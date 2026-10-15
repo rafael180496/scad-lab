@@ -21,6 +21,7 @@ Leé el plan en `.claude/specs/`, `claude/08-openscad.md` y `.claude/rules/techn
 - El CLI de OpenSCAD se invoca desde Go (`os/exec` con contexto cancelable, `hideWindow` en Windows, ruta resuelta por `backend/detect`), nunca con una shell intermedia ni concatenando argumentos.
 - Errores de OpenSCAD: parseá `ERROR:`/`WARNING:` con archivo y línea (`in file X, line N`) a estructuras con línea, columna y severidad para los marcadores de Monaco.
 - Código Go con las mismas reglas que el resto (`claude/03-backend.md`): sin CGO, `i18n.Msg` para textos, tests con `t.TempDir()`.
+- **Nunca lances Bambu Studio ni otra app gráfica** desde tests o comandos (regla 9 de `technical.md`): se cae y le abre diálogos al usuario. Valida un 3MF con tus propios chequeos (zip, XML, volúmenes); no escribas pruebas que lancen Bambu Studio (el usuario lo prueba a mano).
 - Una plantilla `.scad` nueva se valida renderizándola con OpenSCAD si está instalado; si no lo está, decilo en tu respuesta en vez de afirmar que funciona.
 - Una cifra de impresora que no puedas confirmar va marcada en `printers.json` (`verify`), nunca inventada.
 

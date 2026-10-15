@@ -13,7 +13,7 @@ const MessageBubble = memo(function MessageBubble({message, actions}: {message: 
     if (message.role === 'user') {
         return (
             <div className="flex justify-end">
-                <div className="selectable max-w-[85%] rounded-lg border border-line bg-accent-soft px-3 py-2 text-[13px] leading-relaxed break-words whitespace-pre-wrap text-fg">
+                <div className="selectable max-w-[85%] rounded-lg border border-line bg-accent-soft px-3 py-2 text-chat leading-relaxed break-words whitespace-pre-wrap text-fg">
                     {message.content}
                 </div>
             </div>
@@ -31,8 +31,8 @@ function StreamingBubble({chatId, actions}: {chatId: number; actions: CodeAction
     const running = useStreamRunning(chatId)
     if (!text) {
         return running ? (
-            <p className="flex items-center gap-2 text-[12.5px] text-muted" role="status">
-                <Loader2 className="size-3.5 animate-spin" />
+            <p className="flex items-center gap-2 text-ui-12-5 text-muted" role="status">
+                <Loader2 className="icon-ui-14 animate-spin" />
                 {t.chat.thinking}
             </p>
         ) : null
@@ -46,11 +46,11 @@ function ErrorBanner({chatId}: {chatId: number}) {
     const error = useStreamError(chatId)
     if (!error) return null
     return (
-        <div role="alert" className="selectable flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12.5px] text-fg">
-            <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-danger" />
+        <div role="alert" className="selectable flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-ui-12-5 text-fg">
+            <CircleAlert className="mt-0.5 icon-ui-14 shrink-0 text-danger" />
             <span className="min-w-0 flex-1 break-words">{error}</span>
             <IconButton title={t.chat.dismiss} className="-my-1 -mr-1.5 size-6" onClick={() => dismissError(chatId)}>
-                <X className="size-3.5" />
+                <X className="icon-ui-14" />
             </IconButton>
         </div>
     )

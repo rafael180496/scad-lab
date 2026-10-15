@@ -29,9 +29,14 @@ export function Dialog({
         if (open && !d.open) {
             d.showModal()
             // showModal enfoca el primer control —la X de cerrar— y el anillo de
-            // foco queda encendido como si se hubiera llegado por teclado. Salvo
-            // que el contenido pida foco (autoFocus), se enfoca el diálogo.
-            if (!d.querySelector('[autofocus]')) d.focus()
+            // foco queda encendido como si se hubiera llegado por teclado. El
+            // campo que deba arrancar con foco se marca con data-autofocus: el
+            // autoFocus de React no sirve acá (no escribe el atributo en el DOM y
+            // corre antes de que el <dialog> esté abierto, así que el foco se
+            // pierde). Sin marca, se enfoca el diálogo.
+            const target = d.querySelector<HTMLElement>('[data-autofocus]')
+            if (target) target.focus()
+            else d.focus()
         }
         if (!open && d.open) d.close()
     }, [open])
@@ -42,20 +47,20 @@ export function Dialog({
             onClose={onClose}
             onClick={(e) => e.target === ref.current && onClose()}
             className={cn(
-                'm-auto max-h-[86vh] outline-none w-[560px] max-w-[92vw] overflow-hidden rounded-xl border border-line bg-surface p-0 text-fg shadow-2xl shadow-black/40 backdrop:bg-black/50',
+                'm-auto max-h-[86vh] outline-none w-[560px] max-w-[92vw] overflow-clip rounded-xl border border-line bg-surface p-0 text-fg shadow-2xl shadow-black/40 backdrop:bg-black/50',
                 className,
             )}
         >
             {open ? (
                 <div className="flex max-h-[86vh] flex-col">
                     <header className="flex h-11 shrink-0 items-center justify-between border-b border-line px-4">
-                        <h2 className="text-[13.5px] font-semibold">{title}</h2>
+                        <h2 className="text-ui-13-5 font-semibold">{title}</h2>
                         <IconButton title={closeLabel} onClick={onClose}>
-                            <X className="size-4" />
+                            <X className="icon-ui-16" />
                         </IconButton>
                     </header>
                     <div className="min-h-0 flex-1 overflow-auto">{children}</div>
-                    {footer ? <footer className="flex shrink-0 justify-end gap-2 border-t border-line px-4 py-3">{footer}</footer> : null}
+                    {footer ? <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-4 py-3">{footer}</footer> : null}
                 </div>
             ) : null}
         </dialog>
@@ -108,7 +113,7 @@ export function ConfirmHost({title}: {title: string}) {
                 </>
             }
         >
-            <p className="px-4 py-4 text-[13px] leading-relaxed text-muted">{s?.text}</p>
+            <p className="px-4 py-4 text-ui-13 leading-relaxed text-muted">{s?.text}</p>
         </Dialog>
     )
 }

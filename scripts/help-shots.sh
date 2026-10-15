@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# archivo           vista             ancho alto
+# archivo           vista             ancho alto  [escala %]
 SHOTS='
 app-main            main              1440  900
 app-empty           empty             1280  800
@@ -41,6 +41,17 @@ terminal-sessions   terminal-sessions 1440  900
 chat                chat              1440  900
 chat-empty          chat-empty        1440  900
 chat-new            chat-new          1440  900
+settings-appearance settings-appearance 1280 980
+appearance-150      appearance-150    1440  900  150
+small-1024          small             1024  640
+export-3mf          export-3mf        1280  860
+export-3mf-warning  export-3mf-warning 1280 900
+dock-default        dock-default      1440  900
+dock-custom         dock-custom       1440  900
+dock-view-menu      dock-view-menu    1440  900
+dock-layouts        dock-layouts      1440  900
+dock-hidden         dock-hidden       1440  900
+dock-150            dock-150          1440  900  150
 '
 
 ONLY="${1:-}"
@@ -61,7 +72,7 @@ done
 # primera carga, y esa foto sale con el canvas vacío. Se descarta.
 UISHOT_PORT=$PORT UISHOT_OUT="${TMPDIR:-/tmp}/uishot-warmup.png" ./scripts/uishot.sh viewer 1440 900 >/dev/null || true
 
-echo "$SHOTS" | while read -r file view w h; do
+echo "$SHOTS" | while read -r file view w h scale; do
     [ -z "$file" ] && continue
     [ -n "$ONLY" ] && [ "$ONLY" != "$file" ] && continue
     theme=dark
@@ -69,7 +80,7 @@ echo "$SHOTS" | while read -r file view w h; do
     for lang in en es; do
         dir=docs/screenshots
         [ "$lang" = es ] && dir=docs/screenshots/es
-        UISHOT_PORT=$PORT UISHOT_LANG=$lang UISHOT_THEME=$theme UISHOT_OUT="$ROOT/$dir/$file.png" \
+        UISHOT_PORT=$PORT UISHOT_SCALE="${scale:-100}" UISHOT_LANG=$lang UISHOT_THEME=$theme UISHOT_OUT="$ROOT/$dir/$file.png" \
             ./scripts/uishot.sh "$view" "$w" "$h" >/dev/null
         echo "  $dir/$file.png"
     done

@@ -23,7 +23,7 @@ function RenderDot({result, running}: {result: render.Result | undefined; runnin
     if (tone === 'running') {
         return (
             <span className="ml-auto flex shrink-0 items-center" title={text} aria-label={text}>
-                <Loader2 className="size-3 animate-spin text-accent" />
+                <Loader2 className="icon-ui-12 animate-spin text-accent" />
             </span>
         )
     }
@@ -56,7 +56,7 @@ export function CheckpointTree({
     const t = useT()
     const roots = useMemo(() => buildTree(checkpoints), [checkpoints])
     if (checkpoints.length === 0) {
-        return <p className="px-3 py-2 text-[12px] leading-relaxed text-faint">{t.checkpoints.empty}</p>
+        return <p className="px-3 py-2 text-ui-12 leading-relaxed text-faint">{t.checkpoints.empty}</p>
     }
     const rows: React.ReactNode[] = []
     const walk = (nodes: TreeNode[], prefix: string) => {
@@ -81,7 +81,7 @@ export function CheckpointTree({
                         }
                     }}
                     className={cn(
-                        'group flex h-7 cursor-default items-center gap-1 rounded-md pr-2 pl-1 text-[12px] transition-colors duration-100',
+                        'group flex h-7 cursor-default items-center gap-1 rounded-md pr-2 pl-1 text-ui-12 transition-colors duration-100',
                         isSel ? 'bg-accent-soft text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg',
                     )}
                 >
@@ -94,17 +94,17 @@ export function CheckpointTree({
                                 e.stopPropagation()
                                 onToggle(n.cp)
                             }}
-                            className="flex size-4 items-center justify-center rounded text-faint hover:text-fg"
+                            className="flex icon-ui-16 items-center justify-center rounded text-faint hover:text-fg"
                         >
-                            {n.cp.collapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+                            {n.cp.collapsed ? <ChevronRight className="icon-ui-12" /> : <ChevronDown className="icon-ui-12" />}
                         </button>
                     ) : (
-                        <FileCode2 className={cn('size-3.5 shrink-0', isSel ? 'text-accent' : 'text-faint')} />
+                        <FileCode2 className={cn('icon-ui-14 shrink-0', isSel ? 'text-accent' : 'text-faint')} />
                     )}
                     <span className="truncate font-mono">{n.cp.label || n.cp.fileName.replace(/\.scad$/i, '')}</span>
                     {n.orphan ? (
                         <TriangleAlert
-                            className="size-3 shrink-0 text-warn"
+                            className="icon-ui-12 shrink-0 text-warn"
                             aria-label={fmt(t.checkpoints.orphan, {parent: n.cp.parentFile})}
                         />
                     ) : null}

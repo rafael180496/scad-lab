@@ -19,7 +19,7 @@ Skills: `vercel-react-best-practices`, `react`, `tailwind-design-system`,
 - Sin fetch: todo pasa por los bindings de `wailsjs/`. Única excepción: la
   malla del visor (`GET /mesh/<clave>.stl`, ver abajo).
 - Componentes: `components/ui` (primitivas), `layout`, `workspace`, `settings`,
-  `render`, `viewer`, `editor`, `problems`;
+  `render`, `viewer`, `editor`, `problems`, `dock`;
   helpers sin estado en `lib/`.
 - macOS: cabecera con `--wails-draggable` y 82 px a la izquierda para los
   semáforos (`TitleBarHiddenInset`); Windows usa el marco nativo.
@@ -62,11 +62,12 @@ Skills: `vercel-react-best-practices`, `react`, `tailwind-design-system`,
 
 - Editor: ver [10-editor.md](10-editor.md#frontend-tanda-4b--componentseditor).
   Chunk propio (~3,4 MB, ~890 kB gzip), lazy como el visor.
-- **Layout** (`hooks/useLayout.ts`): `Splitter` (divisor con arrastre por
-  pointer capture, doble clic = tamaño de fábrica, flechas con foco) entre barra
-  lateral, visor, código y panel inferior. Se previsualiza en vivo y se guarda al
-  soltar con `SaveLayout`. Los tamaños se acotan al tamaño real (visor mínimo
-  360×200). ⌘B/Ctrl+B pliega la barra lateral (listener en captura).
+- **Layout** (`hooks/useLayout.ts`): solo la barra lateral y la barra de
+  estado (`Splitter` entre barra lateral y paneles, y entre workspaces y
+  checkpoints; `statusBarHidden`). Se previsualiza en vivo y se guarda al soltar
+  con `SaveLayout`. Todo lo demás —visor, código, agentes, chat, problemas— son
+  **paneles acoplables**: ver «Paneles acoplables (S4b)». ⌘B/Ctrl+B pliega la
+  barra lateral (listener en captura).
 - Atajos en los `title`: `withKeys(texto, 'mod+s')` de `lib/platform.ts` (⌘ en
   macOS, Ctrl en Windows, según `boot.platform`).
 - Estado que cambia seguido y leen pocos (cursor, lint): `lib/store.ts`
@@ -76,3 +77,72 @@ Skills: `vercel-react-best-practices`, `react`, `tailwind-design-system`,
   importa el `catalog.json` real (`server.fs.allow: ['..']`, solo dev) y su
   sincronización WebGL salta los canvas de Monaco (un `getContext('webgl')` deja
   sin contexto 2D a la regla de Monaco).
+
+## Tamaños y escala (S10)
+
+**Regla: nunca `text-[Npx]` ni un ícono con tamaño fijo.** Todo tamaño de texto
+o de ícono pasa por una utilidad escalada (`grep -rn "text-\[[0-9]*px\]" frontend/src`
+tiene que dar vacío). Se definen en `src/index.css`, no como clase arbitraria:
+
+- **Texto**: `text-ui-N` (`N` = 10, 10-5, 11, 11-5, 12, 12-5, 13, 13-5, 14, 15; el
+  `-5` es «punto cinco»), que vale `N px × --ui-font-scale`. El `body` también
+  escala (`13px × --ui-font-scale`), así que lo que hereda crece igual. Un valor
+  nuevo se agrega en `index.css`.
+- **Ícono** (lucide) **y la caja que lo contiene**: `icon-ui-N` (`N` = 12, 14, 16,
+  20, 24, 28, 36) = ancho y alto `N px × --ui-font-scale`. Se elige `icon-ui-N`
+  y no `size-[1em]` porque los íconos van sueltos, sin texto de referencia, y un
+  `em` heredaría el tamaño del contenedor equivocado. Un punto de 6 px o un
+  círculo decorativo **no** son íconos: siguen con `size-1.5`.
+- **Letra del chat**: `text-chat` / `text-chat-sm` (`--chat-font-size`; los
+  encabezados del markdown van en `em` relativos a ella). La del editor y la de
+  la terminal son opciones de Monaco/xterm, no CSS.
+
+**Qué escala cada preferencia** (`lib/appearance.ts`, `hooks/useAppearance.ts`):
+
+| Preferencia | Escala | Mecanismo |
+|---|---|---|
+| `uiScale` 90/100/115/130/150 % | texto e íconos de la interfaz, **no** los espacios | variable `--ui-font-scale` en `<html>` |
+| `editorFontSize`, `terminalFontSize`, `chatFontSize` (9–28 px) | solo su área, independiente de `uiScale` | Monaco `fontSize`, xterm `fontSize`, `--chat-font-size` |
+
+Se **aplican en vivo y se guardan al instante** (`SaveAppearance`, 300 ms de
+espera), sin pasar por «Guardar» de Configuración; `applyAppearance` escribe las
+variables y la store `appearance` (que leen xterm y los cálculos de «¿cabe?»).
+Atajos ⌘/Ctrl `+` `-` `0` en captura sobre `window`: con el foco dentro de un
+elemento con `data-font-area` (`editor`, `terminal`, `chat`) cambian la letra de
+esa área; fuera, recorren los presets de la interfaz. Un nuevo área con letra
+propia = su `data-font-area` + su campo en `Appearance` (Go y TS) + su fila en
+`AppearanceSettings.tsx`.
+
+**El documento nunca se desplaza** (bug del documento «corrido» en WebKit): en
+`index.css`, `html, body, #root { overflow: clip }` (`hidden` solo como
+respaldo). `hidden` bloquea la rueda pero no el desplazamiento programático
+(`focus()` de xterm/Monaco/`<dialog>`, `scrollIntoView`); `clip` no admite
+ninguno. Los contenedores de la estructura usan `overflow-clip`, no
+`overflow-hidden`, y todo hijo flex/grid que pueda empujar el tamaño lleva
+`min-h-0`/`min-w-0`. `lib/scrollGuard.ts` (instalado en `main.tsx`) devuelve el
+documento a 0,0 si algo lo mueve y reajusta los elementos marcados `data-lock`.
+Verificación: `./scripts/uishot-fit.sh [vista ancho alto]` (con
+`UISHOT_SCALE=150` para otra escala) abre el banco con `poke=1`, que intenta
+desplazar la página, y falla si `scrollWidth/Height` superan la ventana o la
+cabecera / barra de estado no quedan en su sitio.
+
+**Degradar sin cortar controles.** Toda barra con rótulos usa `hooks/useNarrow.ts`
+(`const [compact, ref] = useNarrow(limit)`): mide **su propio elemento** (no la
+ventana) y compara con `limit × escala`, así que con la interfaz agrandada pasa
+a solo ícono antes. En modo compacto el rótulo se omite y el `title` queda como
+nombre; si ni así cabe, la barra envuelve (`flex-wrap`) o recorta datos
+secundarios enteros, nunca a medias. Ya lo usan la cabecera, el menú Ver, la
+barra de la terminal, el editor y la barra de estado del render. (Las pestañas
+de los paneles no lo necesitan: no se encogen, la barra se desplaza.)
+
+**Tamaño de cada sección.** La barra lateral y el reparto workspaces ↔
+checkpoints se arrastran y se guardan en `layout` (`hooks/useLayout.ts`); los
+límites se calculan con la ventana actual (`sidebarMaxFor(innerWidth)`) y el
+tamaño guardado solo se **recorta al mostrarlo**, así que al volver a agrandar la
+ventana reaparece. Los de los paneles los lleva dockview (ver abajo).
+«Restablecer el diseño» de Configuración llama a `resetLayout` (barra lateral,
+barras visibles) **y** a `resetLayout` del dock (paneles al predeterminado).
+
+## Paneles acoplables
+
+Ver [claude/12-paneles.md](12-paneles.md).

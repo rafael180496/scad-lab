@@ -75,7 +75,7 @@ export function NewWorkspaceDialog({
                 }}
             >
                 <Field label={t.workspaces.name} hint={root ? fmt(t.workspaces.rootHint, {root}) : undefined}>
-                    <Input autoFocus value={name} placeholder={t.workspaces.namePlaceholder} onChange={(e) => setName(e.target.value)} />
+                    <Input data-autofocus value={name} placeholder={t.workspaces.namePlaceholder} onChange={(e) => setName(e.target.value)} />
                 </Field>
                 <Field label={t.workspaces.printer}>
                     <Select value={printer} onChange={(e) => setPrinter(e.target.value)}>

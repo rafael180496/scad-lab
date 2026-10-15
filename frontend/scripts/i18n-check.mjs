@@ -9,7 +9,7 @@ import {fileURLToPath} from 'node:url'
 
 const root = fileURLToPath(new URL('../src', import.meta.url))
 // Nombres propios y símbolos que no se traducen.
-const allow = new Set(['ScadLab', 'STL', '3MF', 'PNG', 'openscad', '/', '—', '·', '…'])
+const allow = new Set(['ScadLab', 'STL', '3MF', 'PNG', 'openscad', 'px', '/', '—', '·', '…'])
 
 const files = []
 const walk = (dir) => {

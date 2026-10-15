@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"strings"
 )
 
 // Settings es la configuración de la app. Se guarda campo por campo en la
@@ -20,6 +21,10 @@ type Settings struct {
 	DefaultMaterial string  `json:"defaultMaterial"` // id de materials
 	InfillPercent   float64 `json:"infillPercent"`
 	DefaultAgent    string  `json:"defaultAgent"` // id de ai_providers
+	// BambuStudioPath es la app de Bambu Studio para «Abrir en Bambu Studio»
+	// (S9): en macOS el .app, en Windows el .exe. Vacío = autodetectar en las
+	// rutas de instalación habituales; si la ruta no existe se ignora.
+	BambuStudioPath string `json:"bambuStudioPath"`
 	// AutoRender renderiza solo cada checkpoint nuevo que aparece en el
 	// workspace (y el que se elige en el árbol si todavía no tiene resultado).
 	AutoRender bool `json:"autoRender"`
@@ -39,14 +44,40 @@ type Settings struct {
 	// Editor de código (S4). EditorIndent lo usa también el formateador
 	// (App.FormatScad lo lee por su nombre JSON): 2 o 4 espacios.
 	EditorIndent   int  `json:"editorIndent"`
-	EditorFontSize int  `json:"editorFontSize"` // px, 10–24
+	EditorFontSize int  `json:"editorFontSize"` // px, 9–28
 	EditorWordWrap bool `json:"editorWordWrap"`
 	EditorMinimap  bool `json:"editorMinimap"`
+
+	// Apariencia. UIScale es el tamaño de la interfaz en % (uno de
+	// UIScalePresets): escala el texto y los íconos, no los espaciados. La
+	// letra de la terminal y la del chat son propias de cada área, independientes
+	// de UIScale (y del editor, que tiene EditorFontSize). Se cambian en vivo desde
+	// Configuración → General y se guardan al instante (App.SaveAppearance).
+	UIScale          int `json:"uiScale"`          // %, uno de UIScalePresets
+	TerminalFontSize int `json:"terminalFontSize"` // px, 9–28
+	ChatFontSize     int `json:"chatFontSize"`     // px, 9–28
 
 	// Layout es la disposición de los paneles de la ventana principal. Se
 	// guarda desde la propia ventana al soltar un divisor (App.SaveLayout),
 	// no desde el diálogo de Configuración.
 	Layout Layout `json:"layout"`
+
+	// DockLayout es la disposición de los paneles acoplables (S4b): el JSON
+	// que arma el frontend (sobre dockview). Va guardado como texto opaco: el
+	// frontend lo valida al cargar y, si no lo entiende, cae al diseño
+	// predeterminado; acá solo se acota el tamaño. Vacío = predeterminado.
+	// Se guarda desde la propia ventana (App.SaveDockLayout), nunca con
+	// SaveSettings: el diálogo de Configuración tiene una copia vieja.
+	DockLayout string `json:"dockLayout"`
+	// DockLayouts son los diseños propios con nombre (App.SaveDockLayouts).
+	DockLayouts []DockLayoutEntry `json:"dockLayouts"`
+}
+
+// DockLayoutEntry es un diseño guardado por el usuario: un nombre y el mismo
+// JSON que DockLayout.
+type DockLayoutEntry struct {
+	Name string `json:"name"`
+	JSON string `json:"json"`
 }
 
 // Layout: tamaños en píxeles CSS. El frontend los vuelve a acotar al tamaño
@@ -54,9 +85,18 @@ type Settings struct {
 type Layout struct {
 	SidebarWidth     int  `json:"sidebarWidth"`
 	SidebarCollapsed bool `json:"sidebarCollapsed"`
-	CodeWidth        int  `json:"codeWidth"`    // ancho del panel de código
-	BottomHeight     int  `json:"bottomHeight"` // alto del panel inferior (agente / problemas)
-	DimsCollapsed    bool `json:"dimsCollapsed"`
+	// CodeWidth y BottomHeight son OBSOLETOS desde S4b: el código y el panel
+	// inferior ahora son paneles acoplables (DockLayout). Se conservan sin uso
+	// (regla de datos: no se borra lo que el usuario ya guardó).
+	CodeWidth     int  `json:"codeWidth"`
+	BottomHeight  int  `json:"bottomHeight"`
+	DimsCollapsed bool `json:"dimsCollapsed"`
+	// StatusBarHidden oculta la barra de estado (menú Ver). La barra lateral
+	// usa SidebarCollapsed, que ya existía.
+	StatusBarHidden bool `json:"statusBarHidden"`
+	// WorkspacesHeight es el alto de la lista de workspaces dentro de la barra
+	// lateral; los checkpoints ocupan el resto.
+	WorkspacesHeight int `json:"workspacesHeight"`
 }
 
 // Límites del layout y del editor.
@@ -64,13 +104,71 @@ const (
 	MinSidebarWidth, MaxSidebarWidth = 200, 480
 	MinCodeWidth, MaxCodeWidth       = 280, 1400
 	MinBottomHeight, MaxBottomHeight = 120, 800
-	MinEditorFontSize                = 10
-	MaxEditorFontSize                = 24
+	MinWorkspacesHeight              = 56
+	MaxWorkspacesHeight              = 640
+	// Letra propia de cada área (editor, terminal, chat), en px.
+	MinFontSize     = 9
+	MaxFontSize     = 28
+	DefaultFontSize = 13
+	// DefaultUIScale es el 100 %: el tamaño de siempre.
+	DefaultUIScale = 100
 )
+
+// UIScalePresets son los tamaños de interfaz que ofrece Configuración
+// (Compacto, Normal, Grande, Más grande, Máximo). Un valor fuera de la lista no
+// se guarda: vuelve al 100 %.
+var UIScalePresets = []int{90, 100, 115, 130, 150}
+
+// ValidUIScale dice si v es uno de los presets.
+func ValidUIScale(v int) bool {
+	for _, p := range UIScalePresets {
+		if p == v {
+			return true
+		}
+	}
+	return false
+}
+
+// NormalizeFontSize deja una letra en 9–28 px. Fuera de rango (o 0, un campo
+// que nunca se guardó) vuelve al valor de fábrica, igual que la sangría del
+// editor: un número roto en la base no debe dejar una letra ilegible.
+func NormalizeFontSize(v int) int {
+	if v < MinFontSize || v > MaxFontSize {
+		return DefaultFontSize
+	}
+	return v
+}
+
+// Appearance es lo que cambia la pantalla de Configuración → Apariencia. Va en
+// un binding aparte (App.SaveAppearance) para guardarse al instante, sin
+// reescribir el resto de la configuración con lo que el diálogo tenga abierto.
+type Appearance struct {
+	UIScale          int `json:"uiScale"`
+	EditorFontSize   int `json:"editorFontSize"`
+	TerminalFontSize int `json:"terminalFontSize"`
+	ChatFontSize     int `json:"chatFontSize"`
+}
+
+// DefaultAppearance es la apariencia de fábrica.
+func DefaultAppearance() Appearance {
+	return Appearance{UIScale: DefaultUIScale, EditorFontSize: DefaultFontSize, TerminalFontSize: DefaultFontSize, ChatFontSize: DefaultFontSize}
+}
+
+// Normalize deja la apariencia en valores que la interfaz entiende: una escala
+// fuera de los presets vuelve al 100 % y las letras fuera de 9–28 vuelven a 13.
+func (a Appearance) Normalize() Appearance {
+	if !ValidUIScale(a.UIScale) {
+		a.UIScale = DefaultUIScale
+	}
+	a.EditorFontSize = NormalizeFontSize(a.EditorFontSize)
+	a.TerminalFontSize = NormalizeFontSize(a.TerminalFontSize)
+	a.ChatFontSize = NormalizeFontSize(a.ChatFontSize)
+	return a
+}
 
 // DefaultLayout es la disposición de fábrica (la de S0–S2).
 func DefaultLayout() Layout {
-	return Layout{SidebarWidth: 264, CodeWidth: 420, BottomHeight: 220}
+	return Layout{SidebarWidth: 264, CodeWidth: 420, BottomHeight: 220, WorkspacesHeight: 150}
 }
 
 func clampInt(v, lo, hi, def int) int {
@@ -87,6 +185,7 @@ func (l Layout) Normalize() Layout {
 	l.SidebarWidth = clampInt(l.SidebarWidth, MinSidebarWidth, MaxSidebarWidth, d.SidebarWidth)
 	l.CodeWidth = clampInt(l.CodeWidth, MinCodeWidth, MaxCodeWidth, d.CodeWidth)
 	l.BottomHeight = clampInt(l.BottomHeight, MinBottomHeight, MaxBottomHeight, d.BottomHeight)
+	l.WorkspacesHeight = clampInt(l.WorkspacesHeight, MinWorkspacesHeight, MaxWorkspacesHeight, d.WorkspacesHeight)
 	return l
 }
 
@@ -96,9 +195,8 @@ func (s *Settings) normalizeEditor() {
 	if s.EditorIndent != 2 && s.EditorIndent != 4 {
 		s.EditorIndent = 4
 	}
-	if s.EditorFontSize < MinEditorFontSize || s.EditorFontSize > MaxEditorFontSize {
-		s.EditorFontSize = 13
-	}
+	a := Appearance{UIScale: s.UIScale, EditorFontSize: s.EditorFontSize, TerminalFontSize: s.TerminalFontSize, ChatFontSize: s.ChatFontSize}.Normalize()
+	s.UIScale, s.EditorFontSize, s.TerminalFontSize, s.ChatFontSize = a.UIScale, a.EditorFontSize, a.TerminalFontSize, a.ChatFontSize
 	s.Layout = s.Layout.Normalize()
 }
 
@@ -142,7 +240,10 @@ func DefaultSettings() Settings {
 		AutoIterate:      true,
 		Swatches:         DefaultSwatches(),
 		EditorIndent:     4,
-		EditorFontSize:   13,
+		EditorFontSize:   DefaultFontSize,
+		UIScale:          DefaultUIScale,
+		TerminalFontSize: DefaultFontSize,
+		ChatFontSize:     DefaultFontSize,
 		Layout:           DefaultLayout(),
 	}
 }
@@ -206,6 +307,10 @@ func (s *Store) SaveSettings(in Settings) error {
 	if keepLayout {
 		delete(fields, "layout")
 	}
+	// Los diseños de paneles solo cambian por sus propios bindings: el diálogo
+	// de Configuración guarda una copia vieja y pisaría el diseño actual.
+	delete(fields, "dockLayout")
+	delete(fields, "dockLayouts")
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -240,4 +345,57 @@ func notFound(err error) error {
 		return ErrNotFound
 	}
 	return err
+}
+
+// Límites del diseño de paneles. El JSON de dockview de un diseño real mide
+// pocos KB; el tope solo evita que un valor absurdo llene la base.
+const (
+	MaxDockLayoutBytes = 256 * 1024
+	MaxDockLayouts     = 30
+	MaxDockLayoutName  = 40
+)
+
+// ErrDockLayout es un diseño de paneles que no se puede guardar.
+var ErrDockLayout = errors.New("invalid dock layout")
+
+// ValidDockLayoutJSON dice si s es un objeto JSON dentro del tope de tamaño.
+// No mira qué hay dentro: eso lo valida el frontend, que es quien lo entiende
+// (y que cae al diseño predeterminado si no).
+func ValidDockLayoutJSON(s string) bool {
+	if len(s) == 0 || len(s) > MaxDockLayoutBytes {
+		return false
+	}
+	var m map[string]json.RawMessage
+	// "null" decodifica sin error a un mapa nil: no es un objeto.
+	return json.Unmarshal([]byte(s), &m) == nil && m != nil
+}
+
+// NormalizeDockLayouts deja la lista de diseños propios lista para guardar:
+// nombres sin espacios sobrantes y de hasta 40 letras, sin vacíos ni repetidos
+// (sin distinguir mayúsculas; gana el último, así guardar con un nombre que ya
+// existe lo reemplaza) y con un JSON válido. Devuelve ErrDockLayout si alguno
+// no lo es o si hay más de MaxDockLayouts.
+func NormalizeDockLayouts(in []DockLayoutEntry) ([]DockLayoutEntry, error) {
+	out := make([]DockLayoutEntry, 0, len(in))
+	pos := map[string]int{}
+	for _, e := range in {
+		name := strings.TrimSpace(e.Name)
+		if r := []rune(name); len(r) > MaxDockLayoutName {
+			name = strings.TrimSpace(string(r[:MaxDockLayoutName]))
+		}
+		if name == "" || !ValidDockLayoutJSON(e.JSON) {
+			return nil, ErrDockLayout
+		}
+		key := strings.ToLower(name)
+		if i, ok := pos[key]; ok {
+			out[i] = DockLayoutEntry{Name: name, JSON: e.JSON}
+			continue
+		}
+		pos[key] = len(out)
+		out = append(out, DockLayoutEntry{Name: name, JSON: e.JSON})
+	}
+	if len(out) > MaxDockLayouts {
+		return nil, ErrDockLayout
+	}
+	return out, nil
 }

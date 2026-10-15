@@ -47,7 +47,7 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
     return (
         <div className="my-2 overflow-hidden rounded-lg border border-line bg-bg">
             <div className="flex h-7 items-center gap-1 border-b border-line bg-surface-2 pr-1 pl-2.5">
-                <span className={cn('font-mono text-[10px] tracking-[0.12em] uppercase', scad ? 'text-accent' : 'text-faint')}>
+                <span className={cn('font-mono text-ui-10 tracking-[0.12em] uppercase', scad ? 'text-accent' : 'text-faint')}>
                     {scad ? 'OpenSCAD' : lang || t.chat.code}
                 </span>
                 <div className="ml-auto flex items-center gap-0.5">
@@ -55,9 +55,9 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
                         type="button"
                         title={t.chat.copyHint}
                         onClick={copy}
-                        className="no-drag inline-flex h-5 items-center gap-1 rounded px-1.5 text-[11px] text-muted transition-colors duration-100 hover:bg-raised hover:text-fg"
+                        className="no-drag inline-flex h-5 items-center gap-1 rounded px-1.5 text-ui-11 text-muted transition-colors duration-100 hover:bg-raised hover:text-fg"
                     >
-                        {copied ? <Check className="size-3 text-ok" /> : <Copy className="size-3" />}
+                        {copied ? <Check className="icon-ui-12 text-ok" /> : <Copy className="icon-ui-12" />}
                         {copied ? t.chat.copied : t.chat.copy}
                     </button>
                     {canSave ? (
@@ -65,15 +65,15 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
                             type="button"
                             title={t.chat.saveHint}
                             onClick={() => actions?.onSave?.(code)}
-                            className="no-drag inline-flex h-5 items-center gap-1 rounded bg-accent px-1.5 text-[11px] font-medium text-accent-fg transition-[filter] duration-100 hover:brightness-110"
+                            className="no-drag inline-flex h-5 items-center gap-1 rounded bg-accent px-1.5 text-ui-11 font-medium text-accent-fg transition-[filter] duration-100 hover:brightness-110"
                         >
-                            <GitBranchPlus className="size-3" />
+                            <GitBranchPlus className="icon-ui-12" />
                             {t.chat.save}
                         </button>
                     ) : null}
                 </div>
             </div>
-            <pre className="selectable max-h-[22rem] overflow-auto px-3 py-2 font-mono text-[12px] leading-relaxed text-fg">
+            <pre className="selectable max-h-[22rem] overflow-auto px-3 py-2 font-mono text-chat-sm leading-relaxed text-fg">
                 <code>{code}</code>
             </pre>
         </div>

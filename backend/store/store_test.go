@@ -185,13 +185,39 @@ func TestEditorSettings(t *testing.T) {
 	}
 }
 
+// La ruta de Bambu Studio (S9) no necesita migración: vacía = autodetectar, y
+// lo que el usuario guarda vuelve igual.
+func TestBambuStudioPath(t *testing.T) {
+	s := openTemp(t)
+	got, _ := s.GetSettings()
+	if got.BambuStudioPath != "" {
+		t.Fatalf("default: %q", got.BambuStudioPath)
+	}
+	got.BambuStudioPath = "/Applications/BambuStudio.app"
+	if err := s.SaveSettings(got); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := s.GetSettings()
+	if again.BambuStudioPath != got.BambuStudioPath {
+		t.Errorf("round trip: %q", again.BambuStudioPath)
+	}
+	again.BambuStudioPath = ""
+	if err := s.SaveSettings(again); err != nil {
+		t.Fatal(err)
+	}
+	final, _ := s.GetSettings()
+	if final.BambuStudioPath != "" {
+		t.Errorf("vaciar la ruta no se guardó: %q", final.BambuStudioPath)
+	}
+}
+
 func TestLayout(t *testing.T) {
 	s := openTemp(t)
 	got, _ := s.GetSettings()
 	if got.Layout != DefaultLayout() {
 		t.Fatalf("layout por defecto: %+v", got.Layout)
 	}
-	custom := Layout{SidebarWidth: 300, SidebarCollapsed: true, CodeWidth: 600, BottomHeight: 260, DimsCollapsed: true}
+	custom := Layout{SidebarWidth: 300, SidebarCollapsed: true, CodeWidth: 600, BottomHeight: 260, DimsCollapsed: true, StatusBarHidden: true, WorkspacesHeight: 220}
 	if err := s.SetSetting("layout", custom); err != nil {
 		t.Fatal(err)
 	}
@@ -212,5 +238,93 @@ func TestLayout(t *testing.T) {
 	n := Layout{SidebarWidth: 5000, CodeWidth: 10, BottomHeight: 0}.Normalize()
 	if n.SidebarWidth != MaxSidebarWidth || n.CodeWidth != MinCodeWidth || n.BottomHeight != DefaultLayout().BottomHeight {
 		t.Errorf("Normalize: %+v", n)
+	}
+}
+
+// dockLayout y dockLayouts: se guardan solo por sus propios métodos y
+// SaveSettings (cuyo diálogo tiene una copia vieja) no los pisa.
+func TestDockLayoutSettings(t *testing.T) {
+	s := openTemp(t)
+	got, _ := s.GetSettings()
+	if got.DockLayout != "" || len(got.DockLayouts) != 0 {
+		t.Fatalf("por defecto: %q %v", got.DockLayout, got.DockLayouts)
+	}
+	layout := `{"v":1,"dock":{"panels":{}}}`
+	list := []DockLayoutEntry{{Name: "Modelado 2", JSON: layout}}
+	if err := s.SetSetting("dockLayout", layout); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetSetting("dockLayouts", list); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetSettings()
+	if got.DockLayout != layout || !reflect.DeepEqual(got.DockLayouts, list) {
+		t.Fatalf("round trip: %q %v", got.DockLayout, got.DockLayouts)
+	}
+	// Un diálogo con la copia vieja (vacía) guarda la configuración: no pisa el diseño.
+	got.DockLayout = ""
+	got.DockLayouts = nil
+	if err := s.SaveSettings(got); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := s.GetSettings()
+	if again.DockLayout != layout || !reflect.DeepEqual(again.DockLayouts, list) {
+		t.Errorf("SaveSettings pisó el diseño: %q %v", again.DockLayout, again.DockLayouts)
+	}
+}
+
+func TestValidDockLayoutJSON(t *testing.T) {
+	for in, want := range map[string]bool{
+		`{}`:                true,
+		`{"v":1,"dock":{}}`: true,
+		``:                  false,
+		`[]`:                false,
+		`"texto"`:           false,
+		`null`:              false,
+		`{"v":`:             false,
+		`{"a":"` + string(make([]byte, MaxDockLayoutBytes)) + `"}`: false,
+	} {
+		if got := ValidDockLayoutJSON(in); got != want {
+			t.Errorf("ValidDockLayoutJSON(%.30q) = %v, quiero %v", in, got, want)
+		}
+	}
+}
+
+func TestNormalizeDockLayouts(t *testing.T) {
+	ok := `{"v":1}`
+	got, err := NormalizeDockLayouts([]DockLayoutEntry{
+		{Name: "  Mi diseño  ", JSON: ok},
+		{Name: "otro", JSON: ok},
+		{Name: "MI DISEÑO", JSON: `{"v":2}`}, // mismo nombre sin distinguir mayúsculas: gana el último
+	})
+	if err != nil || len(got) != 2 || got[0].Name != "MI DISEÑO" || got[0].JSON != `{"v":2}` || got[1].Name != "otro" {
+		t.Fatalf("normalizar: %+v, %v", got, err)
+	}
+	long := ""
+	for i := 0; i < 60; i++ {
+		long += "ñ"
+	}
+	got, err = NormalizeDockLayouts([]DockLayoutEntry{{Name: long, JSON: ok}})
+	if err != nil || len([]rune(got[0].Name)) != MaxDockLayoutName {
+		t.Fatalf("nombre largo: %q, %v", got, err)
+	}
+	for name, in := range map[string][]DockLayoutEntry{
+		"nombre vacío": {{Name: "  ", JSON: ok}},
+		"JSON roto":    {{Name: "x", JSON: `{"v":`}},
+		"no objeto":    {{Name: "x", JSON: `[1]`}},
+	} {
+		if _, err := NormalizeDockLayouts(in); err == nil {
+			t.Errorf("%s: debería fallar", name)
+		}
+	}
+	many := make([]DockLayoutEntry, MaxDockLayouts+1)
+	for i := range many {
+		many[i] = DockLayoutEntry{Name: string(rune('a'+i%26)) + string(rune('a'+i/26)), JSON: ok}
+	}
+	if _, err := NormalizeDockLayouts(many); err == nil {
+		t.Error("más de 30 diseños debería fallar")
+	}
+	if out, err := NormalizeDockLayouts(nil); err != nil || out == nil || len(out) != 0 {
+		t.Errorf("lista vacía: %v %v", out, err)
 	}
 }

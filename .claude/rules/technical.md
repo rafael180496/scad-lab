@@ -13,3 +13,16 @@
 7. **OpenSCAD es externo**: nunca se asume una versión; se detecta y se degrada
    (Manifold → CGAL, 3MF con color → 3MF por objetos).
 8. **Binario < 100 MB.**
+9. **Ningún test ni script del repo abre slicers ni otras aplicaciones del
+   usuario** (Bambu Studio, OrcaSlicer, navegadores visibles). **ScadLab sí se
+   puede abrir** para probarlo (arranque real, prueba de humo); lo que nunca se
+   dispara es su botón «Abrir en Bambu Studio». Bambu
+   Studio por línea de comandos se cae y le abre al usuario el diálogo de macOS
+   «se cerró inesperadamente» en cada corrida (pasó en S9). Por pedido del
+   usuario **no hay pruebas automáticas con Bambu Studio en el repo**, ni con
+   build tag: la exportación 3MF la prueba él a mano en Bambu Studio. La app
+   **sí** puede abrir un archivo en Bambu Studio cuando el usuario lo pide con
+   un clic («Abrir en Bambu Studio»): se abre la app con el archivo, nunca su
+   CLI, y en los tests el lanzador se inyecta y no ejecuta nada. OpenSCAD
+   por CLI sí está permitido (no tiene GUI en ese modo). Chrome solo en
+   `--headless`.

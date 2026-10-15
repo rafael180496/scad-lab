@@ -6,6 +6,7 @@ import {
     ChooseDirectory,
     ChooseFile,
     CreateSkill,
+    DetectSlicers,
     DetectTools,
     EffectiveWorkspacesRoot,
     ListMaterials,
@@ -28,6 +29,8 @@ import {fmt, LANGUAGES, normalizeLang, setLanguage, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
 import {applyTheme} from '../../lib/theme'
 import {cn} from '../../lib/cn'
+import type {Appearance} from '../../lib/appearance'
+import {AppearanceSettings} from './AppearanceSettings'
 
 export type SettingsTab = 'general' | 'openscad' | 'ai' | 'printing' | 'skills' | 'about'
 type Tab = SettingsTab
@@ -48,16 +51,16 @@ function ToolStatus({tool}: {tool?: detect.Tool}) {
     const t = useT()
     if (!tool) return null
     return tool.found ? (
-        <span className="selectable flex min-w-0 items-center gap-1.5 text-[11.5px] text-ok" title={tool.path}>
-            <CheckCircle2 className="size-3.5 shrink-0" />
+        <span className="selectable flex min-w-0 items-center gap-1.5 text-ui-11-5 text-ok" title={tool.path}>
+            <CheckCircle2 className="icon-ui-14 shrink-0" />
             <span className="truncate">
                 {t.settings.found}
                 {tool.version ? ` · ${fmt(t.settings.version, {v: tool.version})}` : ''}
             </span>
         </span>
     ) : (
-        <span className="flex items-center gap-1.5 text-[11.5px] text-faint">
-            <CircleDashed className="size-3.5" />
+        <span className="flex items-center gap-1.5 text-ui-11-5 text-faint">
+            <CircleDashed className="icon-ui-14" />
             {t.settings.notFound}
         </span>
     )
@@ -69,6 +72,10 @@ export function SettingsDialog({
     boot,
     printerList,
     onSaved,
+    appearance,
+    onAppearance,
+    onResetAppearance,
+    onResetLayout,
     initialTab = 'general',
 }: {
     open: boolean
@@ -79,12 +86,19 @@ export function SettingsDialog({
     boot: main.Bootstrap
     printerList: printers.Printer[]
     onSaved: (s: store.Settings) => void
+    // Apariencia y diseño se aplican y guardan al instante, fuera de «Guardar»:
+    // el diálogo recibe el valor vigente y avisa de cada cambio.
+    appearance: Appearance
+    onAppearance: (patch: Partial<Appearance>) => void
+    onResetAppearance: () => void
+    onResetLayout: () => void
 }) {
     const t = useT()
     const [tab, setTab] = useState<Tab>(initialTab)
     const [s, setS] = useState<store.Settings>(boot.settings)
     const [defaultRoot, setDefaultRoot] = useState('')
     const [tools, setTools] = useState<detect.Tool[]>([])
+    const [slicers, setSlicers] = useState<main.Slicer[]>([])
     const [detecting, setDetecting] = useState(false)
     const [providers, setProviders] = useState<store.AIProvider[]>([])
     const [models, setModels] = useState<Record<string, string[]>>({})
@@ -111,6 +125,7 @@ export function SettingsDialog({
         ListProviders().then(setProviders).catch((e) => toast.error(errorText(e)))
         ListMaterials().then(setMaterials).catch((e) => toast.error(errorText(e)))
         ListSkills().then(setSkills).catch((e) => toast.error(errorText(e)))
+        DetectSlicers().then((l) => setSlicers(l ?? [])).catch(() => {})
         void detectAll()
     }, [open, boot.settings, detectAll, initialTab])
 
@@ -118,10 +133,13 @@ export function SettingsDialog({
 
     const save = async () => {
         try {
-            await SaveSettings(s)
+            // La apariencia vigente se guarda aparte y al instante: el borrador
+            // del diálogo trae la de cuando se abrió y no debe pisarla.
+            const merged = store.Settings.createFrom({...s, ...appearance})
+            await SaveSettings(merged)
             setLanguage(normalizeLang(s.language))
             applyTheme(s.theme)
-            onSaved(s)
+            onSaved(merged)
             toast.ok(t.settings.saved)
             onClose()
         } catch (e) {
@@ -155,11 +173,11 @@ export function SettingsDialog({
                         compita con Guardar. Abre el navegador del sistema. */}
                     <div className="mr-auto flex items-center gap-1">
                         <Button variant="ghost" title={t.settings.supportCoffeeHint} onClick={() => BrowserOpenURL(BUY_ME_A_COFFEE_URL)}>
-                            <Coffee className="size-3.5 text-warn" />
+                            <Coffee className="icon-ui-14 text-warn" />
                             {t.settings.supportCoffee}
                         </Button>
                         <Button variant="ghost" title={t.settings.supportPatreonHint} onClick={() => BrowserOpenURL(PATREON_JOIN_URL)}>
-                            <Heart className="size-3.5 text-accent" />
+                            <Heart className="icon-ui-14 text-accent" />
                             {t.settings.supportPatreon}
                         </Button>
                     </div>
@@ -173,7 +191,9 @@ export function SettingsDialog({
             }
         >
             <div className="flex min-h-[460px]">
-                <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-line p-2" role="tablist">
+                {/* La barra de pestañas se queda a la vista aunque la página de la derecha se desplace. */}
+                <div className="w-[168px] shrink-0 border-r border-line">
+                <nav className="sticky top-0 flex flex-col gap-0.5 p-2" role="tablist">
                     {TABS.map((id) => (
                         <button
                             key={id}
@@ -183,7 +203,7 @@ export function SettingsDialog({
                             title={t.settings.tabs[id]}
                             onClick={() => setTab(id)}
                             className={cn(
-                                'h-8 rounded-md px-2.5 text-left text-[12.5px] transition-colors duration-100',
+                                'h-8 rounded-md px-2.5 text-left text-ui-12-5 transition-colors duration-100',
                                 tab === id ? 'bg-accent-soft text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg',
                             )}
                         >
@@ -191,6 +211,7 @@ export function SettingsDialog({
                         </button>
                     ))}
                 </nav>
+                </div>
 
                 <div className="min-w-0 flex-1 overflow-auto p-5">
                     {tab === 'general' && (
@@ -229,7 +250,7 @@ export function SettingsDialog({
                             </Field>
 
                             <div className="mt-2 flex flex-col gap-4 border-t border-line pt-4">
-                                <span className="font-mono text-[10.5px] tracking-[0.12em] text-faint uppercase">{t.settings.editor}</span>
+                                <span className="font-mono text-ui-10-5 tracking-[0.12em] text-faint uppercase">{t.settings.editor}</span>
                                 <div className="grid grid-cols-2 gap-4">
                                     <Field label={t.settings.editorIndent} hint={t.settings.editorIndentHint}>
                                         <Select
@@ -244,33 +265,29 @@ export function SettingsDialog({
                                             ))}
                                         </Select>
                                     </Field>
-                                    <Field label={t.settings.editorFontSize} hint={t.settings.editorFontSizeHint}>
-                                        <Input
-                                            type="number"
-                                            min={10}
-                                            max={24}
-                                            step={1}
-                                            title={t.settings.editorFontSize}
-                                            value={s.editorFontSize || 13}
-                                            onChange={(e) => set('editorFontSize', Math.max(10, Math.min(24, Number(e.target.value) || 13)))}
-                                        />
-                                    </Field>
                                 </div>
                                 <div className="flex items-start justify-between gap-4 rounded-lg border border-line px-3 py-2.5">
                                     <div className="flex flex-col gap-0.5">
-                                        <span className="text-[12.5px] font-medium">{t.settings.editorWordWrap}</span>
-                                        <span className="text-[11.5px] leading-relaxed text-faint">{t.settings.editorWordWrapHint}</span>
+                                        <span className="text-ui-12-5 font-medium">{t.settings.editorWordWrap}</span>
+                                        <span className="text-ui-11-5 leading-relaxed text-faint">{t.settings.editorWordWrapHint}</span>
                                     </div>
                                     <Toggle checked={s.editorWordWrap} title={t.settings.editorWordWrap} onChange={(v) => set('editorWordWrap', v)} />
                                 </div>
                                 <div className="flex items-start justify-between gap-4 rounded-lg border border-line px-3 py-2.5">
                                     <div className="flex flex-col gap-0.5">
-                                        <span className="text-[12.5px] font-medium">{t.settings.editorMinimap}</span>
-                                        <span className="text-[11.5px] leading-relaxed text-faint">{t.settings.editorMinimapHint}</span>
+                                        <span className="text-ui-12-5 font-medium">{t.settings.editorMinimap}</span>
+                                        <span className="text-ui-11-5 leading-relaxed text-faint">{t.settings.editorMinimapHint}</span>
                                     </div>
                                     <Toggle checked={s.editorMinimap} title={t.settings.editorMinimap} onChange={(v) => set('editorMinimap', v)} />
                                 </div>
                             </div>
+
+                            <AppearanceSettings
+                                appearance={appearance}
+                                onChange={onAppearance}
+                                onResetAppearance={onResetAppearance}
+                                onResetLayout={onResetLayout}
+                            />
                         </div>
                     )}
 
@@ -291,17 +308,17 @@ export function SettingsDialog({
                                 </div>
                             </Field>
                             <div className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-3 py-2.5">
-                                <span className="font-mono text-[12px]">openscad</span>
+                                <span className="font-mono text-ui-12">openscad</span>
                                 <div className="flex items-center gap-3">
                                     <ToolStatus tool={tool('openscad')} />
                                     <Button variant="ghost" title={t.settings.detect} onClick={detectAll} disabled={detecting}>
-                                        <RefreshCw className={cn('size-3.5', detecting && 'animate-spin')} />
+                                        <RefreshCw className={cn('icon-ui-14', detecting && 'animate-spin')} />
                                         {detecting ? t.settings.detecting : t.settings.detect}
                                     </Button>
                                 </div>
                             </div>
                             {tools.length > 0 && !tool('openscad')?.found ? (
-                                <p className="text-[12px] leading-relaxed text-warn">{t.settings.openscadMissing}</p>
+                                <p className="text-ui-12 leading-relaxed text-warn">{t.settings.openscadMissing}</p>
                             ) : null}
                             <Field label={t.settings.renderBackend}>
                                 <Select value={s.renderBackend} onChange={(e) => set('renderBackend', e.target.value)}>
@@ -311,8 +328,8 @@ export function SettingsDialog({
                             </Field>
                             <div className="flex items-start justify-between gap-4 rounded-lg border border-line px-3 py-2.5">
                                 <div className="flex flex-col gap-0.5">
-                                    <span className="text-[12.5px] font-medium">{t.settings.autoRender}</span>
-                                    <span className="text-[11.5px] leading-relaxed text-faint">{t.settings.autoRenderHint}</span>
+                                    <span className="text-ui-12-5 font-medium">{t.settings.autoRender}</span>
+                                    <span className="text-ui-11-5 leading-relaxed text-faint">{t.settings.autoRenderHint}</span>
                                 </div>
                                 <Toggle checked={s.autoRender} title={t.settings.autoRender} onChange={(v) => set('autoRender', v)} />
                             </div>
@@ -336,20 +353,20 @@ export function SettingsDialog({
                             <div className="flex flex-col gap-2">
                                 <div className="flex items-end justify-between">
                                     <div>
-                                        <h3 className="text-[13px] font-semibold">{t.settings.agents}</h3>
-                                        <p className="text-[11.5px] text-faint">{t.settings.agentsHint}</p>
+                                        <h3 className="text-ui-13 font-semibold">{t.settings.agents}</h3>
+                                        <p className="text-ui-11-5 text-faint">{t.settings.agentsHint}</p>
                                     </div>
                                     <Button variant="ghost" title={t.settings.detect} onClick={detectAll} disabled={detecting}>
-                                        <RefreshCw className={cn('size-3.5', detecting && 'animate-spin')} />
+                                        <RefreshCw className={cn('icon-ui-14', detecting && 'animate-spin')} />
                                         {t.settings.detect}
                                     </Button>
                                 </div>
                                 <div className="divide-y divide-line rounded-lg border border-line">
                                     {cliProviders.map((p) => (
                                         <div key={p.id} className="grid grid-cols-[130px_150px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
-                                            <span className="text-[12.5px] font-medium">{p.name}</span>
+                                            <span className="text-ui-12-5 font-medium">{p.name}</span>
                                             <Input
-                                                className="h-7 font-mono text-[11.5px]"
+                                                className="h-7 font-mono text-ui-11-5"
                                                 value={p.command}
                                                 title={t.settings.command}
                                                 onChange={(e) => setProviders((l) => l.map((x) => (x.id === p.id ? store.AIProvider.createFrom({...x, command: e.target.value}) : x)))}
@@ -376,7 +393,7 @@ export function SettingsDialog({
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <h3 className="text-[13px] font-semibold">{t.settings.modelServers}</h3>
+                                <h3 className="text-ui-13 font-semibold">{t.settings.modelServers}</h3>
                                 {serverProviders.map((p) => {
                                     const cfg = parseCfg(p.config)
                                     const update = (patch: ProviderCfg) =>
@@ -386,7 +403,7 @@ export function SettingsDialog({
                                     return (
                                         <div key={p.id} className="flex flex-col gap-3 rounded-lg border border-line p-3">
                                             <div className="flex items-center justify-between">
-                                                <span className="text-[12.5px] font-medium">{p.name}</span>
+                                                <span className="text-ui-12-5 font-medium">{p.name}</span>
                                                 <Toggle
                                                     checked={p.enabled}
                                                     title={t.settings.enabled}
@@ -436,7 +453,7 @@ export function SettingsDialog({
                                                         {t.settings.testConnection}
                                                     </Button>
                                                     {models[p.id] ? (
-                                                        <span className="text-[11.5px] text-ok">{fmt(t.settings.modelsFound, {n: models[p.id].length})}</span>
+                                                        <span className="text-ui-11-5 text-ok">{fmt(t.settings.modelsFound, {n: models[p.id].length})}</span>
                                                     ) : null}
                                                 </div>
                                             ) : null}
@@ -461,7 +478,7 @@ export function SettingsDialog({
                             {(() => {
                                 const p = printerList.find((x) => x.id === s.defaultPrinter)
                                 return p ? (
-                                    <p className="-mt-2 font-mono text-[11.5px] text-faint">
+                                    <p className="-mt-2 font-mono text-ui-11-5 text-faint">
                                         {fmt(t.settings.buildVolume, {x: p.build_volume.x, y: p.build_volume.y, z: p.build_volume.z})} ·{' '}
                                         {fmt(t.settings.colors, {n: p.multicolor_slots || 1})}
                                     </p>
@@ -487,9 +504,48 @@ export function SettingsDialog({
                                     />
                                 </Field>
                             </div>
-                            <h3 className="mt-2 text-[13px] font-semibold">{t.settings.materials}</h3>
+                            <Field label={t.settings.bambuPath} hint={t.settings.bambuPathHint}>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={s.bambuStudioPath}
+                                        title={t.settings.bambuPath}
+                                        onChange={(e) => set('bambuStudioPath', e.target.value)}
+                                    />
+                                    <Button
+                                        title={t.settings.choose}
+                                        onClick={async () => {
+                                            const f = await ChooseFile(t.settings.bambuPath)
+                                            if (f) set('bambuStudioPath', f)
+                                        }}
+                                    >
+                                        {t.settings.choose}
+                                    </Button>
+                                </div>
+                            </Field>
+                            {(() => {
+                                const b = slicers.find((x) => x.id === 'bambu-studio')
+                                return b ? (
+                                    <div className="-mt-1 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+                                        <span className="font-mono text-ui-12">{t.settings.bambuStudio}</span>
+                                        {b.found ? (
+                                            <span className="selectable flex min-w-0 items-center gap-1.5 text-ui-11-5 text-ok" title={b.path}>
+                                                <CheckCircle2 className="icon-ui-14 shrink-0" />
+                                                <span className="truncate">
+                                                    {t.settings.found} · {b.path}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1.5 text-ui-11-5 text-faint">
+                                                <CircleDashed className="icon-ui-14" />
+                                                {t.settings.notFound}
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : null
+                            })()}
+                            <h3 className="mt-2 text-ui-13 font-semibold">{t.settings.materials}</h3>
                             <div className="divide-y divide-line rounded-lg border border-line">
-                                <div className="grid grid-cols-[1fr_140px_140px] gap-3 px-3 py-1.5 font-mono text-[10.5px] tracking-wider text-faint uppercase">
+                                <div className="grid grid-cols-[1fr_140px_140px] gap-3 px-3 py-1.5 font-mono text-ui-10-5 tracking-wider text-faint uppercase">
                                     <span>{t.settings.material}</span>
                                     <span>{t.settings.density}</span>
                                     <span>{t.settings.costPerKg}</span>
@@ -501,7 +557,7 @@ export function SettingsDialog({
                                         SaveMaterial(materials.find((x) => x.id === m.id) ?? m).catch((e) => toast.error(errorText(e)))
                                     return (
                                         <div key={m.id} className="grid grid-cols-[1fr_140px_140px] items-center gap-3 px-3 py-1.5">
-                                            <span className="text-[12.5px]">{m.name}</span>
+                                            <span className="text-ui-12-5">{m.name}</span>
                                             <Input
                                                 className="h-7"
                                                 type="number"
@@ -527,23 +583,23 @@ export function SettingsDialog({
 
                     {tab === 'skills' && (
                         <div className="flex flex-col gap-4">
-                            <p className="text-[12px] leading-relaxed text-muted">{t.settings.skillsIntro}</p>
+                            <p className="text-ui-12 leading-relaxed text-muted">{t.settings.skillsIntro}</p>
                             <div className="divide-y divide-line rounded-lg border border-line">
                                 {skills.map((k) => (
                                     <div key={k.name} className="flex items-start gap-3 px-3 py-2.5">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-mono text-[12px] font-medium">{k.name}</span>
+                                                <span className="font-mono text-ui-12 font-medium">{k.name}</span>
                                                 <span
                                                     className={cn(
-                                                        'rounded px-1.5 py-px font-mono text-[10px]',
+                                                        'rounded px-1.5 py-px font-mono text-ui-10',
                                                         k.source === 'user' ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-faint',
                                                     )}
                                                 >
                                                     {k.source === 'user' ? t.settings.user : t.settings.builtin}
                                                 </span>
                                             </div>
-                                            <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-faint">{k.description}</p>
+                                            <p className="mt-0.5 line-clamp-2 text-ui-11-5 leading-snug text-faint">{k.description}</p>
                                         </div>
                                         <Toggle
                                             checked={k.enabled}
@@ -583,11 +639,11 @@ export function SettingsDialog({
                                             }
                                         }}
                                     >
-                                        <Plus className="size-3.5" />
+                                        <Plus className="icon-ui-14" />
                                         {t.settings.newSkill}
                                     </Button>
                                     <Button title={t.settings.openSkillsFolder} onClick={() => OpenSkillsFolder().catch((e) => toast.error(errorText(e)))}>
-                                        <FolderOpen className="size-3.5" />
+                                        <FolderOpen className="icon-ui-14" />
                                     </Button>
                                 </div>
                             </Field>
@@ -595,7 +651,7 @@ export function SettingsDialog({
                     )}
 
                     {tab === 'about' && (
-                        <dl className="selectable grid grid-cols-[160px_1fr] gap-x-4 gap-y-2 text-[12.5px]">
+                        <dl className="selectable grid grid-cols-[160px_1fr] gap-x-4 gap-y-2 text-ui-12-5">
                             <dt className="text-muted">{t.settings.aboutVersion}</dt>
                             <dd className="font-mono">{boot.version}</dd>
                             <dt className="text-muted">{t.settings.aboutPlatform}</dt>
@@ -610,15 +666,15 @@ export function SettingsDialog({
                     )}
                     {tab === 'about' && (
                         <section className="mt-6 rounded-lg border border-line bg-surface-2 p-4">
-                            <h3 className="text-[13px] font-semibold">{t.settings.supportTitle}</h3>
-                            <p className="mt-1 text-[12px] leading-relaxed text-muted">{t.settings.supportBody}</p>
+                            <h3 className="text-ui-13 font-semibold">{t.settings.supportTitle}</h3>
+                            <p className="mt-1 text-ui-12 leading-relaxed text-muted">{t.settings.supportBody}</p>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <Button variant="primary" title={t.settings.supportCoffeeHint} onClick={() => BrowserOpenURL(BUY_ME_A_COFFEE_URL)}>
-                                    <Coffee className="size-3.5" />
+                                    <Coffee className="icon-ui-14" />
                                     {t.settings.supportCoffee}
                                 </Button>
                                 <Button title={t.settings.supportPatreonHint} onClick={() => BrowserOpenURL(PATREON_JOIN_URL)}>
-                                    <Heart className="size-3.5 text-accent" />
+                                    <Heart className="icon-ui-14 text-accent" />
                                     {t.settings.supportPatreon}
                                 </Button>
                                 <Button variant="ghost" title={t.settings.supportPatreonPageHint} onClick={() => BrowserOpenURL(PATREON_PAGE_URL)}>

@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react'
+import {lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import type {main, printers, store} from '../wailsjs/go/models'
 import {
     ChooseDirectory,
@@ -16,12 +16,16 @@ import {
     SyncWorkspaceSkills,
 } from '../wailsjs/go/main/App'
 import {Header} from './components/layout/Header'
-import {Workbench, type BottomTab} from './components/layout/Workbench'
+import {PanelHost} from './components/dock/PanelHost'
+import {dockShot, dockState, resetLayout as resetDockLayout, showPanel} from './components/dock/dock'
+import type {PanelId} from './components/dock/panels'
+import type {ShotView} from './components/dock/ViewMenu'
 import {StatusBar} from './components/layout/StatusBar'
 import {Splitter} from './components/layout/Splitter'
 import {confirmLeave, type EditorShot} from './components/editor/EditorPane'
 import {Logo} from './components/layout/Logo'
 import {Sidebar} from './components/workspace/Sidebar'
+import {ExportDialog} from './components/export/ExportDialog'
 import {NewWorkspaceDialog} from './components/workspace/NewWorkspaceDialog'
 import {SettingsDialog, type SettingsTab} from './components/settings/SettingsDialog'
 import {ConfirmHost, confirmDialog} from './components/ui/Dialog'
@@ -31,9 +35,15 @@ import {errorText} from './lib/errors'
 import {applyTheme} from './lib/theme'
 import {onEvent} from './lib/events'
 import {useRenders} from './hooks/useRenders'
-import {LAYOUT_DEFAULTS, LAYOUT_LIMITS, useLayout} from './hooks/useLayout'
+import {LAYOUT_DEFAULTS, LAYOUT_LIMITS, sidebarMaxFor, useLayout, useWindowWidth} from './hooks/useLayout'
+import {useAppearance} from './hooks/useAppearance'
+import {useExport} from './hooks/useExport'
 import {setPlatform} from './lib/platform'
 import type {ViewerShot} from './components/viewer/Viewer'
+
+// Los paneles acoplables (dockview, ~440 kB) van en su propio chunk: el núcleo de
+// la app (cabecera, barra lateral, estado) no lo arrastra.
+const DockWorkbench = lazy(() => import('./components/dock/DockWorkbench').then((m) => ({default: m.DockWorkbench})))
 
 // ShotOptions las usa solo el banco de capturas (src/uishot.tsx) para abrir
 // un diálogo sin simular clics. En la app real no se pasan.
@@ -42,8 +52,15 @@ export type ShotOptions = {
     newWorkspace?: boolean
     select?: string
     viewer?: ViewerShot
-    bottomTab?: BottomTab
+    /** Panel que queda activo al abrir (agent-1, chat, problems…). */
+    panel?: PanelId
+    /** Diseño de paneles a armar: una división distinta con un panel flotante, o solo el visor. */
+    dock?: 'custom' | 'hidden' | 'tall'
+    /** Abre el menú Ver o el diálogo de diseños guardados. */
+    viewMenu?: ShotView
     editor?: EditorShot
+    /** Abre el diálogo de exportación 3MF en cuanto el checkpoint tiene render. */
+    exportDialog?: boolean
 }
 
 // Volumen por defecto si la impresora del workspace no está en el catálogo
@@ -61,9 +78,10 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
     const [newOpen, setNewOpen] = useState(false)
-    const [bottomTab, setBottomTab] = useState<BottomTab>(shot?.bottomTab ?? 'agent')
     const [detectedOpenSCAD, setDetectedOpenSCAD] = useState<{version: string; missing: boolean} | null>(null)
-    const {layout, preview, commit, toggleSidebar} = useLayout(boot?.settings.layout, (l) =>
+    const {appearance, change: changeAppearance, reset: resetAppearance} = useAppearance(boot?.settings)
+    const winW = useWindowWidth()
+    const {layout, preview, commit, toggleSidebar, toggleStatusBar, resetLayout} = useLayout(boot?.settings.layout, (l) =>
         // El diálogo de Configuración guarda la configuración entera: tiene
         // que ver el layout nuevo para no pisarlo.
         setBoot((b) => (b ? ({...b, settings: {...b.settings, layout: l}} as main.Bootstrap) : b)),
@@ -95,6 +113,14 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         }
         if (shot.newWorkspace) setNewOpen(true)
     }, [boot, shot])
+
+    // Banco de capturas: el estado del dock a fotografiar se arma dentro de attach
+    // (dockShot); aquí solo se deja activo el panel pedido.
+    dockShot.mode = shot?.dock
+    const dockReady = dockState.use((s) => s.ready)
+    useEffect(() => {
+        if (dockReady && shot?.panel) showPanel(shot.panel)
+    }, [dockReady, shot])
 
     const open = useCallback(
         async (id: number) => {
@@ -159,6 +185,22 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         void renderFile(selected)
     }, [boot?.settings.autoRender, view, selected, rendersLoaded, renderResults, renderRunning, renderFile])
 
+    const exp = useExport({
+        workspaceId: view?.workspace.id ?? null,
+        file: selected,
+        result: selected ? renderResults[selected] : undefined,
+        running: !!(selected && renderRunning[selected]),
+        bambuPath: boot?.settings.bambuStudioPath ?? '',
+    })
+
+    // Banco de capturas: abre el diálogo de exportación cuando hay render.
+    const shotExport = !!shot?.exportDialog
+    const exportReady = exp.why === ''
+    const {openDialog: openExportDialog} = exp
+    useEffect(() => {
+        if (shotExport && exportReady) openExportDialog()
+    }, [shotExport, exportReady, openExportDialog])
+
     const select = async (file: string) => {
         if (!view || file === selected) return
         if (!(await confirmLeave(t, selected))) return
@@ -204,34 +246,57 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const bv = printer?.build_volume
     const bed = bv && bv.x > 0 && bv.y > 0 && bv.z > 0 ? bv : FALLBACK_BED
 
-    if (!boot) {
+    // Los tamaños guardados se respetan mientras entren en la ventana: si se
+    // achica, la barra lateral cede para que el visor y el código no desborden.
+    const zen = dockState.use((s) => s.zen)
+    const sidebarHidden = layout.sidebarCollapsed || zen
+    const statusBarHidden = layout.statusBarHidden || zen
+    const sidebarMax = sidebarMaxFor(winW)
+    const sidebarWidth = Math.min(layout.sidebarWidth || LAYOUT_DEFAULTS.sidebarWidth, sidebarMax)
+    // Lo que ven el editor y los paneles: la configuración guardada con la
+    // apariencia en vivo (cambia al elegir, sin esperar a «Guardar»).
+    const liveSettings = useMemo(() => (boot ? ({...boot.settings, ...appearance} as store.Settings) : null), [boot, appearance])
+
+    if (!boot || !liveSettings) {
         return (
             <div className="flex h-full items-center justify-center gap-3 text-muted">
-                <Logo className="size-6 animate-pulse text-fg" />
+                <Logo className="icon-ui-24 animate-pulse text-fg" />
                 {t.app.loading}
             </div>
         )
     }
 
     return (
-        <div className="flex h-full flex-col">
+        <div data-lock className="flex h-full flex-col overflow-clip">
             <Header
                 platform={boot.platform}
                 workspaceName={view?.workspace.name}
-                sidebarCollapsed={layout.sidebarCollapsed}
+                sidebarCollapsed={sidebarHidden}
                 onToggleSidebar={toggleSidebar}
+                statusBarHidden={statusBarHidden}
+                onToggleStatusBar={toggleStatusBar}
+                viewShot={shot?.viewMenu}
                 onSettings={() => openSettings()}
+                exportWhy={exp.why}
+                exportBusy={exp.busy}
+                onExportStl={() => void exp.exportStl()}
+                onExport3mf={exp.openDialog}
+                onExportPng={() => void exp.exportPng()}
             />
             {boot.initError ? (
-                <div className="selectable border-b border-danger/40 bg-surface px-4 py-2 text-[12px] text-danger">
+                <div className="selectable border-b border-danger/40 bg-surface px-4 py-2 text-ui-12 text-danger">
                     {t.app.initError}: {boot.initError}
                 </div>
             ) : null}
-            <div className="flex min-h-0 flex-1">
-                {layout.sidebarCollapsed ? null : (
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-clip">
+                {sidebarHidden ? null : (
                 <>
                 <Sidebar
-                    width={layout.sidebarWidth || LAYOUT_DEFAULTS.sidebarWidth}
+                    width={sidebarWidth}
+                    workspacesHeight={layout.workspacesHeight || LAYOUT_DEFAULTS.workspacesHeight}
+                    onWorkspacesResize={(v) => preview({workspacesHeight: v})}
+                    onWorkspacesCommit={(v) => commit({workspacesHeight: v})}
+                    onWorkspacesReset={() => commit({workspacesHeight: LAYOUT_DEFAULTS.workspacesHeight})}
                     workspaces={workspaces}
                     view={view}
                     selected={selected}
@@ -289,9 +354,9 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 />
                 <Splitter
                     orientation="vertical"
-                    size={layout.sidebarWidth || LAYOUT_DEFAULTS.sidebarWidth}
+                    size={sidebarWidth}
                     min={LAYOUT_LIMITS.sidebar[0]}
-                    max={LAYOUT_LIMITS.sidebar[1]}
+                    max={sidebarMax}
                     title={t.layout.resizeSidebar}
                     className="-mx-1"
                     onResize={(v) => preview({sidebarWidth: v})}
@@ -300,7 +365,10 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 />
                 </>
                 )}
-                <Workbench
+                <Suspense fallback={<main className="min-h-0 min-w-0 flex-1 p-2" />}>
+                    <DockWorkbench initialLayout={boot.settings.dockLayout} savedLayouts={boot.settings.dockLayouts ?? []} />
+                </Suspense>
+                <PanelHost
                     workspaceId={view?.workspace.id ?? null}
                     file={selected}
                     source={source}
@@ -308,10 +376,9 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     running={!!(selected && renderRunning[selected])}
                     bed={bed}
                     swatches={boot.settings.swatches}
-                    settings={boot.settings}
-                    layout={layout}
-                    bottomTab={bottomTab}
-                    onBottomTab={setBottomTab}
+                    settings={liveSettings}
+                    dimsCollapsed={layout.dimsCollapsed}
+                    onDimsCollapsed={(v) => commit({dimsCollapsed: v})}
                     onOpenAISettings={() => openSettings('ai')}
                     // El interruptor de la terminal guarda autoIterate por su
                     // lado: se refleja en boot.settings para que un guardado
@@ -319,8 +386,6 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     onAutoIterateChange={(v) =>
                         setBoot((b) => (b ? ({...b, settings: {...b.settings, autoIterate: v}} as main.Bootstrap) : b))
                     }
-                    onLayoutPreview={preview}
-                    onLayoutCommit={commit}
                     onSaved={(name) => {
                         // El watcher lo renderiza (auto-render) al verlo
                         // aparecer: el efecto de «elegido sin resultado» no
@@ -340,14 +405,16 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     onOpenSettings={() => openSettings('openscad')}
                 />
             </div>
-            <StatusBar
-                workspace={view?.workspace.name}
-                printer={printer?.name}
-                file={selected}
-                renderDiags={selected ? renderResults[selected]?.diagnostics : undefined}
-                openscad={openscad}
-                onProblems={() => setBottomTab('problems')}
-            />
+            {statusBarHidden ? null : (
+                <StatusBar
+                    workspace={view?.workspace.name}
+                    printer={printer?.name}
+                    file={selected}
+                    renderDiags={selected ? renderResults[selected]?.diagnostics : undefined}
+                    openscad={openscad}
+                    onProblems={() => showPanel('problems')}
+                />
+            )}
 
             <NewWorkspaceDialog
                 open={newOpen}
@@ -359,12 +426,32 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     await open(id)
                 }}
             />
+            <ExportDialog
+                open={exp.dialog}
+                onClose={exp.closeDialog}
+                workspaceId={view?.workspace.id ?? null}
+                fileName={selected}
+                bambuFound={!!exp.bambu}
+                onExported={exp.exported}
+                onOpenSettings={() => openSettings('printing')}
+            />
             <SettingsDialog
                 open={settingsOpen}
                 initialTab={settingsTab}
                 onClose={() => setSettingsOpen(false)}
                 boot={boot}
                 printerList={printerList}
+                appearance={appearance}
+                onAppearance={changeAppearance}
+                onResetAppearance={() => {
+                    resetAppearance()
+                    toast.ok(t.appearance.resetAppearanceDone)
+                }}
+                onResetLayout={() => {
+                    resetLayout()
+                    resetDockLayout()
+                    toast.ok(t.appearance.resetLayoutDone)
+                }}
                 onSaved={(s) => setBoot({...boot, settings: s} as main.Bootstrap)}
             />
             <ConfirmHost title="ScadLab" />

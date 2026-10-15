@@ -11,8 +11,8 @@ function num(v: number, digits: number): string {
 function Row({label, hint, children}: {label: string; hint: string; children: React.ReactNode}) {
     return (
         <div className="flex items-baseline justify-between gap-4" title={hint}>
-            <span className="font-mono text-[10px] tracking-[0.1em] text-faint uppercase">{label}</span>
-            <span className="font-mono text-[11px] text-fg tabular-nums">{children}</span>
+            <span className="font-mono text-ui-10 tracking-[0.1em] text-faint uppercase">{label}</span>
+            <span className="font-mono text-ui-11 text-fg tabular-nums">{children}</span>
         </div>
     )
 }
@@ -56,16 +56,16 @@ export function Dimensions({
             aria-expanded={!collapsed}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => onCollapsed(!collapsed)}
-            className="-mr-1 inline-flex size-5 items-center justify-center rounded text-faint transition-colors duration-100 hover:bg-surface-2 hover:text-fg"
+            className="-mr-1 inline-flex icon-ui-20 items-center justify-center rounded text-faint transition-colors duration-100 hover:bg-surface-2 hover:text-fg"
         >
-            {collapsed ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+            {collapsed ? <ChevronUp className="icon-ui-12" /> : <ChevronDown className="icon-ui-12" />}
         </button>
     )
     if (collapsed) {
         return (
             <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-line bg-surface/90 py-1 pr-2 pl-3 backdrop-blur-sm">
-                <span className="font-mono text-[10px] tracking-[0.12em] text-muted uppercase">{t.viewer.dims}</span>
-                <span className="font-mono text-[11px] text-fg tabular-nums" title={t.viewer.sizeHint}>
+                <span className="font-mono text-ui-10 tracking-[0.12em] text-muted uppercase">{t.viewer.dims}</span>
+                <span className="font-mono text-ui-11 text-fg tabular-nums" title={t.viewer.sizeHint}>
                     {fmt(t.viewer.mm, {v: size})}
                 </span>
                 {toggle}
@@ -75,7 +75,7 @@ export function Dimensions({
     return (
         <div className="pointer-events-auto flex min-w-[190px] flex-col gap-1 rounded-lg border border-line bg-surface/90 px-3 py-2 backdrop-blur-sm">
             <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] tracking-[0.12em] text-muted uppercase" title={exact ? t.viewer.dims : t.viewer.approx}>
+                <span className="font-mono text-ui-10 tracking-[0.12em] text-muted uppercase" title={exact ? t.viewer.dims : t.viewer.approx}>
                     {t.viewer.dims}
                 </span>
                 {toggle}
@@ -91,13 +91,13 @@ export function Dimensions({
             </Row>
             {exact ? (
                 info.watertight ? (
-                    <span className="flex items-center gap-1 text-[11px] text-ok" title={t.viewer.closedHint}>
-                        <CircleCheck className="size-3" />
+                    <span className="flex items-center gap-1 text-ui-11 text-ok" title={t.viewer.closedHint}>
+                        <CircleCheck className="icon-ui-12" />
                         {t.viewer.closed}
                     </span>
                 ) : (
-                    <span className="flex items-center gap-1 text-[11px] text-warn" title={t.viewer.openHint}>
-                        <TriangleAlert className="size-3" />
+                    <span className="flex items-center gap-1 text-ui-11 text-warn" title={t.viewer.openHint}>
+                        <TriangleAlert className="icon-ui-12" />
                         {t.viewer.open}
                     </span>
                 )

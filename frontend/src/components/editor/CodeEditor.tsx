@@ -217,5 +217,5 @@ export default function CodeEditor(props: CodeEditorProps) {
         monaco.editor.setModelMarkers(model, 'scadlab', markers)
     }, [props.markers, props.docKey])
 
-    return <div ref={host} className="selectable h-full w-full" />
+    return <div ref={host} data-font-area="editor" className="selectable h-full w-full" />
 }

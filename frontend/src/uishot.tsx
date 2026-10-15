@@ -9,6 +9,12 @@
 //   lang   en | es
 //   theme  dark | light
 //   platform darwin | windows
+//   scale  tamaño de la interfaz en % (90–150); por defecto 100
+//   keytest 1 = simula ⌘+ ⌘- ⌘0 (interfaz) y ⌘+ con el foco en el editor, la terminal
+//          y el chat; el resultado queda en data-keytest
+//   dockraw  texto crudo del diseño de paneles guardado (prueba de diseño roto o ajeno)
+//   poke   1 = intenta desplazar el documento (scrollTo, focus, scrollIntoView)
+//          para comprobar que no se mueve; el resultado queda en data-docfit
 //
 // Una vista nueva = una entrada en VIEWS + su fila en scripts/help-shots.sh.
 import {StrictMode} from 'react'
@@ -20,6 +26,8 @@ import {loadMesh} from './lib/mesh'
 import {loadCodeEditor} from './components/editor/lazy'
 import {setLanguage} from './i18n'
 import {terminalShot} from './components/terminal/shot'
+import {shotTools} from './components/dock/dock'
+import {installScrollGuard} from './lib/scrollGuard'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
 import catalog from '../../assets/scad/catalog.json'
@@ -30,6 +38,8 @@ const lang = q.get('lang') === 'es' ? 'es' : 'en'
 const theme = q.get('theme') || 'dark'
 const platform = q.get('platform') || 'darwin'
 const es = lang === 'es'
+// Tamaño de la interfaz en % (UISHOT_SCALE en scripts/uishot.sh).
+const scale = [90, 100, 115, 130, 150].includes(Number(q.get('scale'))) ? Number(q.get('scale')) : 100
 
 type Scenario = 'ok' | 'error' | 'missing' | 'empty'
 const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
@@ -43,7 +53,7 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     editor: {scenario: 'ok'},
     'editor-edit': {scenario: 'ok', shot: {editor: {mode: 'edit'}}},
     'editor-search': {scenario: 'ok', shot: {editor: {mode: 'search'}}},
-    problems: {scenario: 'error', shot: {select: '004-usb-c-cutout.scad', bottomTab: 'problems'}},
+    problems: {scenario: 'error', shot: {select: '004-usb-c-cutout.scad', panel: 'problems'}},
     'save-checkpoint': {
         scenario: 'ok',
         shot: {
@@ -56,23 +66,40 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     },
     // Terminal de agentes (S5, bloque 5.A): una sesión de Claude Code simulada
     // escribiendo un checkpoint, y el menú para retomar una conversación.
-    terminal: {scenario: 'ok', shot: {bottomTab: 'agent'}},
-    'terminal-sessions': {scenario: 'ok', shot: {bottomTab: 'agent'}},
+    terminal: {scenario: 'ok', shot: {panel: 'agent-1', dock: 'tall'}},
+    'terminal-sessions': {scenario: 'ok', shot: {panel: 'agent-1', dock: 'tall'}},
     // Chat con modelos (S5, bloque 5.B): una conversación cuya respuesta trae un
     // bloque OpenSCAD con «Guardar como checkpoint», y el aviso sin proveedores.
-    chat: {scenario: 'ok', shot: {bottomTab: 'chat'}},
-    'chat-empty': {scenario: 'ok', shot: {bottomTab: 'chat'}},
-    'chat-new': {scenario: 'ok', shot: {bottomTab: 'chat'}},
-    'chat-stream': {scenario: 'ok', shot: {bottomTab: 'chat'}},
+    chat: {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-empty': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-new': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-stream': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    // Exportación (S9, tanda 9.B): el diálogo de 3MF con dos colores y sin avisos,
+    // y con cinco colores en una A1 mini (admite 4: aviso de colores de más).
+    'export-3mf': {scenario: 'ok', shot: {exportDialog: true}},
+    'export-3mf-warning': {scenario: 'ok', shot: {exportDialog: true}},
+    // Paneles acoplables (S4b): el diseño predeterminado, uno con otra división y
+    // un panel flotante, el menú Ver abierto, el diálogo de diseños guardados, y
+    // solo el visor con la barra lateral oculta.
+    'dock-default': {scenario: 'ok'},
+    'dock-custom': {scenario: 'ok', shot: {dock: 'custom', panel: 'chat'}},
+    'dock-view-menu': {scenario: 'ok', shot: {viewMenu: 'menu'}},
+    'dock-layouts': {scenario: 'ok', shot: {viewMenu: 'layouts'}},
+    'dock-hidden': {scenario: 'ok', shot: {dock: 'hidden'}},
+    'dock-150': {scenario: 'ok', shot: {panel: 'agent-1'}},
     empty: {scenario: 'empty'},
     newworkspace: {scenario: 'empty', shot: {newWorkspace: true}},
 }
+// Apariencia (S10): la pantalla de Configuración → General con su bloque de
+// tamaños, y la ventana principal con la interfaz agrandada (scale en la URL).
+VIEWS['small'] = {scenario: 'ok', shot: {panel: 'agent-1'}}
+VIEWS['appearance-150'] = {scenario: 'ok', shot: {panel: 'agent-1'}}
+VIEWS['settings-appearance'] = {scenario: 'ok', shot: {settingsTab: 'general'}}
 for (const tab of ['general', 'openscad', 'ai', 'printing', 'skills', 'about'] as SettingsTab[]) {
     VIEWS[`settings-${tab}`] = {scenario: 'ok', shot: {settingsTab: tab}}
 }
 const cfg = VIEWS[view] ?? VIEWS.main
-const isTerminalView = view === 'terminal' || view === 'terminal-sessions'
-const isChatView = view.startsWith('chat')
+const isTerminalView = view === 'terminal' || view === 'terminal-sessions' || view === 'appearance-150' || view === 'small' || view === 'dock-150'
 if (view === 'terminal-sessions') terminalShot.openSessions = true
 
 // Bus de eventos mínimo en lugar del runtime de Wails.
@@ -255,12 +282,27 @@ const printers = [
     ['bambu-h2d', 'Bambu Lab H2D', 350, 320, 325, 24],
 ].map(([id, name, x, y, z, slots]) => ({id, name, build_volume: {x, y, z}, nozzle_mm: 0.4, multicolor_slots: slots, multicolor_system: 'AMS', enclosed: false, heated_chamber: false, notes: '', verify: []}))
 
+// Diseños propios inventados (los que lista «Diseños guardados…»). Cada uno es el
+// sobre de un diseño real: se arma al vuelo con el predeterminado como base.
+const savedLayouts =
+    view === 'dock-layouts'
+        ? [
+              {name: es ? 'Revisión con agente' : 'Review with agent', json: '{"v":1,"dock":{"grid":{"root":{"type":"branch","data":[]},"height":1,"width":1,"orientation":"HORIZONTAL"},"panels":{"viewport":{"id":"viewport","contentComponent":"slot"},"source":{"id":"source","contentComponent":"slot"},"agent-1":{"id":"agent-1","contentComponent":"slot"},"chat":{"id":"chat","contentComponent":"slot"}}}}'},
+              {name: es ? 'Solo código y chat' : 'Code and chat only', json: '{"v":1,"dock":{"grid":{"root":{"type":"branch","data":[]},"height":1,"width":1,"orientation":"HORIZONTAL"},"panels":{"source":{"id":"source","contentComponent":"slot"},"chat":{"id":"chat","contentComponent":"slot"}}}}'},
+              {name: es ? 'Presentación' : 'Presentation', json: '{"v":1,"dock":{"grid":{"root":{"type":"branch","data":[]},"height":1,"width":1,"orientation":"HORIZONTAL"},"panels":{"viewport":{"id":"viewport","contentComponent":"slot"}}}}'},
+          ]
+        : []
+
 const settings = {
     language: lang, theme, openscadPath: '', renderBackend: 'manifold', workspacesRoot: '',
     defaultPrinter: 'bambu-a1-mini', defaultMaterial: 'pla', infillPercent: 15, defaultAgent: 'claude',
-    autoRender: true, renderTimeoutSec: 300, autoIterate: true,
+    autoRender: true, renderTimeoutSec: 300, autoIterate: true, bambuStudioPath: '',
     editorIndent: 4, editorFontSize: 13, editorWordWrap: false, editorMinimap: false,
-    layout: {sidebarWidth: 264, sidebarCollapsed: false, codeWidth: 440, bottomHeight: isTerminalView ? 400 : isChatView ? 520 : 200, dimsCollapsed: view === 'viewer-split'},
+    uiScale: scale, terminalFontSize: 13, chatFontSize: 13,
+    layout: {sidebarWidth: 264, sidebarCollapsed: view === 'dock-hidden', codeWidth: 440, bottomHeight: 220, dimsCollapsed: view === 'viewer-split', statusBarHidden: false, workspacesHeight: 150},
+    // Sin diseño guardado: el predeterminado. Los diseños con nombre son datos inventados.
+    dockLayout: q.get('dockraw') ?? '',
+    dockLayouts: savedLayouts,
     swatches: ['#ff7a1a', '#e7e9ee', '#2b2f38', '#3ccf7a', '#5aa2ff', '#d32f2f'],
 }
 
@@ -394,7 +436,30 @@ const chatMocks = {
     DeleteChat: () => P(undefined),
 }
 
+// Exportación 3MF: lo que devolvería PreviewExportParts. Los nombres tienen la
+// forma real del backend («Color N (#RRGGBB)»).
+const part = (n: number, hex: string, triangles: number) => ({name: `Color ${n} (${hex})`, color: hex, triangles, extruder: n, uncolored: false})
+const exportParts =
+    view === 'export-3mf-warning'
+        ? [part(1, '#2B2F38', 3412), part(2, '#FF7A1A', 764), part(3, '#E7E9EE', 1180), part(4, '#3CCF7A', 522), part(5, '#5AA2FF', 396)]
+        : [part(1, '#2B2F38', 3412), part(2, '#FF7A1A', 764)]
+const exportWarnings =
+    view === 'export-3mf-warning'
+        ? [
+              es
+                  ? 'El modelo usa 5 colores y tu Bambu Lab A1 mini admite 4 a la vez (AMS lite). Unifica algunos colores o imprime por partes.'
+                  : 'The model uses 5 colors and your Bambu Lab A1 mini supports 4 at a time (AMS lite). Merge some colors or print in separate parts.',
+          ]
+        : []
+const bambuApp = platform === 'windows' ? 'C:\\Program Files\\Bambu Studio\\bambu-studio.exe' : '/Applications/BambuStudio.app'
+
 const App_ = {
+    // Bambu Studio detectado; abrir y mostrar no hacen nada (el banco no lanza apps).
+    DetectSlicers: () => P([{id: 'bambu-studio', name: 'Bambu Studio', path: bambuApp, found: true}]),
+    OpenInSlicer: () => P(undefined),
+    RevealPath: () => P(undefined),
+    PreviewExportParts: () => P({parts: exportParts, warnings: exportWarnings}),
+    ExportCheckpoint: () => P({path: '', format: '3mf', parts: exportParts, warnings: exportWarnings}),
     GetBootstrap: () => P({version: '0.1.0', platform, dataDir: platform === 'windows' ? 'C:\\Users\\maker\\AppData\\Roaming\\ScadLab' : '/Users/maker/Library/Application Support/ScadLab', schemaVersion: 1, initError: '', settings}),
     GetSettings: () => P(settings),
     ListPrinters: () => P(printers),
@@ -417,6 +482,13 @@ const App_ = {
     SaveSwatches: () => P(undefined),
     SaveScreenshot: () => P(''),
     SaveLayout: (l: unknown) => P(l),
+    // Lo último que se guardó, para que las pruebas con CDP lo lean.
+    SaveDockLayout: (j: string) => {
+        ;(window as unknown as {__dockSaved?: string}).__dockSaved = j
+        return P(undefined)
+    },
+    SaveDockLayouts: (list: unknown) => P(list),
+    SaveAppearance: (a: unknown) => P(a),
     LintCheckpointSource: (_id: number, file: string) => P(lintFor(file)),
     FormatScad: (src: string) => P(src),
     SaveAsCheckpoint: () => P('007-lid-screws.scad'),
@@ -513,7 +585,7 @@ const syncGL = window.setInterval(() => {
 // El editor (Monaco) también entra con lazy(): mismo motivo. El idioma va
 // antes, porque decide con qué textos carga Monaco sus widgets.
 setLanguage(lang)
-Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath)])
+Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath)])
     .catch(() => {})
     .then(() =>
         createRoot(document.getElementById('root')!).render(
@@ -522,3 +594,96 @@ Promise.all([import('./components/viewer/Viewer'), import('./components/terminal
             </StrictMode>,
         ),
     )
+
+// Para las pruebas con CDP (scripts de revisión locales): el controlador del dock.
+;(window as unknown as {__dock: typeof shotTools}).__dock = shotTools
+
+// Guard de desplazamiento igual que la app real (main.tsx).
+installScrollGuard()
+
+// settings-appearance: Configuración → General desplazada hasta el bloque de
+// Apariencia (el diálogo es más alto que la ventana).
+if (view === 'settings-appearance') {
+    const find = window.setInterval(() => {
+        const el = document.querySelector('[data-testid="appearance"]')
+        if (el) {
+            el.scrollIntoView({block: 'start'})
+            window.clearInterval(find)
+        }
+    }, 100)
+}
+
+// keytest=1: comprueba los atajos de tamaño con teclas simuladas (⌘ porque el
+// banco corre como darwin). Cada paso se hace con el foco donde lo tendría el
+// usuario; al final se lee lo que quedó aplicado.
+if (q.get('keytest') === '1') {
+    const press = (key: string, focusSel?: string) => {
+        const el = focusSel ? document.querySelector<HTMLElement>(focusSel) : null
+        if (focusSel) el?.focus()
+        else (document.activeElement as HTMLElement | null)?.blur()
+        const target = (document.activeElement as HTMLElement | null) ?? document.body
+        target.dispatchEvent(new KeyboardEvent('keydown', {key, metaKey: true, bubbles: true, cancelable: true}))
+    }
+    const read = () => {
+        const fs = (sel: string) => {
+            const e = document.querySelector(sel)
+            return e ? getComputedStyle(e).fontSize : null
+        }
+        return {
+            ui: document.documentElement.style.getPropertyValue('--ui-font-scale'),
+            chat: document.documentElement.style.getPropertyValue('--chat-font-size'),
+            editor: fs('.monaco-editor .view-lines'),
+            terminal: fs('.xterm-rows'),
+        }
+    }
+    const steps: [string, string?][] = [['=' ], ['='], ['-'], ['0'], ['=', '.monaco-editor textarea'], ['=', '.xterm-helper-textarea'], ['=', '[data-font-area="chat"] textarea']]
+    const log: unknown[] = []
+    steps.forEach(([key, sel], i) =>
+        window.setTimeout(() => {
+            press(key, sel)
+            window.setTimeout(() => {
+                log.push({step: `${sel ?? 'body'} ${key}`, ...read()})
+                document.documentElement.dataset.keytest = JSON.stringify(log)
+            }, 50)
+        }, 3000 + i * 400),
+    )
+}
+
+// Informe de ajuste del documento: lo lee scripts/uishot-fit.sh con --dump-dom.
+// El documento no puede medir más que la ventana ni estar desplazado; con
+// poke=1 antes se le provoca el desplazamiento que lo rompía.
+const poke = q.get('poke') === '1'
+let pokes = 0
+const report = () => {
+    const d = document.documentElement
+    if (poke && pokes++ < 10) {
+        // Un hijo que desborda la ventana (lo que hace un contenido más
+        // ancho/alto que ella): sin esto no hay nada que desplazar.
+        if (!document.getElementById('poke-overflow')) {
+            const o = document.createElement('div')
+            o.id = 'poke-overflow'
+            o.style.cssText = 'width:3000px;height:3000px;pointer-events:none'
+            document.getElementById('root')!.appendChild(o)
+        }
+        window.scrollTo(37, 53)
+        d.scrollTop = 41
+        d.scrollLeft = 29
+        document.body.scrollTop = 17
+        document.getElementById('root')!.scrollTop = 23
+        document.querySelector<HTMLElement>('.xterm-helper-textarea')?.focus()
+        document.querySelector<HTMLElement>('header')?.scrollIntoView()
+    }
+    const bar = document.querySelector('footer')?.getBoundingClientRect()
+    const head = document.querySelector('header')?.getBoundingClientRect()
+    d.dataset.docfit = JSON.stringify({
+        iw: innerWidth, ih: innerHeight,
+        sw: d.scrollWidth, sh: d.scrollHeight,
+        sx: d.scrollLeft + document.body.scrollLeft + scrollX, sy: d.scrollTop + document.body.scrollTop + scrollY,
+        rootTop: document.getElementById('root')!.scrollTop,
+        headerTop: head ? Math.round(head.top) : null, headerLeft: head ? Math.round(head.left) : null,
+        footerBottom: bar ? Math.round(bar.bottom) : null,
+        footerRight: bar ? Math.round(bar.right) : null,
+    })
+}
+window.setInterval(report, 200)
+new MutationObserver(report).observe(document.body, {childList: true, subtree: true})

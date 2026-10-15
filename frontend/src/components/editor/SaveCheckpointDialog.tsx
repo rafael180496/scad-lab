@@ -50,7 +50,7 @@ export function SaveCheckpointDialog({
                         {t.editor.cancel}
                     </Button>
                     <Button variant="primary" title={t.editor.saveButtonHint} onClick={submit} disabled={!ok}>
-                        <GitBranchPlus className="size-3.5" />
+                        <GitBranchPlus className="icon-ui-14" />
                         {t.editor.saveButton}
                     </Button>
                 </>
@@ -63,12 +63,12 @@ export function SaveCheckpointDialog({
                     submit()
                 }}
             >
-                <p className="text-[12.5px] leading-relaxed text-muted">
+                <p className="text-ui-12-5 leading-relaxed text-muted">
                     {fmt(t.editor.saveIntro, {parent})}
                 </p>
                 <Field label={t.editor.label} hint={fmt(t.editor.labelHint, {name: `NNN-${slugify(label)}.scad`})}>
                     <Input
-                        autoFocus
+                        data-autofocus
                         value={label}
                         placeholder={t.editor.labelPlaceholder}
                         title={t.editor.label}

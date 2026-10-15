@@ -80,6 +80,7 @@ Plan: [.claude/specs/s4-editor-openscad.md](../.claude/specs/s4-editor-openscad.
 | 4.8 | Settings del editor (sangría, letra, ajuste, minimapa); capturas y ayuda | FS | ✅ |
 | 4.9 | Menú nativo Edición en macOS (`appMenu` en `main.go`): sin él WKWebView no entrega ⌘C/⌘V/⌘Z al editor | architect | ✅ |
 | 4.10 | Probar el editor en la ventana real (WKWebView/WebView2): workers de Monaco, copiar/pegar, ⌥⌘F | usuario | ⬜ |
+| 4.11 | **Paneles acoplables (S4b)**: visor, código, agentes, chat y problemas con pestañas estilo VS Code (dockview), dividir, flotar, ocultar sin destruir, menú Ver, diseños (de fábrica y propios), modo enfoque, divisores con mínimos; reemplaza a `Workbench`/`Splitter` de S4. Plan: [.claude/specs/s4b-paneles-acoplables.md](../.claude/specs/s4b-paneles-acoplables.md). Pendiente del usuario: arrastrar pestañas en la ventana real de Wails (ver `claude/04-frontend.md`) | FS | ✅ |
 
 ## S5 — Agentes de IA en la app ✅ (falta 5.8, prueba del usuario en la ventana real)
 
@@ -119,13 +120,18 @@ Plan: [.claude/specs/s5-agentes-ia.md](../.claude/specs/s5-agentes-ia.md).
 | 8.1 | Hasta 4 workspaces abiertos (Wails v2 es de una ventana: pestañas de proyecto, o instancias con candado — decide `architect`) | FS |
 | 8.2 | El agente ve todos los workspaces abiertos (`--add-dir` / equivalentes) | FS |
 
-## S9 — Exportación ⬜
+## S9 — Exportación ✅ (falta 9.6, prueba manual del usuario en Bambu Studio)
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 9.1 | Botones STL / 3MF / PNG de la cabecera | FS |
-| 9.2 | 3MF multicolor generado en Go: un objeto por color con `basematerials`, abre en Bambu Studio con partes asignables al AMS | OS |
-| 9.3 | Panel de costo de impresión | FS |
+Plan: [.claude/specs/s9-exportacion.md](../.claude/specs/s9-exportacion.md). Tanda 9.A (núcleo Go) ✅; 9.B (interfaz) ✅. Detalle en [11-exportacion.md](11-exportacion.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 9.1 | Botones STL / 3MF / PNG de la cabecera (activos con render OK, `title` con el motivo si no), diálogo de 3MF con la vista previa de partes y extrusores, avisos, atajos ⌘/Ctrl+E y ⌘/Ctrl+⇧+E | FS | ✅ |
+| 9.2 | 3MF multicolor generado en Go: un objeto con una parte por color y su extrusor, STL por color (.zip) | OS | ✅ |
+| 9.3 | «Abrir en Bambu Studio» (la app, nunca su CLI): `DetectSlicers`, `OpenInSlicer`, `RevealPath`, setting `bambuStudioPath`, aviso con «Mostrar en el Finder» | FS | ✅ |
+| 9.4 | Capturas `export-3mf` y `export-3mf-warning`; ayuda de exportar y multicolor sin «En desarrollo» | FS | ✅ |
+| 9.5 | Panel de costo de impresión | FS | ⬜ |
+| 9.6 | Abrir un 3MF exportado en Bambu Studio y comprobar una parte por color con su extrusor, asignar AMS y laminar (no se automatiza: regla 9 de `technical.md`) | usuario | ⬜ |
 
 ## S10 — Pulido y versión ⬜
 

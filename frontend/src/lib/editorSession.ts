@@ -48,8 +48,16 @@ export function editorCommands(): EditorCommands | null {
     return commands
 }
 
+// Antes de ir a una línea hay que ver el editor: si su panel está oculto, quien
+// lo registra (PanelHost) lo muestra.
+let beforeGoTo: (() => void) | null = null
+export function onBeforeGoToLine(fn: (() => void) | null) {
+    beforeGoTo = fn
+}
+
 export function goToLine(line: number, col?: number) {
     if (line <= 0) return
+    beforeGoTo?.()
     if (commands) commands.revealLine(line, col)
     else pendingLine = {line, col}
 }

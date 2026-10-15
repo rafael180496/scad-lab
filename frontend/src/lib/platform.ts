@@ -32,3 +32,9 @@ export function withKeys(title: string, combo: string): string {
 export function isMod(e: KeyboardEvent | React.KeyboardEvent): boolean {
     return mac ? e.metaKey : e.ctrlKey
 }
+
+// modLabel es el modificador principal tal como se escribe en un rótulo:
+// «⌘» en macOS, «Ctrl+» en Windows. Sirve para armar «⌘+», «⌘−», «⌘0».
+export function modLabel(): string {
+    return mac ? '⌘' : 'Ctrl+'
+}

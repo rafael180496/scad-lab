@@ -51,16 +51,16 @@ export function Composer({
                             if (ready) onSend()
                         }
                     }}
-                    className="selectable max-h-[132px] min-h-6 flex-1 resize-none bg-transparent py-0.5 text-[13px] leading-relaxed text-fg outline-none placeholder:text-faint"
+                    className="selectable max-h-[132px] min-h-6 flex-1 resize-none bg-transparent py-0.5 text-chat leading-relaxed text-fg outline-none placeholder:text-faint"
                 />
                 {running ? (
                     <Button variant="outline" title={t.chat.stopHint} onClick={onStop} className="h-7">
-                        <Square className="size-3 fill-current" />
+                        <Square className="icon-ui-12 fill-current" />
                         {t.chat.stop}
                     </Button>
                 ) : (
                     <Button variant="primary" title={disabledReason ?? t.chat.sendHint} onClick={onSend} disabled={!ready} className="h-7">
-                        <ArrowUp className="size-3.5" />
+                        <ArrowUp className="icon-ui-14" />
                         {t.chat.send}
                     </Button>
                 )}

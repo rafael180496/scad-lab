@@ -38,12 +38,20 @@ export function DeleteChat(arg1) {
   return window['go']['main']['App']['DeleteChat'](arg1);
 }
 
+export function DetectSlicers() {
+  return window['go']['main']['App']['DetectSlicers']();
+}
+
 export function DetectTools() {
   return window['go']['main']['App']['DetectTools']();
 }
 
 export function EffectiveWorkspacesRoot() {
   return window['go']['main']['App']['EffectiveWorkspacesRoot']();
+}
+
+export function ExportCheckpoint(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ExportCheckpoint'](arg1, arg2, arg3);
 }
 
 export function FormatScad(arg1) {
@@ -130,12 +138,20 @@ export function OllamaModels(arg1) {
   return window['go']['main']['App']['OllamaModels'](arg1);
 }
 
+export function OpenInSlicer(arg1, arg2) {
+  return window['go']['main']['App']['OpenInSlicer'](arg1, arg2);
+}
+
 export function OpenSkillsFolder() {
   return window['go']['main']['App']['OpenSkillsFolder']();
 }
 
 export function OpenWorkspace(arg1) {
   return window['go']['main']['App']['OpenWorkspace'](arg1);
+}
+
+export function PreviewExportParts(arg1, arg2) {
+  return window['go']['main']['App']['PreviewExportParts'](arg1, arg2);
 }
 
 export function ReadCheckpoint(arg1, arg2) {
@@ -162,12 +178,28 @@ export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
 }
 
+export function RevealPath(arg1) {
+  return window['go']['main']['App']['RevealPath'](arg1);
+}
+
 export function RevealWorkspace(arg1) {
   return window['go']['main']['App']['RevealWorkspace'](arg1);
 }
 
+export function SaveAppearance(arg1) {
+  return window['go']['main']['App']['SaveAppearance'](arg1);
+}
+
 export function SaveAsCheckpoint(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['SaveAsCheckpoint'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function SaveDockLayout(arg1) {
+  return window['go']['main']['App']['SaveDockLayout'](arg1);
+}
+
+export function SaveDockLayouts(arg1) {
+  return window['go']['main']['App']['SaveDockLayouts'](arg1);
 }
 
 export function SaveLayout(arg1) {

@@ -42,6 +42,99 @@ export namespace detect {
 
 }
 
+export namespace exporter {
+	
+	export class PartInfo {
+	    name: string;
+	    color: string;
+	    triangles: number;
+	    extruder: number;
+	    uncolored: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PartInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.color = source["color"];
+	        this.triangles = source["triangles"];
+	        this.extruder = source["extruder"];
+	        this.uncolored = source["uncolored"];
+	    }
+	}
+	export class Preview {
+	    parts: PartInfo[];
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Preview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.parts = this.convertValues(source["parts"], PartInfo);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result {
+	    path: string;
+	    format: string;
+	    parts: PartInfo[];
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.format = source["format"];
+	        this.parts = this.convertValues(source["parts"], PartInfo);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace main {
 	
 	export class AgentChoice {
@@ -162,6 +255,24 @@ export namespace main {
 	        this.source = source["source"];
 	        this.dir = source["dir"];
 	        this.enabled = source["enabled"];
+	    }
+	}
+	export class Slicer {
+	    id: string;
+	    name: string;
+	    path: string;
+	    found: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Slicer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.found = source["found"];
 	    }
 	}
 	export class TerminalInfo {
@@ -585,6 +696,24 @@ export namespace store {
 	        this.sortOrder = source["sortOrder"];
 	    }
 	}
+	export class Appearance {
+	    uiScale: number;
+	    editorFontSize: number;
+	    terminalFontSize: number;
+	    chatFontSize: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Appearance(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uiScale = source["uiScale"];
+	        this.editorFontSize = source["editorFontSize"];
+	        this.terminalFontSize = source["terminalFontSize"];
+	        this.chatFontSize = source["chatFontSize"];
+	    }
+	}
 	export class Chat {
 	    id: number;
 	    workspaceId: number;
@@ -659,12 +788,28 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
+	export class DockLayoutEntry {
+	    name: string;
+	    json: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DockLayoutEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.json = source["json"];
+	    }
+	}
 	export class Layout {
 	    sidebarWidth: number;
 	    sidebarCollapsed: boolean;
 	    codeWidth: number;
 	    bottomHeight: number;
 	    dimsCollapsed: boolean;
+	    statusBarHidden: boolean;
+	    workspacesHeight: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Layout(source);
@@ -677,6 +822,8 @@ export namespace store {
 	        this.codeWidth = source["codeWidth"];
 	        this.bottomHeight = source["bottomHeight"];
 	        this.dimsCollapsed = source["dimsCollapsed"];
+	        this.statusBarHidden = source["statusBarHidden"];
+	        this.workspacesHeight = source["workspacesHeight"];
 	    }
 	}
 	export class Material {
@@ -707,6 +854,7 @@ export namespace store {
 	    defaultMaterial: string;
 	    infillPercent: number;
 	    defaultAgent: string;
+	    bambuStudioPath: string;
 	    autoRender: boolean;
 	    renderTimeoutSec: number;
 	    autoIterate: boolean;
@@ -715,7 +863,12 @@ export namespace store {
 	    editorFontSize: number;
 	    editorWordWrap: boolean;
 	    editorMinimap: boolean;
+	    uiScale: number;
+	    terminalFontSize: number;
+	    chatFontSize: number;
 	    layout: Layout;
+	    dockLayout: string;
+	    dockLayouts: DockLayoutEntry[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -732,6 +885,7 @@ export namespace store {
 	        this.defaultMaterial = source["defaultMaterial"];
 	        this.infillPercent = source["infillPercent"];
 	        this.defaultAgent = source["defaultAgent"];
+	        this.bambuStudioPath = source["bambuStudioPath"];
 	        this.autoRender = source["autoRender"];
 	        this.renderTimeoutSec = source["renderTimeoutSec"];
 	        this.autoIterate = source["autoIterate"];
@@ -740,7 +894,12 @@ export namespace store {
 	        this.editorFontSize = source["editorFontSize"];
 	        this.editorWordWrap = source["editorWordWrap"];
 	        this.editorMinimap = source["editorMinimap"];
+	        this.uiScale = source["uiScale"];
+	        this.terminalFontSize = source["terminalFontSize"];
+	        this.chatFontSize = source["chatFontSize"];
 	        this.layout = this.convertValues(source["layout"], Layout);
+	        this.dockLayout = source["dockLayout"];
+	        this.dockLayouts = this.convertValues(source["dockLayouts"], DockLayoutEntry);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

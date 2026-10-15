@@ -65,13 +65,64 @@ del AssetServer (`backend/meshserve`) desde `<datos>/cache/meshes/`, con
 | `FormatScad(source)` | `string` | sangría de `settings.editorIndent`; falla solo con un string o comentario sin cerrar |
 | `SaveAsCheckpoint(id, parentFile, label, description, source)` | `string` (archivo creado) | checkpoint hijo nuevo (`O_EXCL`), nunca sobrescribe; no renderiza (lo hace el watcher) |
 | `GetScadCatalog()` | `scad.Catalog{version, entries}` | autocompletado y hover; `doc` en `{es, en}` |
-| `SaveLayout(layout)` | `store.Layout` (acotado) | tamaños de paneles; aparte de `SaveSettings`, como `SaveSwatches` |
+| `SaveLayout(layout)` | `store.Layout` (acotado) | barra lateral y barra de estado (ver abajo); aparte de `SaveSettings`, como `SaveSwatches` |
 
 Settings del editor (en `store.Settings`): `editorIndent` (2 \| 4, default 4),
-`editorFontSize` (10–24, default 13), `editorWordWrap`, `editorMinimap`
+`editorFontSize` (9–28, default 13), `editorWordWrap`, `editorMinimap`
 (default `false`) y `layout{sidebarWidth, sidebarCollapsed, codeWidth,
-bottomHeight, dimsCollapsed}`. Fuera de rango se normalizan al leer; un
-`SaveSettings` con `layout` en cero no pisa el guardado.
+bottomHeight, dimsCollapsed, statusBarHidden, workspacesHeight}`. Fuera de rango
+se normalizan al leer; un `SaveSettings` con `layout` en cero no pisa el
+guardado. Desde S4b `codeWidth` y `bottomHeight` están **obsoletos** (el código
+y el panel inferior son paneles acoplables): se conservan en la base y en el
+struct, sin uso. `statusBarHidden` es nuevo (menú Ver); la barra lateral sigue
+usando `sidebarCollapsed`.
+
+## Paneles acoplables — `app_dock.go` (S4b)
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `SaveDockLayout(layout)` | — | `layout` = el sobre JSON que arma el frontend (`{v, dock}`, sobre dockview). `""` borra el guardado (vuelve al predeterminado); un texto que no sea un objeto JSON o pase de 256 KB se rechaza sin tocar lo guardado. Se llama con espera de 600 ms al mover/dividir/ocultar y al salir |
+| `SaveDockLayouts(list)` | `[]store.DockLayoutEntry{name, json}` | lista **completa** de diseños propios; devuelve lo guardado: nombres recortados (≤ 40 letras), sin repetidos (sin distinguir mayúsculas; gana el último), JSON válido; rechaza más de 30 o uno inválido |
+
+Settings nuevos (en `store.Settings`, una clave por campo, sin migración):
+`dockLayout` (texto) y `dockLayouts` (`[{name, json}]`). Son **opacos para Go**:
+solo se acota el tamaño y se valida que sea un objeto JSON; quien los entiende y
+valida (versión `v`, ids de panel conocidos, `contentComponent: "slot"`) es el
+frontend, que ante cualquier duda abre con el diseño predeterminado.
+`SaveSettings` **nunca** escribe estas dos claves (el diálogo de Configuración
+tiene una copia vieja): solo cambian por estos bindings.
+
+## Apariencia — `app_appearance.go` (S10)
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `SaveAppearance(appearance)` | `store.Appearance` (normalizado) | `{uiScale, editorFontSize, terminalFontSize, chatFontSize}`; aparte de `SaveSettings` (como `SaveLayout`) porque Configuración → Apariencia aplica y guarda **al instante**, con el diálogo abierto, y no debe reescribir la configuración entera |
+
+Settings nuevos (en `store.Settings`, una clave `settings` por campo, sin
+migración): `uiScale` (uno de `UIScalePresets` = 90, 100, 115, 130, 150; default
+100), `terminalFontSize` y `chatFontSize` (9–28, default 13) y `editorFontSize`
+(que pasó de 10–24 a 9–28). Un valor inválido no es un error: `Normalize` deja
+la escala en 100 % y las letras fuera de 9–28 en 13 (misma política que
+`editorIndent`), tanto en `GetSettings` como en `SaveSettings` y `SaveAppearance`.
+`Layout.workspacesHeight` (56–640, default 150) es el alto de la lista de
+workspaces dentro de la barra lateral. El `SaveSettings` de Configuración manda
+la apariencia vigente fusionada con su borrador para no pisarla con la de cuando
+se abrió el diálogo.
+
+## Exportación — `app_export.go` (S9)
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `PreviewExportParts(id, fileName)` | `exporter.Preview{parts, warnings}` | sin escribir nada; la primera vez renderiza el checkpoint a 3MF con OpenSCAD (queda en caché) |
+| `ExportCheckpoint(id, fileName, format)` | `exporter.Result{path, format, parts, warnings}` | `format`: `stl` \| `3mf` \| `stl-per-color` (.zip); diálogo nativo de guardar; `path` vacío si se cancela |
+| `DetectSlicers()` | `[]Slicer{id, name, path, found}` | hoy solo `bambu-studio`; gana `settings.bambuStudioPath` si existe, si no autodetecta (macOS `/Applications` y `~/Applications`; Windows `%ProgramFiles%\Bambu Studio`) |
+| `OpenInSlicer(slicerId, filePath)` | — | valida ruta absoluta, archivo existente y extensión `.3mf`/`.stl`, y que el slicer esté; abre **la app** desacoplada (macOS `open -a <app> <archivo>`; Windows `exec(<exe>, <archivo>)`). Nunca la CLI de Bambu; solo por un clic del usuario |
+| `RevealPath(path)` | — | muestra el archivo en el Finder/Explorador (`open -R` / `explorer /select,`); la ruta tiene que existir |
+
+`exporter.PartInfo{name, color, triangles, extruder, uncolored}`. Setting nuevo
+`bambuStudioPath` (vacío = autodetectar, sin migración). Los lanzamientos pasan
+por la variable de paquete `launchApp`, que los tests reemplazan por un
+registrador: ninguna prueba abre una aplicación (regla 9 de `technical.md`).
 
 ## Terminal de agentes — `app_terminal.go` (S5)
 

@@ -3,6 +3,8 @@ import type {BufferGeometry} from 'three'
 import {CircleAlert, Loader2, X} from 'lucide-react'
 import {SaveScreenshot, SaveSwatches} from '../../../wailsjs/go/main/App'
 import {fmt, useT} from '../../i18n'
+import {toastSaved} from '../../lib/saved'
+import {setViewerCapture} from '../../lib/viewerBridge'
 import {errorText} from '../../lib/errors'
 import {cachedMesh, loadMesh, meshKey} from '../../lib/mesh'
 import {themeColors, useThemeColors} from '../../hooks/useThemeColors'
@@ -115,9 +117,12 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
     }
     useEffect(() => () => window.clearTimeout(saveTimer.current), [])
 
-    const capture = async () => {
+    // Guarda la vista activa como PNG; devuelve la ruta ("" si el usuario cancela).
+    // La usan el botón de la barra del visor y el botón PNG de la cabecera
+    // (lib/viewerBridge), que es quien muestra el aviso con «Mostrar en el Finder».
+    const capture = async (): Promise<string> => {
         const h = pane()
-        if (!h) return
+        if (!h) return ''
         // El canvas es transparente (el fondo es el del panel): la captura se
         // compone sobre el color de superficie del tema.
         const src = h.capture()
@@ -125,13 +130,22 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
         out.width = src.width
         out.height = src.height
         const ctx = out.getContext('2d')
-        if (!ctx) return
+        if (!ctx) return ''
         ctx.fillStyle = themeColors().surface2
         ctx.fillRect(0, 0, out.width, out.height)
         ctx.drawImage(src, 0, 0)
+        return SaveScreenshot(out.toDataURL('image/png'), fileName.replace(/\.scad$/i, ''))
+    }
+    const captureRef = useRef(capture)
+    captureRef.current = capture
+    useEffect(() => {
+        setViewerCapture(() => captureRef.current())
+        return () => setViewerCapture(null)
+    }, [])
+    const captureFromToolbar = async () => {
         try {
-            const path = await SaveScreenshot(out.toDataURL('image/png'), fileName.replace(/\.scad$/i, ''))
-            if (path) toast.ok(fmt(t.viewer.captureSaved, {path}))
+            const path = await capture()
+            if (path) toastSaved(t, t.viewer.captureSaved, path)
         } catch (e) {
             toast.error(errorText(e))
         }
@@ -167,7 +181,7 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
                 onFit={() => pane()?.fit()}
                 onColor={setColorIndex}
                 onEditColor={editColor}
-                onCapture={() => void capture()}
+                onCapture={() => void captureFromToolbar()}
                 onSplit={() => {
                     setSplit((s) => !s)
                     setActive(0)
@@ -184,19 +198,19 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
                 >
                     {overlay ? <div className="absolute top-2 left-2 z-10 max-w-[70%]">{overlay}</div> : null}
                     {geometry && shownPath ? (
-                        <div className="absolute bottom-2 left-2 z-10">
+                        <div className="absolute bottom-2 left-2 z-10 max-h-[calc(100%-1rem)] max-w-[calc(100%-1rem)] overflow-auto">
                             <Dimensions meshPath={shownPath} geometry={geometry} collapsed={dimsCollapsed} onCollapsed={onDimsCollapsed} />
                         </div>
                     ) : null}
                     {loading || stale ? (
-                        <span className="absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-md border border-line bg-surface/90 px-2 py-1 font-mono text-[10.5px] text-muted">
-                            <Loader2 className="size-3 animate-spin text-accent" />
+                        <span className="absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-md border border-line bg-surface/90 px-2 py-1 font-mono text-ui-10-5 text-muted">
+                            <Loader2 className="icon-ui-12 animate-spin text-accent" />
                             {t.viewer.loading}
                         </span>
                     ) : null}
                     {loadError ? (
-                        <div className="absolute inset-x-4 top-1/2 z-10 mx-auto flex max-w-[420px] -translate-y-1/2 items-start gap-2 rounded-lg border border-danger/50 bg-surface p-3 text-[12px] text-fg">
-                            <CircleAlert className="mt-px size-3.5 shrink-0 text-danger" />
+                        <div className="absolute inset-x-4 top-1/2 z-10 mx-auto flex max-w-[420px] -translate-y-1/2 items-start gap-2 rounded-lg border border-danger/50 bg-surface p-3 text-ui-12 text-fg">
+                            <CircleAlert className="mt-px icon-ui-14 shrink-0 text-danger" />
                             <span className="selectable">{fmt(t.viewer.loadError, {msg: loadError})}</span>
                         </div>
                     ) : null}
@@ -218,9 +232,9 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
                                 setSplit(false)
                                 setActive(0)
                             }}
-                            className="absolute top-2 right-2 z-10 inline-flex size-6 items-center justify-center rounded-md border border-line bg-surface/90 text-muted transition-colors duration-100 hover:text-fg"
+                            className="absolute top-2 right-2 z-10 inline-flex icon-ui-24 items-center justify-center rounded-md border border-line bg-surface/90 text-muted transition-colors duration-100 hover:text-fg"
                         >
-                            <X className="size-3.5" />
+                            <X className="icon-ui-14" />
                         </button>
                     </ViewPane>
                 ) : null}

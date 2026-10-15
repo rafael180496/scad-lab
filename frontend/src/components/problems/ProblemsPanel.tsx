@@ -8,7 +8,7 @@ const tone: Record<Severity, string> = {error: 'text-danger', warning: 'text-war
 
 export function SeverityIcon({severity, className}: {severity: Severity; className?: string}) {
     const t = useT()
-    const cls = cn('size-3.5 shrink-0', tone[severity], className)
+    const cls = cn('icon-ui-14 shrink-0', tone[severity], className)
     const label = t.problems.severity[severity]
     if (severity === 'error') return <CircleAlert className={cls} aria-label={label} />
     if (severity === 'warning') return <TriangleAlert className={cls} aria-label={label} />
@@ -20,12 +20,12 @@ export function SeverityIcon({severity, className}: {severity: Severity; classNa
 export function ProblemsPanel({file, problems}: {file: string | null; problems: Problem[]}) {
     const t = useT()
     if (!file) {
-        return <p className="px-4 py-3 text-[12px] text-faint">{t.problems.noFile}</p>
+        return <p className="px-4 py-3 text-ui-12 text-faint">{t.problems.noFile}</p>
     }
     if (problems.length === 0) {
         return (
-            <p className="flex items-center gap-2 px-4 py-3 text-[12px] text-muted">
-                <CircleCheck className="size-3.5 text-ok" />
+            <p className="flex items-center gap-2 px-4 py-3 text-ui-12 text-muted">
+                <CircleCheck className="icon-ui-14 text-ok" />
                 {fmt(t.problems.empty, {file})}
             </p>
         )
@@ -42,7 +42,7 @@ export function ProblemsPanel({file, problems}: {file: string | null; problems: 
                             disabled={!go}
                             title={go ? fmt(t.problems.goTo, {line: p.line}) : p.file ? fmt(t.problems.inFile, {file: p.file}) : t.problems.noLine}
                             onClick={() => goToLine(p.line, p.col)}
-                            className="flex w-full items-start gap-2 px-3 py-1 text-left text-[12px] transition-colors duration-100 enabled:hover:bg-surface-2 disabled:cursor-default"
+                            className="flex w-full items-start gap-2 px-3 py-1 text-left text-ui-12 transition-colors duration-100 enabled:hover:bg-surface-2 disabled:cursor-default"
                         >
                             <SeverityIcon severity={p.severity} className="mt-px" />
                             <span className="selectable min-w-0 flex-1 leading-snug break-words text-fg">
@@ -50,17 +50,17 @@ export function ProblemsPanel({file, problems}: {file: string | null; problems: 
                                 {p.message}
                             </span>
                             {p.code ? (
-                                <span className="shrink-0 rounded border border-line px-1 font-mono text-[10px] text-muted" title={t.problems.codeHint}>
+                                <span className="shrink-0 rounded border border-line px-1 font-mono text-ui-10 text-muted" title={t.problems.codeHint}>
                                     {p.code}
                                 </span>
                             ) : null}
                             <span
-                                className="w-[54px] shrink-0 text-right font-mono text-[10px] tracking-[0.08em] text-faint uppercase"
+                                className="w-[54px] shrink-0 text-right font-mono text-ui-10 tracking-[0.08em] text-faint uppercase"
                                 title={p.origin === 'render' ? t.problems.renderHint : t.problems.lintHint}
                             >
                                 {p.origin === 'render' ? t.problems.render : t.problems.lint}
                             </span>
-                            <span className="w-[86px] shrink-0 text-right font-mono text-[11px] text-muted">{where}</span>
+                            <span className="w-[86px] shrink-0 text-right font-mono text-ui-11 text-muted">{where}</span>
                         </button>
                     </li>
                 )

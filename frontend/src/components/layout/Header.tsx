@@ -1,31 +1,68 @@
-import {Box, Download, Image, PanelLeftClose, PanelLeftOpen, Settings} from 'lucide-react'
+import {Box, Download, Image, Loader2, PanelLeftClose, PanelLeftOpen, Settings} from 'lucide-react'
 import {Button, IconButton} from '../ui/Button'
 import {Logo} from './Logo'
+import {ViewMenu, type ShotView} from '../dock/ViewMenu'
+import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {withKeys} from '../../lib/platform'
+
+// Ancho de cabecera (a interfaz 100 %) por debajo del cual los botones pasan a solo ícono.
+const HEADER_COMPACT_W = 900
 
 export function Header({
     platform,
     workspaceName,
     sidebarCollapsed,
     onToggleSidebar,
+    statusBarHidden,
+    onToggleStatusBar,
+    viewShot,
     onSettings,
+    exportWhy,
+    exportBusy,
+    onExportStl,
+    onExport3mf,
+    onExportPng,
 }: {
     platform: string
     workspaceName?: string
     sidebarCollapsed: boolean
     onToggleSidebar: () => void
+    statusBarHidden: boolean
+    onToggleStatusBar: () => void
+    /** Solo el banco de capturas: abre el menú Ver o el diálogo de diseños. */
+    viewShot?: ShotView
     onSettings: () => void
+    /** Por qué no se puede exportar ahora ('' = se puede). */
+    exportWhy: string
+    exportBusy: boolean
+    onExportStl: () => void
+    onExport3mf: () => void
+    onExportPng: () => void
 }) {
     const t = useT()
-    // Las exportaciones llegan en S9: se muestran deshabilitadas para que la
-    // cabecera ya tenga su forma final y no cambie de lugar más adelante.
-    const soon = (hint: string) => `${hint} — ${fmt(t.app.phase, {phase: 'S9'})}`
+    // Ventana angosta (o interfaz agrandada): los botones de exportación pierden
+    // el rótulo y quedan como íconos con su `title`.
+    const [compact, ref] = useNarrow(HEADER_COMPACT_W)
+    // Sin un render correcto los botones quedan apagados pero con su `title`
+    // diciendo por qué: `aria-disabled` y no `disabled`, que no deja pasar el
+    // cursor y el `title` nunca se vería.
+    const exportBtn = (hint: string, combo: string | null, onClick: () => void, busy = false) => {
+        const base = combo ? withKeys(hint, combo) : hint
+        const off = exportWhy !== ''
+        return {
+            title: off ? fmt(t.export.notAvailable, {hint: base, why: exportWhy}) : base,
+            'aria-disabled': off || busy,
+            onClick: () => !off && !busy && onClick(),
+            className: cn((off || busy) && 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted'),
+        }
+    }
     return (
         <header
+            ref={ref}
             className={cn(
-                'drag flex h-11 shrink-0 items-center gap-3 border-b border-line bg-surface pr-2',
+                'drag flex h-11 min-w-0 shrink-0 items-center gap-3 overflow-clip border-b border-line bg-surface pr-2',
                 // Semáforos de macOS (TitleBarHiddenInset) a la izquierda.
                 platform === 'darwin' ? 'pl-[82px]' : 'pl-3',
             )}
@@ -36,35 +73,43 @@ export function Header({
                 onClick={onToggleSidebar}
                 className="-mx-1"
             >
-                {sidebarCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                {sidebarCollapsed ? <PanelLeftOpen className="icon-ui-16" /> : <PanelLeftClose className="icon-ui-16" />}
             </IconButton>
-            <div className="flex items-center gap-2">
-                <Logo className="size-5 text-fg" />
-                <span className="text-[13.5px] font-semibold tracking-tight">ScadLab</span>
+            <div className="flex shrink-0 items-center gap-2">
+                <Logo className="icon-ui-20 text-fg" />
+                <span className="text-ui-13-5 font-semibold tracking-tight">ScadLab</span>
             </div>
             {workspaceName ? (
                 <>
                     <span className="text-faint">/</span>
-                    <span className="truncate font-mono text-[12px] text-muted">{workspaceName}</span>
+                    <span className="min-w-0 truncate font-mono text-ui-12 text-muted" title={workspaceName}>{workspaceName}</span>
                 </>
             ) : null}
-            <div className="flex-1" />
-            <div className="flex items-center gap-1">
-                <Button variant="ghost" title={soon(t.header.exportStlHint)} disabled>
-                    <Box className="size-3.5" />
-                    {t.header.exportStl}
+            <ViewMenu
+                compact={compact}
+                sidebarHidden={sidebarCollapsed}
+                onToggleSidebar={onToggleSidebar}
+                statusBarHidden={statusBarHidden}
+                onToggleStatusBar={onToggleStatusBar}
+                shot={viewShot}
+            />
+            <div className="min-w-0 flex-1" />
+            <div className="flex shrink-0 items-center gap-1">
+                <Button variant="ghost" {...exportBtn(t.header.exportStlHint, 'mod+shift+e', onExportStl, exportBusy)}>
+                    {exportBusy ? <Loader2 className="icon-ui-14 animate-spin" /> : <Box className="icon-ui-14" />}
+                    {compact ? null : t.header.exportStl}
                 </Button>
-                <Button variant="ghost" title={soon(t.header.export3mfHint)} disabled>
-                    <Download className="size-3.5" />
-                    {t.header.export3mf}
+                <Button variant="ghost" {...exportBtn(t.header.export3mfHint, 'mod+e', onExport3mf)}>
+                    <Download className="icon-ui-14" />
+                    {compact ? null : t.header.export3mf}
                 </Button>
-                <Button variant="ghost" title={soon(t.header.exportPngHint)} disabled>
-                    <Image className="size-3.5" />
-                    {t.header.exportPng}
+                <Button variant="ghost" {...exportBtn(t.header.exportPngHint, null, onExportPng)}>
+                    <Image className="icon-ui-14" />
+                    {compact ? null : t.header.exportPng}
                 </Button>
                 <span className="mx-1 h-5 w-px bg-line" />
                 <IconButton title={t.header.settingsHint} onClick={onSettings}>
-                    <Settings className="size-4" />
+                    <Settings className="icon-ui-16" />
                 </IconButton>
             </div>
         </header>

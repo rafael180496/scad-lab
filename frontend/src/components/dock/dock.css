@@ -1,0 +1,308 @@
+/*
+ * Tema «scadlab» de dockview (paneles acoplables, S4b). Todo sale de los tokens
+ * de index.css (--c-*), así que el modo claro/oscuro funciona solo. Las medidas
+ * de texto y de la barra de pestañas escalan con --ui-font-scale (Configuración
+ * → Apariencia). Pestañas de editor estilo VS Code: ícono + título en letra
+ * normal, la activa fundida con el contenido, las inactivas más oscuras.
+ */
+.dockview-theme-scadlab {
+    --dv-paneview-active-outline-color: var(--c-accent);
+    --dv-tabs-and-actions-container-font-size: calc(13px * var(--ui-font-scale));
+    --dv-tabs-and-actions-container-height: calc(35px * var(--ui-font-scale));
+    --dv-tab-font-size: calc(13px * var(--ui-font-scale));
+    --dv-drag-over-background-color: color-mix(in srgb, var(--c-accent) 18%, transparent);
+    --dv-drag-over-border-color: transparent;
+    --dv-drag-over-border: none;
+    --dv-edge-dock-indicator-color: var(--c-accent);
+    --dv-tabs-container-scrollbar-color: var(--c-line-strong);
+    --dv-icon-hover-background-color: color-mix(in srgb, var(--c-fg) 12%, transparent);
+    --dv-floating-box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.28);
+    --dv-floating-border: 1px solid var(--c-line-strong);
+    --dv-floating-group-border: none;
+    --dv-floating-group-dragging-opacity: 0.85;
+    --dv-overlay-z-index: 90;
+    --dv-border-radius: 0px;
+    --dv-tab-margin: 0;
+    --dv-tab-border-radius: 0px;
+    --dv-sash-border-radius: 0px;
+    --dv-dropdown-border-radius: 6px;
+    --dv-spacing-padding: 0px;
+    --dv-tab-close-icon-size: inherit;
+    --dv-sash-color: transparent;
+    --dv-active-sash-color: color-mix(in srgb, var(--c-accent) 75%, transparent);
+    --dv-active-sash-transition-duration: 0.1s;
+    --dv-active-sash-transition-delay: 0.08s;
+    --dv-separator-border: var(--c-line);
+    --dv-paneview-header-border-color: var(--c-line);
+
+    --dv-group-view-background-color: var(--c-surface);
+    --dv-tabs-and-actions-container-background-color: var(--c-bg);
+    --dv-activegroup-visiblepanel-tab-background-color: var(--c-surface);
+    --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+    --dv-inactivegroup-visiblepanel-tab-background-color: var(--c-surface);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+    --dv-tab-divider-color: var(--c-line);
+    --dv-activegroup-visiblepanel-tab-color: var(--c-fg);
+    --dv-activegroup-hiddenpanel-tab-color: var(--c-muted);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--c-fg);
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--c-muted);
+    --dv-context-menu-background-color: var(--c-raised);
+    --dv-context-menu-color: var(--c-fg);
+    font-family: var(--font-sans);
+}
+
+/* ── Barra de pestañas ─────────────────────────────────────────────────── */
+.dockview-theme-scadlab .dv-tabs-and-actions-container {
+    /* La línea de abajo va como sombra interior: la pestaña activa la tapa y se
+       funde con el contenido sin una línea entre los dos. */
+    box-shadow: inset 0 -1px 0 var(--c-line);
+}
+.dockview-theme-scadlab .dv-tabs-container {
+    /* Con muchas pestañas la barra se desplaza en horizontal (rueda o arrastre);
+       la barra de desplazamiento es una raya fina, no un cuerpo extraño. */
+    scrollbar-width: none;
+}
+.dockview-theme-scadlab .dv-tabs-container::-webkit-scrollbar {
+    display: none;
+}
+.dockview-theme-scadlab .dv-tab {
+    padding: 0;
+    min-width: 0;
+    /* Ancho según el título; si es muy largo, elipsis. Las pestañas no se
+       encogen: cuando no caben, la barra se desplaza en horizontal. */
+    max-width: calc(220px * var(--ui-font-scale));
+    flex-shrink: 0;
+    color: var(--c-muted);
+    transition: background-color 90ms linear, color 90ms linear;
+}
+.dockview-theme-scadlab .dv-tab:not(.dv-active-tab):hover {
+    background-color: var(--c-surface-2) !important;
+    color: var(--c-fg) !important;
+}
+.dockview-theme-scadlab .dv-tab.dv-active-tab {
+    position: relative;
+    z-index: 1;
+    box-shadow:
+        inset 1px 0 0 var(--c-line),
+        inset -1px 0 0 var(--c-line),
+        inset 0 1px 0 var(--c-line);
+}
+/* El grupo con el foco marca su pestaña activa con una línea de acento arriba. */
+.dockview-theme-scadlab .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
+    box-shadow:
+        inset 1px 0 0 var(--c-line),
+        inset -1px 0 0 var(--c-line),
+        inset 0 2px 0 var(--c-accent);
+}
+.dockview-theme-scadlab .dv-tabs-container.dv-horizontal .dv-tab.dv-active-tab::before,
+.dockview-theme-scadlab .dv-tabs-container.dv-horizontal .dv-tab.dv-active-tab + .dv-tab::before {
+    display: none;
+}
+
+.scadlab-tab {
+    display: flex;
+    height: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: calc(6px * var(--ui-font-scale));
+    padding: 0 calc(6px * var(--ui-font-scale)) 0 calc(11px * var(--ui-font-scale));
+    white-space: nowrap;
+}
+.scadlab-tab-icon {
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+.dv-tab.dv-active-tab .scadlab-tab-icon {
+    color: var(--c-accent);
+    opacity: 1;
+}
+.scadlab-tab-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: calc(13px * var(--ui-font-scale));
+    font-weight: 400;
+    letter-spacing: 0;
+}
+.scadlab-tab-badge {
+    flex-shrink: 0;
+    border-radius: 999px;
+    padding: 0 calc(6px * var(--ui-font-scale));
+    font-size: calc(10px * var(--ui-font-scale));
+    line-height: 1.5;
+}
+.scadlab-tab-end {
+    position: relative;
+    display: flex;
+    width: calc(18px * var(--ui-font-scale));
+    height: calc(18px * var(--ui-font-scale));
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+}
+.scadlab-tab-dot {
+    width: calc(8px * var(--ui-font-scale));
+    height: calc(8px * var(--ui-font-scale));
+    border-radius: 999px;
+}
+.scadlab-tab-close {
+    display: inline-flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    visibility: hidden;
+}
+.scadlab-tab-close:hover {
+    background: var(--dv-icon-hover-background-color);
+}
+/* La × se ve siempre en la pestaña activa y al pasar el ratón en las demás. */
+.dv-tab.dv-active-tab .scadlab-tab-close,
+.scadlab-tab:hover .scadlab-tab-close {
+    visibility: visible;
+}
+/* Con un indicador de estado (cambios sin guardar, agente vivo) el punto ocupa
+   el lugar de la × y vuelve a ser × al pasar el ratón, como en VS Code. */
+.scadlab-tab[data-dot] .scadlab-tab-close {
+    display: none;
+}
+.scadlab-tab[data-dot]:hover .scadlab-tab-close {
+    display: inline-flex;
+}
+.scadlab-tab[data-dot]:hover .scadlab-tab-dot {
+    display: none;
+}
+
+/* ── Acciones del grupo (a la derecha de la barra) ─────────────────────── */
+.scadlab-group-actions {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    gap: 2px;
+    padding: 0 calc(6px * var(--ui-font-scale));
+}
+.scadlab-group-action {
+    display: inline-flex;
+    width: calc(24px * var(--ui-font-scale));
+    height: calc(24px * var(--ui-font-scale));
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--c-muted);
+    cursor: pointer;
+}
+.scadlab-group-action:hover {
+    background: var(--dv-icon-hover-background-color);
+    color: var(--c-fg);
+}
+.scadlab-group-action[aria-pressed='true'] {
+    color: var(--c-accent);
+}
+
+/* ── Divisores: línea de 1 px, zona de agarre de 6 px ──────────────────── */
+.dockview-theme-scadlab .dv-split-view-container > .dv-sash-container > .dv-sash:not(.dv-disabled)::before {
+    content: '';
+    position: absolute;
+    background: transparent;
+}
+.dockview-theme-scadlab .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash:not(.dv-disabled)::before {
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    right: -1px;
+}
+.dockview-theme-scadlab .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash:not(.dv-disabled)::before {
+    left: 0;
+    right: 0;
+    top: -1px;
+    bottom: -1px;
+}
+
+/* ── Grupos flotantes: bordes y esquinas para agarrarlos ────────────────── */
+/* El contenido de un grupo flotante se dibuja en una capa por encima de su
+   contenedor, así que lo único agarrable del tirador es lo que sobresale por
+   fuera del borde: se hace de 8 px (6 px de borde + el margen) y en las esquinas
+   de 14 px, pegado por fuera. Sin overflow:clip en el contenedor, que lo recortaría. */
+.dockview-theme-scadlab .dv-resize-container {
+    border-radius: 8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-groupview {
+    border-radius: 7px;
+    overflow: hidden;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-top,
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-bottom {
+    height: 8px;
+    width: calc(100% - 12px);
+    left: 6px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-top {
+    top: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-bottom {
+    bottom: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-left,
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-right {
+    width: 8px;
+    height: calc(100% - 12px);
+    top: 6px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-left {
+    left: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-right {
+    right: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-topleft,
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-topright,
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-bottomleft,
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-bottomright {
+    width: 14px;
+    height: 14px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-topleft {
+    top: -8px;
+    left: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-topright {
+    top: -8px;
+    right: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-bottomleft {
+    bottom: -8px;
+    left: -8px;
+}
+.dockview-theme-scadlab .dv-resize-container .dv-resize-handle-bottomright {
+    bottom: -8px;
+    right: -8px;
+}
+
+/* ── Menú contextual de la pestaña ─────────────────────────────────────── */
+.dockview-theme-scadlab .dv-context-menu,
+.dv-context-menu {
+    border: 1px solid var(--c-line-strong);
+    border-radius: 8px;
+    font-size: calc(12px * var(--ui-font-scale));
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    z-index: 2000;
+}
+
+/* Los menús de dockview (clic derecho en una pestaña, lista de pestañas ocultas)
+   salen con z-index 180 y los grupos flotantes dibujan su contenido en 1000: el
+   menú de una pestaña flotante quedaba tapado por su propio panel. */
+.dockview-theme-scadlab .dv-popover-anchor > div {
+    z-index: 3000 !important;
+}
+
+/* Zona vacía: sin paneles a la vista. */
+.dockview-theme-scadlab .dv-watermark {
+    align-items: stretch;
+}

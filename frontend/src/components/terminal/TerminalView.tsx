@@ -7,6 +7,7 @@ import './terminal.css'
 import {ReadTerminalBuffer, ResizeTerminal, WriteTerminal} from '../../../wailsjs/go/main/App'
 import {BrowserOpenURL} from '../../../wailsjs/runtime/runtime'
 import {useThemeColors} from '../../hooks/useThemeColors'
+import {appearance} from '../../lib/appearance'
 import {isMac} from '../../lib/platform'
 import {t as tNow} from '../../i18n'
 import {base64ToBytes, onTerminalData, onTerminalExit, type TerminalDataEvent} from './events'
@@ -23,12 +24,10 @@ import {monoFont, terminalTheme} from './termTheme'
 export function TerminalView({
     termId,
     visible,
-    fontSize = 12,
     onExit,
 }: {
     termId: string
     visible: boolean
-    fontSize?: number
     onExit?: (code: number) => void
 }) {
     const box = useRef<HTMLDivElement>(null)
@@ -39,6 +38,9 @@ export function TerminalView({
     const exit = useRef(onExit)
     exit.current = onExit
     const colors = useThemeColors() // solo para repintar al cambiar claro/oscuro
+    // La letra de la terminal es propia del área (Configuración → Apariencia),
+    // independiente del tamaño de la interfaz.
+    const fontSize = appearance.use((s) => s.terminalFontSize)
 
     // Mide la caja y avisa al PTY. Oculta (display:none) mediría 0 columnas y
     // dejaría al agente dibujando sobre un tamaño absurdo.
@@ -168,5 +170,5 @@ export function TerminalView({
         term.current?.focus()
     }, [visible])
 
-    return <div ref={box} className="scadlab-term h-full w-full overflow-hidden bg-surface" />
+    return <div ref={box} data-font-area="terminal" className="scadlab-term h-full w-full overflow-clip bg-surface" />
 }

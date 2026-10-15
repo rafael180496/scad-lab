@@ -23,7 +23,7 @@ export function Button({
             type="button"
             title={title}
             className={cn(
-                'no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md whitespace-nowrap px-2.5 text-[12px] font-medium transition-[background-color,filter,color] duration-150 disabled:pointer-events-none disabled:opacity-40',
+                'no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md whitespace-nowrap px-2.5 text-ui-12 font-medium transition-[background-color,filter,color] duration-150 disabled:pointer-events-none disabled:opacity-40',
                 styles[variant],
                 className,
             )}

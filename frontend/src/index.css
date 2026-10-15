@@ -72,8 +72,21 @@
     color-scheme: dark;
 }
 
+/*
+ * El documento NUNCA se desplaza. Con `overflow: hidden` bastaba para la rueda,
+ * pero WebKit sigue permitiendo el desplazamiento PROGRAMÁTICO: un focus() (xterm
+ * enfoca su textarea oculto, Monaco, el <dialog>) o un scrollIntoView movían la
+ * página y dejaban la cabecera, la barra lateral y la barra de estado fuera de
+ * la ventana, sin forma de volver. `clip` no admite ni eso. La primera línea es
+ * el respaldo para un motor sin `clip`; lib/scrollGuard.ts es la última defensa.
+ */
 html, body, #root {
     height: 100%;
+    overflow: hidden;
+    overflow: clip;
+}
+html {
+    overscroll-behavior: none;
 }
 
 body {
@@ -81,10 +94,97 @@ body {
     background: var(--c-bg);
     color: var(--c-fg);
     font-family: var(--font-sans);
-    font-size: 13px;
+    /* Escala con la interfaz: lo que hereda el cuerpo (listas, entradas sin
+       tamaño propio) crece igual que lo que usa text-ui-N. */
+    font-size: calc(13px * var(--ui-font-scale));
     -webkit-font-smoothing: antialiased;
     user-select: none;
-    overflow: hidden;
+}
+
+/*
+ * Tamaños y escala (ver claude/04-frontend.md, «Tamaños y escala»).
+ *
+ * --ui-font-scale es un multiplicador sin unidad (1 = el tamaño de siempre) que
+ * escribe hooks/useAppearance.ts a partir de la preferencia «Tamaño de la
+ * interfaz» (90–150 %). Escala el TEXTO y los ÍCONOS, no los espaciados: es
+ * «más grande para leer», no un zoom de ventana (un `html { font-size }` habría
+ * agrandado también paddings, alturas y anchos, que Tailwind expresa en rem).
+ *
+ * REGLA: nunca `text-[Npx]` ni `size-N` en un ícono. Texto = `text-ui-N`;
+ * ícono (o la caja que lo contiene) = `icon-ui-N`, que mide N px × escala.
+ * Un valor nuevo se agrega acá, no como clase arbitraria.
+ */
+:root {
+    --ui-font-scale: 1;
+    /* Letra del chat (px): propia del área, no depende de --ui-font-scale. */
+    --chat-font-size: 13px;
+}
+@utility text-ui-10 {
+    font-size: calc(10px * var(--ui-font-scale));
+}
+@utility text-ui-10-5 {
+    font-size: calc(10.5px * var(--ui-font-scale));
+}
+@utility text-ui-11 {
+    font-size: calc(11px * var(--ui-font-scale));
+}
+@utility text-ui-11-5 {
+    font-size: calc(11.5px * var(--ui-font-scale));
+}
+@utility text-ui-12 {
+    font-size: calc(12px * var(--ui-font-scale));
+}
+@utility text-ui-12-5 {
+    font-size: calc(12.5px * var(--ui-font-scale));
+}
+@utility text-ui-13 {
+    font-size: calc(13px * var(--ui-font-scale));
+}
+@utility text-ui-13-5 {
+    font-size: calc(13.5px * var(--ui-font-scale));
+}
+@utility text-ui-14 {
+    font-size: calc(14px * var(--ui-font-scale));
+}
+@utility text-ui-15 {
+    font-size: calc(15px * var(--ui-font-scale));
+}
+@utility icon-ui-12 {
+    width: calc(12px * var(--ui-font-scale));
+    height: calc(12px * var(--ui-font-scale));
+}
+@utility icon-ui-14 {
+    width: calc(14px * var(--ui-font-scale));
+    height: calc(14px * var(--ui-font-scale));
+}
+@utility icon-ui-16 {
+    width: calc(16px * var(--ui-font-scale));
+    height: calc(16px * var(--ui-font-scale));
+}
+@utility icon-ui-20 {
+    width: calc(20px * var(--ui-font-scale));
+    height: calc(20px * var(--ui-font-scale));
+}
+@utility icon-ui-24 {
+    width: calc(24px * var(--ui-font-scale));
+    height: calc(24px * var(--ui-font-scale));
+}
+@utility icon-ui-28 {
+    width: calc(28px * var(--ui-font-scale));
+    height: calc(28px * var(--ui-font-scale));
+}
+@utility icon-ui-36 {
+    width: calc(36px * var(--ui-font-scale));
+    height: calc(36px * var(--ui-font-scale));
+}
+
+/* Letra del chat: la fija el usuario (Configuración → Apariencia). `text-chat`
+   es el cuerpo del mensaje; `text-chat-sm` el texto secundario (código, pie). */
+@utility text-chat {
+    font-size: var(--chat-font-size);
+}
+@utility text-chat-sm {
+    font-size: calc(var(--chat-font-size) * 0.92);
 }
 
 /* Texto que el usuario quiere copiar: rutas, código, errores. */
@@ -141,4 +241,13 @@ body {
 /* Editor: línea a la que se saltó desde un diagnóstico (se apaga sola). */
 .monaco-editor .scad-flash-line {
     background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+}
+
+/* Barra con desplazamiento horizontal interno y sin la barra visible (las
+   pestañas del panel inferior en una ventana muy angosta). */
+.no-scrollbar {
+    scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
 }

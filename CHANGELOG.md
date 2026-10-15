@@ -9,14 +9,14 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
-- **Agentes de IA dentro de ScadLab.** El panel inferior tiene ahora dos
-  terminales de agente (Agente 1 y Agente 2) donde corre Claude Code, opencode,
+- **Agentes de IA dentro de ScadLab.** Hay ahora dos paneles de terminal de agente
+  (Agente 1 y Agente 2) donde corre Claude Code, opencode,
   Codex o Antigravity directamente en la carpeta del workspace: ya no hace falta
   salir a otra ventana para pedirle un modelo. Cada terminal ofrece **Nueva**,
   **Continuar** la última conversación y **Sesiones**, que lista las
   conversaciones previas de ese agente en ese workspace para retomarlas
   (Antigravity solo permite nueva y continuar). Los agentes siguen vivos si se
-  recarga la interfaz y se vuelve a ver su pantalla. El panel se puede maximizar.
+  recarga la interfaz y se vuelve a ver su pantalla. Cada panel se puede maximizar.
 - **Auto-iteración.** Si el render del checkpoint más nuevo falla, ScadLab le
   avisa al agente de la terminal para que lea `RENDER_ERRORS.md` y lo corrija en
   un checkpoint nuevo: una sola vez por fallo y con un tope de cinco avisos
@@ -35,8 +35,77 @@ empaquetarla (ver `.claude/specs/releases.md`).
   que indiques en Configuración → IA, también si la definiste en `~/.zshrc`
   aunque abras la app desde el Finder.
 
+- **Paneles acoplables, como en un editor.** El visor 3D, el código, las dos
+  terminales de agente, el chat y los problemas son ahora **paneles** que
+  reorganizas a tu gusto, con pestañas como las de un editor de código (ícono y
+  nombre, la activa fundida con su contenido, un punto naranja en *Código* si hay
+  cambios sin guardar y uno verde en *Agente* mientras el agente corre).
+  **Arrastra una pestaña** para reordenarla, llevarla a otro grupo o soltarla en
+  un borde y **dividir**; **doble clic** en una pestaña maximiza su grupo; el clic
+  derecho ofrece ocultar, maximizar, **flotar** (el panel pasa a una ventana
+  dentro de ScadLab, que se mueve y se redimensiona libremente sin salirse de la
+  ventana), acoplar y mover. Todo borde entre paneles es un **divisor** que se
+  arrastra en las dos direcciones (con doble clic reparte el espacio a partes
+  iguales) y ningún panel baja de un mínimo útil: el visor de unos 200 × 150 px,
+  el código y las terminales de unos 240 × 120. **Ocultar un panel no destruye
+  nada**: el visor conserva su cámara, el editor su texto y su historial de
+  deshacer, y el agente sigue corriendo con su pantalla intacta.
+- **Menú Ver, diseños y modo enfoque.** El menú **Ver** de la cabecera tiene una
+  casilla por panel (con su atajo ⌘⇧1…6, Ctrl+Shift+1…6 en Windows; en macOS
+  ⌘⇧3/4/5 los reserva el sistema para capturas, así que también valen ⌘⌥3/4/5),
+  la barra lateral y la barra de estado, que ahora se pueden ocultar, y los
+  **diseños**: Predeterminado, Modelado, Código e IA y Pantalla dividida, más los
+  tuyos con **Guardar diseño como…** y **Diseños guardados…** para aplicarlos o
+  borrarlos. El diseño actual se guarda solo y se restaura al abrir; si el
+  guardado estuviera dañado, ScadLab abre con el predeterminado. Si ocultas todos
+  los paneles, una pantalla te deja volver a abrirlos o aplicar un diseño. El
+  **modo enfoque** (⌘⇧0 / Ctrl+Shift+0) deja solo el panel activo sin barras, y
+  Esc o el mismo atajo vuelve al diseño anterior. Los paneles flotan dentro de la
+  app, no en ventanas del sistema: varias ventanas nativas es otra fase.
+- **Tamaños a tu medida.** Configuración → General tiene ahora un bloque
+  **Apariencia**: elige el **tamaño de la interfaz** (Compacto 90 %, Normal,
+  Grande 115 %, Más grande 130 % o Máximo 150 %), que agranda o reduce el texto
+  y los íconos de toda la app sin tocar los espacios, y la **letra propia del
+  editor, de la terminal y del chat** (de 9 a 28 px, cada una independiente de
+  la interfaz) con una vista previa en vivo. Todo se aplica y se guarda al
+  instante, sin pulsar Guardar. Con el teclado, ⌘+ / ⌘− / ⌘0 (Ctrl en Windows)
+  suben, bajan y restablecen la interfaz; con el foco dentro del editor, la
+  terminal o el chat, esos mismos atajos cambian la letra de esa área. Los
+  botones **Restablecer apariencia** y **Restablecer el diseño** vuelven todo a
+  fábrica.
+- **Cada sección, a tu tamaño.** Además del ancho de la barra lateral, ahora
+  también se puede arrastrar el reparto de la barra lateral entre la lista de
+  workspaces y el árbol de checkpoints. Los tamaños se ajustan a la ventana de
+  cada momento: si la achicas, las secciones ceden en vez de salirse, y recuperan
+  lo elegido al agrandarla.
+- **Exportar a STL, 3MF y PNG.** Los tres botones de la cabecera ya funcionan y
+  se activan cuando el checkpoint elegido tiene un render correcto; si no, siguen
+  apagados y su descripción te dice por qué. **STL** guarda la malla directo,
+  **PNG** la vista del visor tal como se ve, y **3MF** abre un diálogo que te
+  muestra qué va a salir antes de elegir dónde guardar: **una parte por cada
+  `color()` del modelo**, con su muestra de color, sus triángulos y el
+  **extrusor** que Bambu Studio le asigna (E1, E2…). Avisa, sin impedir exportar,
+  si el modelo usa más colores de los que admite la impresora del workspace (por
+  ejemplo, cinco en una A1 mini, que admite cuatro), si hay geometría sin
+  `color()` o si dos colores son casi iguales y gastarían dos filamentos. Además
+  del 3MF para Bambu Studio puedes elegir **un STL por color** en un `.zip`,
+  pensado para OrcaSlicer, PrusaSlicer o Cura. Atajos: ⌘E / Ctrl+E para el 3MF y
+  ⇧⌘E / Ctrl+Shift+E para el STL.
+- **Abrir en Bambu Studio.** Si ScadLab encuentra Bambu Studio, el diálogo de
+  3MF ofrece **Exportar y abrir en Bambu Studio**, y tras cualquier exportación
+  un aviso con la ruta del archivo te deja **Mostrar en el Finder** (o en el
+  Explorador) y **Abrir en Bambu Studio**. Siempre es por un clic tuyo: ScadLab
+  nunca lo abre solo, y lo abre como app con el archivo, no por línea de
+  comandos. Si lo tienes en otra carpeta, indica la ruta en Configuración →
+  Impresión → Ruta de Bambu Studio (vacío = autodetectar), donde además ves si
+  lo encontró.
+
 ### Cambiado
 
+- **«Restablecer el diseño» ahora también devuelve los paneles** al diseño
+  predeterminado, y muestra la barra lateral y la de estado si estaban ocultas.
+  El alto del panel inferior y el ancho del código que se guardaban antes ya no
+  se usan (los paneles llevan su tamaño dentro del diseño), pero no se borran.
 - **Español neutro en toda la interfaz.** Algunos textos usaban vos («Elegí»,
   «Creá», «podés») y otros tú; ahora la interfaz, los mensajes de error y
   `RENDER_ERRORS.md` usan tú, igual que la ayuda.
@@ -148,8 +217,7 @@ empaquetarla (ver `.claude/specs/releases.md`).
   clic en cualquier diagnóstico lleva a su línea. Sangría, tamaño de letra,
   ajuste de líneas y minimapa se eligen en Configuración → General.
 - **Una ventana que se acomoda a cómo trabaja cada uno.** Los bordes entre la barra
-  lateral, el visor, el código y el panel inferior se **arrastran** (doble clic
-  los devuelve a su tamaño) y la disposición se recuerda; la barra lateral se
+  lateral y los paneles se **arrastran** y la disposición se recuerda; la barra lateral se
   **pliega** con el botón de la cabecera o ⌘B/Ctrl+B. Abajo hay una **barra de
   estado** con el workspace, la impresora, el modo del editor y si hay cambios
   sin guardar, la posición del cursor, el conteo de errores y advertencias y la
@@ -158,3 +226,21 @@ empaquetarla (ver `.claude/specs/releases.md`).
   panel de medidas del visor se **pliega** a una sola línea, para que en la vista
   dividida no tape la pieza, y cada botón recuerda su atajo (⌘ en macOS, Ctrl en
   Windows) al pasar el ratón.
+
+### Corregido
+
+- Los diálogos «Nuevo workspace» y «Guardar checkpoint» abren con el cursor en
+  el campo del nombre: antes el foco quedaba en el diálogo y había que hacer
+  clic para empezar a escribir.
+
+- **La ventana ya no queda «corrida».** En macOS, a veces la cabecera
+  desaparecía, los semáforos de la ventana quedaban encima del contenido, la
+  barra lateral se veía cortada por la izquierda y faltaba la barra de estado:
+  todo el documento se había desplazado hacia arriba y a la izquierda (al enfocar
+  la terminal, el editor o un diálogo) y no había forma de volver. Ahora el
+  documento no puede desplazarse en ningún caso.
+- **Nada se corta en ventanas angostas.** En el tamaño mínimo (1024 × 640) las
+  pestañas de los paneles y las barras de la terminal, el chat, el editor y
+  el visor se cortaban. Ahora los rótulos pasan a solo ícono (con su ayuda
+  emergente) o la barra se reparte en dos filas, y lo mismo ocurre al agrandar la
+  interfaz.

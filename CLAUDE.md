@@ -45,6 +45,8 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/08-openscad.md](claude/08-openscad.md) | OpenSCAD, skills de modelado, impresoras Bambu, 3MF |
 | [claude/09-agents-ai.md](claude/09-agents-ai.md) | CLIs agénticos, Ollama/OpenAI/Anthropic, MCP, workspaces |
 | [claude/10-editor.md](claude/10-editor.md) | Editor OpenSCAD: lexer, linter (SL001–SL009), formateador, catálogo, guardar como checkpoint |
+| [claude/11-exportacion.md](claude/11-exportacion.md) | Exportación: STL, 3MF multicolor para Bambu (una parte por color con extrusor), STL por color; prueba manual en Bambu Studio |
+| [claude/12-paneles.md](claude/12-paneles.md) | Paneles acoplables (dockview): pestañas estilo VS Code, ocultar, dividir, flotar, diseños, cómo agregar un panel |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

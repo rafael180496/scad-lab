@@ -60,21 +60,21 @@ export function SessionsMenu({
             role="menu"
             className="absolute top-1 left-2 z-20 flex max-h-[calc(100%-8px)] w-[460px] max-w-[calc(100%-16px)] flex-col overflow-hidden rounded-lg border border-line-strong bg-raised shadow-lg shadow-black/30"
         >
-            <div className="shrink-0 border-b border-line px-3 py-1.5 font-mono text-[10.5px] tracking-[0.12em] text-muted uppercase">
+            <div className="shrink-0 border-b border-line px-3 py-1.5 font-mono text-ui-10-5 tracking-[0.12em] text-muted uppercase">
                 {fmt(t.terminal.sessionsTitle, {agent: agentName})}
             </div>
             <div className="min-h-0 flex-1 overflow-auto">
                 {error ? (
-                    <p className="selectable px-3 py-2 text-[12px] text-danger">
+                    <p className="selectable px-3 py-2 text-ui-12 text-danger">
                         {t.terminal.sessionsError}: {error}
                     </p>
                 ) : list === null ? (
-                    <p className="flex items-center gap-2 px-3 py-2 text-[12px] text-muted">
-                        <Loader2 className="size-3.5 animate-spin" />
+                    <p className="flex items-center gap-2 px-3 py-2 text-ui-12 text-muted">
+                        <Loader2 className="icon-ui-14 animate-spin" />
                         {t.terminal.sessionsLoading}
                     </p>
                 ) : list.length === 0 ? (
-                    <p className="px-3 py-2 text-[12px] text-muted">{fmt(t.terminal.sessionsEmpty, {agent: agentName})}</p>
+                    <p className="px-3 py-2 text-ui-12 text-muted">{fmt(t.terminal.sessionsEmpty, {agent: agentName})}</p>
                 ) : (
                     list.map((s) => {
                         const title = s.title || t.terminal.untitled
@@ -87,8 +87,8 @@ export function SessionsMenu({
                                 onClick={() => onPick(s.id)}
                                 className="flex w-full items-baseline gap-3 px-3 py-1.5 text-left transition-colors duration-100 hover:bg-surface-2"
                             >
-                                <span className={s.title ? 'min-w-0 flex-1 truncate text-[12.5px] text-fg' : 'min-w-0 flex-1 truncate text-[12.5px] text-faint italic'}>{title}</span>
-                                <span className="shrink-0 font-mono text-[10.5px] text-faint">{sessionDate(s.updatedAt)}</span>
+                                <span className={s.title ? 'min-w-0 flex-1 truncate text-ui-12-5 text-fg' : 'min-w-0 flex-1 truncate text-ui-12-5 text-faint italic'}>{title}</span>
+                                <span className="shrink-0 font-mono text-ui-10-5 text-faint">{sessionDate(s.updatedAt)}</span>
                             </button>
                         )
                     })

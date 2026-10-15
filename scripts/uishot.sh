@@ -12,6 +12,7 @@
 #   UISHOT_LANG=es ./scripts/uishot.sh main      # en español (por defecto, inglés)
 #   UISHOT_THEME=light ./scripts/uishot.sh main  # tema claro (por defecto, oscuro)
 #   UISHOT_PLATFORM=windows ./scripts/uishot.sh main
+#   UISHOT_SCALE=150 ./scripts/uishot.sh main    # interfaz al 150 % (90|100|115|130|150)
 #   UISHOT_OUT=/ruta/x.png ./scripts/uishot.sh main
 #
 # Vistas: las claves de VIEWS en frontend/src/uishot.tsx.
@@ -24,6 +25,7 @@ OUT="${UISHOT_OUT:-${TMPDIR:-/tmp}/uishot-$VIEW.png}"
 LANG_UI="${UISHOT_LANG:-en}"
 THEME="${UISHOT_THEME:-dark}"
 PLATFORM="${UISHOT_PLATFORM:-darwin}"
+SCALE="${UISHOT_SCALE:-100}"
 PORT="${UISHOT_PORT:-5198}"
 BUDGET="${UISHOT_BUDGET:-4000}"
 
@@ -54,7 +56,7 @@ fi
     --window-size="$W,$H" \
     --virtual-time-budget="$BUDGET" \
     --screenshot="$OUT" \
-    "http://localhost:$PORT/uishot.html?view=$VIEW&lang=$LANG_UI&theme=$THEME&platform=$PLATFORM" >/dev/null 2>&1
+    "http://localhost:$PORT/uishot.html?view=$VIEW&lang=$LANG_UI&theme=$THEME&platform=$PLATFORM&scale=$SCALE" >/dev/null 2>&1
 
 [ -s "$OUT" ] || { echo "La captura salió vacía. Log de vite:"; tail -5 "${TMPDIR:-/tmp}/uishot-vite.log"; exit 1; }
 echo "$OUT"

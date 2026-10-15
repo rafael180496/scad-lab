@@ -35,17 +35,17 @@ function NoProviders({onOpenSettings, onRefresh}: {onOpenSettings?: () => void; 
     const t = useT()
     return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-faint">
-                <Bot className="size-5" />
+            <span className="flex icon-ui-36 items-center justify-center rounded-full bg-surface-2 text-faint">
+                <Bot className="icon-ui-20" />
             </span>
             <div className="max-w-[460px]">
-                <p className="text-[13px] font-medium text-fg">{t.chat.noProvidersTitle}</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{t.chat.noProvidersBody}</p>
+                <p className="text-ui-13 font-medium text-fg">{t.chat.noProvidersTitle}</p>
+                <p className="mt-1 text-ui-12-5 leading-relaxed text-muted">{t.chat.noProvidersBody}</p>
             </div>
             <div className="flex items-center gap-2">
                 {onOpenSettings ? (
                     <Button variant="primary" title={t.chat.openSettingsHint} onClick={onOpenSettings}>
-                        <SettingsIcon className="size-3.5" />
+                        <SettingsIcon className="icon-ui-14" />
                         {t.chat.openSettings}
                     </Button>
                 ) : null}
@@ -61,12 +61,12 @@ function EmptyChat({onPick}: {onPick: (text: string) => void}) {
     const t = useT()
     return (
         <div className="m-auto flex max-w-[520px] flex-col items-center gap-3 py-4 text-center">
-            <span className="flex size-9 items-center justify-center rounded-full bg-accent-soft text-accent">
-                <Sparkles className="size-5" />
+            <span className="flex icon-ui-36 items-center justify-center rounded-full bg-accent-soft text-accent">
+                <Sparkles className="icon-ui-20" />
             </span>
             <div>
-                <p className="text-[13px] font-medium text-fg">{t.chat.emptyTitle}</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{t.chat.emptyBody}</p>
+                <p className="text-ui-13 font-medium text-fg">{t.chat.emptyTitle}</p>
+                <p className="mt-1 text-ui-12-5 leading-relaxed text-muted">{t.chat.emptyBody}</p>
             </div>
             <div className="flex flex-wrap justify-center gap-1.5">
                 {t.chat.suggestions.map((s) => (
@@ -75,7 +75,7 @@ function EmptyChat({onPick}: {onPick: (text: string) => void}) {
                         type="button"
                         title={t.chat.suggestionHint}
                         onClick={() => onPick(s)}
-                        className="no-drag rounded-full border border-line px-2.5 py-1 text-[12px] text-muted transition-colors hover:border-line-strong hover:bg-surface-2 hover:text-fg"
+                        className="no-drag rounded-full border border-line px-2.5 py-1 text-ui-12 text-muted transition-colors hover:border-line-strong hover:bg-surface-2 hover:text-fg"
                     >
                         {s}
                     </button>
@@ -310,7 +310,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
 
     // ── Render ──────────────────────────────────────────────────────────────
     if (workspaceId == null) {
-        return <p className="px-4 py-3 text-[12.5px] text-faint">{t.chat.noWorkspace}</p>
+        return <p className="px-4 py-3 text-ui-12-5 text-faint">{t.chat.noWorkspace}</p>
     }
     if (loaded && providers.length === 0) {
         return (
@@ -323,7 +323,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     const desc = saving ? headerDescription(saving.code) : ''
     const noModel = chatId == null && (!providerId || !model.trim())
     return (
-        <div className="flex h-full min-h-0 flex-col" onPointerEnter={() => refresh()}>
+        <div data-font-area="chat" className="flex h-full min-h-0 flex-col" onPointerEnter={() => refresh()}>
             <ChatHeader
                 chats={chats}
                 current={current}

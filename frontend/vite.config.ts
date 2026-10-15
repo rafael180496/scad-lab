@@ -22,8 +22,40 @@ function dropUishotAssets(): Plugin {
     }
 }
 
+// dockview.css trae su estructura y, además, ~25 temas ya hechos (abyss, dracula,
+// nord, catppuccin…): 160 kB de CSS de los que la app usa uno, el suyo
+// (`.dockview-theme-scadlab`, en components/dock/dock.css). Se descartan los
+// bloques de los demás temas; la estructura (`.dv-*`) queda intacta.
+function trimDockviewThemes(): Plugin {
+    return {
+        name: 'scadlab-trim-dockview-themes',
+        enforce: 'pre',
+        transform(code, id) {
+            if (!/dockview[^/\\]*\.css(\?|$)/.test(id) || !id.includes('dockview-react')) return null
+            const src = code.replace(/\/\*[\s\S]*?\*\//g, '')
+            let out = ''
+            let depth = 0
+            let start = 0
+            for (let i = 0; i < src.length; i++) {
+                const ch = src[i]
+                if (ch === '{') depth++
+                else if (ch === '}' && --depth === 0) {
+                    const rule = src.slice(start, i + 1)
+                    const selector = rule.slice(0, rule.indexOf('{')).trim()
+                    const otherTheme =
+                        !selector.startsWith('@') &&
+                        selector.split(',').every((sel) => /^\.dockview-theme-(?!scadlab\b)/.test(sel.trim()))
+                    if (!otherTheme) out += rule + '\n'
+                    start = i + 1
+                }
+            }
+            return {code: out, map: null}
+        },
+    }
+}
+
 export default defineConfig({
-    plugins: [react(), tailwindcss(), dropUishotAssets()],
+    plugins: [trimDockviewThemes(), react(), tailwindcss(), dropUishotAssets()],
     resolve: {
         alias: [
             // El editor importa Monaco por archivo (núcleo + contribuciones

@@ -1,8 +1,10 @@
 import {Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {Code2, Eye, Loader2, Lock, PencilLine, Save, Search, Undo2, WandSparkles} from 'lucide-react'
+import {createPortal} from 'react-dom'
+import {useNarrow} from '../../hooks/useNarrow'
+import {Eye, Loader2, Lock, PencilLine, Save, Search, Undo2, WandSparkles} from 'lucide-react'
 import type {render, store} from '../../../wailsjs/go/models'
 import {LintCheckpointSource, SaveAsCheckpoint} from '../../../wailsjs/go/main/App'
-import {Pane, Placeholder} from '../layout/Pane'
+import {PanelToolbar, Placeholder} from '../layout/Pane'
 import {Button, IconButton} from '../ui/Button'
 import {confirmDialog} from '../ui/Dialog'
 import {toast} from '../ui/Toast'
@@ -34,14 +36,15 @@ export async function confirmLeave(t: Dict, file: string | null) {
 // EditorPane es el panel de código: cabecera con el modo y las acciones, y
 // Monaco debajo (que entra con lazy). Los checkpoints son inmutables: el
 // código se abre en solo lectura y «Guardar» crea un checkpoint hijo.
+// Ancho del panel de código (a interfaz 100 %) por debajo del cual la barra pasa a solo ícono.
+const EDITOR_COMPACT_W = 400
+
 export function EditorPane({
     workspaceId,
     file,
     source,
     renderDiags,
     settings,
-    className,
-    style,
     onSaved,
     shot,
 }: {
@@ -50,12 +53,13 @@ export function EditorPane({
     source: string
     renderDiags: render.Diagnostic[] | undefined
     settings: store.Settings
-    className?: string
-    style?: React.CSSProperties
     onSaved: (fileName: string) => void
     shot?: EditorShot
 }) {
     const t = useT()
+    // Panel angosto (o interfaz agrandada): los botones pierden el rótulo y
+    // quedan como íconos con su `title`.
+    const [compact, paneRef] = useNarrow(EDITOR_COMPACT_W)
     const editing = editorSession.use((s) => s.editing)
     const dirty = editorSession.use((s) => s.dirty)
     const lint = editorSession.use((s) => s.lint)
@@ -187,73 +191,68 @@ export function EditorPane({
     // que se renderizó: con cambios, sus líneas ya no coinciden.
     const markers = useMemo(() => mergeProblems(lint, dirty ? undefined : renderDiags), [lint, dirty, renderDiags])
 
-    const small = 'h-6 px-2 text-[11.5px]'
+    const small = 'h-6 px-2 text-ui-11-5'
     const actions = file ? (
         <>
             <span
                 className={cn(
-                    'mr-1 flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-[11px]',
+                    'mr-1 flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-ui-11',
                     editing ? 'bg-accent-soft text-accent' : 'text-faint',
                 )}
                 title={editing ? t.editor.editingHint : t.editor.readOnlyHint}
             >
-                {editing ? <PencilLine className="size-3" /> : <Lock className="size-3" />}
-                {editing ? t.editor.editing : t.editor.readOnly}
+                {editing ? <PencilLine className="icon-ui-12" /> : <Lock className="icon-ui-12" />}
+                {compact ? null : editing ? t.editor.editing : t.editor.readOnly}
                 {dirty ? <span className="size-1.5 rounded-full bg-accent" aria-label={t.editor.unsaved} /> : null}
             </span>
             <IconButton title={withKeys(t.editor.findHint, 'mod+f')} className="size-6" onClick={() => editorCommands()?.find(false)}>
-                <Search className="size-3.5" />
+                <Search className="icon-ui-14" />
             </IconButton>
             <IconButton title={withKeys(t.editor.formatHint, 'shift+alt+f')} className="size-6" onClick={() => void format()}>
-                <WandSparkles className="size-3.5" />
+                <WandSparkles className="icon-ui-14" />
             </IconButton>
             {!editing ? (
                 <Button className={small} title={t.editor.editHint} onClick={startEditing}>
-                    <PencilLine className="size-3" />
-                    {t.editor.edit}
+                    <PencilLine className="icon-ui-12" />
+                    {compact ? null : t.editor.edit}
                 </Button>
             ) : dirty ? (
                 <>
                     <IconButton title={t.editor.discardHint} className="size-6" onClick={() => void discard()}>
-                        <Undo2 className="size-3.5" />
+                        <Undo2 className="icon-ui-14" />
                     </IconButton>
                     <Button variant="primary" className={small} title={withKeys(fmt(t.editor.saveHint, {file}), 'mod+s')} onClick={openSave}>
-                        <Save className="size-3" />
+                        <Save className="icon-ui-12" />
                         {t.editor.save}
                     </Button>
                 </>
             ) : (
                 <Button className={small} title={t.editor.viewHint} onClick={() => editorSession.set({editing: false})}>
-                    <Eye className="size-3" />
-                    {t.editor.view}
+                    <Eye className="icon-ui-12" />
+                    {compact ? null : t.editor.view}
                 </Button>
             )}
         </>
     ) : null
 
     return (
-        <Pane
-            icon={<Code2 className="size-3.5" />}
-            title={file ? '' : t.panes.editor}
-            subtitle={file ?? undefined}
-            actions={actions}
-            className={className}
-            style={style}
-        >
+        <div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col bg-surface">
+            {file ? <PanelToolbar label={file} actions={actions} /> : null}
+            <div className="min-h-0 min-w-0 flex-1">
             {file ? (
                 <EditorBoundary
                     resetKey={docKey}
                     fallback={(err) => (
                         <div className="flex h-full flex-col">
-                            <p className="border-b border-line px-3 py-2 text-[12px] text-danger">{fmt(t.editor.loadError, {msg: err})}</p>
-                            <pre className="selectable min-h-0 flex-1 overflow-auto p-3 font-mono text-[12px] leading-[1.55] text-fg">{source}</pre>
+                            <p className="border-b border-line px-3 py-2 text-ui-12 text-danger">{fmt(t.editor.loadError, {msg: err})}</p>
+                            <pre className="selectable min-h-0 flex-1 overflow-auto p-3 font-mono text-ui-12 leading-[1.55] text-fg">{source}</pre>
                         </div>
                     )}
                 >
                 <Suspense
                     fallback={
-                        <div className="flex h-full items-center justify-center gap-2 text-[12px] text-muted">
-                            <Loader2 className="size-4 animate-spin text-accent" />
+                        <div className="flex h-full items-center justify-center gap-2 text-ui-12 text-muted">
+                            <Loader2 className="icon-ui-16 animate-spin text-accent" />
                             {t.editor.loading}
                         </div>
                     }
@@ -279,14 +278,20 @@ export function EditorPane({
                     <Placeholder text={t.panes.editorBody} />
                 </div>
             )}
-            <SaveCheckpointDialog
-                open={saveOpen}
-                parent={file ?? ''}
-                saving={saving}
-                initial={shot?.mode === 'save' ? {label: shot.label ?? '', description: shot.description ?? ''} : undefined}
-                onCancel={() => setSaveOpen(false)}
-                onSave={(l, d) => void save(l, d)}
-            />
-        </Pane>
+            </div>
+            {/* En el body y no dentro del panel: ⌘S funciona aunque el panel de código
+                esté oculto, y un <dialog> dentro de un elemento aparcado no se vería. */}
+            {createPortal(
+                <SaveCheckpointDialog
+                    open={saveOpen}
+                    parent={file ?? ''}
+                    saving={saving}
+                    initial={shot?.mode === 'save' ? {label: shot.label ?? '', description: shot.description ?? ''} : undefined}
+                    onCancel={() => setSaveOpen(false)}
+                    onSave={(l, d) => void save(l, d)}
+                />,
+                document.body,
+            )}
+        </div>
     )
 }

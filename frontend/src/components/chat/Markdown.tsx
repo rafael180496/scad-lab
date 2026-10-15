@@ -56,7 +56,8 @@ function Inlines({nodes}: {nodes: Inline[]}): ReactNode {
 
 const Text = ({text}: {text: string}) => <Inlines nodes={parseInline(text)} />
 
-const headingCls = ['', 'text-[15px]', 'text-[14px]', 'text-[13px]', 'text-[13px]', 'text-[12.5px]', 'text-[12.5px]']
+// Relativos al cuerpo del chat (--chat-font-size): la jerarquía se conserva al cambiar la letra.
+const headingCls = ['', 'text-[1.15em]', 'text-[1.08em]', 'text-[1em]', 'text-[1em]', 'text-[0.96em]', 'text-[0.96em]']
 
 function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) {
     switch (block.type) {
@@ -81,7 +82,7 @@ function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) 
                 <ul className="my-1.5 flex flex-col gap-0.5">
                     {block.items.map((it, i) => (
                         <li key={i} className="flex gap-2" style={{paddingLeft: it.depth * 16}}>
-                            <span className="w-4 shrink-0 text-right font-mono text-[11.5px] text-faint">{it.marker}</span>
+                            <span className="w-4 shrink-0 text-right font-mono text-chat-sm text-faint">{it.marker}</span>
                             <span className="min-w-0 flex-1">
                                 <Text text={it.text} />
                             </span>
@@ -92,7 +93,7 @@ function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) 
         case 'table':
             return (
                 <div className="my-2 overflow-x-auto rounded-lg border border-line">
-                    <table className="w-full border-collapse text-[12px]">
+                    <table className="w-full border-collapse text-chat-sm">
                         <thead className="bg-surface-2 text-left text-muted">
                             <tr>
                                 {block.head.map((h, i) => (
@@ -133,7 +134,7 @@ const BlockView = memo(BlockViewImpl, (a, b) => a.block.raw === b.block.raw && a
 export function Markdown({source, actions}: {source: string; actions?: CodeActions}) {
     const blocks = useMemo(() => parseMarkdown(source), [source])
     return (
-        <div className="selectable text-[13px] leading-relaxed break-words text-fg">
+        <div className="selectable text-chat leading-relaxed break-words text-fg">
             {blocks.map((b, i) => (
                 <BlockView key={i} block={b} actions={actions} />
             ))}

@@ -4,15 +4,15 @@ import {cn} from '../../lib/cn'
 export function Field({label, hint, children}: {label: string; hint?: ReactNode; children: ReactNode}) {
     return (
         <label className="flex flex-col gap-1">
-            <span className="font-mono text-[10.5px] tracking-wider text-muted uppercase">{label}</span>
+            <span className="font-mono text-ui-10-5 tracking-wider text-muted uppercase">{label}</span>
             {children}
-            {hint ? <span className="text-[11.5px] text-faint">{hint}</span> : null}
+            {hint ? <span className="text-ui-11-5 text-faint">{hint}</span> : null}
         </label>
     )
 }
 
 const control =
-    'h-8 w-full rounded-md border border-line bg-surface-2 px-2.5 text-[12.5px] text-fg placeholder:text-faint outline-none transition-colors focus:border-accent'
+    'h-8 w-full rounded-md border border-line bg-surface-2 px-2.5 text-ui-12-5 text-fg placeholder:text-faint outline-none transition-colors focus:border-accent'
 
 export function Input({className, ...rest}: InputHTMLAttributes<HTMLInputElement>) {
     return <input className={cn(control, 'selectable', className)} spellCheck={false} {...rest} />

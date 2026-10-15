@@ -453,10 +453,11 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <tr><td>Render con OpenSCAD: estado, diagnósticos, auto-render y <code>RENDER_ERRORS.md</code></td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Visor 3D: navegación, vistas, modos, medidas, colores, captura PNG y vista dividida</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Editor de código: resaltado, buscar y reemplazar, linter, formato, autocompletado y guardar como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Ventana: paneles redimensionables, barra lateral plegable, barra de estado y panel Problemas</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Ventana: paneles acoplables (mover, dividir, flotar y ocultar), diseños guardados, modo enfoque, barra lateral plegable, barra de estado y panel Problemas</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Terminal de agentes (Claude Code, opencode, Codex, Antigravity) con sesiones y auto-iteración de errores</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Chat con modelos (Ollama, compatible con OpenAI, Anthropic) y guardar el código como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Checkpoints avanzados, MCP, exportar, peso y costo</td><td><span class="badge dev">En desarrollo</span></td></tr>
+    <tr><td>Exportar: STL, 3MF multicolor para Bambu (una parte por color con su extrusor), STL por color y abrir en Bambu Studio</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Checkpoints avanzados, MCP, peso y costo</td><td><span class="badge dev">En desarrollo</span></td></tr>
   </table></div>
 
   <h2 id="introduccion--seguir">Por dónde seguir</h2>
@@ -589,7 +590,7 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
   </ol>
 
   <h2 id="primer-proyecto--pedir">2. Pídele el modelo al agente <span class="badge ok">Disponible</span></h2>
-  <p>Abre una pestaña <a href="#ia-agentes">Agente</a> del panel inferior, elige tu agente, pulsa <strong>Nueva</strong> y describe la pieza con medidas:</p>
+  <p>Abre el panel <a href="#ia-agentes">Agente</a>, elige tu agente, pulsa <strong>Nueva</strong> y describe la pieza con medidas:</p>
   <div class="prompt"><p>Haz una caja de 60×40×25 mm con paredes de 2 mm y una tapa a presión con holgura de
   0,2 mm. Esquinas redondeadas de 4 mm. Caja en azul y tapa en blanco. Debe caber en la A1 mini.</p></div>
   <p>El agente crea <code>001-base-box.scad</code>, ScadLab lo renderiza solo y el checkpoint aparece en el árbol;
@@ -983,19 +984,137 @@ color("SteelBlue") difference() {
 <!-- ============================================================== VENTANA -->
 <article class="topic" id="ventana" data-title="La ventana: paneles y barra de estado">
   <h1>La ventana: paneles y barra de estado <span class="badge ok">Disponible</span></h1>
-  <p class="lead">Barra lateral, visor, código y panel inferior se reparten la ventana como prefieras, y ScadLab
-  recuerda la disposición.</p>
+  <p class="lead">El área de trabajo funciona como un editor de código: el visor 3D, el código, los agentes, el chat y
+  los problemas son <strong>paneles acoplables</strong>. Los mueves, los divides, los pones en pestañas, los
+  haces flotar o los ocultas, y ScadLab recuerda cómo los dejaste.</p>
 
-  <figure class="shot"><img src="docs/screenshots/es/app-main.png" alt="Ventana principal de ScadLab con la barra lateral, el visor, el código, el panel inferior con las pestañas Agente 1, Agente 2, Chat y Problemas, y la barra de estado abajo" loading="lazy"><figcaption>La barra de estado, abajo, resume dónde estás y qué pasa: workspace, impresora, modo del editor, cursor, problemas y versión de OpenSCAD.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/dock-default.png" alt="Ventana principal de ScadLab con el diseño predeterminado: el visor 3D arriba a la izquierda, el código a la derecha y, debajo del visor, un grupo de pestañas con Agente 1, Agente 2, Chat y Problemas; la pestaña activa de cada grupo se funde con su contenido y las demás quedan más oscuras" loading="lazy"><figcaption>El diseño predeterminado: visor y código arriba, agentes, chat y problemas en pestañas debajo del visor. La barra de estado, abajo, resume dónde estás.</figcaption></figure>
 
-  <h2 id="ventana--paneles">Paneles redimensionables</h2>
-  <p>Arrastra el borde entre dos paneles para repartir el espacio: barra lateral ↔ visor, visor ↔ código y visor ↔
-  panel inferior. <strong>Doble clic</strong> en un borde vuelve al tamaño de fábrica; con el borde enfocado
-  (<kbd>Tab</kbd>), las flechas lo mueven de a poco. La disposición se guarda al soltar.</p>
+  <h2 id="ventana--paneles">Los seis paneles</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Panel</th><th>Qué es</th><th>Atajo</th></tr>
+    <tr><td><strong>Visor 3D</strong></td><td>La pieza del checkpoint abierto, con su estado de render y sus diagnósticos.</td><td><kbd>⌘⇧1</kbd> / <kbd>Ctrl+Shift+1</kbd></td></tr>
+    <tr><td><strong>Código</strong></td><td>El editor OpenSCAD del checkpoint abierto.</td><td><kbd>⌘⇧2</kbd> / <kbd>Ctrl+Shift+2</kbd></td></tr>
+    <tr><td><strong>Agente 1</strong> y <strong>Agente 2</strong></td><td>Las dos terminales de agente de IA.</td><td><kbd>⌘⇧3</kbd> y <kbd>⌘⇧4</kbd></td></tr>
+    <tr><td><strong>Chat</strong></td><td>El chat con modelos.</td><td><kbd>⌘⇧5</kbd> / <kbd>Ctrl+Shift+5</kbd></td></tr>
+    <tr><td><strong>Problemas</strong></td><td>Errores y advertencias del linter y del render.</td><td><kbd>⌘⇧6</kbd> / <kbd>Ctrl+Shift+6</kbd></td></tr>
+  </table></div>
+  <p>Cada panel existe una sola vez: abrirlo de nuevo lleva al que ya está. La <strong>barra lateral</strong> (workspaces
+  y checkpoints) no es un panel: se queda a la izquierda y se pliega aparte.</p>
+
+  <h2 id="ventana--pestanas">Pestañas</h2>
+  <p>Cada panel tiene su <strong>pestaña</strong>, con el aspecto de las de un editor: ícono y nombre en letra normal;
+  la pestaña activa se funde con su contenido y muestra la <strong>×</strong>, y las demás, más oscuras, la muestran al
+  pasar el ratón. Algunas llevan un <strong>punto de estado</strong> en lugar de la ×: naranja en <em>Código</em> cuando
+  hay cambios sin guardar, verde en <em>Agente</em> mientras el agente está en marcha; al pasar el ratón el punto vuelve a
+  ser una ×. <em>Problemas</em> suma el número de entradas.</p>
+  <ul>
+    <li><strong>Arrastra una pestaña</strong> para reordenarla dentro de su grupo o llevarla a otro grupo.</li>
+    <li><strong>Doble clic</strong> en una pestaña maximiza su grupo; otro doble clic lo restaura.</li>
+    <li><strong>Clic derecho</strong> en la pestaña (o el botón <strong>⋯</strong> de la barra del grupo): <em>Ocultar</em>,
+      <em>Ocultar los demás del grupo</em>, <em>Maximizar / Restaurar</em>, <em>Flotar / Acoplar</em>, <em>Mover a la
+      derecha</em> y <em>Mover abajo</em>.</li>
+    <li>Con muchas pestañas en un grupo angosto, la barra se desplaza en horizontal (rueda o trackpad) y un menú lista
+      las que quedaron fuera de la vista.</li>
+  </ul>
+
+  <h2 id="ventana--dividir">Dividir y acoplar</h2>
+  <p>Mientras arrastras una pestaña, sobre cada grupo aparece una zona resaltada: suéltala <strong>en el centro</strong> para
+  sumarla como pestaña de ese grupo, o <strong>en un borde</strong> (izquierda, derecha, arriba o abajo) para
+  <strong>dividir</strong> y que el panel quede en un grupo nuevo a ese lado. Así armas, por ejemplo, el chat al lado de
+  la terminal en vez de en pestañas.</p>
+
+  <figure class="shot"><img src="docs/screenshots/es/dock-custom.png" alt="Un diseño propio: el chat dividido a la derecha de las terminales, debajo del visor, y el panel Problemas flotando sobre el visor como una ventana dentro de la app" loading="lazy"><figcaption>Un diseño propio: el chat dividido junto a las terminales y Problemas flotando sobre el visor.</figcaption></figure>
+
+  <h2 id="ventana--tamano">Tamaño de los paneles</h2>
+  <p>Todo borde entre dos grupos es un <strong>divisor</strong> que se arrastra en las dos direcciones: la línea es de
+  1&nbsp;px, pero la zona para agarrarlo mide unos 6&nbsp;px y el cursor cambia al pasar por encima.
+  <strong>Doble clic en un divisor</strong> reparte el espacio a partes iguales entre sus dos lados.</p>
+  <ul>
+    <li>Ningún panel se puede dejar inutilizable: el visor no baja de unos 200 × 150&nbsp;px, el código y las terminales
+      de unos 240 × 120&nbsp;px (estas medidas crecen con el tamaño de la interfaz).</li>
+    <li>Los tamaños se guardan con el diseño, también en los diseños con nombre.</li>
+    <li>Si achicas la ventana, los grupos se reparten el espacio <strong>en proporción</strong> en vez de salirse de ella.</li>
+  </ul>
+
+  <h2 id="ventana--flotar">Paneles flotantes</h2>
+  <p><strong>Flotar</strong> (clic derecho en la pestaña) saca el panel a una ventana que va <em>dentro</em> de ScadLab,
+  encima de los demás. Se mueve arrastrando su barra de pestañas y se redimensiona desde cualquier borde o esquina,
+  sin poder salirse de la ventana. <strong>Acoplar</strong> lo devuelve a la grilla. Un grupo flotante puede llevar
+  varias pestañas.</p>
+  <div class="note"><span class="lbl">Ventanas del sistema</span><p>Los paneles no se pueden sacar a una ventana nativa
+  de Windows o macOS (por ejemplo, para llevar el visor a un segundo monitor): ScadLab corre en una sola ventana
+  del sistema y los flotantes viven dentro de ella. Varias ventanas nativas es otra fase del proyecto
+  (<a href="#workspaces--ventanas">Varias ventanas</a>).</p></div>
+
+  <h2 id="ventana--ocultar">Ocultar y mostrar</h2>
+  <p>Cualquier panel se oculta con la <strong>×</strong> de su pestaña, con su casilla del <a href="#ventana--ver">menú
+  Ver</a> o con su atajo, y se vuelve a mostrar igual: reaparece junto a las pestañas con las que estaba. <strong>Ocultar
+  no destruye nada</strong>: el visor conserva su cámara, el editor su texto y su historial de deshacer, y la terminal su
+  pantalla y su agente, que sigue corriendo. Solo el botón <strong>×</strong> de la barra de la terminal termina al agente.</p>
+  <p>Si ocultas <em>todos</em> los paneles, el área de trabajo muestra una pantalla con botones para volver a abrirlos o
+  aplicar un diseño; nunca queda un hueco en blanco. La barra lateral y la barra de estado también se pueden ocultar,
+  y todo se recuerda al reabrir la app.</p>
+
+  <figure class="shot"><img src="docs/screenshots/es/dock-hidden.png" alt="La ventana con solo el visor 3D visible y la barra lateral oculta: el visor ocupa todo el ancho y la pestaña Visor 3D es la única" loading="lazy"><figcaption>Solo el visor, con la barra lateral oculta: los demás paneles siguen vivos, solo fuera de la vista.</figcaption></figure>
+
+  <h2 id="ventana--ver">El menú Ver</h2>
+  <p>El menú <strong>Ver</strong> de la cabecera reúne todo: una casilla por cada <strong>panel</strong> (con su atajo), la
+  <strong>barra lateral</strong> y la <strong>barra de estado</strong>, <em>Maximizar panel</em>, el <em>Modo enfoque</em> y
+  los <strong>diseños</strong>.</p>
+  <figure class="shot"><img src="docs/screenshots/es/dock-view-menu.png" alt="El menú Ver desplegado: casillas marcadas para los seis paneles con sus atajos, después Barra lateral y Barra de estado, Maximizar panel, Modo enfoque, los cuatro diseños de fábrica, Restablecer diseño, Guardar diseño como y Diseños guardados" loading="lazy"><figcaption>El menú Ver, con una casilla por panel y los diseños al final.</figcaption></figure>
+
+  <h2 id="ventana--disenos">Diseños</h2>
+  <p>Un <strong>diseño</strong> es dónde está cada panel y su tamaño. ScadLab trae cuatro:</p>
+  <ul>
+    <li><strong>Predeterminado</strong>: visor y código arriba, agentes, chat y problemas debajo.</li>
+    <li><strong>Modelado</strong>: visor grande; código y agentes como pestañas a la derecha.</li>
+    <li><strong>Código e IA</strong>: código grande, el agente al lado y el visor chico.</li>
+    <li><strong>Pantalla dividida</strong>: visor y código a partes iguales, agentes abajo.</li>
+  </ul>
+  <p><strong>Restablecer diseño</strong> vuelve al predeterminado. Para guardar el tuyo, usa <strong>Ver → Guardar diseño
+  como…</strong>, ponle nombre (si ya existe uno igual, te pregunta antes de reemplazarlo) y aparecerá en el menú.
+  <strong>Ver → Diseños guardados…</strong> los lista para aplicarlos o borrarlos.</p>
+  <figure class="shot"><img src="docs/screenshots/es/dock-layouts.png" alt="El diálogo Diseños guardados con tres diseños propios —Revisión con agente, Solo código y chat y Presentación—, cada uno con Aplicar y Borrar, y debajo los cuatro diseños de fábrica con Aplicar" loading="lazy"><figcaption>Diseños guardados: los tuyos (Aplicar / Borrar) y los de fábrica.</figcaption></figure>
+  <p>El diseño actual se guarda solo y se restaura al abrir la app. Si el diseño guardado estuviera dañado o fuera de una
+  versión distinta, ScadLab abre con el predeterminado en vez de fallar.</p>
+
+  <h2 id="ventana--enfoque">Modo enfoque</h2>
+  <p><kbd>⌘⇧0</kbd> / <kbd>Ctrl+Shift+0</kbd> (o <strong>Ver → Modo enfoque</strong>) deja <strong>solo el panel activo</strong>, sin
+  barra lateral, sin barra de estado y sin los demás paneles. <kbd>Esc</kbd> —o el mismo atajo, o el botón de la
+  esquina— vuelve exactamente al diseño anterior. Con el foco dentro del editor o de la terminal, <kbd>Esc</kbd> sigue
+  siendo de ellos: sal con el atajo.</p>
+
+  <h2 id="ventana--atajos">Atajos</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Atajo</th><th>Qué hace</th></tr>
+    <tr><td><kbd>⌘⇧1</kbd> … <kbd>⌘⇧6</kbd> (Windows: <kbd>Ctrl+Shift+1</kbd> … <kbd>6</kbd>)</td><td>Muestra y enfoca Visor, Código, Agente 1, Agente 2, Chat o Problemas. Si ya está enfocado, lo oculta.</td></tr>
+    <tr><td><kbd>⌘⇧0</kbd> / <kbd>Ctrl+Shift+0</kbd></td><td>Modo enfoque.</td></tr>
+    <tr><td><kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd></td><td>Pliega o muestra la barra lateral.</td></tr>
+  </table></div>
+  <p>En macOS, el sistema reserva <kbd>⌘⇧3</kbd>, <kbd>⌘⇧4</kbd> y <kbd>⌘⇧5</kbd> para las capturas de pantalla y no llegan a
+  ScadLab: para esos paneles usa <kbd>⌘⌥3</kbd>, <kbd>⌘⌥4</kbd> y <kbd>⌘⌥5</kbd> (valen también para el resto) o el menú Ver. Los atajos
+  no pisan los del editor ni los de la terminal.</p>
+
+  <h2 id="ventana--pequena">Ventanas pequeñas y letra grande</h2>
+  <p>La ventana admite hasta <strong>1024 × 640</strong>. Cuando un panel se queda sin espacio, sus barras se
+  adaptan en vez de cortar controles: los botones de la terminal, del editor y de la cabecera pasan a mostrar
+  <strong>solo el ícono</strong> (el nombre sigue en la ayuda emergente al pasar el ratón) y, si ni así caben, se
+  reparten en una segunda fila. La barra de pestañas y sus medidas también crecen con el
+  <a href="#config-general--apariencia">tamaño de la interfaz</a>.</p>
+
+  <figure class="shot"><img src="docs/screenshots/es/small-1024.png" alt="Ventana de ScadLab en su tamaño mínimo de 1024 por 640: los grupos se reparten el espacio, las pestañas se desplazan con un menú para las que no caben y la barra de la terminal reparte sus botones" loading="lazy"><figcaption>En la ventana mínima (1024 × 640) nada queda cortado: los grupos se reparten el espacio y las barras se adaptan.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/dock-150.png" alt="La ventana con la interfaz al 150 %: la barra de pestañas, su texto y sus íconos son más grandes y los paneles conservan sus tamaños mínimos escalados" loading="lazy"><figcaption>Con la interfaz al 150 %, las pestañas y los tamaños mínimos de los paneles crecen con ella.</figcaption></figure>
 
   <h2 id="ventana--lateral">Barra lateral plegable</h2>
-  <p>El botón de la izquierda de la cabecera o <kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd> oculta y muestra la lista de
-  workspaces y el árbol, para dejarle todo el ancho al visor y al código.</p>
+  <p>El botón de la izquierda de la cabecera, <kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd> o la casilla del menú Ver oculta y muestra
+  la lista de workspaces y el árbol, para dejarle todo el ancho a los paneles. Su ancho, y el reparto entre workspaces y
+  checkpoints, se arrastran y se recuerdan.</p>
+
+  <h2 id="ventana--restablecer">Restablecer el diseño</h2>
+  <p><strong>Ver → Restablecer diseño</strong> devuelve los paneles al predeterminado. En <strong>Configuración → General</strong>,
+  <strong>Restablecer el diseño</strong> hace eso y además devuelve la barra lateral a su tamaño de fábrica y muestra las
+  barras ocultas. Más sobre la letra y la interfaz en <a href="#config-general--apariencia">Apariencia y tamaños</a>.</p>
 
   <h2 id="ventana--medidas">Medidas del visor plegables</h2>
   <p>El panel de medidas de la pieza se pliega con su flecha: queda solo el tamaño en una línea. Útil en la vista
@@ -1005,7 +1124,7 @@ color("SteelBlue") difference() {
   <ul>
     <li><strong>Workspace e impresora</strong> abiertos.</li>
     <li><strong>Modo del editor</strong> (solo lectura / edición, y si hay cambios sin guardar) y la posición del cursor.</li>
-    <li><strong>Problemas</strong>: errores, advertencias y sugerencias del checkpoint abierto; un clic abre el panel.</li>
+    <li><strong>Problemas</strong>: errores, advertencias y sugerencias del checkpoint abierto; un clic muestra el panel.</li>
     <li><strong>OpenSCAD</strong>: la versión con la que renderiza ScadLab, o el aviso si no lo encuentra.</li>
   </ul>
 </article>
@@ -1016,13 +1135,14 @@ color("SteelBlue") difference() {
   <p class="lead">Una terminal integrada ejecuta el agente que prefieras dentro del workspace. El agente escribe
   checkpoints y tú los ves aparecer en el árbol, sin salir de ScadLab.</p>
 
-  <figure class="shot"><img src="docs/screenshots/es/terminal.png" alt="Claude Code escribiendo un checkpoint en la terminal del workspace: la pestaña Agente 1 del panel inferior con el selector de agente, los botones Nueva, Continuar y Sesiones, el interruptor Auto-iteración activo y la salida del agente con las líneas que escribió" loading="lazy"><figcaption>Claude Code escribiendo un checkpoint en la terminal del workspace. En la barra de arriba: agente, Nueva, Continuar, Sesiones y el interruptor de auto-iteración.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/terminal.png" alt="Claude Code escribiendo un checkpoint en la terminal del workspace: el panel Agente 1 con el selector de agente, los botones Nueva, Continuar y Sesiones, el interruptor Auto-iteración activo y la salida del agente con las líneas que escribió" loading="lazy"><figcaption>Claude Code escribiendo un checkpoint en la terminal del workspace. En la barra de arriba: agente, Nueva, Continuar, Sesiones y el interruptor de auto-iteración.</figcaption></figure>
 
   <h2 id="ia-agentes--abrir">Abrir un agente</h2>
-  <p>El panel inferior tiene cuatro pestañas: <strong>Agente 1</strong>, <strong>Agente 2</strong>,
-  <a href="#ia-ollama"><strong>Chat</strong></a> y <a href="#editor--problemas"><strong>Problemas</strong></a>.</p>
+  <p>Debajo del visor hay, en pestañas, cuatro paneles: <strong>Agente 1</strong>, <strong>Agente 2</strong>,
+  <a href="#ia-ollama"><strong>Chat</strong></a> y <a href="#editor--problemas"><strong>Problemas</strong></a>
+  (puedes moverlos, ver <a href="#ventana">La ventana</a>).</p>
   <ol class="steps">
-    <li>Abre una pestaña de agente y elige el agente en el selector.</li>
+    <li>Abre el panel de un agente y elige el agente en el selector.</li>
     <li>Pulsa <strong>Nueva</strong>. El agente arranca en la carpeta del workspace, así que lo que cree aparece como
       checkpoint en el árbol.</li>
     <li>Escribe en la terminal lo que quieres, como en cualquier CLI. Para saber cómo pedirlo, mira
@@ -1063,8 +1183,8 @@ color("SteelBlue") difference() {
   </ul>
 
   <h2 id="ia-agentes--maximizar">Maximizar el panel</h2>
-  <p>El botón de la esquina del panel inferior lo agranda hasta cubrir el visor 3D, útil para leer una respuesta
-  larga; pulsarlo otra vez devuelve el tamaño normal.</p>
+  <p>El botón de la esquina de la barra del panel (o un doble clic en su pestaña) agranda su grupo hasta cubrir toda el
+  área de trabajo, útil para leer una respuesta larga; pulsarlo otra vez devuelve el tamaño normal.</p>
 
   <h2 id="ia-agentes--limites">Límites</h2>
   <p>Hasta <strong>2 terminales de agente</strong> a la vez —por ejemplo una con Claude Code y otra con Codex
@@ -1397,26 +1517,72 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
 }</code></pre></div>
 </article>
 
-<article class="topic" id="imprimir-exportar" data-title="Exportar STL, 3MF y PNG" data-status="dev">
-  <h1>Exportar STL, 3MF y PNG <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Tres botones en la cabecera exportan el checkpoint seleccionado.</p>
+<article class="topic" id="imprimir-exportar" data-title="Exportar STL, 3MF y PNG">
+  <h1>Exportar STL, 3MF y PNG <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Tres botones en la cabecera exportan el checkpoint seleccionado. Están activos cuando ese checkpoint
+  tiene un render correcto; si no, siguen apagados y su descripción (pasa el ratón) dice por qué.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Exportar STL, 3MF y PNG.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/export-3mf.png" alt="Diálogo Exportar a 3MF: formato 3MF para Bambu Studio elegido, dos partes (Color 1 grafito en el extrusor E1 y Color 2 naranja en el E2) con sus triángulos, sin avisos, y los botones Cancelar, Exportar y Exportar y abrir en Bambu Studio" loading="lazy"><figcaption>El diálogo de 3MF: una fila por parte, con su color, sus triángulos y el extrusor que le toca.</figcaption></figure>
 
   <div class="tablewrap"><table>
-    <tr><th>Botón</th><th>Qué genera</th><th>Cuándo usarlo</th></tr>
-    <tr><td><strong>STL</strong></td><td>Malla de un solo cuerpo, sin color</td><td>Piezas de un color, o para otros slicers</td></tr>
-    <tr><td><strong>3MF</strong></td><td>Malla con una parte por color</td><td>Multicolor con AMS, o para conservar las piezas separadas</td></tr>
-    <tr><td><strong>PNG</strong></td><td>Imagen de la vista actual</td><td>Documentar o compartir el diseño</td></tr>
+    <tr><th>Botón</th><th>Atajo</th><th>Qué genera</th><th>Cuándo usarlo</th></tr>
+    <tr><td><strong>STL</strong></td><td><kbd>⇧⌘E</kbd> / <kbd>Ctrl+Shift+E</kbd></td><td>La malla del render, de un solo cuerpo y sin color. Abre directo el diálogo de guardar</td><td>Piezas de un color, o para otros laminadores</td></tr>
+    <tr><td><strong>3MF</strong></td><td><kbd>⌘E</kbd> / <kbd>Ctrl+E</kbd></td><td>Abre el diálogo de exportación: una parte por color, cada una con su extrusor</td><td>Multicolor con AMS, o para conservar las piezas separadas</td></tr>
+    <tr><td><strong>PNG</strong></td><td>—</td><td>Imagen de la vista activa del visor, tal como se ve</td><td>Documentar o compartir el diseño</td></tr>
   </table></div>
 
+  <h2 id="imprimir-exportar--3mf">El diálogo de 3MF</h2>
+  <p>Antes de elegir dónde guardar, el diálogo te muestra <strong>qué va a salir</strong>. La primera vez OpenSCAD
+  renderiza el modelo con sus colores (unos segundos; después queda en caché) y la tabla lista:</p>
+  <ul>
+    <li><strong>Una parte por cada <code>color()</code></strong> del modelo, con su muestra de color, su nombre y su
+    cantidad de triángulos. La geometría sin <code>color()</code> sale como una parte más, <em>Default</em>
+    (amarillo), y el diálogo la marca como «sin color()».</li>
+    <li><strong>El extrusor</strong> (E1, E2…) que Bambu Studio le asigna a cada parte, en el orden en que aparecen
+    los colores en el modelo.</li>
+    <li><strong>Avisos</strong>, que no impiden exportar: más colores de los que admite la impresora del workspace
+    (por ejemplo, cinco colores en una A1 mini, que admite cuatro a la vez), geometría sin <code>color()</code>, o dos
+    colores casi iguales que usarían dos filamentos distintos.</li>
+  </ul>
+
+  <figure class="shot"><img src="docs/screenshots/es/export-3mf-warning.png" alt="Diálogo Exportar a 3MF con cinco partes, de E1 a E5, y un aviso en ámbar: el modelo usa 5 colores y la Bambu Lab A1 mini admite 4 a la vez" loading="lazy"><figcaption>Cinco colores en una A1 mini: el aviso lo dice antes de exportar, y la exportación sigue disponible.</figcaption></figure>
+
+  <h2 id="imprimir-exportar--formatos">Los tres formatos</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Formato</th><th>Cómo sale</th><th>Para qué</th></tr>
+    <tr><td><strong>STL</strong></td><td>Un solo archivo <code>.stl</code>, sin color</td><td>Una pieza de un solo color; cualquier laminador</td></tr>
+    <tr><td><strong>3MF para Bambu Studio</strong></td><td>Un objeto con una parte por color y su extrusor, en un <code>.3mf</code></td><td>Multicolor con AMS: Bambu Studio lo abre listo para asignar filamentos</td></tr>
+    <tr><td><strong>Un STL por color</strong></td><td>Un <code>.zip</code> con un <code>.stl</code> por parte</td><td>OrcaSlicer, PrusaSlicer, Cura u otro que no lee las partes del 3MF</td></tr>
+  </table></div>
+  <p>El nombre que propone el diálogo de guardar es <code>&lt;workspace&gt;-&lt;checkpoint&gt;</code> con la extensión del
+  formato, y abre en la carpeta <code>exports/</code> del workspace si existe.</p>
+
+  <h2 id="imprimir-exportar--despues">Tras exportar</h2>
+  <p>Un aviso te dice dónde quedó el archivo y te ofrece dos botones: <strong>Mostrar en el Finder</strong>
+  (<strong>Explorador</strong> en Windows) y, si ScadLab encontró Bambu Studio, <strong>Abrir en Bambu Studio</strong>.
+  En el diálogo de 3MF, <strong>Exportar y abrir en Bambu Studio</strong> hace las dos cosas de una vez. Bambu Studio
+  <strong>solo se abre cuando tú lo pides</strong> con uno de esos botones, nunca solo.</p>
+
   <h2 id="imprimir-exportar--bambu">Abrir en Bambu Studio</h2>
+  <p>ScadLab busca la app en su ruta de instalación (macOS: <code>/Applications/BambuStudio.app</code> o la misma
+  carpeta dentro de tu <code>~/Applications</code>; Windows: <code>Program Files\Bambu Studio</code>). Si la tienes en
+  otro lado, indícala en <a href="#config-materiales--bambu">Configuración → Impresión → Ruta de Bambu Studio</a>. Si no
+  está, el botón no aparece y el diálogo te lleva a esa configuración.</p>
+
+  <h2 id="imprimir-exportar--comprobar">Comprueba el 3MF en Bambu Studio</h2>
+  <p>La primera vez que exportes un modelo multicolor, vale la pena hacer esta comprobación a mano:</p>
   <ol class="steps">
-    <li>Exporta a 3MF.</li>
-    <li>En Bambu Studio, <strong>Archivo → Importar</strong> (o arrastra el archivo).</li>
+    <li>Abre el archivo en Bambu Studio (con <strong>Abrir en Bambu Studio</strong>, o con <strong>Archivo → Importar</strong>
+    o arrastrándolo a la ventana).</li>
     <li>Si pregunta si cargarlo como un objeto con varias partes, responde que sí.</li>
-    <li>Asigna cada parte a un filamento del AMS. Ver <a href="#imprimir-multicolor">Multicolor</a>.</li>
+    <li>Revisa la lista de objetos: tiene que verse <strong>un objeto con una parte por color</strong>, cada parte con su
+    extrusor (1, 2…) y el nombre de su color.</li>
+    <li><strong>Asigna los filamentos del AMS</strong> a cada extrusor y lamina. No deberían aparecer errores de
+    geometría.</li>
   </ol>
+  <p>Un modelo sin <code>color()</code> sale como un objeto de una sola parte.</p>
+  <div class="note"><span class="lbl">Los colores del filamento los pones tú</span><p>El 3MF lleva el color de cada parte
+  como referencia, pero el filamento real lo eliges en el AMS de Bambu Studio.</p></div>
 </article>
 
 <article class="topic" id="imprimir-multicolor" data-title="Multicolor con AMS">
@@ -1424,7 +1590,7 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
   <p class="lead">Una pieza por color en OpenSCAD, un 3MF con esas partes, y en Bambu Studio cada parte va a un
   filamento del AMS o AMS lite.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Multicolor con AMS.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/export-3mf-warning.png" alt="Diálogo de exportación con cinco partes, cada una con su extrusor, y el aviso de que la A1 mini admite cuatro colores a la vez" loading="lazy"><figcaption>Al exportar, el diálogo lista cada color como una parte con su extrusor y avisa si hay más colores de los que admite tu impresora.</figcaption></figure>
 
   <h2 id="imprimir-multicolor--regla">La regla: una pieza por color</h2>
   <p>Cada bloque de primer nivel va dentro de su <code>color()</code>, y las piezas no deben solaparse: donde dos
@@ -1445,10 +1611,12 @@ color("Black") label();                                    // texto que llena el
   <p>Aquí el texto está <strong>embutido</strong> en la base (misma altura total): sale plano y se imprime sin
   cambios de altura entre colores.</p>
 
-  <h2 id="imprimir-multicolor--exportar">Exportar <span class="badge dev">En desarrollo</span></h2>
-  <p>El botón <strong>3MF</strong> genera el archivo con una parte por color, que Bambu Studio abre con las partes
-  asignables a filamentos. Requiere una versión de OpenSCAD que exporte 3MF con color (ver
-  <a href="#requisitos--openscad">Requisitos</a>).</p>
+  <h2 id="imprimir-multicolor--exportar">Exportar <span class="badge ok">Disponible</span></h2>
+  <p>El botón <strong>3MF</strong> (<kbd>⌘E</kbd> / <kbd>Ctrl+E</kbd>) abre el diálogo de exportación: genera el archivo
+  con <strong>una parte por color</strong>, cada una con su extrusor, que Bambu Studio abre con las partes asignables a
+  filamentos. Si prefieres otro laminador, elige <em>Un STL por color</em> y obtienes un <code>.zip</code>. Requiere una
+  versión de OpenSCAD que exporte 3MF con color (ver <a href="#requisitos--openscad">Requisitos</a>). Detalle y
+  comprobación en <a href="#imprimir-exportar">Exportar STL, 3MF y PNG</a>.</p>
 
   <h2 id="imprimir-multicolor--limites">Cuántos colores</h2>
   <p>AMS lite (A1, A1 mini): 4. AMS: 4 por unidad, hasta 16 encadenando unidades. Cada cambio de color purga
@@ -1491,13 +1659,33 @@ color("Black") label();                                    // texto que llena el
 <!-- ======================================================= CONFIGURACIÓN -->
 <article class="topic" id="config-general" data-title="Idioma, OpenSCAD y agentes">
   <h1>Idioma, OpenSCAD y agentes <span class="badge ok">Disponible</span></h1>
-  <p class="lead">Lo básico de Configuración: en qué idioma te habla la app, dónde está OpenSCAD y qué agentes
-  encontró.</p>
+  <p class="lead">Lo básico de Configuración: en qué idioma te habla la app, qué tan grande se ve, dónde está OpenSCAD
+  y qué agentes encontró.</p>
 
   <figure class="shot"><img src="docs/screenshots/es/settings-general.png" alt="Configuración, pestaña General: idioma, tema y carpeta de workspaces" loading="lazy"><figcaption>Configuración → General: idioma, tema y carpeta de workspaces.</figcaption></figure>
 
   <h2 id="config-general--idioma">Idioma</h2>
   <p>Español o English. El cambio se aplica al momento y se recuerda.</p>
+
+  <h2 id="config-general--apariencia">Apariencia y tamaños</h2>
+  <p>El bloque <strong>Apariencia</strong> de la pestaña General te deja ajustar la app a tu vista y a tu pantalla.
+  <strong>Todo se ve y se guarda al instante</strong>: no hace falta pulsar Guardar.</p>
+  <ul>
+    <li><strong>Tamaño de la interfaz</strong>: Compacto (90 %), Normal (100 %), Grande (115 %), Más grande
+    (130 %) o Máximo (150 %). Agranda o reduce el <em>texto y los íconos</em> de toda la aplicación; los espacios
+    no cambian, así que no es un zoom de la ventana.</li>
+    <li><strong>Tamaño de letra de cada área</strong>: el editor de código, la terminal y el chat tienen cada uno
+    su tamaño (de 9 a 28 px), independiente del de la interfaz. Una <strong>vista previa</strong> muestra cómo se
+    lee cada una mientras eliges.</li>
+    <li><strong>Restablecer apariencia</strong> vuelve la interfaz al 100 % y las tres letras a 13 px.</li>
+  </ul>
+  <p>Con el teclado: <kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> (<kbd>Ctrl</kbd> en Windows) suben, bajan y
+  restablecen el tamaño de la interfaz; con el foco <em>dentro</em> del editor, la terminal o el chat, esos mismos
+  atajos cambian la letra de <em>esa</em> área. Un aviso breve dice el valor al que quedó.</p>
+
+  <figure class="shot"><img src="docs/screenshots/es/settings-appearance.png" alt="Configuración, pestaña General, bloque Apariencia: selector del tamaño de la interfaz, tres campos de tamaño de letra para el editor, la terminal y el chat con su vista previa, y los botones Restablecer apariencia y Restablecer el diseño" loading="lazy"><figcaption>Configuración → General → Apariencia: tamaño de la interfaz, letra de cada área con vista previa y los botones para restablecer.</figcaption></figure>
+
+  <figure class="shot"><img src="docs/screenshots/es/appearance-150.png" alt="Ventana principal con el tamaño de la interfaz al 150 %: el texto y los íconos son más grandes mientras la terminal conserva su propia letra de 13 píxeles" loading="lazy"><figcaption>La interfaz al 150 %: el texto y los íconos crecen; la terminal y el editor mantienen su propia letra.</figcaption></figure>
 
   <h2 id="config-general--openscad">Ruta de OpenSCAD</h2>
   <p>Muestra la ruta detectada y su versión. Si no lo encontró, o tienes varias versiones, escribe o elige la
@@ -1525,7 +1713,14 @@ color("Black") label();                                    // texto que llena el
   <p class="lead">Los servidores de modelos del chat, y los ajustes que alimentan la estimación de costo y el perfil de
   impresora de los proyectos nuevos.</p>
 
-  <figure class="shot"><img src="docs/screenshots/es/settings-printing.png" alt="Tabla de materiales con densidad y costo por kilo de PLA, PETG, ABS, ASA y TPU" loading="lazy"><figcaption>Materiales: densidad y costo por kilo, editables.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/settings-printing.png" alt="Configuración, pestaña Impresión: impresora y material por defecto, ruta de Bambu Studio con su estado de detección y tabla de materiales con densidad y costo por kilo" loading="lazy"><figcaption>Impresión: ruta de Bambu Studio (con su estado de detección) y materiales con densidad y costo por kilo, editables.</figcaption></figure>
+
+  <h2 id="config-materiales--bambu">Ruta de Bambu Studio</h2>
+  <p>En la pestaña <strong>Impresión</strong>. La usa <a href="#imprimir-exportar--bambu">Abrir en Bambu Studio</a> tras
+  exportar. <strong>Vacío = autodetectar</strong>: ScadLab busca la app en su ruta de instalación y, debajo del campo,
+  te dice si la encontró y dónde. Si la tienes en otra carpeta, escribe la ruta o pulsa <strong>Elegir…</strong>
+  (en macOS, la carpeta <code>BambuStudio.app</code>; en Windows, <code>bambu-studio.exe</code>). Se aplica al
+  guardar.</p>
 
   <h2 id="config-materiales--ollama">Servidores de modelos (pestaña IA)</h2>
   <p>Son los proveedores del <a href="#ia-ollama">chat</a>. Habilita los que uses:</p>
@@ -1577,12 +1772,12 @@ color("Black") label();                                    // texto que llena el
 </article>
 
 <!-- ============================================================= RECETAS -->
-<article class="topic" id="receta-multicolor" data-title="De idea a 3MF multicolor en 5 pasos" data-status="dev">
-  <h1>De idea a 3MF multicolor para la A1 mini en 5 pasos <span class="badge dev">En desarrollo</span></h1>
+<article class="topic" id="receta-multicolor" data-title="De idea a 3MF multicolor en 5 pasos">
+  <h1>De idea a 3MF multicolor para la A1 mini en 5 pasos <span class="badge ok">Disponible</span></h1>
   <p class="lead">Un llavero bicolor con tu nombre, de la idea al archivo que abre Bambu Studio con los colores
   asignados al AMS lite.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>De idea a 3MF multicolor en 5 pasos.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/export-3mf.png" alt="Diálogo Exportar a 3MF con dos partes, una por color, cada una con su extrusor" loading="lazy"><figcaption>El paso 5: el diálogo de exportación muestra una parte por color y su extrusor.</figcaption></figure>
 
   <ol class="steps">
     <li><strong>Crea el workspace</strong> <em>Llavero</em> con la impresora <strong>A1 mini</strong>.</li>
@@ -1594,7 +1789,8 @@ color("Black") label();                                    // texto que llena el
       base es plana. Haz clic en el texto para ver su volumen.</li>
     <li><strong>Ajusta</strong> si hace falta: <em>«el texto es muy fino, súbelo a 8 mm de alto con fuente en negrita»</em>.
       Eso crea un checkpoint nuevo; el anterior sigue ahí.</li>
-    <li><strong>Exporta 3MF</strong>, ábrelo en Bambu Studio, asigna amarillo y negro a dos ranuras del AMS lite y lamina.</li>
+    <li><strong>Exporta 3MF</strong> (<kbd>⌘E</kbd>): el diálogo te muestra dos partes, una por color, con su extrusor.
+      Pulsa <strong>Exportar y abrir en Bambu Studio</strong>, asigna amarillo y negro a dos ranuras del AMS lite y lamina.</li>
   </ol>
   <div class="note tip"><span class="lbl">Consejo</span><p>Con el texto embutido (no en relieve), los cambios de color
   ocurren solo en el último milímetro: menos purga y más rápido.</p></div>
@@ -1647,6 +1843,12 @@ color("Black") label();                                    // texto que llena el
     <tr><th>macOS</th><th>Windows</th><th>Qué hace</th></tr>
     <tr class="sect"><td colspan="3">Ventana</td></tr>
     <tr><td><kbd>⌘B</kbd></td><td><kbd>Ctrl+B</kbd></td><td>Mostrar u ocultar la barra lateral</td></tr>
+    <tr><td><kbd>⌘+</kbd> / <kbd>⌘−</kbd></td><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd></td><td>Agrandar / reducir el texto y los íconos de la interfaz (90, 100, 115, 130, 150 %)</td></tr>
+    <tr><td><kbd>⌘0</kbd></td><td><kbd>Ctrl+0</kbd></td><td>Volver la interfaz al 100 %</td></tr>
+    <tr><td><kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> con el foco en el editor, la terminal o el chat</td><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd> / <kbd>Ctrl+0</kbd></td><td>Subir, bajar o restablecer la letra de <em>esa</em> área (9–28 px, 13 por defecto), sin tocar la interfaz</td></tr>
+    <tr class="sect"><td colspan="3">Exportar</td></tr>
+    <tr><td><kbd>⌘E</kbd></td><td><kbd>Ctrl+E</kbd></td><td>Exportar a 3MF (abre el diálogo con las partes y los extrusores)</td></tr>
+    <tr><td><kbd>⇧⌘E</kbd></td><td><kbd>Ctrl+Shift+E</kbd></td><td>Exportar a STL (directo al diálogo de guardar)</td></tr>
     <tr class="sect"><td colspan="3">Editor de código</td></tr>
     <tr><td><kbd>⌘S</kbd></td><td><kbd>Ctrl+S</kbd></td><td>Guardar como checkpoint nuevo (en modo edición)</td></tr>
     <tr><td>Doble clic</td><td>Doble clic</td><td>Pasar de solo lectura a edición</td></tr>
