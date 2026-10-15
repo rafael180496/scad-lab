@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "units": "mm",
+  "notes": "Volumen de impresion nominal del fabricante. Dejar un margen de 2-5 mm al disenar. 'multicolor_slots' es el maximo de filamentos con unidades AMS encadenadas; 'verify' lista los campos que deben confirmarse con la ficha oficial de Bambu Lab antes de confiar en ellos.",
+  "printers": [
+    {
+      "id": "bambu-a1-mini",
+      "name": "Bambu Lab A1 mini",
+      "build_volume": { "x": 180, "y": 180, "z": 180 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 4,
+      "multicolor_system": "AMS lite",
+      "enclosed": false,
+      "heated_chamber": false,
+      "notes": "Cama movil (bed slinger), marco abierto. AMS lite de 4 colores. Ideal PLA/PETG/TPU; no recomendada para ABS/ASA. Piezas altas y delgadas pueden oscilar: orientar el lado largo en Y o agregar orejas.",
+      "verify": []
+    },
+    {
+      "id": "bambu-a1",
+      "name": "Bambu Lab A1",
+      "build_volume": { "x": 256, "y": 256, "z": 256 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 4,
+      "multicolor_system": "AMS lite",
+      "enclosed": false,
+      "heated_chamber": false,
+      "notes": "Cama movil, marco abierto, AMS lite de 4 colores. Mismas limitaciones de materiales que la A1 mini.",
+      "verify": ["multicolor_slots"]
+    },
+    {
+      "id": "bambu-p1p",
+      "name": "Bambu Lab P1P",
+      "build_volume": { "x": 256, "y": 256, "z": 256 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 16,
+      "multicolor_system": "AMS (hasta 4 unidades de 4)",
+      "enclosed": false,
+      "heated_chamber": false,
+      "notes": "CoreXY de marco abierto. Con un AMS: 4 colores. ABS/ASA solo con cerramiento opcional.",
+      "verify": []
+    },
+    {
+      "id": "bambu-p1s",
+      "name": "Bambu Lab P1S",
+      "build_volume": { "x": 256, "y": 256, "z": 256 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 16,
+      "multicolor_system": "AMS (hasta 4 unidades de 4)",
+      "enclosed": true,
+      "heated_chamber": false,
+      "notes": "CoreXY cerrada (camara pasiva, sin calefaccion activa). Apta para ABS/ASA.",
+      "verify": []
+    },
+    {
+      "id": "bambu-p2s",
+      "name": "Bambu Lab P2S",
+      "build_volume": { "x": 256, "y": 256, "z": 256 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 16,
+      "multicolor_system": "AMS / AMS 2 Pro",
+      "enclosed": true,
+      "heated_chamber": false,
+      "notes": "Sucesora de la serie P1, cerrada. Confirmar volumen, calefaccion de camara y numero de AMS con la ficha oficial.",
+      "verify": ["build_volume", "multicolor_slots", "heated_chamber"]
+    },
+    {
+      "id": "bambu-x1c",
+      "name": "Bambu Lab X1 Carbon",
+      "build_volume": { "x": 256, "y": 256, "z": 256 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 16,
+      "multicolor_system": "AMS (hasta 4 unidades de 4)",
+      "enclosed": true,
+      "heated_chamber": false,
+      "notes": "CoreXY cerrada con lidar (calibracion de flujo y primera capa). Boquilla de acero endurecido: apta para filamentos con fibra (CF/GF).",
+      "verify": []
+    },
+    {
+      "id": "bambu-x1e",
+      "name": "Bambu Lab X1E",
+      "build_volume": { "x": 256, "y": 256, "z": 256 },
+      "nozzle_mm": 0.4,
+      "multicolor_slots": 16,
+      "multicolor_system": "AMS (hasta 4 unidades de 4)",
+      "enclosed": true,
+      "heated_chamber": true,
+      "notes": "Variante empresarial de la X1C con camara calefaccionada activa (aprox. 60 C) y lidar. Apta para materiales tecnicos.",
+      "verify": ["heated_chamber"]
+    },
+    {
+      "id": "bambu-h2d",
+      "name": "Bambu Lab H2D",
+      "build_volume": { "x": 325, "y": 320, "z": 325 },
+      "build_volume_dual_nozzle": { "x": 300, "y": 320, "z": 325 },
+      "build_volume_total": { "x": 350, "y": 320, "z": 325 },
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "multicolor_slots": 24,
+      "multicolor_system": "AMS 2 Pro / AMS HT en ambas boquillas",
+      "enclosed": true,
+      "heated_chamber": true,
+      "notes": "Doble boquilla. build_volume = area con una sola boquilla; build_volume_dual_nozzle = area alcanzable por ambas (usar este si la pieza mezcla las dos boquillas); build_volume_total = envolvente de las dos boquillas juntas. Camara calefaccionada activa (aprox. 65 C).",
+      "verify": ["build_volume", "build_volume_dual_nozzle", "build_volume_total", "multicolor_slots"]
+    },
+    {
+      "id": "bambu-h2s",
+      "name": "Bambu Lab H2S",
+      "build_volume": { "x": 340, "y": 320, "z": 340 },
+      "nozzle_mm": 0.4,
+      "nozzle_count": 1,
+      "multicolor_slots": 24,
+      "multicolor_system": "AMS 2 Pro / AMS HT",
+      "enclosed": true,
+      "heated_chamber": true,
+      "notes": "Serie H de una sola boquilla con volumen mayor que la H2D en una boquilla. Confirmar todas las cifras con la ficha oficial.",
+      "verify": ["build_volume", "multicolor_slots", "heated_chamber"]
+    }
+  ]
+}

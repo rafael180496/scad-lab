@@ -1,0 +1,54 @@
+# {{.Name}} — workspace de ScadLab
+
+Proyecto de modelado 3D en **OpenSCAD** gestionado por ScadLab. Impresora
+destino: **{{.PrinterName}}** — volumen de impresión {{.BuildX}} × {{.BuildY}} × {{.BuildZ}} mm
+(ver `printer.json`). Unidades: milímetros.
+
+## Reglas obligatorias
+
+1. **Nunca sobrescribir ni borrar un `.scad` existente.** Cada versión del
+   modelo es un *checkpoint* inmutable. Para cambiar algo, crear un archivo
+   NUEVO con el siguiente número: `NNN-slug.scad` (tres dígitos, creciente,
+   slug en kebab-case que diga qué cambió — p. ej. `004-add-hinge.scad`).
+2. **Primera línea de cada checkpoint**, exactamente con este formato:
+
+   ```
+   // @checkpoint parent=003-base-box.scad desc="Agrega bisagra lateral"
+   ```
+
+   `parent` es el checkpoint del que parte (vacío en el primero: `parent=`).
+   Ramificar = crear un archivo nuevo cuyo `parent` es un checkpoint anterior
+   distinto del último. ScadLab arma el árbol con estas líneas.
+3. **Color en cada pieza de primer nivel**: `color("nombre_o_#hex") …`. ScadLab
+   colorea el visor y exporta el 3MF multicolor por color (máximo
+   {{.ColorSlots}} colores para esta impresora).
+4. **Parámetros arriba**, con anotaciones del Customizer (`/* [Dimensiones] */`,
+   `// [min:step:max]`).
+5. **Validar después de cada checkpoint**: renderizar con la herramienta MCP de
+   OpenSCAD (`openscad` en `.mcp.json`) o, si no está, con
+   `openscad -o exports/check.stl <archivo>.scad` y leer errores y warnings.
+6. **Si existe `RENDER_ERRORS.md`**, ScadLab lo escribió porque el último
+   render falló: leerlo y corregir en un checkpoint NUEVO, nunca editando el
+   que falló.
+7. **Debe caber en la placa**: el modelo completo dentro de
+   {{.BuildX}} × {{.BuildY}} × {{.BuildZ}} mm. Si no cabe, partirlo en piezas y decirlo.
+8. **Diseñar para FDM**: voladizos ≤ 45°, pared mínima 0,8 mm (2 perímetros de
+   0,4), holgura 0,2 mm a presión y 0,3–0,4 mm deslizante, chaflán de 0,5 mm en
+   la base contra la pata de elefante. Detalle en la skill `bambu-lab-printers`.
+9. **No hacer commits.** Nunca `git add`, `commit`, `push` ni tags: el usuario
+   revisa y commitea.
+
+## Skills disponibles
+
+Las skills de este workspace están en `.claude/skills/` (y su copia para cada
+CLI: `.agents/skills/`, `.opencode/skills/`, `.agent/skills/`). Empezar por
+`openscad-core`; para un proyecto nuevo, copiar una plantilla de
+`openscad-templates` como `001-<slug>.scad`.
+
+## Carpetas
+
+| Carpeta | Qué va |
+|---|---|
+| raíz | los checkpoints `NNN-slug.scad` |
+| `lib/` | librerías OpenSCAD (BOSL2, etc.) — ver skill `openscad-libraries` |
+| `exports/` | STL/3MF/PNG generados; se pueden borrar y regenerar |

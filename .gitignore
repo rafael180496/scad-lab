@@ -1,0 +1,51 @@
+# ── Build de Wails / Go ─────────────────────────────────────────────
+build/bin/
+# frontend/dist lo embebe main.go: solo se versiona el .gitkeep para que
+# `go build` compile en un clon limpio sin haber corrido pnpm build.
+frontend/dist/*
+!frontend/dist/.gitkeep
+*.exe~
+/ScadLab
+/scadlab
+wails.json.bak
+
+# OJO: releases/**/*.dmg y *.exe NO se ignoran a propósito — el workflow de
+# release publica exactamente lo que está commiteado ahí (.claude/specs/releases.md).
+
+# ── Node / pnpm ─────────────────────────────────────────────────────
+node_modules/
+frontend/package.json.md5
+.pnpm-store/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# ── Datos locales y secretos ────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+
+# ── Workspaces y salidas de modelado de prueba ──────────────────────
+exports/
+RENDER_ERRORS.md
+*.stl
+!assets/**/*.stl
+*.3mf
+!assets/**/*.3mf
+
+# ── Herramientas ────────────────────────────────────────────────────
+.codegraph/
+coverage/
+*.out
+*.test
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ── Sistema operativo ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini

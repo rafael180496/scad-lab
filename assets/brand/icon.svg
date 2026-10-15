@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232834"/>
+      <stop offset="1" stop-color="#0d0f14"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffa04d"/>
+      <stop offset="1" stop-color="#ff6a00"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7d8698"/>
+      <stop offset="1" stop-color="#4a5262"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c9ced8"/>
+      <stop offset="1" stop-color="#8e95a3"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#ffffff" stroke-opacity=".05" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <!-- Placa base redondeada (macOS recorta con su propia máscara; en Windows se ve tal cual) -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#grid)"/>
+  <!-- Sombra de la pieza sobre la cama -->
+  <ellipse cx="512" cy="808" rx="250" ry="44" fill="#000" opacity=".35"/>
+  <!-- Cubo isométrico -->
+  <path d="M512 196 788 356 512 516 236 356Z" fill="url(#top)"/>
+  <path d="M236 356 512 516v320L236 676Z" fill="url(#left)"/>
+  <path d="M788 356 512 516v320l276-160Z" fill="url(#right)"/>
+  <!-- Líneas de capa (impresión FDM) en las caras laterales -->
+  <g stroke="#0d0f14" stroke-opacity=".18" stroke-width="6">
+    <path d="M236 420 512 580M236 484 512 644M236 548 512 708M236 612 512 772"/>
+    <path d="M788 420 512 580M788 484 512 644M788 548 512 708M788 612 512 772"/>
+  </g>
+  <!-- Arista superior: una boquilla imaginaria acaba de pasar -->
+  <path d="M236 356 512 516 788 356" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Llaves de código { } apoyadas en la cara superior. La matriz lleva el
+       cuadrado local [-100,100]² al rombo de la cara (e1=(1.38,.8), e2=(-1.38,.8)). -->
+  <g transform="matrix(1.38 .8 -1.38 .8 512 356)" fill="none" stroke="#2a1300" stroke-opacity=".82"
+     stroke-width="22" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+    <path vector-effect="non-scaling-stroke" d="M-18 -62q-26 0-26 24v16q0 22-22 22q22 0 22 22v16q0 24 26 24"/>
+    <path vector-effect="non-scaling-stroke" d="M18 -62q26 0 26 24v16q0 22 22 22q-22 0-22 22v16q0 24-26 24"/>
+  </g>
+</svg>

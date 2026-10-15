@@ -1,0 +1,555 @@
+import {useCallback, useEffect, useState} from 'react'
+import {CheckCircle2, CircleDashed, FolderOpen, Plus, RefreshCw} from 'lucide-react'
+import type {detect, main, printers} from '../../../wailsjs/go/models'
+import {store} from '../../../wailsjs/go/models'
+import {
+    ChooseDirectory,
+    ChooseFile,
+    CreateSkill,
+    DetectTools,
+    EffectiveWorkspacesRoot,
+    ListMaterials,
+    ListProviders,
+    ListSkills,
+    OllamaModels,
+    OpenSkillsFolder,
+    SaveMaterial,
+    SaveProvider,
+    SaveSettings,
+    SetSkillEnabled,
+} from '../../../wailsjs/go/main/App'
+import {Dialog} from '../ui/Dialog'
+import {Button} from '../ui/Button'
+import {Field, Input, Select, Toggle} from '../ui/Field'
+import {toast} from '../ui/Toast'
+import {fmt, LANGUAGES, normalizeLang, setLanguage, useT} from '../../i18n'
+import {errorText} from '../../lib/errors'
+import {applyTheme} from '../../lib/theme'
+import {cn} from '../../lib/cn'
+
+export type SettingsTab = 'general' | 'openscad' | 'ai' | 'printing' | 'skills' | 'about'
+type Tab = SettingsTab
+const TABS: Tab[] = ['general', 'openscad', 'ai', 'printing', 'skills', 'about']
+
+type ProviderCfg = {baseUrl?: string; model?: string; apiKeyEnv?: string}
+
+function parseCfg(raw: unknown): ProviderCfg {
+    if (raw && typeof raw === 'object') return raw as ProviderCfg
+    try {
+        return JSON.parse(String(raw ?? '{}'))
+    } catch {
+        return {}
+    }
+}
+
+function ToolStatus({tool}: {tool?: detect.Tool}) {
+    const t = useT()
+    if (!tool) return null
+    return tool.found ? (
+        <span className="selectable flex min-w-0 items-center gap-1.5 text-[11.5px] text-ok" title={tool.path}>
+            <CheckCircle2 className="size-3.5 shrink-0" />
+            <span className="truncate">
+                {t.settings.found}
+                {tool.version ? ` · ${fmt(t.settings.version, {v: tool.version})}` : ''}
+            </span>
+        </span>
+    ) : (
+        <span className="flex items-center gap-1.5 text-[11.5px] text-faint">
+            <CircleDashed className="size-3.5" />
+            {t.settings.notFound}
+        </span>
+    )
+}
+
+export function SettingsDialog({
+    open,
+    onClose,
+    boot,
+    printerList,
+    onSaved,
+    initialTab = 'general',
+}: {
+    open: boolean
+    // initialTab es la pestaña con la que abre: el aviso «OpenSCAD no
+    // encontrado» del visor lleva directo a OpenSCAD.
+    initialTab?: Tab
+    onClose: () => void
+    boot: main.Bootstrap
+    printerList: printers.Printer[]
+    onSaved: (s: store.Settings) => void
+}) {
+    const t = useT()
+    const [tab, setTab] = useState<Tab>(initialTab)
+    const [s, setS] = useState<store.Settings>(boot.settings)
+    const [defaultRoot, setDefaultRoot] = useState('')
+    const [tools, setTools] = useState<detect.Tool[]>([])
+    const [detecting, setDetecting] = useState(false)
+    const [providers, setProviders] = useState<store.AIProvider[]>([])
+    const [models, setModels] = useState<Record<string, string[]>>({})
+    const [materials, setMaterials] = useState<store.Material[]>([])
+    const [skills, setSkills] = useState<main.SkillView[]>([])
+    const [newSkill, setNewSkill] = useState('')
+
+    const detectAll = useCallback(async () => {
+        setDetecting(true)
+        try {
+            setTools(await DetectTools())
+        } catch (e) {
+            toast.error(errorText(e))
+        } finally {
+            setDetecting(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!open) return
+        setS(boot.settings)
+        setTab(initialTab)
+        EffectiveWorkspacesRoot().then(setDefaultRoot).catch(() => {})
+        ListProviders().then(setProviders).catch((e) => toast.error(errorText(e)))
+        ListMaterials().then(setMaterials).catch((e) => toast.error(errorText(e)))
+        ListSkills().then(setSkills).catch((e) => toast.error(errorText(e)))
+        void detectAll()
+    }, [open, boot.settings, detectAll, initialTab])
+
+    const set = <K extends keyof store.Settings>(k: K, v: store.Settings[K]) => setS((prev) => store.Settings.createFrom({...prev, [k]: v}))
+
+    const save = async () => {
+        try {
+            await SaveSettings(s)
+            setLanguage(normalizeLang(s.language))
+            applyTheme(s.theme)
+            onSaved(s)
+            toast.ok(t.settings.saved)
+            onClose()
+        } catch (e) {
+            toast.error(errorText(e))
+        }
+    }
+
+    const saveProvider = async (p: store.AIProvider) => {
+        setProviders((list) => list.map((x) => (x.id === p.id ? p : x)))
+        try {
+            await SaveProvider(p)
+        } catch (e) {
+            toast.error(errorText(e))
+        }
+    }
+
+    const tool = (id: string) => tools.find((x) => x.id === id)
+    const cliProviders = providers.filter((p) => p.kind === 'cli')
+    const serverProviders = providers.filter((p) => p.kind !== 'cli')
+
+    return (
+        <Dialog
+            open={open}
+            onClose={onClose}
+            title={t.settings.title}
+            closeLabel={t.settings.close}
+            className="w-[860px]"
+            footer={
+                <>
+                    <Button title={t.settings.close} onClick={onClose}>
+                        {t.settings.close}
+                    </Button>
+                    <Button variant="primary" title={t.settings.save} onClick={save}>
+                        {t.settings.save}
+                    </Button>
+                </>
+            }
+        >
+            <div className="flex min-h-[460px]">
+                <nav className="flex w-[168px] shrink-0 flex-col gap-0.5 border-r border-line p-2" role="tablist">
+                    {TABS.map((id) => (
+                        <button
+                            key={id}
+                            type="button"
+                            role="tab"
+                            aria-selected={tab === id}
+                            title={t.settings.tabs[id]}
+                            onClick={() => setTab(id)}
+                            className={cn(
+                                'h-8 rounded-md px-2.5 text-left text-[12.5px] transition-colors duration-100',
+                                tab === id ? 'bg-accent-soft text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg',
+                            )}
+                        >
+                            {t.settings.tabs[id]}
+                        </button>
+                    ))}
+                </nav>
+
+                <div className="min-w-0 flex-1 overflow-auto p-5">
+                    {tab === 'general' && (
+                        <div className="flex flex-col gap-4">
+                            <Field label={t.settings.language}>
+                                <Select value={s.language} onChange={(e) => set('language', e.target.value)}>
+                                    {LANGUAGES.map((l) => (
+                                        <option key={l.id} value={l.id}>
+                                            {l.label}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field label={t.settings.theme}>
+                                <Select value={s.theme} onChange={(e) => set('theme', e.target.value)}>
+                                    {(['dark', 'light', 'system'] as const).map((k) => (
+                                        <option key={k} value={k}>
+                                            {t.settings.themes[k]}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            <Field label={t.settings.workspacesRoot} hint={fmt(t.settings.workspacesRootHint, {root: defaultRoot})}>
+                                <div className="flex gap-2">
+                                    <Input value={s.workspacesRoot} onChange={(e) => set('workspacesRoot', e.target.value)} />
+                                    <Button
+                                        title={t.settings.choose}
+                                        onClick={async () => {
+                                            const dir = await ChooseDirectory(t.settings.workspacesRoot, s.workspacesRoot || defaultRoot)
+                                            if (dir) set('workspacesRoot', dir)
+                                        }}
+                                    >
+                                        {t.settings.choose}
+                                    </Button>
+                                </div>
+                            </Field>
+                        </div>
+                    )}
+
+                    {tab === 'openscad' && (
+                        <div className="flex flex-col gap-4">
+                            <Field label={t.settings.openscadPath} hint={t.settings.openscadPathHint}>
+                                <div className="flex gap-2">
+                                    <Input value={s.openscadPath} onChange={(e) => set('openscadPath', e.target.value)} />
+                                    <Button
+                                        title={t.settings.choose}
+                                        onClick={async () => {
+                                            const f = await ChooseFile(t.settings.openscadPath)
+                                            if (f) set('openscadPath', f)
+                                        }}
+                                    >
+                                        {t.settings.choose}
+                                    </Button>
+                                </div>
+                            </Field>
+                            <div className="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+                                <span className="font-mono text-[12px]">openscad</span>
+                                <div className="flex items-center gap-3">
+                                    <ToolStatus tool={tool('openscad')} />
+                                    <Button variant="ghost" title={t.settings.detect} onClick={detectAll} disabled={detecting}>
+                                        <RefreshCw className={cn('size-3.5', detecting && 'animate-spin')} />
+                                        {detecting ? t.settings.detecting : t.settings.detect}
+                                    </Button>
+                                </div>
+                            </div>
+                            {tools.length > 0 && !tool('openscad')?.found ? (
+                                <p className="text-[12px] leading-relaxed text-warn">{t.settings.openscadMissing}</p>
+                            ) : null}
+                            <Field label={t.settings.renderBackend}>
+                                <Select value={s.renderBackend} onChange={(e) => set('renderBackend', e.target.value)}>
+                                    <option value="manifold">{t.settings.renderBackends.manifold}</option>
+                                    <option value="cgal">{t.settings.renderBackends.cgal}</option>
+                                </Select>
+                            </Field>
+                            <div className="flex items-start justify-between gap-4 rounded-lg border border-line px-3 py-2.5">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[12.5px] font-medium">{t.settings.autoRender}</span>
+                                    <span className="text-[11.5px] leading-relaxed text-faint">{t.settings.autoRenderHint}</span>
+                                </div>
+                                <Toggle checked={s.autoRender} title={t.settings.autoRender} onChange={(v) => set('autoRender', v)} />
+                            </div>
+                            <Field label={t.settings.renderTimeout} hint={t.settings.renderTimeoutHint}>
+                                <Input
+                                    type="number"
+                                    min={10}
+                                    max={3600}
+                                    step={10}
+                                    className="w-32"
+                                    title={t.settings.renderTimeout}
+                                    value={s.renderTimeoutSec}
+                                    onChange={(e) => set('renderTimeoutSec', Number(e.target.value))}
+                                />
+                            </Field>
+                        </div>
+                    )}
+
+                    {tab === 'ai' && (
+                        <div className="flex flex-col gap-5">
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-end justify-between">
+                                    <div>
+                                        <h3 className="text-[13px] font-semibold">{t.settings.agents}</h3>
+                                        <p className="text-[11.5px] text-faint">{t.settings.agentsHint}</p>
+                                    </div>
+                                    <Button variant="ghost" title={t.settings.detect} onClick={detectAll} disabled={detecting}>
+                                        <RefreshCw className={cn('size-3.5', detecting && 'animate-spin')} />
+                                        {t.settings.detect}
+                                    </Button>
+                                </div>
+                                <div className="divide-y divide-line rounded-lg border border-line">
+                                    {cliProviders.map((p) => (
+                                        <div key={p.id} className="grid grid-cols-[130px_150px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+                                            <span className="text-[12.5px] font-medium">{p.name}</span>
+                                            <Input
+                                                className="h-7 font-mono text-[11.5px]"
+                                                value={p.command}
+                                                title={t.settings.command}
+                                                onChange={(e) => setProviders((l) => l.map((x) => (x.id === p.id ? store.AIProvider.createFrom({...x, command: e.target.value}) : x)))}
+                                                onBlur={() => saveProvider(p)}
+                                            />
+                                            <ToolStatus tool={tool(p.id)} />
+                                            <Toggle
+                                                checked={p.enabled}
+                                                title={t.settings.enabled}
+                                                onChange={(v) => saveProvider(store.AIProvider.createFrom({...p, enabled: v}))}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <Field label={t.settings.defaultAgent}>
+                                    <Select value={s.defaultAgent} onChange={(e) => set('defaultAgent', e.target.value)}>
+                                        {cliProviders.map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                <h3 className="text-[13px] font-semibold">{t.settings.modelServers}</h3>
+                                {serverProviders.map((p) => {
+                                    const cfg = parseCfg(p.config)
+                                    const update = (patch: ProviderCfg) =>
+                                        setProviders((l) =>
+                                            l.map((x) => (x.id === p.id ? store.AIProvider.createFrom({...x, config: {...cfg, ...patch}}) : x)),
+                                        )
+                                    return (
+                                        <div key={p.id} className="flex flex-col gap-3 rounded-lg border border-line p-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[12.5px] font-medium">{p.name}</span>
+                                                <Toggle
+                                                    checked={p.enabled}
+                                                    title={t.settings.enabled}
+                                                    onChange={(v) => saveProvider(store.AIProvider.createFrom({...p, enabled: v}))}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3" onBlur={() => saveProvider(p)}>
+                                                {p.kind !== 'anthropic' ? (
+                                                    <Field label={t.settings.baseUrl}>
+                                                        <Input value={cfg.baseUrl ?? ''} onChange={(e) => update({baseUrl: e.target.value})} />
+                                                    </Field>
+                                                ) : null}
+                                                <Field label={t.settings.model}>
+                                                    {models[p.id]?.length ? (
+                                                        <Select value={cfg.model ?? ''} onChange={(e) => update({model: e.target.value})}>
+                                                            <option value="">—</option>
+                                                            {models[p.id].map((m) => (
+                                                                <option key={m} value={m}>
+                                                                    {m}
+                                                                </option>
+                                                            ))}
+                                                        </Select>
+                                                    ) : (
+                                                        <Input value={cfg.model ?? ''} onChange={(e) => update({model: e.target.value})} />
+                                                    )}
+                                                </Field>
+                                                {p.kind !== 'ollama' ? (
+                                                    <Field label={t.settings.apiKeyEnv} hint={t.settings.apiKeyEnvHint}>
+                                                        <Input className="font-mono" value={cfg.apiKeyEnv ?? ''} onChange={(e) => update({apiKeyEnv: e.target.value})} />
+                                                    </Field>
+                                                ) : null}
+                                            </div>
+                                            {p.kind === 'ollama' ? (
+                                                <div className="flex items-center gap-3">
+                                                    <Button
+                                                        title={t.settings.testConnection}
+                                                        onClick={async () => {
+                                                            try {
+                                                                const list = await OllamaModels(cfg.baseUrl ?? '')
+                                                                setModels((m) => ({...m, [p.id]: list}))
+                                                                toast.ok(fmt(t.settings.modelsFound, {n: list.length}))
+                                                            } catch (e) {
+                                                                toast.error(errorText(e))
+                                                            }
+                                                        }}
+                                                    >
+                                                        {t.settings.testConnection}
+                                                    </Button>
+                                                    {models[p.id] ? (
+                                                        <span className="text-[11.5px] text-ok">{fmt(t.settings.modelsFound, {n: models[p.id].length})}</span>
+                                                    ) : null}
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'printing' && (
+                        <div className="flex flex-col gap-4">
+                            <Field label={t.settings.defaultPrinter}>
+                                <Select value={s.defaultPrinter} onChange={(e) => set('defaultPrinter', e.target.value)}>
+                                    {printerList.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </Field>
+                            {(() => {
+                                const p = printerList.find((x) => x.id === s.defaultPrinter)
+                                return p ? (
+                                    <p className="-mt-2 font-mono text-[11.5px] text-faint">
+                                        {fmt(t.settings.buildVolume, {x: p.build_volume.x, y: p.build_volume.y, z: p.build_volume.z})} ·{' '}
+                                        {fmt(t.settings.colors, {n: p.multicolor_slots || 1})}
+                                    </p>
+                                ) : null
+                            })()}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Field label={t.settings.material}>
+                                    <Select value={s.defaultMaterial} onChange={(e) => set('defaultMaterial', e.target.value)}>
+                                        {materials.map((m) => (
+                                            <option key={m.id} value={m.id}>
+                                                {m.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                                <Field label={t.settings.infill}>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={s.infillPercent}
+                                        onChange={(e) => set('infillPercent', Number(e.target.value))}
+                                    />
+                                </Field>
+                            </div>
+                            <h3 className="mt-2 text-[13px] font-semibold">{t.settings.materials}</h3>
+                            <div className="divide-y divide-line rounded-lg border border-line">
+                                <div className="grid grid-cols-[1fr_140px_140px] gap-3 px-3 py-1.5 font-mono text-[10.5px] tracking-wider text-faint uppercase">
+                                    <span>{t.settings.material}</span>
+                                    <span>{t.settings.density}</span>
+                                    <span>{t.settings.costPerKg}</span>
+                                </div>
+                                {materials.map((m) => {
+                                    const upd = (patch: Partial<store.Material>) =>
+                                        setMaterials((l) => l.map((x) => (x.id === m.id ? store.Material.createFrom({...x, ...patch}) : x)))
+                                    const persist = () =>
+                                        SaveMaterial(materials.find((x) => x.id === m.id) ?? m).catch((e) => toast.error(errorText(e)))
+                                    return (
+                                        <div key={m.id} className="grid grid-cols-[1fr_140px_140px] items-center gap-3 px-3 py-1.5">
+                                            <span className="text-[12.5px]">{m.name}</span>
+                                            <Input
+                                                className="h-7"
+                                                type="number"
+                                                step="0.01"
+                                                value={m.densityGCm3}
+                                                onChange={(e) => upd({densityGCm3: Number(e.target.value)})}
+                                                onBlur={persist}
+                                            />
+                                            <Input
+                                                className="h-7"
+                                                type="number"
+                                                step="0.5"
+                                                value={m.costPerKg}
+                                                onChange={(e) => upd({costPerKg: Number(e.target.value)})}
+                                                onBlur={persist}
+                                            />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === 'skills' && (
+                        <div className="flex flex-col gap-4">
+                            <p className="text-[12px] leading-relaxed text-muted">{t.settings.skillsIntro}</p>
+                            <div className="divide-y divide-line rounded-lg border border-line">
+                                {skills.map((k) => (
+                                    <div key={k.name} className="flex items-start gap-3 px-3 py-2.5">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-[12px] font-medium">{k.name}</span>
+                                                <span
+                                                    className={cn(
+                                                        'rounded px-1.5 py-px font-mono text-[10px]',
+                                                        k.source === 'user' ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-faint',
+                                                    )}
+                                                >
+                                                    {k.source === 'user' ? t.settings.user : t.settings.builtin}
+                                                </span>
+                                            </div>
+                                            <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-faint">{k.description}</p>
+                                        </div>
+                                        <Toggle
+                                            checked={k.enabled}
+                                            title={t.settings.enabled}
+                                            onChange={async (v) => {
+                                                setSkills((l) => l.map((x) => (x.name === k.name ? {...x, enabled: v} : x)) as main.SkillView[])
+                                                try {
+                                                    await SetSkillEnabled(k.name, v)
+                                                } catch (e) {
+                                                    toast.error(errorText(e))
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                            <Field label={t.settings.newSkill} hint={t.settings.newSkillHint}>
+                                <div className="flex gap-2">
+                                    <Input
+                                        className="font-mono"
+                                        value={newSkill}
+                                        placeholder={t.settings.newSkillPlaceholder}
+                                        onChange={(e) => setNewSkill(e.target.value.toLowerCase())}
+                                    />
+                                    <Button
+                                        variant="primary"
+                                        title={t.settings.newSkillHint}
+                                        disabled={!newSkill.trim()}
+                                        onClick={async () => {
+                                            try {
+                                                const dir = await CreateSkill(newSkill.trim())
+                                                toast.ok(fmt(t.settings.skillCreated, {dir}))
+                                                setNewSkill('')
+                                                setSkills(await ListSkills())
+                                            } catch (e) {
+                                                toast.error(errorText(e))
+                                            }
+                                        }}
+                                    >
+                                        <Plus className="size-3.5" />
+                                        {t.settings.newSkill}
+                                    </Button>
+                                    <Button title={t.settings.openSkillsFolder} onClick={() => OpenSkillsFolder().catch((e) => toast.error(errorText(e)))}>
+                                        <FolderOpen className="size-3.5" />
+                                    </Button>
+                                </div>
+                            </Field>
+                        </div>
+                    )}
+
+                    {tab === 'about' && (
+                        <dl className="selectable grid grid-cols-[160px_1fr] gap-x-4 gap-y-2 text-[12.5px]">
+                            <dt className="text-muted">{t.settings.aboutVersion}</dt>
+                            <dd className="font-mono">{boot.version}</dd>
+                            <dt className="text-muted">{t.settings.aboutPlatform}</dt>
+                            <dd className="font-mono">{boot.platform}</dd>
+                            <dt className="text-muted">{t.settings.aboutData}</dt>
+                            <dd className="font-mono break-all">{boot.dataDir}</dd>
+                            <dt className="text-muted">{t.settings.aboutSchema}</dt>
+                            <dd className="font-mono">{boot.schemaVersion}</dd>
+                        </dl>
+                    )}
+                </div>
+            </div>
+        </Dialog>
+    )
+}

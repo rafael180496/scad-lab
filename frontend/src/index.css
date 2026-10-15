@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+/*
+ * Sistema de diseño de ScadLab (ver claude/04-frontend.md).
+ * Estética de taller: superficies grafito, acento naranja filamento, rótulos en
+ * monoespaciada. Los componentes usan SOLO estos tokens (bg-surface, text-fg,
+ * border-line, accent…), nunca colores sueltos: así el modo claro sale gratis.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --font-sans: "Inter", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, Menlo, monospace;
+
+    --color-bg: var(--c-bg);
+    --color-surface: var(--c-surface);
+    --color-surface-2: var(--c-surface-2);
+    --color-raised: var(--c-raised);
+    --color-line: var(--c-line);
+    --color-line-strong: var(--c-line-strong);
+    --color-fg: var(--c-fg);
+    --color-muted: var(--c-muted);
+    --color-faint: var(--c-faint);
+    --color-accent: var(--c-accent);
+    --color-accent-fg: var(--c-accent-fg);
+    --color-accent-soft: var(--c-accent-soft);
+    --color-ok: var(--c-ok);
+    --color-warn: var(--c-warn);
+    --color-danger: var(--c-danger);
+    --color-info: var(--c-info);
+
+    --radius-panel: 10px;
+}
+
+:root {
+    --c-bg: #eef0f3;
+    --c-surface: #ffffff;
+    --c-surface-2: #f6f7f9;
+    --c-raised: #ffffff;
+    --c-line: #dfe2e7;
+    --c-line-strong: #c4c9d1;
+    --c-fg: #171a20;
+    --c-muted: #5b6270;
+    --c-faint: #8a909c;
+    --c-accent: #e8630a;
+    --c-accent-fg: #ffffff;
+    --c-accent-soft: #fdeadb;
+    --c-ok: #1a8a4a;
+    --c-warn: #b7791f;
+    --c-danger: #c8321e;
+    --c-info: #2563b8;
+    color-scheme: light;
+}
+
+.dark {
+    --c-bg: #0d0f14;
+    --c-surface: #14171e;
+    --c-surface-2: #191d26;
+    --c-raised: #1f2430;
+    --c-line: #262c38;
+    --c-line-strong: #343c4b;
+    --c-fg: #e7e9ee;
+    --c-muted: #9aa1ae;
+    --c-faint: #6b7280;
+    --c-accent: #ff7a1a;
+    --c-accent-fg: #160a00;
+    --c-accent-soft: #3a210d;
+    --c-ok: #3ccf7a;
+    --c-warn: #f2b84b;
+    --c-danger: #ff5c48;
+    --c-info: #5aa2ff;
+    color-scheme: dark;
+}
+
+html, body, #root {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--c-bg);
+    color: var(--c-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+}
+
+/* Texto que el usuario quiere copiar: rutas, código, errores. */
+.selectable {
+    user-select: text;
+}
+
+/* Barra de título de macOS: la cabecera arrastra la ventana. */
+.drag {
+    --wails-draggable: drag;
+}
+.no-drag {
+    --wails-draggable: no-drag;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--c-line-strong);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* El <dialog> recibe foco al abrirse (ver Dialog.tsx): sin el :not() quedaría
+   enmarcado entero como si se hubiera llegado por teclado. */
+:focus-visible:not(dialog) {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 1px;
+}
+
+/* Cuadrícula de cama de impresión para el visor vacío. */
+.bed-grid {
+    background-color: var(--c-surface-2);
+    background-image:
+        linear-gradient(var(--c-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--c-line) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        transition-duration: 0ms !important;
+        animation-duration: 0ms !important;
+    }
+}

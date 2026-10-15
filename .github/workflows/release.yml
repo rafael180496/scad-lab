@@ -1,0 +1,166 @@
+# Publica un GitHub Release cuando se empuja un tag `vX.Y.Z`.
+#
+# **No compila nada.** Sube los artefactos que ya están versionados en
+# `releases/macos/` y `releases/windows/` — los mismos que se generaron y se
+# probaron en la máquina de desarrollo con `./scripts/package-all.sh`.
+#
+# Por qué reusar en vez de recompilar: dos compilaciones de Go en máquinas
+# distintas no dan un binario bit a bit idéntico, así que un release compilado
+# acá sería un archivo que nadie probó y cuyo checksum no coincide con el que
+# documentan los `releases/<so>/README.md`. Reusando, lo que baja la gente es
+# exactamente lo que se verificó, y el checksum documentado sigue siendo el
+# bueno — de hecho este workflow lo comprueba antes de publicar.
+#
+# Consecuencia práctica: corre en Linux en segundos y sin toolchain. Lo que
+# antes hacía a mano el usuario —crear el release, pegar las notas, adjuntar los
+# dos archivos— es ahora empujar el tag.
+#
+# Lo que NO hace: firmar. Ni Apple Developer ID ni Authenticode. Las
+# advertencias de Gatekeeper y SmartScreen siguen valiendo y están escritas en
+# `releases/<so>/README.md`.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  # Ensayo: corre todas las comprobaciones y arma las notas SIN publicar. Es la
+  # forma de probar un cambio en este archivo sin gastar un tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a verificar en el ensayo (por ejemplo 2.3.0)'
+        required: true
+
+permissions:
+  contents: write   # crear el release y subirle los archivos
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: La versión del tag tiene que coincidir con VERSION
+        id: version
+        run: |
+          set -euo pipefail
+          FILE_VERSION="$(cat VERSION)"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            WANT="${{ github.event.inputs.version }}"
+          else
+            WANT="${GITHUB_REF_NAME#v}"
+          fi
+          if [ "$WANT" != "$FILE_VERSION" ]; then
+            echo "::error::El tag pide $WANT y el archivo VERSION dice $FILE_VERSION."
+            echo "::error::Publicar así subiría un binario que por dentro se llama distinto que el release."
+            echo "::error::Corregir: ./scripts/bump-version.sh, commitear, y recién ahí tagear."
+            exit 1
+          fi
+          echo "version=$FILE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Los artefactos de esta versión tienen que estar commiteados
+        id: artifacts
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          DMG="releases/macos/ScadLab-v$V.dmg"
+          EXE="releases/windows/ScadLab-v$V-windows-amd64.exe"
+
+          for f in "$DMG" "$EXE"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Falta $f en el commit del tag."
+              echo "::error::Este workflow no compila: sube lo que hay en releases/."
+              echo "::error::Correr ./scripts/package-all.sh, copiar el artefacto a releases/<so>/, commitear y volver a tagear."
+              exit 1
+            fi
+          done
+
+          # Un archivo de cero bytes o de unos pocos KB es casi siempre un
+          # puntero de Git LFS sin resolver, o una copia que se cortó. Publicar
+          # eso es peor que no publicar: parece un release válido.
+          for f in "$DMG" "$EXE"; do
+            SIZE="$(stat -c%s "$f")"
+            if [ "$SIZE" -lt 1000000 ]; then
+              echo "::error::$f mide $SIZE bytes — demasiado chico para ser el artefacto real."
+              exit 1
+            fi
+          done
+
+          {
+            echo "dmg=$DMG"
+            echo "exe=$EXE"
+            echo "dmg_sha=$(sha256sum "$DMG" | cut -d' ' -f1)"
+            echo "exe_sha=$(sha256sum "$EXE" | cut -d' ' -f1)"
+            echo "dmg_size=$(du -h "$DMG" | cut -f1)"
+            echo "exe_size=$(du -h "$EXE" | cut -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: El checksum tiene que coincidir con el que documenta el README
+        run: |
+          set -euo pipefail
+          # Esta es la comprobación que hace que reusar sea seguro: si alguien
+          # regeneró el binario y se olvidó de actualizar el README —o al revés,
+          # actualizó el README y dejó el artefacto viejo—, el release saldría
+          # con un checksum documentado que no es el del archivo. Acá se corta.
+          check() {
+            local file="$1" doc="$2" sha="$3"
+            if ! grep -qF "$sha" "$doc"; then
+              echo "::error::El SHA-256 de $file no aparece en $doc."
+              echo "::error::  archivo: $sha"
+              echo "::error::  Ese README documenta otro hash: o el binario o la documentación quedaron viejos."
+              echo "::error::  Recalcular con: shasum -a 256 $file"
+              exit 1
+            fi
+            echo "OK  $file"
+          }
+          check "${{ steps.artifacts.outputs.dmg }}" releases/macos/README.md "${{ steps.artifacts.outputs.dmg_sha }}"
+          check "${{ steps.artifacts.outputs.exe }}" releases/windows/README.md "${{ steps.artifacts.outputs.exe_sha }}"
+
+      - name: Armar las notas del release
+        run: |
+          set -euo pipefail
+          V="${{ steps.version.outputs.version }}"
+          {
+            ./scripts/changelog-section.sh "$V"
+            echo
+            echo '---'
+            echo
+            echo '### Descargas'
+            echo
+            echo '| Sistema | Archivo | Tamaño | SHA-256 |'
+            echo '|---|---|---|---|'
+            echo "| macOS (Apple Silicon, 11+) | \`ScadLab-v$V.dmg\` | ${{ steps.artifacts.outputs.dmg_size }} | \`${{ steps.artifacts.outputs.dmg_sha }}\` |"
+            echo "| Windows (x86-64) | \`ScadLab-v$V-windows-amd64.exe\` | ${{ steps.artifacts.outputs.exe_size }} | \`${{ steps.artifacts.outputs.exe_sha }}\` |"
+            echo
+            echo 'Ninguno de los dos está firmado. En macOS, Gatekeeper avisa "desarrollador no identificado":'
+            echo 'clic derecho → Abrir, o `xattr -dr com.apple.quarantine /Applications/ScadLab.app`.'
+            echo 'En Windows, SmartScreen avisa "Windows protegió su PC": Más información → Ejecutar de todas formas.'
+            echo
+            echo 'Detalle por sistema en [releases/macos](releases/macos/README.md) y [releases/windows](releases/windows/README.md).'
+            echo
+            echo '📖 [Documentación](https://rafael180496.github.io/ScadLab/)'
+          } > /tmp/release-notes.md
+          echo "Notas: $(wc -l < /tmp/release-notes.md) líneas"
+
+      - name: Ensayo — mostrar las notas sin publicar
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "### Ensayo: esto es lo que se publicaría" >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar el release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # `gh` viene preinstalado en el runner: no hace falta una acción de
+          # terceros para algo que es un comando.
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file /tmp/release-notes.md \
+            "${{ steps.artifacts.outputs.dmg }}" \
+            "${{ steps.artifacts.outputs.exe }}"

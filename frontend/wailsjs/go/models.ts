@@ -1,0 +1,395 @@
+export namespace detect {
+	
+	export class Tool {
+	    id: string;
+	    found: boolean;
+	    path: string;
+	    version: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tool(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.found = source["found"];
+	        this.path = source["path"];
+	        this.version = source["version"];
+	    }
+	}
+
+}
+
+export namespace main {
+	
+	export class Bootstrap {
+	    version: string;
+	    platform: string;
+	    dataDir: string;
+	    schemaVersion: number;
+	    settings: store.Settings;
+	    initError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Bootstrap(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.platform = source["platform"];
+	        this.dataDir = source["dataDir"];
+	        this.schemaVersion = source["schemaVersion"];
+	        this.settings = this.convertValues(source["settings"], store.Settings);
+	        this.initError = source["initError"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SkillView {
+	    name: string;
+	    description: string;
+	    source: string;
+	    dir: string;
+	    enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.source = source["source"];
+	        this.dir = source["dir"];
+	        this.enabled = source["enabled"];
+	    }
+	}
+	export class WorkspaceView {
+	    workspace: store.Workspace;
+	    checkpoints: store.Checkpoint[];
+	    missing: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace = this.convertValues(source["workspace"], store.Workspace);
+	        this.checkpoints = this.convertValues(source["checkpoints"], store.Checkpoint);
+	        this.missing = source["missing"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace printers {
+	
+	export class Volume {
+	    x: number;
+	    y: number;
+	    z: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Volume(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.z = source["z"];
+	    }
+	}
+	export class Printer {
+	    id: string;
+	    name: string;
+	    build_volume: Volume;
+	    nozzle_mm: number;
+	    multicolor_slots: number;
+	    multicolor_system: string;
+	    enclosed: boolean;
+	    heated_chamber: boolean;
+	    notes: string;
+	    verify: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Printer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.build_volume = this.convertValues(source["build_volume"], Volume);
+	        this.nozzle_mm = source["nozzle_mm"];
+	        this.multicolor_slots = source["multicolor_slots"];
+	        this.multicolor_system = source["multicolor_system"];
+	        this.enclosed = source["enclosed"];
+	        this.heated_chamber = source["heated_chamber"];
+	        this.notes = source["notes"];
+	        this.verify = source["verify"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace render {
+	
+	export class Diagnostic {
+	    severity: string;
+	    line: number;
+	    col: number;
+	    file: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.severity = source["severity"];
+	        this.line = source["line"];
+	        this.col = source["col"];
+	        this.file = source["file"];
+	        this.message = source["message"];
+	    }
+	}
+	export class Result {
+	    fileName: string;
+	    status: string;
+	    meshPath: string;
+	    cacheHit: boolean;
+	    durationMs: number;
+	    diagnostics: Diagnostic[];
+	    log: string;
+	    backend: string;
+	    version: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fileName = source["fileName"];
+	        this.status = source["status"];
+	        this.meshPath = source["meshPath"];
+	        this.cacheHit = source["cacheHit"];
+	        this.durationMs = source["durationMs"];
+	        this.diagnostics = this.convertValues(source["diagnostics"], Diagnostic);
+	        this.log = source["log"];
+	        this.backend = source["backend"];
+	        this.version = source["version"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace store {
+	
+	export class AIProvider {
+	    id: string;
+	    kind: string;
+	    name: string;
+	    command: string;
+	    config: Record<string, any>;
+	    enabled: boolean;
+	    sortOrder: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIProvider(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.command = source["command"];
+	        this.config = source["config"];
+	        this.enabled = source["enabled"];
+	        this.sortOrder = source["sortOrder"];
+	    }
+	}
+	export class Checkpoint {
+	    id: number;
+	    workspaceId: number;
+	    fileName: string;
+	    parentFile: string;
+	    label: string;
+	    description: string;
+	    sessionId: string;
+	    collapsed: boolean;
+	    fileMtime: number;
+	    createdAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Checkpoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.workspaceId = source["workspaceId"];
+	        this.fileName = source["fileName"];
+	        this.parentFile = source["parentFile"];
+	        this.label = source["label"];
+	        this.description = source["description"];
+	        this.sessionId = source["sessionId"];
+	        this.collapsed = source["collapsed"];
+	        this.fileMtime = source["fileMtime"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class Material {
+	    id: string;
+	    name: string;
+	    densityGCm3: number;
+	    costPerKg: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Material(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.densityGCm3 = source["densityGCm3"];
+	        this.costPerKg = source["costPerKg"];
+	    }
+	}
+	export class Settings {
+	    language: string;
+	    theme: string;
+	    openscadPath: string;
+	    renderBackend: string;
+	    workspacesRoot: string;
+	    defaultPrinter: string;
+	    defaultMaterial: string;
+	    infillPercent: number;
+	    defaultAgent: string;
+	    autoRender: boolean;
+	    renderTimeoutSec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.language = source["language"];
+	        this.theme = source["theme"];
+	        this.openscadPath = source["openscadPath"];
+	        this.renderBackend = source["renderBackend"];
+	        this.workspacesRoot = source["workspacesRoot"];
+	        this.defaultPrinter = source["defaultPrinter"];
+	        this.defaultMaterial = source["defaultMaterial"];
+	        this.infillPercent = source["infillPercent"];
+	        this.defaultAgent = source["defaultAgent"];
+	        this.autoRender = source["autoRender"];
+	        this.renderTimeoutSec = source["renderTimeoutSec"];
+	    }
+	}
+	export class Workspace {
+	    id: number;
+	    name: string;
+	    path: string;
+	    printerId: string;
+	    description: string;
+	    lastOpened: number;
+	    createdAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Workspace(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.printerId = source["printerId"];
+	        this.description = source["description"];
+	        this.lastOpened = source["lastOpened"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+
+}
+
