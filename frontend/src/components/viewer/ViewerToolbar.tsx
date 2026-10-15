@@ -1,0 +1,165 @@
+import {useRef} from 'react'
+import {Box, Camera, CircleHelp, Columns2, Grid3x3, Maximize, Shapes} from 'lucide-react'
+import {fmt, useT} from '../../i18n'
+import {cn} from '../../lib/cn'
+import {VIEWS, type ViewName} from './camera'
+
+function Toggle({
+    on,
+    title,
+    onClick,
+    children,
+}: {
+    on: boolean
+    title: string
+    onClick: () => void
+    children: React.ReactNode
+}) {
+    return (
+        <button
+            type="button"
+            title={title}
+            aria-label={title}
+            aria-pressed={on}
+            onClick={onClick}
+            className={cn(
+                'inline-flex h-6 min-w-6 shrink-0 items-center justify-center gap-1 rounded px-1.5 font-mono text-[10.5px] transition-colors duration-100',
+                on ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-surface-2 hover:text-fg',
+            )}
+        >
+            {children}
+        </button>
+    )
+}
+
+function Sep() {
+    return <span className="mx-0.5 h-4 w-px shrink-0 bg-line" />
+}
+
+export function ViewerToolbar({
+    wireframe,
+    edges,
+    ortho,
+    split,
+    colors,
+    colorIndex,
+    onView,
+    onWireframe,
+    onEdges,
+    onOrtho,
+    onFit,
+    onColor,
+    onEditColor,
+    onCapture,
+    onSplit,
+}: {
+    wireframe: boolean
+    edges: boolean
+    ortho: boolean
+    split: boolean
+    colors: string[]
+    colorIndex: number
+    onView: (v: ViewName) => void
+    onWireframe: () => void
+    onEdges: () => void
+    onOrtho: () => void
+    onFit: () => void
+    onColor: (i: number) => void
+    onEditColor: (i: number, color: string) => void
+    onCapture: () => void
+    onSplit: () => void
+}) {
+    const t = useT()
+    const picker = useRef<HTMLInputElement>(null)
+    const editing = useRef(0)
+
+    // El selector nativo de color se abre sobre un <input type=color> oculto:
+    // así cada muestra se ve como un punto y no como el control del sistema.
+    const edit = (i: number) => {
+        const el = picker.current
+        if (!el) return
+        editing.current = i
+        el.value = colors[i]
+        el.click()
+    }
+
+    return (
+        <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-line bg-surface px-2 [scrollbar-width:none]">
+            <div className="flex shrink-0 items-center gap-0.5">
+                {VIEWS.map((v, i) => (
+                    <button
+                        key={v}
+                        type="button"
+                        title={fmt(t.viewer.viewHint, {view: t.viewer.viewNames[v], key: i + 1})}
+                        onClick={() => onView(v)}
+                        className="inline-flex h-6 shrink-0 items-center rounded px-1 font-mono text-[10.5px] tracking-wide text-muted uppercase transition-colors duration-100 hover:bg-surface-2 hover:text-fg"
+                    >
+                        {t.viewer.views[v]}
+                    </button>
+                ))}
+            </div>
+            <Sep />
+            <Toggle on={wireframe} title={wireframe ? t.viewer.wireframeOff : t.viewer.wireframeOn} onClick={onWireframe}>
+                <Grid3x3 className="size-3.5" />
+            </Toggle>
+            <Toggle on={edges} title={edges ? t.viewer.edgesOff : t.viewer.edgesOn} onClick={onEdges}>
+                <Shapes className="size-3.5" />
+            </Toggle>
+            <Toggle on={ortho} title={ortho ? t.viewer.toPersp : t.viewer.toOrtho} onClick={onOrtho}>
+                <Box className="size-3.5" />
+                {ortho ? t.viewer.ortho : t.viewer.persp}
+            </Toggle>
+            <Toggle on={false} title={t.viewer.fit} onClick={onFit}>
+                <Maximize className="size-3.5" />
+            </Toggle>
+            <Sep />
+            <div className="flex shrink-0 items-center gap-1 px-0.5">
+                {colors.map((c, i) => (
+                    <button
+                        key={i}
+                        type="button"
+                        title={fmt(t.viewer.swatchHint, {color: c})}
+                        aria-label={fmt(t.viewer.swatchHint, {color: c})}
+                        aria-pressed={i === colorIndex}
+                        onClick={() => onColor(i)}
+                        onDoubleClick={() => edit(i)}
+                        onContextMenu={(e) => {
+                            e.preventDefault()
+                            edit(i)
+                        }}
+                        style={{backgroundColor: c}}
+                        className={cn(
+                            'size-4 shrink-0 rounded-full border transition-shadow duration-100',
+                            i === colorIndex ? 'border-fg ring-2 ring-accent/60' : 'border-line-strong hover:ring-2 hover:ring-line-strong',
+                        )}
+                    />
+                ))}
+                <input
+                    ref={picker}
+                    type="color"
+                    tabIndex={-1}
+                    title={t.viewer.swatchEdit}
+                    aria-hidden
+                    className="pointer-events-none absolute size-0 opacity-0"
+                    onChange={(e) => onEditColor(editing.current, e.target.value)}
+                />
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">
+                <Toggle on={false} title={t.viewer.capture} onClick={onCapture}>
+                    <Camera className="size-3.5" />
+                </Toggle>
+                <Toggle on={split} title={split ? t.viewer.splitOff : t.viewer.splitOn} onClick={onSplit}>
+                    <Columns2 className="size-3.5" />
+                </Toggle>
+                <span
+                    className="inline-flex size-6 cursor-help items-center justify-center text-faint"
+                    title={t.viewer.help}
+                    aria-label={t.viewer.help}
+                    role="img"
+                >
+                    <CircleHelp className="size-3.5" />
+                </span>
+            </div>
+        </div>
+    )
+}

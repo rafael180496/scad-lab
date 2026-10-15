@@ -3,7 +3,9 @@
 import {store} from '../models';
 import {detect} from '../models';
 import {main} from '../models';
+import {mesh} from '../models';
 import {render} from '../models';
+import {scad} from '../models';
 import {printers} from '../models';
 
 export function CancelRender(arg1:number):Promise<void>;
@@ -20,13 +22,21 @@ export function DetectTools():Promise<Array<detect.Tool>>;
 
 export function EffectiveWorkspacesRoot():Promise<string>;
 
+export function FormatScad(arg1:string):Promise<string>;
+
 export function GetBootstrap():Promise<main.Bootstrap>;
 
+export function GetMeshInfo(arg1:string):Promise<mesh.Info>;
+
 export function GetRenderState(arg1:number):Promise<Record<string, render.Result>>;
+
+export function GetScadCatalog():Promise<scad.Catalog>;
 
 export function GetSettings():Promise<store.Settings>;
 
 export function ImportWorkspace(arg1:string,arg2:string):Promise<store.Workspace>;
+
+export function LintCheckpointSource(arg1:number,arg2:string,arg3:string):Promise<Array<scad.Diagnostic>>;
 
 export function ListMaterials():Promise<Array<store.Material>>;
 
@@ -54,11 +64,19 @@ export function RescanWorkspace(arg1:number):Promise<main.WorkspaceView>;
 
 export function RevealWorkspace(arg1:number):Promise<void>;
 
+export function SaveAsCheckpoint(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
+
+export function SaveLayout(arg1:store.Layout):Promise<store.Layout>;
+
 export function SaveMaterial(arg1:store.Material):Promise<void>;
 
 export function SaveProvider(arg1:store.AIProvider):Promise<void>;
 
+export function SaveScreenshot(arg1:string,arg2:string):Promise<string>;
+
 export function SaveSettings(arg1:store.Settings):Promise<void>;
+
+export function SaveSwatches(arg1:Array<string>):Promise<void>;
 
 export function SetCheckpointUI(arg1:number,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 

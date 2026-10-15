@@ -154,6 +154,11 @@ var (
 	numRe    = regexp.MustCompile(`^(\d{3,})-`)
 )
 
+// descUnescape deshace el escapado que escriben SaveAsCheckpoint y los
+// agentes: \" y \\ (un NewReplacer recorre una sola vez, así \\" no se
+// desescapa dos veces).
+var descUnescape = strings.NewReplacer(`\"`, `"`, `\\`, `\`)
+
 // Scan lee los .scad de la raíz del workspace con su encabezado.
 func Scan(dir string) ([]CheckpointFile, error) {
 	ents, err := os.ReadDir(dir)
@@ -176,7 +181,7 @@ func Scan(dir string) ([]CheckpointFile, error) {
 					cf.ParentFile = p[1]
 				}
 				if d := descRe.FindStringSubmatch(m[1]); d != nil {
-					cf.Description = strings.ReplaceAll(d[1], `\"`, `"`)
+					cf.Description = descUnescape.Replace(d[1])
 				}
 			}
 		}

@@ -2,7 +2,7 @@
 name: openscad-dev
 description: Desarrollador especialista en OpenSCAD e impresión FDM con Bambu Lab para ScadLab. Úsalo para todo lo que es geometría y modelado: invocar el CLI de OpenSCAD (render, STL, 3MF, PNG, backend Manifold), parsear errores y warnings a marcadores, exportación 3MF multicolor compatible con Bambu Studio/AMS, cálculo de volumen/peso/costo, servidor MCP de OpenSCAD, y crear o mantener las skills y plantillas .scad que se instalan en los workspaces.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: claude-opus-5-5
+model: claude-sonnet-5-5
 effort: high
 ---
 

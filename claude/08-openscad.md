@@ -51,6 +51,52 @@ Contrato en `backend/render/types.go` (fijo) y
 - **Tests**: openscad falso (script sh en `t.TempDir()`), se saltean en
   Windows. Validado sin OpenSCAD real instalado.
 
+## Malla en el visor (S2)
+
+Spec: [.claude/specs/s2-visor-3d.md](../.claude/specs/s2-visor-3d.md).
+
+- **URL**: `GET /mesh/<clave>.stl`, con `<clave>` = nombre base de
+  `render.Result.MeshPath` (64 hex). El frontend la arma con
+  `'/mesh/' + basename(meshPath)` (separador `/` o `\`) y la pide con `fetch`.
+  Por un binding, el `[]byte` cruzaría como base64 dentro de JSON.
+- **`backend/meshserve`**: `Middleware(cacheDir)` del AssetServer, enganchado en
+  `main.go` con `<datos>/cache/meshes` (`appdata.Dir()`; si falla, sin
+  middleware y la app abre igual). Solo acepta `^[0-9a-f]{64}\.stl$`
+  (`meshserve.ValidName`): cualquier otro nombre bajo `/mesh/` —`..`, `%2e%2e`,
+  mayúsculas, `.json`, temporales `-NNN.stl`— es 404 y nunca llega a una ruta;
+  métodos distintos de GET/HEAD, 405. Responde `Content-Type: model/stl` y
+  `Cache-Control: no-store` (el visor tiene su caché LRU por clave). Lo que no
+  empieza con `/mesh/` pasa a `next`.
+- **Middleware y no `Handler`**: en `wails dev` Wails reemplaza el `Handler` por
+  el proxy a Vite y manda **todo GET** al proxy (Vite contesta `index.html` a lo
+  que no conoce); el `Handler` solo vería los no-GET. El `Middleware` envuelve al
+  proxy en dev y a los assets embebidos en producción (verificado en Wails
+  2.15, `assethandler_external.go`).
+- **`backend/mesh`**: `ParseSTL(io.Reader)` / `InfoFromFile(path)` →
+  `mesh.Info{Triangles, Min, Max, Size, VolumeMM3, AreaMM2, Watertight}`. Binario
+  si el tamaño es exactamente `84 + 50·n` (n = contador del encabezado), no por
+  el «solid» inicial, que muchos binarios también traen; si no, ASCII estricto
+  (sin `endsolid`, con un vértice mal formado o con bytes NUL → error). Un
+  lector posicionable se lee en streaming (STL de 18 MB / 360k triángulos ≈
+  80 ms); uno sin `Seek` se lee entero. Coordenadas NaN/Inf → `ErrNonFinite`.
+- **Volumen**: suma de tetraedros con signo contra el origen
+  (`v0·(v1×v2)/6`), en valor absoluto (una malla con las normales invertidas da
+  el mismo volumen). Solo tiene sentido si la malla es cerrada.
+- **Watertight**: se sueldan los vértices por **posición exacta** (mismo
+  float), cada triángulo aporta sus 3 aristas como par de ids ordenado, y la
+  malla es cerrada si cada arista aparece **exactamente 2 veces** (se ordena un
+  `[]uint64` en vez de un mapa de conteos: 8 bytes por arista). No mira la
+  orientación. Una malla vacía no es watertight.
+- **Binding** `GetMeshInfo(meshPath)` (`app_mesh.go`): exige
+  `filepath.Dir(meshPath) == <datos>/cache/meshes` y nombre con forma de clave;
+  cachea por clave en memoria (mutex, tope 4096 entradas). Vive a nivel de
+  paquete: la malla de una clave no cambia nunca.
+- **Tests**: `backend/mesh` (cubo binario/ASCII, abierto, truncado, NaN, y
+  mallas reales de OpenSCAD contra la fórmula), `backend/meshserve`
+  (`httptest`, escapes, STL real servido byte a byte) y
+  `TestRenderedMeshInfoAndServe` (render real → `GetMeshInfo` → middleware). Los
+  que usan OpenSCAD se saltan si no está instalado.
+
 ## Contrato de checkpoints
 
 `NNN-slug.scad`, primera línea `// @checkpoint parent=<archivo> desc="<texto>"`.

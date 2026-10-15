@@ -29,7 +29,9 @@ export function Sidebar({
     onToggle,
     renders,
     running,
+    width,
 }: {
+    width: number
     workspaces: store.Workspace[]
     view: main.WorkspaceView | null
     selected: string | null
@@ -48,7 +50,7 @@ export function Sidebar({
     const t = useT()
     const current = view?.workspace.id
     return (
-        <aside className="flex w-[264px] shrink-0 flex-col border-r border-line bg-surface">
+        <aside style={{width}} className="flex shrink-0 flex-col border-r border-line bg-surface">
             <SectionTitle
                 actions={
                     <>

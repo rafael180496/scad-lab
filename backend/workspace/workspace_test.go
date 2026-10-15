@@ -30,13 +30,17 @@ func TestScanAndNext(t *testing.T) {
 	write("001-base-box.scad", "// @checkpoint parent= desc=\"Caja base\"\ncube(10);\n")
 	write("002-add-lid.scad", "\uFEFF// @checkpoint parent=001-base-box.scad desc=\"Tapa \\\"deslizante\\\"\"\n")
 	write("notes.txt", "x")
+	write("003-path.scad", "// @checkpoint parent=002-add-lid.scad desc=\"ruta C:\\\\tmp y \\\"cita\\\"\"\n")
 
 	files, err := Scan(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 2 {
-		t.Fatalf("esperaba 2 checkpoints, hay %d", len(files))
+	if len(files) != 3 {
+		t.Fatalf("esperaba 3 checkpoints, hay %d", len(files))
+	}
+	if got := files[2].Description; got != `ruta C:\tmp y "cita"` {
+		t.Errorf("desc con barra invertida: %q", got)
 	}
 	if files[1].ParentFile != "001-base-box.scad" || files[1].Description != `Tapa "deslizante"` {
 		t.Errorf("encabezado mal leído: %+v", files[1])
@@ -45,7 +49,7 @@ func TestScanAndNext(t *testing.T) {
 		t.Errorf("el primero no tiene parent: %+v", files[0])
 	}
 	next, err := NextFileName(dir, "Agregar bisagra")
-	if err != nil || next != "003-agregar-bisagra.scad" {
+	if err != nil || next != "004-agregar-bisagra.scad" {
 		t.Errorf("NextFileName = %q, %v", next, err)
 	}
 }

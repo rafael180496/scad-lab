@@ -38,16 +38,22 @@ ver, después editar, después la IA que itera sobre todo eso.
 | 1.6 | Validación con OpenSCAD real (2026.10.11): mensajes, `assert`/2D, test `TestRenderWithRealOpenSCAD`; `RENDER_ERRORS.md` solo sigue al checkpoint más nuevo | architect | ✅ |
 | 1.7 | Banco de capturas (`frontend/src/uishot.tsx`, `scripts/uishot.sh`, `scripts/help-shots.sh`) y capturas reales en `index.html` | architect | ✅ |
 
-## S2 — Visor 3D ⬜
+## S2 — Visor 3D ✅ (falta 2.9, prueba visual del usuario)
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 2.1 | React Three Fiber + carga STL desde binding (bytes, no archivo), PBR con environment map | FS |
-| 2.2 | Órbita/pan/zoom con ratón, táctil y teclado; 7 vistas (Front/Back/Left/Right/Top/Bottom/Iso) | FS |
-| 2.3 | Wireframe, aristas, ortográfica/perspectiva, cama de impresión a escala de la impresora | FS |
-| 2.4 | 6 muestras de color personalizables (guardadas en settings) | FS |
-| 2.5 | Captura PNG; vista dividida con segunda cámara independiente | FS |
-| 2.6 | Caché en memoria (LRU) de mallas por checkpoint: clic = carga instantánea | FS |
+Plan: [.claude/specs/s2-visor-3d.md](../.claude/specs/s2-visor-3d.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 2.1 | React Three Fiber + carga STL por HTTP (`/mesh/<clave>.stl`, no binding), PBR con `RoomEnvironment` (sin red) | FS | ✅ |
+| 2.2 | Órbita/pan/zoom con ratón, táctil y teclado; 7 vistas (Front/Back/Left/Right/Top/Bottom/Iso) | FS | ✅ |
+| 2.3 | Wireframe, aristas, ortográfica/perspectiva, cama de impresión a escala de la impresora | FS | ✅ |
+| 2.4 | 6 muestras de color personalizables (guardadas en settings) | FS | ✅ |
+| 2.5 | Captura PNG; vista dividida con segunda cámara independiente | FS | ✅ |
+| 2.6 | Caché en memoria (LRU) de mallas por checkpoint: clic = carga instantánea | FS | ✅ |
+| 2.7 | Panel de medidas con `GetMeshInfo`; capturas del visor en la ayuda | FS | ✅ |
+| 2.8 | `wails build` de macOS y arranque real (base + caché creadas, sin errores) | architect | ✅ |
+| 2.9 | Mirar el visor en la ventana real (WebGL de WKWebView/WebView2) y el diálogo de captura PNG — no se puede automatizar sin permiso de grabación de pantalla | usuario | ⬜ |
+| 2.A | Mallas por HTTP (`backend/meshserve`, middleware) + análisis STL (`backend/mesh`, `GetMeshInfo`) con tests contra OpenSCAD real | OS | ✅ |
 
 ## S3 — Checkpoints avanzados ⬜
 
@@ -58,14 +64,22 @@ ver, después editar, después la IA que itera sobre todo eso.
 | 3.3 | Ramificar: fijar el «padre activo» (`.scadlab/active-parent`) que leen las reglas del agente | FS+OS |
 | 3.4 | Vínculo checkpoint ↔ sesión del agente que lo creó | FS |
 
-## S4 — Editor de código ⬜
+## S4 — Editor de código ✅ (falta 4.10, prueba del usuario en la ventana real)
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 4.1 | Monaco (empaquetado local, sin CDN) con gramática Monarch de OpenSCAD y tema propio | FS |
-| 4.2 | Buscar/reemplazar, solo lectura por defecto, modo edición | FS |
-| 4.3 | «Guardar» crea un checkpoint hijo (`NextFileName` + encabezado), nunca sobrescribe | FS+OS |
-| 4.4 | Marcadores de error de S1 (subrayado rojo en la línea) | FS |
+Plan: [.claude/specs/s4-editor-openscad.md](../.claude/specs/s4-editor-openscad.md). Tanda 4.A (núcleo Go: lexer, linter OpenSCAD + SL001–SL009, formateador, catálogo, guardar como checkpoint) ✅; 4.B (Monaco + UX) ✅.
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 4.1 | Monaco (empaquetado local, sin CDN) con gramática Monarch de OpenSCAD y tema propio | FS | ✅ |
+| 4.2 | Buscar/reemplazar, solo lectura por defecto, modo edición | FS | ✅ |
+| 4.3 | «Guardar» crea un checkpoint hijo (`NextFileName` + encabezado), nunca sobrescribe | FS+OS | ✅ |
+| 4.4 | Marcadores de error de S1 (subrayado en la línea) y del linter, clic a la línea | FS | ✅ |
+| 4.5 | Linter en vivo (debounce 400 ms), formatear, autocompletado/hover/firma del catálogo | FS | ✅ |
+| 4.6 | Paneles redimensionables y persistidos, barra lateral plegable (⌘B/Ctrl+B) | FS | ✅ |
+| 4.7 | Barra de estado y panel Problemas; medidas del visor plegables | FS | ✅ |
+| 4.8 | Settings del editor (sangría, letra, ajuste, minimapa); capturas y ayuda | FS | ✅ |
+| 4.9 | Menú nativo Edición en macOS (`appMenu` en `main.go`): sin él WKWebView no entrega ⌘C/⌘V/⌘Z al editor | architect | ✅ |
+| 4.10 | Probar el editor en la ventana real (WKWebView/WebView2): workers de Monaco, copiar/pegar, ⌥⌘F | usuario | ⬜ |
 
 ## S5 — Agentes de IA en la app ⬜
 

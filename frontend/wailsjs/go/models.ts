@@ -120,6 +120,35 @@ export namespace main {
 
 }
 
+export namespace mesh {
+	
+	export class Info {
+	    triangles: number;
+	    min: number[];
+	    max: number[];
+	    size: number[];
+	    volumeMm3: number;
+	    areaMm2: number;
+	    watertight: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.triangles = source["triangles"];
+	        this.min = source["min"];
+	        this.max = source["max"];
+	        this.size = source["size"];
+	        this.volumeMm3 = source["volumeMm3"];
+	        this.areaMm2 = source["areaMm2"];
+	        this.watertight = source["watertight"];
+	    }
+	}
+
+}
+
 export namespace printers {
 	
 	export class Volume {
@@ -260,6 +289,157 @@ export namespace render {
 
 }
 
+export namespace scad {
+	
+	export class LocalizedText {
+	    es: string;
+	    en: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalizedText(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.es = source["es"];
+	        this.en = source["en"];
+	    }
+	}
+	export class CatalogParam {
+	    name: string;
+	    doc: LocalizedText;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogParam(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.doc = this.convertValues(source["doc"], LocalizedText);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CatalogEntry {
+	    name: string;
+	    kind: string;
+	    signature: string;
+	    params: CatalogParam[];
+	    doc: LocalizedText;
+	    since?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CatalogEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.signature = source["signature"];
+	        this.params = this.convertValues(source["params"], CatalogParam);
+	        this.doc = this.convertValues(source["doc"], LocalizedText);
+	        this.since = source["since"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Catalog {
+	    version: string;
+	    entries: CatalogEntry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Catalog(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.entries = this.convertValues(source["entries"], CatalogEntry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class Diagnostic {
+	    severity: string;
+	    line: number;
+	    col: number;
+	    endLine: number;
+	    endCol: number;
+	    code: string;
+	    source: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.severity = source["severity"];
+	        this.line = source["line"];
+	        this.col = source["col"];
+	        this.endLine = source["endLine"];
+	        this.endCol = source["endCol"];
+	        this.code = source["code"];
+	        this.source = source["source"];
+	        this.message = source["message"];
+	    }
+	}
+
+}
+
 export namespace store {
 	
 	export class AIProvider {
@@ -316,6 +496,26 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
+	export class Layout {
+	    sidebarWidth: number;
+	    sidebarCollapsed: boolean;
+	    codeWidth: number;
+	    bottomHeight: number;
+	    dimsCollapsed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Layout(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sidebarWidth = source["sidebarWidth"];
+	        this.sidebarCollapsed = source["sidebarCollapsed"];
+	        this.codeWidth = source["codeWidth"];
+	        this.bottomHeight = source["bottomHeight"];
+	        this.dimsCollapsed = source["dimsCollapsed"];
+	    }
+	}
 	export class Material {
 	    id: string;
 	    name: string;
@@ -346,6 +546,12 @@ export namespace store {
 	    defaultAgent: string;
 	    autoRender: boolean;
 	    renderTimeoutSec: number;
+	    swatches: string[];
+	    editorIndent: number;
+	    editorFontSize: number;
+	    editorWordWrap: boolean;
+	    editorMinimap: boolean;
+	    layout: Layout;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -364,7 +570,31 @@ export namespace store {
 	        this.defaultAgent = source["defaultAgent"];
 	        this.autoRender = source["autoRender"];
 	        this.renderTimeoutSec = source["renderTimeoutSec"];
+	        this.swatches = source["swatches"];
+	        this.editorIndent = source["editorIndent"];
+	        this.editorFontSize = source["editorFontSize"];
+	        this.editorWordWrap = source["editorWordWrap"];
+	        this.editorMinimap = source["editorMinimap"];
+	        this.layout = this.convertValues(source["layout"], Layout);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class Workspace {
 	    id: number;

@@ -30,12 +30,24 @@ export function EffectiveWorkspacesRoot() {
   return window['go']['main']['App']['EffectiveWorkspacesRoot']();
 }
 
+export function FormatScad(arg1) {
+  return window['go']['main']['App']['FormatScad'](arg1);
+}
+
 export function GetBootstrap() {
   return window['go']['main']['App']['GetBootstrap']();
 }
 
+export function GetMeshInfo(arg1) {
+  return window['go']['main']['App']['GetMeshInfo'](arg1);
+}
+
 export function GetRenderState(arg1) {
   return window['go']['main']['App']['GetRenderState'](arg1);
+}
+
+export function GetScadCatalog() {
+  return window['go']['main']['App']['GetScadCatalog']();
 }
 
 export function GetSettings() {
@@ -44,6 +56,10 @@ export function GetSettings() {
 
 export function ImportWorkspace(arg1, arg2) {
   return window['go']['main']['App']['ImportWorkspace'](arg1, arg2);
+}
+
+export function LintCheckpointSource(arg1, arg2, arg3) {
+  return window['go']['main']['App']['LintCheckpointSource'](arg1, arg2, arg3);
 }
 
 export function ListMaterials() {
@@ -98,6 +114,14 @@ export function RevealWorkspace(arg1) {
   return window['go']['main']['App']['RevealWorkspace'](arg1);
 }
 
+export function SaveAsCheckpoint(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SaveAsCheckpoint'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function SaveLayout(arg1) {
+  return window['go']['main']['App']['SaveLayout'](arg1);
+}
+
 export function SaveMaterial(arg1) {
   return window['go']['main']['App']['SaveMaterial'](arg1);
 }
@@ -106,8 +130,16 @@ export function SaveProvider(arg1) {
   return window['go']['main']['App']['SaveProvider'](arg1);
 }
 
+export function SaveScreenshot(arg1, arg2) {
+  return window['go']['main']['App']['SaveScreenshot'](arg1, arg2);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SaveSwatches(arg1) {
+  return window['go']['main']['App']['SaveSwatches'](arg1);
 }
 
 export function SetCheckpointUI(arg1, arg2, arg3, arg4) {

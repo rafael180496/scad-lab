@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from 'react'
-import {CheckCircle2, CircleDashed, FolderOpen, Plus, RefreshCw} from 'lucide-react'
+import {CheckCircle2, CircleDashed, FolderOpen, Plus, RefreshCw, Coffee, Heart} from 'lucide-react'
 import type {detect, main, printers} from '../../../wailsjs/go/models'
 import {store} from '../../../wailsjs/go/models'
 import {
@@ -18,6 +18,8 @@ import {
     SaveSettings,
     SetSkillEnabled,
 } from '../../../wailsjs/go/main/App'
+import {BrowserOpenURL} from '../../../wailsjs/runtime/runtime'
+import {BUY_ME_A_COFFEE_URL, PATREON_JOIN_URL, PATREON_PAGE_URL} from '../../lib/support'
 import {Dialog} from '../ui/Dialog'
 import {Button} from '../ui/Button'
 import {Field, Input, Select, Toggle} from '../ui/Field'
@@ -149,6 +151,18 @@ export function SettingsDialog({
             className="w-[860px]"
             footer={
                 <>
+                    {/* Apoyo al proyecto: a la izquierda y discreto, para que no
+                        compita con Guardar. Abre el navegador del sistema. */}
+                    <div className="mr-auto flex items-center gap-1">
+                        <Button variant="ghost" title={t.settings.supportCoffeeHint} onClick={() => BrowserOpenURL(BUY_ME_A_COFFEE_URL)}>
+                            <Coffee className="size-3.5 text-warn" />
+                            {t.settings.supportCoffee}
+                        </Button>
+                        <Button variant="ghost" title={t.settings.supportPatreonHint} onClick={() => BrowserOpenURL(PATREON_JOIN_URL)}>
+                            <Heart className="size-3.5 text-accent" />
+                            {t.settings.supportPatreon}
+                        </Button>
+                    </div>
                     <Button title={t.settings.close} onClick={onClose}>
                         {t.settings.close}
                     </Button>
@@ -213,6 +227,50 @@ export function SettingsDialog({
                                     </Button>
                                 </div>
                             </Field>
+
+                            <div className="mt-2 flex flex-col gap-4 border-t border-line pt-4">
+                                <span className="font-mono text-[10.5px] tracking-[0.12em] text-faint uppercase">{t.settings.editor}</span>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Field label={t.settings.editorIndent} hint={t.settings.editorIndentHint}>
+                                        <Select
+                                            value={String(s.editorIndent === 2 ? 2 : 4)}
+                                            title={t.settings.editorIndent}
+                                            onChange={(e) => set('editorIndent', Number(e.target.value))}
+                                        >
+                                            {[2, 4].map((n) => (
+                                                <option key={n} value={n}>
+                                                    {fmt(t.settings.indentSpaces, {n})}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                    </Field>
+                                    <Field label={t.settings.editorFontSize} hint={t.settings.editorFontSizeHint}>
+                                        <Input
+                                            type="number"
+                                            min={10}
+                                            max={24}
+                                            step={1}
+                                            title={t.settings.editorFontSize}
+                                            value={s.editorFontSize || 13}
+                                            onChange={(e) => set('editorFontSize', Math.max(10, Math.min(24, Number(e.target.value) || 13)))}
+                                        />
+                                    </Field>
+                                </div>
+                                <div className="flex items-start justify-between gap-4 rounded-lg border border-line px-3 py-2.5">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="text-[12.5px] font-medium">{t.settings.editorWordWrap}</span>
+                                        <span className="text-[11.5px] leading-relaxed text-faint">{t.settings.editorWordWrapHint}</span>
+                                    </div>
+                                    <Toggle checked={s.editorWordWrap} title={t.settings.editorWordWrap} onChange={(v) => set('editorWordWrap', v)} />
+                                </div>
+                                <div className="flex items-start justify-between gap-4 rounded-lg border border-line px-3 py-2.5">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="text-[12.5px] font-medium">{t.settings.editorMinimap}</span>
+                                        <span className="text-[11.5px] leading-relaxed text-faint">{t.settings.editorMinimapHint}</span>
+                                    </div>
+                                    <Toggle checked={s.editorMinimap} title={t.settings.editorMinimap} onChange={(v) => set('editorMinimap', v)} />
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -546,7 +604,28 @@ export function SettingsDialog({
                             <dd className="font-mono break-all">{boot.dataDir}</dd>
                             <dt className="text-muted">{t.settings.aboutSchema}</dt>
                             <dd className="font-mono">{boot.schemaVersion}</dd>
+                            <dt className="text-muted">{t.settings.aboutLicense}</dt>
+                            <dd>{t.settings.aboutLicenseValue}</dd>
                         </dl>
+                    )}
+                    {tab === 'about' && (
+                        <section className="mt-6 rounded-lg border border-line bg-surface-2 p-4">
+                            <h3 className="text-[13px] font-semibold">{t.settings.supportTitle}</h3>
+                            <p className="mt-1 text-[12px] leading-relaxed text-muted">{t.settings.supportBody}</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <Button variant="primary" title={t.settings.supportCoffeeHint} onClick={() => BrowserOpenURL(BUY_ME_A_COFFEE_URL)}>
+                                    <Coffee className="size-3.5" />
+                                    {t.settings.supportCoffee}
+                                </Button>
+                                <Button title={t.settings.supportPatreonHint} onClick={() => BrowserOpenURL(PATREON_JOIN_URL)}>
+                                    <Heart className="size-3.5 text-accent" />
+                                    {t.settings.supportPatreon}
+                                </Button>
+                                <Button variant="ghost" title={t.settings.supportPatreonPageHint} onClick={() => BrowserOpenURL(PATREON_PAGE_URL)}>
+                                    {t.settings.supportPatreonPage}
+                                </Button>
+                            </div>
+                        </section>
                     )}
                 </div>
             </div>

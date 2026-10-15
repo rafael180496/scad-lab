@@ -1,0 +1,1873 @@
+{
+ "version": "2021.01",
+ "entries": [
+  {
+   "name": "module",
+   "kind": "keyword",
+   "signature": "module name(params) { … }",
+   "params": [],
+   "doc": {
+    "es": "Define un módulo: una pieza reutilizable que genera geometría. Se llama como cualquier módulo integrado; children() accede a lo que recibe.",
+    "en": "Defines a module: a reusable part that generates geometry. Call it like any built-in module; children() accesses what it receives."
+   }
+  },
+  {
+   "name": "function",
+   "kind": "keyword",
+   "signature": "function name(params) = expression;",
+   "params": [],
+   "doc": {
+    "es": "Define una función que devuelve un valor (no genera geometría). Desde 2021.01 también hay funciones literales: f = function(x) x * 2;",
+    "en": "Defines a function that returns a value (no geometry). Since 2021.01 there are also function literals: f = function(x) x * 2;"
+   }
+  },
+  {
+   "name": "if",
+   "kind": "keyword",
+   "signature": "if (condition) … else …",
+   "params": [],
+   "doc": {
+    "es": "Genera la geometría solo si la condición es verdadera. También existe como expresión en comprensiones de listas: [for (i = v) if (i > 0) i].",
+    "en": "Generates geometry only if the condition is true. Also works inside list comprehensions: [for (i = v) if (i > 0) i]."
+   }
+  },
+  {
+   "name": "else",
+   "kind": "keyword",
+   "signature": "else …",
+   "params": [],
+   "doc": {
+    "es": "Rama alternativa de un if.",
+    "en": "Alternative branch of an if."
+   }
+  },
+  {
+   "name": "for",
+   "kind": "keyword",
+   "signature": "for (i = [start : step : end]) …",
+   "params": [],
+   "doc": {
+    "es": "Repite la geometría por cada valor de un rango o una lista y une el resultado. Dentro de [ ] arma una comprensión de listas: [for (i = [0 : 3]) i * i].",
+    "en": "Repeats geometry for each value of a range or list and unions the result. Inside [ ] it builds a list comprehension: [for (i = [0 : 3]) i * i]."
+   }
+  },
+  {
+   "name": "let",
+   "kind": "keyword",
+   "signature": "let (a = value, b = value) …",
+   "params": [],
+   "doc": {
+    "es": "Asigna variables locales para la expresión o los objetos que siguen. Las asignaciones se evalúan en orden.",
+    "en": "Assigns local variables for the following expression or objects. Assignments are evaluated in order."
+   }
+  },
+  {
+   "name": "each",
+   "kind": "keyword",
+   "signature": "each list",
+   "params": [],
+   "doc": {
+    "es": "En una comprensión de listas, inserta los elementos de una lista en vez de la lista entera: [each a, each b] concatena.",
+    "en": "In a list comprehension, inserts the elements of a list instead of the whole list: [each a, each b] concatenates."
+   }
+  },
+  {
+   "name": "include",
+   "kind": "keyword",
+   "signature": "include <file.scad>",
+   "params": [],
+   "doc": {
+    "es": "Incluye el archivo como si estuviera escrito aquí: módulos, funciones, variables y también su geometría de nivel superior. Se busca junto al archivo, en lib/ y en las librerías de OpenSCAD.",
+    "en": "Includes the file as if it were written here: modules, functions, variables and also its top-level geometry. Searched next to the file, in lib/ and in the OpenSCAD libraries."
+   }
+  },
+  {
+   "name": "use",
+   "kind": "keyword",
+   "signature": "use <file.scad>",
+   "params": [],
+   "doc": {
+    "es": "Importa solo los módulos y funciones del archivo, sin ejecutar su geometría ni sus variables de nivel superior. Lo habitual con librerías como BOSL2 o MCAD.",
+    "en": "Imports only the modules and functions of the file, without running its top-level geometry or variables. The usual way to load libraries such as BOSL2 or MCAD."
+   }
+  },
+  {
+   "name": "true",
+   "kind": "keyword",
+   "signature": "true",
+   "params": [],
+   "doc": {
+    "es": "Valor lógico verdadero.",
+    "en": "Boolean true value."
+   }
+  },
+  {
+   "name": "false",
+   "kind": "keyword",
+   "signature": "false",
+   "params": [],
+   "doc": {
+    "es": "Valor lógico falso.",
+    "en": "Boolean false value."
+   }
+  },
+  {
+   "name": "undef",
+   "kind": "keyword",
+   "signature": "undef",
+   "params": [],
+   "doc": {
+    "es": "Valor indefinido: el de una variable sin asignar o un parámetro que no se pasó.",
+    "en": "Undefined value: that of an unassigned variable or a parameter that was not passed."
+   }
+  },
+  {
+   "name": "cube",
+   "kind": "module",
+   "signature": "cube(size, center)",
+   "params": [
+    {
+     "name": "size",
+     "doc": {
+      "es": "lado (número) o [x, y, z]; por defecto 1",
+      "en": "side (number) or [x, y, z]; default 1"
+     }
+    },
+    {
+     "name": "center",
+     "doc": {
+      "es": "true = centrado en el origen; por defecto false",
+      "en": "true = centered on the origin; default false"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Cubo o prisma rectangular con una esquina en el origen (o centrado).",
+    "en": "Cube or rectangular box with one corner at the origin (or centered)."
+   }
+  },
+  {
+   "name": "sphere",
+   "kind": "module",
+   "signature": "sphere(r, d)",
+   "params": [
+    {
+     "name": "r",
+     "doc": {
+      "es": "radio; por defecto 1",
+      "en": "radius; default 1"
+     }
+    },
+    {
+     "name": "d",
+     "doc": {
+      "es": "diámetro (alternativa a r)",
+      "en": "diameter (alternative to r)"
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    },
+    {
+     "name": "$fa",
+     "doc": {
+      "es": "ángulo mínimo de cada lado, en grados",
+      "en": "minimum angle per side, in degrees"
+     }
+    },
+    {
+     "name": "$fs",
+     "doc": {
+      "es": "largo mínimo de cada lado, en mm",
+      "en": "minimum side length, in mm"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Esfera centrada en el origen. La resolución sale de $fn, $fa y $fs.",
+    "en": "Sphere centered on the origin. Resolution comes from $fn, $fa and $fs."
+   }
+  },
+  {
+   "name": "cylinder",
+   "kind": "module",
+   "signature": "cylinder(h, r1, r2, center, r, d, d1, d2)",
+   "params": [
+    {
+     "name": "h",
+     "doc": {
+      "es": "altura; por defecto 1",
+      "en": "height; default 1"
+     }
+    },
+    {
+     "name": "r1",
+     "doc": {
+      "es": "radio de abajo",
+      "en": "bottom radius"
+     }
+    },
+    {
+     "name": "r2",
+     "doc": {
+      "es": "radio de arriba",
+      "en": "top radius"
+     }
+    },
+    {
+     "name": "center",
+     "doc": {
+      "es": "true = centrado en Z; por defecto false",
+      "en": "true = centered on Z; default false"
+     }
+    },
+    {
+     "name": "r",
+     "doc": {
+      "es": "radio de las dos tapas",
+      "en": "radius of both ends"
+     }
+    },
+    {
+     "name": "d",
+     "doc": {
+      "es": "diámetro de las dos tapas",
+      "en": "diameter of both ends"
+     }
+    },
+    {
+     "name": "d1",
+     "doc": {
+      "es": "diámetro de abajo",
+      "en": "bottom diameter"
+     }
+    },
+    {
+     "name": "d2",
+     "doc": {
+      "es": "diámetro de arriba",
+      "en": "top diameter"
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    },
+    {
+     "name": "$fa",
+     "doc": {
+      "es": "ángulo mínimo de cada lado, en grados",
+      "en": "minimum angle per side, in degrees"
+     }
+    },
+    {
+     "name": "$fs",
+     "doc": {
+      "es": "largo mínimo de cada lado, en mm",
+      "en": "minimum side length, in mm"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Cilindro o cono sobre el eje Z, con la base en z = 0 (o centrado). Con r1 ≠ r2 es un tronco de cono; con un radio en 0, un cono.",
+    "en": "Cylinder or cone along the Z axis, base at z = 0 (or centered). With r1 ≠ r2 it is a truncated cone; with one radius at 0, a cone."
+   }
+  },
+  {
+   "name": "polyhedron",
+   "kind": "module",
+   "signature": "polyhedron(points, faces, convexity)",
+   "params": [
+    {
+     "name": "points",
+     "doc": {
+      "es": "lista de vértices [x, y, z]",
+      "en": "list of [x, y, z] vertices"
+     }
+    },
+    {
+     "name": "faces",
+     "doc": {
+      "es": "lista de caras, cada una una lista de índices",
+      "en": "list of faces, each a list of indices"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Sólido a partir de vértices y caras. Cada cara lista índices de points en sentido horario vista desde afuera; una cara mal orientada da un sólido inválido.",
+    "en": "Solid built from vertices and faces. Each face lists indices into points, clockwise when seen from outside; a misoriented face gives an invalid solid."
+   }
+  },
+  {
+   "name": "import",
+   "kind": "module",
+   "signature": "import(file, convexity, layer, center, dpi)",
+   "params": [
+    {
+     "name": "file",
+     "doc": {
+      "es": "ruta del archivo",
+      "en": "file path"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    },
+    {
+     "name": "layer",
+     "doc": {
+      "es": "capa de un DXF",
+      "en": "DXF layer"
+     }
+    },
+    {
+     "name": "center",
+     "doc": {
+      "es": "SVG: centrar en el origen",
+      "en": "SVG: center on the origin"
+     }
+    },
+    {
+     "name": "dpi",
+     "doc": {
+      "es": "SVG: resolución para convertir a mm (por defecto 72)",
+      "en": "SVG: resolution used to convert to mm (default 72)"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Importa geometría de un archivo: STL, OFF, AMF, 3MF (3D) o DXF, SVG (2D). La ruta es relativa al archivo .scad.",
+    "en": "Imports geometry from a file: STL, OFF, AMF, 3MF (3D) or DXF, SVG (2D). The path is relative to the .scad file."
+   }
+  },
+  {
+   "name": "surface",
+   "kind": "module",
+   "signature": "surface(file, center, invert, convexity)",
+   "params": [
+    {
+     "name": "file",
+     "doc": {
+      "es": "archivo .dat o .png",
+      "en": "a .dat or .png file"
+     }
+    },
+    {
+     "name": "center",
+     "doc": {
+      "es": "centrar en X/Y",
+      "en": "center on X/Y"
+     }
+    },
+    {
+     "name": "invert",
+     "doc": {
+      "es": "PNG: invierte claro y oscuro",
+      "en": "PNG: inverts light and dark"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Superficie de alturas a partir de un archivo .dat (matriz de números) o una imagen PNG (gris = altura).",
+    "en": "Height map from a .dat file (number matrix) or a PNG image (gray = height)."
+   }
+  },
+  {
+   "name": "square",
+   "kind": "module",
+   "signature": "square(size, center)",
+   "params": [
+    {
+     "name": "size",
+     "doc": {
+      "es": "lado (número) o [x, y]; por defecto 1",
+      "en": "side (number) or [x, y]; default 1"
+     }
+    },
+    {
+     "name": "center",
+     "doc": {
+      "es": "true = centrado; por defecto false",
+      "en": "true = centered; default false"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Cuadrado o rectángulo 2D con una esquina en el origen (o centrado).",
+    "en": "2D square or rectangle with one corner at the origin (or centered)."
+   }
+  },
+  {
+   "name": "circle",
+   "kind": "module",
+   "signature": "circle(r, d)",
+   "params": [
+    {
+     "name": "r",
+     "doc": {
+      "es": "radio; por defecto 1",
+      "en": "radius; default 1"
+     }
+    },
+    {
+     "name": "d",
+     "doc": {
+      "es": "diámetro (alternativa a r)",
+      "en": "diameter (alternative to r)"
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    },
+    {
+     "name": "$fa",
+     "doc": {
+      "es": "ángulo mínimo de cada lado, en grados",
+      "en": "minimum angle per side, in degrees"
+     }
+    },
+    {
+     "name": "$fs",
+     "doc": {
+      "es": "largo mínimo de cada lado, en mm",
+      "en": "minimum side length, in mm"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Círculo 2D centrado en el origen.",
+    "en": "2D circle centered on the origin."
+   }
+  },
+  {
+   "name": "polygon",
+   "kind": "module",
+   "signature": "polygon(points, paths, convexity)",
+   "params": [
+    {
+     "name": "points",
+     "doc": {
+      "es": "lista de puntos [x, y]",
+      "en": "list of [x, y] points"
+     }
+    },
+    {
+     "name": "paths",
+     "doc": {
+      "es": "lista de caminos (índices); opcional",
+      "en": "list of paths (indices); optional"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Polígono 2D a partir de puntos. Con paths se definen agujeros: el primer camino es el contorno y los siguientes se restan.",
+    "en": "2D polygon from points. paths defines holes: the first path is the outline and the next ones are subtracted."
+   }
+  },
+  {
+   "name": "text",
+   "kind": "module",
+   "signature": "text(text, size, font, halign, valign, spacing, direction, language, script)",
+   "params": [
+    {
+     "name": "text",
+     "doc": {
+      "es": "el texto",
+      "en": "the text"
+     }
+    },
+    {
+     "name": "size",
+     "doc": {
+      "es": "tamaño en mm; por defecto 10",
+      "en": "size in mm; default 10"
+     }
+    },
+    {
+     "name": "font",
+     "doc": {
+      "es": "fuente, p. ej. \"Liberation Sans:style=Bold\"",
+      "en": "font, e.g. \"Liberation Sans:style=Bold\""
+     }
+    },
+    {
+     "name": "halign",
+     "doc": {
+      "es": "\"left\", \"center\" o \"right\"",
+      "en": "\"left\", \"center\" or \"right\""
+     }
+    },
+    {
+     "name": "valign",
+     "doc": {
+      "es": "\"top\", \"center\", \"baseline\" o \"bottom\"",
+      "en": "\"top\", \"center\", \"baseline\" or \"bottom\""
+     }
+    },
+    {
+     "name": "spacing",
+     "doc": {
+      "es": "factor de espaciado entre letras; por defecto 1",
+      "en": "letter spacing factor; default 1"
+     }
+    },
+    {
+     "name": "direction",
+     "doc": {
+      "es": "\"ltr\", \"rtl\", \"ttb\" o \"btt\"",
+      "en": "\"ltr\", \"rtl\", \"ttb\" or \"btt\""
+     }
+    },
+    {
+     "name": "language",
+     "doc": {
+      "es": "idioma del texto, p. ej. \"es\"",
+      "en": "text language, e.g. \"en\""
+     }
+    },
+    {
+     "name": "script",
+     "doc": {
+      "es": "sistema de escritura, p. ej. \"latin\"",
+      "en": "writing system, e.g. \"latin\""
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Texto 2D (usar linear_extrude para darle altura). size es aproximadamente la altura de las mayúsculas en mm.",
+    "en": "2D text (use linear_extrude to give it height). size is roughly the cap height in mm."
+   }
+  },
+  {
+   "name": "projection",
+   "kind": "module",
+   "signature": "projection(cut)",
+   "params": [
+    {
+     "name": "cut",
+     "doc": {
+      "es": "false = sombra completa; true = corte en z = 0",
+      "en": "false = full shadow; true = slice at z = 0"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Proyecta un objeto 3D al plano XY y devuelve 2D.",
+    "en": "Projects a 3D object onto the XY plane and returns 2D."
+   }
+  },
+  {
+   "name": "translate",
+   "kind": "module",
+   "signature": "translate(v)",
+   "params": [
+    {
+     "name": "v",
+     "doc": {
+      "es": "desplazamiento [x, y, z]",
+      "en": "offset [x, y, z]"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Mueve los hijos según el vector v.",
+    "en": "Moves the children by vector v."
+   }
+  },
+  {
+   "name": "rotate",
+   "kind": "module",
+   "signature": "rotate(a, v)",
+   "params": [
+    {
+     "name": "a",
+     "doc": {
+      "es": "ángulo(s) en grados",
+      "en": "angle(s) in degrees"
+     }
+    },
+    {
+     "name": "v",
+     "doc": {
+      "es": "eje de giro (con a escalar); por defecto Z",
+      "en": "rotation axis (with scalar a); default Z"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Rota los hijos. Con a = [x, y, z] rota sobre X, después Y, después Z (grados); con a escalar y v, gira a grados sobre el eje v.",
+    "en": "Rotates the children. With a = [x, y, z] it rotates about X, then Y, then Z (degrees); with scalar a and v, it rotates a degrees about axis v."
+   }
+  },
+  {
+   "name": "scale",
+   "kind": "module",
+   "signature": "scale(v)",
+   "params": [
+    {
+     "name": "v",
+     "doc": {
+      "es": "factor (número) o [x, y, z]",
+      "en": "factor (number) or [x, y, z]"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Escala los hijos por eje.",
+    "en": "Scales the children per axis."
+   }
+  },
+  {
+   "name": "resize",
+   "kind": "module",
+   "signature": "resize(newsize, auto, convexity)",
+   "params": [
+    {
+     "name": "newsize",
+     "doc": {
+      "es": "[x, y, z] en mm",
+      "en": "[x, y, z] in mm"
+     }
+    },
+    {
+     "name": "auto",
+     "doc": {
+      "es": "true o [bool, bool, bool]: escalar en proporción los ejes en 0",
+      "en": "true or [bool, bool, bool]: scale the 0 axes proportionally"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Cambia el tamaño de los hijos a medidas absolutas. Un 0 deja ese eje (o lo escala en proporción si auto lo pide).",
+    "en": "Resizes the children to absolute dimensions. A 0 keeps that axis (or scales it proportionally if auto says so)."
+   }
+  },
+  {
+   "name": "mirror",
+   "kind": "module",
+   "signature": "mirror(v)",
+   "params": [
+    {
+     "name": "v",
+     "doc": {
+      "es": "normal del plano, p. ej. [1, 0, 0]",
+      "en": "plane normal, e.g. [1, 0, 0]"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Refleja los hijos sobre el plano que pasa por el origen con normal v. No copia: para tener los dos, poner el original también.",
+    "en": "Mirrors the children across the plane through the origin with normal v. It does not copy: to keep both, add the original too."
+   }
+  },
+  {
+   "name": "multmatrix",
+   "kind": "module",
+   "signature": "multmatrix(m)",
+   "params": [
+    {
+     "name": "m",
+     "doc": {
+      "es": "matriz [[…], […], […], [0, 0, 0, 1]]",
+      "en": "matrix [[…], […], […], [0, 0, 0, 1]]"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Aplica una matriz de transformación afín de 4×4 (o 4×3) a los hijos.",
+    "en": "Applies a 4×4 (or 4×3) affine transformation matrix to the children."
+   }
+  },
+  {
+   "name": "color",
+   "kind": "module",
+   "signature": "color(c, alpha)",
+   "params": [
+    {
+     "name": "c",
+     "doc": {
+      "es": "nombre (\"red\"), \"#rrggbb\", \"#rrggbbaa\" o [r, g, b, a] de 0 a 1",
+      "en": "name (\"red\"), \"#rrggbb\", \"#rrggbbaa\" or [r, g, b, a] from 0 to 1"
+     }
+    },
+    {
+     "name": "alpha",
+     "doc": {
+      "es": "opacidad de 0 a 1; por defecto 1",
+      "en": "opacity from 0 to 1; default 1"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Colorea los hijos. En ScadLab cada pieza de primer nivel lleva color(): el 3MF multicolor asigna un filamento por color.",
+    "en": "Colors the children. In ScadLab every top-level part gets color(): the multicolor 3MF maps one filament per color."
+   }
+  },
+  {
+   "name": "offset",
+   "kind": "module",
+   "signature": "offset(r, delta, chamfer)",
+   "params": [
+    {
+     "name": "r",
+     "doc": {
+      "es": "radio de redondeo (negativo achica)",
+      "en": "rounding radius (negative shrinks)"
+     }
+    },
+    {
+     "name": "delta",
+     "doc": {
+      "es": "distancia con esquinas vivas",
+      "en": "distance with sharp corners"
+     }
+    },
+    {
+     "name": "chamfer",
+     "doc": {
+      "es": "con delta: esquinas en chaflán",
+      "en": "with delta: chamfered corners"
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    },
+    {
+     "name": "$fa",
+     "doc": {
+      "es": "ángulo mínimo de cada lado, en grados",
+      "en": "minimum angle per side, in degrees"
+     }
+    },
+    {
+     "name": "$fs",
+     "doc": {
+      "es": "largo mínimo de cada lado, en mm",
+      "en": "minimum side length, in mm"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Agranda o achica un contorno 2D. r redondea las esquinas; delta las mantiene vivas (o en chaflán con chamfer).",
+    "en": "Grows or shrinks a 2D outline. r rounds the corners; delta keeps them sharp (or chamfered with chamfer)."
+   }
+  },
+  {
+   "name": "union",
+   "kind": "module",
+   "signature": "union()",
+   "params": [],
+   "doc": {
+    "es": "Une los hijos en un solo objeto. Es lo que pasa implícitamente con varios objetos dentro de { }.",
+    "en": "Joins the children into one object. It is what happens implicitly with several objects inside { }."
+   }
+  },
+  {
+   "name": "difference",
+   "kind": "module",
+   "signature": "difference()",
+   "params": [],
+   "doc": {
+    "es": "Resta al primer hijo todos los demás. Sumar 0,01 mm a las piezas que restan evita caras coplanares que dejan pieles finas.",
+    "en": "Subtracts all other children from the first one. Making cutters 0.01 mm larger avoids coplanar faces that leave thin skins."
+   }
+  },
+  {
+   "name": "intersection",
+   "kind": "module",
+   "signature": "intersection()",
+   "params": [],
+   "doc": {
+    "es": "Deja solo el volumen común a todos los hijos.",
+    "en": "Keeps only the volume shared by all children."
+   }
+  },
+  {
+   "name": "hull",
+   "kind": "module",
+   "signature": "hull()",
+   "params": [],
+   "doc": {
+    "es": "Envolvente convexa de los hijos: como envolverlos en film. Útil para redondear cajas (hull de cuatro cilindros).",
+    "en": "Convex hull of the children: like shrink-wrapping them. Useful for rounded boxes (hull of four cylinders)."
+   }
+  },
+  {
+   "name": "minkowski",
+   "kind": "module",
+   "signature": "minkowski(convexity)",
+   "params": [
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Suma de Minkowski: pasa el segundo hijo por todo el contorno del primero (redondea aristas). Muy lento con mallas grandes; anidarlo multiplica el costo.",
+    "en": "Minkowski sum: sweeps the second child over the whole surface of the first (rounds edges). Very slow with large meshes; nesting it multiplies the cost."
+   }
+  },
+  {
+   "name": "linear_extrude",
+   "kind": "module",
+   "signature": "linear_extrude(height, center, convexity, twist, slices, scale)",
+   "params": [
+    {
+     "name": "height",
+     "doc": {
+      "es": "altura en mm",
+      "en": "height in mm"
+     }
+    },
+    {
+     "name": "center",
+     "doc": {
+      "es": "centrar en Z",
+      "en": "center on Z"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    },
+    {
+     "name": "twist",
+     "doc": {
+      "es": "giro total en grados a lo largo de la altura",
+      "en": "total twist in degrees along the height"
+     }
+    },
+    {
+     "name": "slices",
+     "doc": {
+      "es": "cantidad de tramos (para twist)",
+      "en": "number of slices (for twist)"
+     }
+    },
+    {
+     "name": "scale",
+     "doc": {
+      "es": "escala de la tapa superior: número o [x, y]",
+      "en": "scale of the top face: number or [x, y]"
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Extruye un perfil 2D a lo largo de Z.",
+    "en": "Extrudes a 2D profile along Z."
+   }
+  },
+  {
+   "name": "rotate_extrude",
+   "kind": "module",
+   "signature": "rotate_extrude(angle, convexity)",
+   "params": [
+    {
+     "name": "angle",
+     "doc": {
+      "es": "ángulo barrido en grados; por defecto 360",
+      "en": "swept angle in degrees; default 360"
+     }
+    },
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    },
+    {
+     "name": "$fn",
+     "doc": {
+      "es": "cantidad fija de lados (0 = usar $fa/$fs)",
+      "en": "fixed number of sides (0 = use $fa/$fs)"
+     }
+    },
+    {
+     "name": "$fa",
+     "doc": {
+      "es": "ángulo mínimo de cada lado, en grados",
+      "en": "minimum angle per side, in degrees"
+     }
+    },
+    {
+     "name": "$fs",
+     "doc": {
+      "es": "largo mínimo de cada lado, en mm",
+      "en": "minimum side length, in mm"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Gira un perfil 2D alrededor del eje Z (torno). El perfil tiene que estar todo del lado X ≥ 0.",
+    "en": "Spins a 2D profile around the Z axis (lathe). The profile must lie entirely on the X ≥ 0 side."
+   }
+  },
+  {
+   "name": "render",
+   "kind": "module",
+   "signature": "render(convexity)",
+   "params": [
+    {
+     "name": "convexity",
+     "doc": {
+      "es": "cuántas veces como máximo cruza un rayo la pieza; solo afecta la vista previa",
+      "en": "maximum number of times a ray crosses the part; only affects the preview"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Fuerza a calcular la geometría de los hijos también en la vista previa. Acelera la vista previa de piezas con muchas restas.",
+    "en": "Forces the children's geometry to be computed in the preview too. Speeds up the preview of parts with many subtractions."
+   }
+  },
+  {
+   "name": "children",
+   "kind": "module",
+   "signature": "children(index)",
+   "params": [
+    {
+     "name": "index",
+     "doc": {
+      "es": "número, lista o rango de hijos",
+      "en": "number, list or range of children"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Dentro de un módulo, los objetos que se le pasaron. Sin índice, todos; con índice o rango, solo esos.",
+    "en": "Inside a module, the objects passed to it. Without index, all of them; with an index or range, only those."
+   }
+  },
+  {
+   "name": "intersection_for",
+   "kind": "module",
+   "signature": "intersection_for(i = [start : end])",
+   "params": [],
+   "doc": {
+    "es": "Como for, pero intersecta los resultados de cada vuelta en vez de unirlos.",
+    "en": "Like for, but intersects the results of each iteration instead of unioning them."
+   }
+  },
+  {
+   "name": "echo",
+   "kind": "module",
+   "signature": "echo(values…)",
+   "params": [],
+   "doc": {
+    "es": "Imprime valores en la consola. También funciona como expresión: echo(x) devuelve la expresión que lo sigue.",
+    "en": "Prints values to the console. It also works as an expression: echo(x) returns the expression that follows it."
+   }
+  },
+  {
+   "name": "assert",
+   "kind": "module",
+   "signature": "assert(condition, message)",
+   "params": [
+    {
+     "name": "condition",
+     "doc": {
+      "es": "lo que tiene que cumplirse",
+      "en": "what must hold"
+     }
+    },
+    {
+     "name": "message",
+     "doc": {
+      "es": "texto del error",
+      "en": "error text"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Detiene el render con un error si la condición es falsa. También funciona dentro de expresiones.",
+    "en": "Stops the render with an error if the condition is false. It also works inside expressions."
+   }
+  },
+  {
+   "name": "abs",
+   "kind": "function",
+   "signature": "abs(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Valor absoluto.",
+    "en": "Absolute value."
+   }
+  },
+  {
+   "name": "sign",
+   "kind": "function",
+   "signature": "sign(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Signo: -1, 0 o 1.",
+    "en": "Sign: -1, 0 or 1."
+   }
+  },
+  {
+   "name": "sin",
+   "kind": "function",
+   "signature": "sin(angle)",
+   "params": [
+    {
+     "name": "angle",
+     "doc": {
+      "es": "ángulo en grados",
+      "en": "angle in degrees"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Seno (el ángulo va en grados).",
+    "en": "Sine (angle in degrees)."
+   }
+  },
+  {
+   "name": "cos",
+   "kind": "function",
+   "signature": "cos(angle)",
+   "params": [
+    {
+     "name": "angle",
+     "doc": {
+      "es": "ángulo en grados",
+      "en": "angle in degrees"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Coseno (el ángulo va en grados).",
+    "en": "Cosine (angle in degrees)."
+   }
+  },
+  {
+   "name": "tan",
+   "kind": "function",
+   "signature": "tan(angle)",
+   "params": [
+    {
+     "name": "angle",
+     "doc": {
+      "es": "ángulo en grados",
+      "en": "angle in degrees"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Tangente (el ángulo va en grados).",
+    "en": "Tangent (angle in degrees)."
+   }
+  },
+  {
+   "name": "asin",
+   "kind": "function",
+   "signature": "asin(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Arcoseno, en grados.",
+    "en": "Arcsine, in degrees."
+   }
+  },
+  {
+   "name": "acos",
+   "kind": "function",
+   "signature": "acos(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Arcocoseno, en grados.",
+    "en": "Arccosine, in degrees."
+   }
+  },
+  {
+   "name": "atan",
+   "kind": "function",
+   "signature": "atan(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Arcotangente, en grados (de -90 a 90).",
+    "en": "Arctangent, in degrees (-90 to 90)."
+   }
+  },
+  {
+   "name": "atan2",
+   "kind": "function",
+   "signature": "atan2(y, x)",
+   "params": [
+    {
+     "name": "y",
+     "doc": {
+      "es": "coordenada y",
+      "en": "y coordinate"
+     }
+    },
+    {
+     "name": "x",
+     "doc": {
+      "es": "coordenada x",
+      "en": "x coordinate"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Ángulo del punto (x, y) en grados, de -180 a 180. Ojo: primero y.",
+    "en": "Angle of point (x, y) in degrees, -180 to 180. Note: y comes first."
+   }
+  },
+  {
+   "name": "floor",
+   "kind": "function",
+   "signature": "floor(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Redondea hacia abajo.",
+    "en": "Rounds down."
+   }
+  },
+  {
+   "name": "round",
+   "kind": "function",
+   "signature": "round(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Redondea al entero más cercano (.5 se aleja del cero).",
+    "en": "Rounds to the nearest integer (.5 rounds away from zero)."
+   }
+  },
+  {
+   "name": "ceil",
+   "kind": "function",
+   "signature": "ceil(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Redondea hacia arriba.",
+    "en": "Rounds up."
+   }
+  },
+  {
+   "name": "ln",
+   "kind": "function",
+   "signature": "ln(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Logaritmo natural.",
+    "en": "Natural logarithm."
+   }
+  },
+  {
+   "name": "log",
+   "kind": "function",
+   "signature": "log(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Logaritmo en base 10.",
+    "en": "Base-10 logarithm."
+   }
+  },
+  {
+   "name": "pow",
+   "kind": "function",
+   "signature": "pow(base, exponent)",
+   "params": [
+    {
+     "name": "base",
+     "doc": {
+      "es": "base",
+      "en": "base"
+     }
+    },
+    {
+     "name": "exponent",
+     "doc": {
+      "es": "exponente",
+      "en": "exponent"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Potencia. Desde 2021.01 también existe el operador ^.",
+    "en": "Power. Since 2021.01 there is also the ^ operator."
+   }
+  },
+  {
+   "name": "sqrt",
+   "kind": "function",
+   "signature": "sqrt(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Raíz cuadrada.",
+    "en": "Square root."
+   }
+  },
+  {
+   "name": "exp",
+   "kind": "function",
+   "signature": "exp(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "número",
+      "en": "number"
+     }
+    }
+   ],
+   "doc": {
+    "es": "e elevado a x.",
+    "en": "e raised to x."
+   }
+  },
+  {
+   "name": "min",
+   "kind": "function",
+   "signature": "min(values…)",
+   "params": [],
+   "doc": {
+    "es": "El menor de los valores, o de los elementos de una lista.",
+    "en": "The smallest of the values, or of the elements of a list."
+   }
+  },
+  {
+   "name": "max",
+   "kind": "function",
+   "signature": "max(values…)",
+   "params": [],
+   "doc": {
+    "es": "El mayor de los valores, o de los elementos de una lista.",
+    "en": "The largest of the values, or of the elements of a list."
+   }
+  },
+  {
+   "name": "norm",
+   "kind": "function",
+   "signature": "norm(v)",
+   "params": [
+    {
+     "name": "v",
+     "doc": {
+      "es": "vector",
+      "en": "vector"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Largo (norma euclídea) de un vector.",
+    "en": "Length (Euclidean norm) of a vector."
+   }
+  },
+  {
+   "name": "cross",
+   "kind": "function",
+   "signature": "cross(a, b)",
+   "params": [
+    {
+     "name": "a",
+     "doc": {
+      "es": "vector",
+      "en": "vector"
+     }
+    },
+    {
+     "name": "b",
+     "doc": {
+      "es": "vector",
+      "en": "vector"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Producto vectorial de dos vectores 3D (o 2D: devuelve un número).",
+    "en": "Cross product of two 3D vectors (or 2D: returns a number)."
+   }
+  },
+  {
+   "name": "rands",
+   "kind": "function",
+   "signature": "rands(min_value, max_value, value_count, seed_value)",
+   "params": [
+    {
+     "name": "min_value",
+     "doc": {
+      "es": "mínimo",
+      "en": "minimum"
+     }
+    },
+    {
+     "name": "max_value",
+     "doc": {
+      "es": "máximo",
+      "en": "maximum"
+     }
+    },
+    {
+     "name": "value_count",
+     "doc": {
+      "es": "cuántos",
+      "en": "how many"
+     }
+    },
+    {
+     "name": "seed_value",
+     "doc": {
+      "es": "semilla (opcional)",
+      "en": "seed (optional)"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Lista de números pseudoaleatorios. Con la misma semilla, siempre los mismos.",
+    "en": "List of pseudo-random numbers. With the same seed, always the same ones."
+   }
+  },
+  {
+   "name": "len",
+   "kind": "function",
+   "signature": "len(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "lista o string",
+      "en": "list or string"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Cantidad de elementos de una lista o de caracteres de un string.",
+    "en": "Number of elements in a list or characters in a string."
+   }
+  },
+  {
+   "name": "concat",
+   "kind": "function",
+   "signature": "concat(lists…)",
+   "params": [],
+   "doc": {
+    "es": "Une listas en una sola. Un valor suelto se agrega como elemento.",
+    "en": "Joins lists into one. A single value is appended as an element."
+   }
+  },
+  {
+   "name": "lookup",
+   "kind": "function",
+   "signature": "lookup(key, table)",
+   "params": [
+    {
+     "name": "key",
+     "doc": {
+      "es": "valor a buscar",
+      "en": "value to look up"
+     }
+    },
+    {
+     "name": "table",
+     "doc": {
+      "es": "lista de pares [clave, valor]",
+      "en": "list of [key, value] pairs"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Interpola linealmente en una tabla [[clave, valor], …] ordenada por clave.",
+    "en": "Linearly interpolates in a [[key, value], …] table sorted by key."
+   }
+  },
+  {
+   "name": "str",
+   "kind": "function",
+   "signature": "str(values…)",
+   "params": [],
+   "doc": {
+    "es": "Convierte los valores a texto y los concatena.",
+    "en": "Converts the values to text and concatenates them."
+   }
+  },
+  {
+   "name": "chr",
+   "kind": "function",
+   "signature": "chr(codes…)",
+   "params": [],
+   "doc": {
+    "es": "Convierte códigos Unicode en un string.",
+    "en": "Converts Unicode code points into a string."
+   }
+  },
+  {
+   "name": "ord",
+   "kind": "function",
+   "signature": "ord(character)",
+   "params": [
+    {
+     "name": "character",
+     "doc": {
+      "es": "string de un carácter",
+      "en": "one-character string"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Código Unicode de un carácter.",
+    "en": "Unicode code point of a character."
+   }
+  },
+  {
+   "name": "search",
+   "kind": "function",
+   "signature": "search(match_value, string_or_vector, num_returns_per_match, index_col_num)",
+   "params": [
+    {
+     "name": "match_value",
+     "doc": {
+      "es": "lo que se busca",
+      "en": "what to search for"
+     }
+    },
+    {
+     "name": "string_or_vector",
+     "doc": {
+      "es": "dónde se busca",
+      "en": "where to search"
+     }
+    },
+    {
+     "name": "num_returns_per_match",
+     "doc": {
+      "es": "resultados por coincidencia (0 = todos); por defecto 1",
+      "en": "results per match (0 = all); default 1"
+     }
+    },
+    {
+     "name": "index_col_num",
+     "doc": {
+      "es": "columna a comparar en listas de listas",
+      "en": "column to compare in lists of lists"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Busca valores en una lista o string y devuelve sus posiciones.",
+    "en": "Searches for values in a list or string and returns their positions."
+   }
+  },
+  {
+   "name": "version",
+   "kind": "function",
+   "signature": "version()",
+   "params": [],
+   "doc": {
+    "es": "Versión de OpenSCAD como lista [año, mes, día].",
+    "en": "OpenSCAD version as a [year, month, day] list."
+   }
+  },
+  {
+   "name": "version_num",
+   "kind": "function",
+   "signature": "version_num()",
+   "params": [],
+   "doc": {
+    "es": "Versión de OpenSCAD como número (20210100 para 2021.01).",
+    "en": "OpenSCAD version as a number (20210100 for 2021.01)."
+   }
+  },
+  {
+   "name": "is_undef",
+   "kind": "function",
+   "signature": "is_undef(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "valor",
+      "en": "value"
+     }
+    }
+   ],
+   "doc": {
+    "es": "true si x es indefinido.",
+    "en": "true if x is undefined."
+   }
+  },
+  {
+   "name": "is_bool",
+   "kind": "function",
+   "signature": "is_bool(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "valor",
+      "en": "value"
+     }
+    }
+   ],
+   "doc": {
+    "es": "true si x es un booleano.",
+    "en": "true if x is a boolean."
+   }
+  },
+  {
+   "name": "is_num",
+   "kind": "function",
+   "signature": "is_num(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "valor",
+      "en": "value"
+     }
+    }
+   ],
+   "doc": {
+    "es": "true si x es un número.",
+    "en": "true if x is a number."
+   }
+  },
+  {
+   "name": "is_string",
+   "kind": "function",
+   "signature": "is_string(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "valor",
+      "en": "value"
+     }
+    }
+   ],
+   "doc": {
+    "es": "true si x es un string.",
+    "en": "true if x is a string."
+   }
+  },
+  {
+   "name": "is_list",
+   "kind": "function",
+   "signature": "is_list(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "valor",
+      "en": "value"
+     }
+    }
+   ],
+   "doc": {
+    "es": "true si x es una lista.",
+    "en": "true if x is a list."
+   }
+  },
+  {
+   "name": "is_function",
+   "kind": "function",
+   "signature": "is_function(x)",
+   "params": [
+    {
+     "name": "x",
+     "doc": {
+      "es": "valor",
+      "en": "value"
+     }
+    }
+   ],
+   "doc": {
+    "es": "true si x es una función literal.",
+    "en": "true if x is a function literal."
+   }
+  },
+  {
+   "name": "parent_module",
+   "kind": "function",
+   "signature": "parent_module(n)",
+   "params": [
+    {
+     "name": "n",
+     "doc": {
+      "es": "niveles hacia arriba",
+      "en": "levels up"
+     }
+    }
+   ],
+   "doc": {
+    "es": "Nombre del módulo n niveles arriba en la pila de llamadas.",
+    "en": "Name of the module n levels up the call stack."
+   }
+  },
+  {
+   "name": "$fn",
+   "kind": "special",
+   "signature": "$fn = 0",
+   "params": [],
+   "doc": {
+    "es": "Cantidad fija de lados de círculos, esferas y cilindros. 0 (por defecto) usa $fa y $fs. Un valor alto en el nivel superior hace lento todo el render.",
+    "en": "Fixed number of sides for circles, spheres and cylinders. 0 (default) uses $fa and $fs. A high value at the top level slows the whole render."
+   }
+  },
+  {
+   "name": "$fa",
+   "kind": "special",
+   "signature": "$fa = 12",
+   "params": [],
+   "doc": {
+    "es": "Ángulo mínimo de cada lado de un círculo, en grados (por defecto 12).",
+    "en": "Minimum angle per side of a circle, in degrees (default 12)."
+   }
+  },
+  {
+   "name": "$fs",
+   "kind": "special",
+   "signature": "$fs = 2",
+   "params": [],
+   "doc": {
+    "es": "Largo mínimo de cada lado de un círculo, en mm (por defecto 2). Para impresión, 0,3–0,5 da curvas suaves.",
+    "en": "Minimum side length of a circle, in mm (default 2). For printing, 0.3–0.5 gives smooth curves."
+   }
+  },
+  {
+   "name": "$t",
+   "kind": "special",
+   "signature": "$t",
+   "params": [],
+   "doc": {
+    "es": "Tiempo de la animación, de 0 a 1.",
+    "en": "Animation time, from 0 to 1."
+   }
+  },
+  {
+   "name": "$vpr",
+   "kind": "special",
+   "signature": "$vpr",
+   "params": [],
+   "doc": {
+    "es": "Rotación de la cámara de la vista previa [x, y, z] en grados.",
+    "en": "Preview camera rotation [x, y, z] in degrees."
+   }
+  },
+  {
+   "name": "$vpt",
+   "kind": "special",
+   "signature": "$vpt",
+   "params": [],
+   "doc": {
+    "es": "Punto al que mira la cámara de la vista previa [x, y, z].",
+    "en": "Preview camera target [x, y, z]."
+   }
+  },
+  {
+   "name": "$vpd",
+   "kind": "special",
+   "signature": "$vpd",
+   "params": [],
+   "doc": {
+    "es": "Distancia de la cámara de la vista previa.",
+    "en": "Preview camera distance."
+   }
+  },
+  {
+   "name": "$vpf",
+   "kind": "special",
+   "signature": "$vpf",
+   "params": [],
+   "doc": {
+    "es": "Campo de visión de la cámara de la vista previa, en grados.",
+    "en": "Preview camera field of view, in degrees."
+   }
+  },
+  {
+   "name": "$children",
+   "kind": "special",
+   "signature": "$children",
+   "params": [],
+   "doc": {
+    "es": "Dentro de un módulo, cuántos hijos recibió.",
+    "en": "Inside a module, how many children it received."
+   }
+  },
+  {
+   "name": "$preview",
+   "kind": "special",
+   "signature": "$preview",
+   "params": [],
+   "doc": {
+    "es": "true en la vista previa (F5), false en el render final (F6) y al exportar. Sirve para bajar la resolución mientras se diseña.",
+    "en": "true in preview (F5), false in the final render (F6) and when exporting. Useful to lower resolution while designing."
+   }
+  },
+  {
+   "name": "$parent_modules",
+   "kind": "special",
+   "signature": "$parent_modules",
+   "params": [],
+   "doc": {
+    "es": "Dentro de un módulo, cuántos módulos hay en la pila de llamadas (afuera de un módulo no está definida).",
+    "en": "Inside a module, how many modules are on the call stack (undefined outside a module)."
+   }
+  },
+  {
+   "name": "PI",
+   "kind": "special",
+   "signature": "PI",
+   "params": [],
+   "doc": {
+    "es": "La constante π (3,14159…).",
+    "en": "The constant π (3.14159…)."
+   }
+  }
+ ]
+}

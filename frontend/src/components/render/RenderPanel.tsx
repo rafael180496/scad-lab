@@ -1,4 +1,4 @@
-import {useState} from 'react'
+import {lazy, Suspense, useEffect, useState} from 'react'
 import {
     ChevronDown,
     ChevronRight,
@@ -19,6 +19,12 @@ import {Button} from '../ui/Button'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {renderTone, seconds, warnings, type RenderTone} from '../../lib/render'
+import {goToLine} from '../../lib/editorSession'
+import type {BedVolume} from '../viewer/ViewPane'
+import type {ViewerShot} from '../viewer/Viewer'
+
+// three + R3F van en su propio chunk: la app abre sin cargarlos.
+const Viewer = lazy(() => import('../viewer/Viewer'))
 
 const toneText: Record<RenderTone, string> = {
     running: 'text-accent',
@@ -46,22 +52,102 @@ function ToneIcon({tone}: {tone: RenderTone}) {
     }
 }
 
+function DiagnosticList({diags, showErrorsFile}: {diags: render.Diagnostic[]; showErrorsFile: boolean}) {
+    const t = useT()
+    return (
+        <>
+            <ul className="selectable divide-y divide-line">
+                {diags.map((d, i) => {
+                    // Clic = ir a la línea en el editor (solo si es del propio
+                    // checkpoint: un error dentro de un include no está ahí).
+                    const go = d.line > 0 && !d.file
+                    return (
+                        <li key={i}>
+                            <button
+                                type="button"
+                                disabled={!go}
+                                title={go ? fmt(t.render.goToLine, {n: d.line}) : d.file || t.render.noLine}
+                                onClick={() => goToLine(d.line, d.col)}
+                                className="flex w-full items-start gap-2 px-3 py-2 text-left text-[12px] transition-colors duration-100 enabled:hover:bg-surface-2 disabled:cursor-default"
+                            >
+                                {d.severity === 'error' ? (
+                                    <CircleAlert className="mt-px size-3.5 shrink-0 text-danger" aria-label={t.render.severity.error} />
+                                ) : (
+                                    <TriangleAlert className="mt-px size-3.5 shrink-0 text-warn" aria-label={t.render.severity.warning} />
+                                )}
+                                <span
+                                    className={cn(
+                                        'w-[74px] shrink-0 font-mono text-[11px]',
+                                        d.severity === 'error' ? 'text-danger' : 'text-warn',
+                                        go && 'underline decoration-dotted underline-offset-2',
+                                    )}
+                                >
+                                    {d.line > 0 ? fmt(t.render.line, {n: d.line}) : t.render.noLine}
+                                </span>
+                                <span className="min-w-0 flex-1 leading-snug break-words text-fg">
+                                    {d.file ? <span className="font-mono text-muted">{d.file}: </span> : null}
+                                    {d.message}
+                                </span>
+                            </button>
+                        </li>
+                    )
+                })}
+            </ul>
+            {showErrorsFile ? <p className="border-t border-line px-3 py-2 text-[11.5px] leading-relaxed text-faint">{t.render.errorsFile}</p> : null}
+        </>
+    )
+}
+
+// WarningsOverlay: con la pieza a la vista, las advertencias de un render OK
+// quedan plegadas en una esquina del visor en vez de taparlo.
+function WarningsOverlay({diags}: {diags: render.Diagnostic[]}) {
+    const t = useT()
+    const [open, setOpen] = useState(false)
+    return (
+        <div className="overflow-hidden rounded-lg border border-warn/50 bg-surface/95">
+            <button
+                type="button"
+                title={open ? t.viewer.hideWarnings : t.viewer.showWarnings}
+                aria-expanded={open}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setOpen((v) => !v)}
+                className="flex h-7 items-center gap-1.5 px-2.5 text-[11.5px] font-medium text-warn"
+            >
+                <TriangleAlert className="size-3.5" />
+                {fmt(t.viewer.warnings, {n: diags.length})}
+                {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+            </button>
+            {open ? (
+                <div className="max-h-[220px] overflow-auto border-t border-line" onPointerDown={(e) => e.stopPropagation()}>
+                    <DiagnosticList diags={diags} showErrorsFile={false} />
+                </div>
+            ) : null}
+        </div>
+    )
+}
+
 function Chip({icon, text, title}: {icon: React.ReactNode; text: string; title: string}) {
     return (
-        <span className="flex items-center gap-1 font-mono text-[10.5px] text-muted" title={title}>
+        <span className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] whitespace-nowrap text-muted" title={title}>
             <span className="text-faint">{icon}</span>
             {text}
         </span>
     )
 }
 
-// RenderPanel es el contenido del panel del visor en S1: botón de render,
-// barra de estado y diagnósticos. El visor 3D en sí llega en S2 y va a ocupar
-// el centro; la barra y los diagnósticos se quedan.
+// RenderPanel es el contenido del panel del visor: barra de estado del render
+// arriba y, debajo, la pieza en el visor 3D si el render salió bien, o los
+// diagnósticos si falló.
 export function RenderPanel({
     file,
     result,
     running,
+    bed,
+    swatches,
+    onSwatchesSaved,
+    viewerShot,
+    dimsCollapsed,
+    onDimsCollapsed,
     onRender,
     onCancel,
     onOpenSettings,
@@ -69,6 +155,12 @@ export function RenderPanel({
     file: string | null
     result: render.Result | undefined
     running: boolean
+    bed: BedVolume
+    swatches: string[]
+    onSwatchesSaved: (colors: string[]) => void
+    viewerShot?: ViewerShot
+    dimsCollapsed: boolean
+    onDimsCollapsed: (collapsed: boolean) => void
     onRender: () => void
     onCancel: () => void
     onOpenSettings: () => void
@@ -76,6 +168,20 @@ export function RenderPanel({
     const t = useT()
     const [logOpen, setLogOpen] = useState(false)
     const tone = renderTone(result, running)
+
+    // Malla a la vista: la del resultado OK o, mientras se renderiza, la que
+    // ya se estaba viendo (sin parpadeo). Un error la oculta: mostrar la pieza
+    // anterior junto a los diagnósticos haría creer que es la rota.
+    const okMesh = result?.status === 'ok' && result.meshPath ? result.meshPath : null
+    const [lastMesh, setLastMesh] = useState<string | null>(null)
+    useEffect(() => {
+        if (okMesh) setLastMesh(okMesh)
+    }, [okMesh])
+    const meshPath = okMesh ?? (running ? lastMesh : null)
+    // Una vez montado, el visor no se desmonta: conserva la cámara al pasar
+    // por un checkpoint roto y volver.
+    const [viewerMounted, setViewerMounted] = useState(false)
+    if (meshPath && !viewerMounted) setViewerMounted(true)
 
     if (!file) {
         return (
@@ -95,11 +201,13 @@ export function RenderPanel({
     }
     const diags = result?.diagnostics ?? []
     const showMeta = !running && result && (result.status === 'ok' || result.status === 'error')
+    // Con la pieza a la vista, las advertencias de un render OK van plegadas encima.
+    const showWarnings = !!okMesh && diags.length > 0 && !running
 
     return (
         <div className="flex h-full flex-col">
             <div className="flex h-9 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
-                <span className={cn('flex min-w-0 items-center gap-1.5 text-[12px] font-medium', toneText[tone])}>
+                <span className={cn('flex min-w-0 shrink-0 items-center gap-1.5 text-[12px] font-medium whitespace-nowrap', toneText[tone])}>
                     <ToneIcon tone={tone} />
                     <span className="truncate">{label[tone]}</span>
                 </span>
@@ -128,68 +236,60 @@ export function RenderPanel({
                 </div>
             </div>
 
-            <div className="bed-grid flex min-h-0 flex-1 flex-col overflow-auto">
-                {tone === 'missing' ? (
-                    <div className="m-4 flex flex-col items-start gap-3 rounded-lg border border-warn/50 bg-surface p-4">
-                        <p className="text-[12.5px] leading-relaxed text-fg">{t.render.missing}</p>
-                        <Button title={t.render.openSettingsHint} onClick={onOpenSettings}>
-                            <Settings className="size-3.5" />
-                            {t.render.openSettings}
-                        </Button>
-                    </div>
-                ) : null}
-
-                {diags.length > 0 && !running ? (
-                    <div className="m-4 mb-0 flex flex-col overflow-hidden rounded-lg border border-line bg-surface">
-                        <div className="border-b border-line px-3 py-1.5 font-mono text-[10.5px] tracking-[0.12em] text-muted uppercase">
-                            {t.render.diagnostics}
+            {viewerMounted ? (
+                <Suspense
+                    fallback={
+                        <div className="bed-grid flex min-h-0 flex-1 items-center justify-center">
+                            <Loader2 className="size-4 animate-spin text-accent" />
                         </div>
-                        <ul className="selectable divide-y divide-line">
-                            {diags.map((d, i) => (
-                                <li key={i} className="flex items-start gap-2 px-3 py-2 text-[12px]">
-                                    {d.severity === 'error' ? (
-                                        <CircleAlert className="mt-px size-3.5 shrink-0 text-danger" aria-label={t.render.severity.error} />
-                                    ) : (
-                                        <TriangleAlert className="mt-px size-3.5 shrink-0 text-warn" aria-label={t.render.severity.warning} />
-                                    )}
-                                    <span
-                                        className={cn(
-                                            'w-[74px] shrink-0 font-mono text-[11px]',
-                                            d.severity === 'error' ? 'text-danger' : 'text-warn',
-                                        )}
-                                    >
-                                        {d.line > 0 ? fmt(t.render.line, {n: d.line}) : t.render.noLine}
-                                    </span>
-                                    <span className="min-w-0 flex-1 leading-snug break-words text-fg">
-                                        {d.file ? <span className="font-mono text-muted">{d.file}: </span> : null}
-                                        {d.message}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                        {result?.status === 'error' ? (
-                            <p className="border-t border-line px-3 py-2 text-[11.5px] leading-relaxed text-faint">{t.render.errorsFile}</p>
-                        ) : null}
+                    }
+                >
+                    <div className={meshPath ? 'min-h-0 flex-1' : 'hidden'}>
+                        <Viewer
+                            meshPath={meshPath}
+                            fileName={file}
+                            bed={bed}
+                            swatches={swatches}
+                            onSwatchesSaved={onSwatchesSaved}
+                            initial={viewerShot}
+                            dimsCollapsed={dimsCollapsed}
+                            onDimsCollapsed={onDimsCollapsed}
+                            overlay={showWarnings ? <WarningsOverlay diags={diags} /> : null}
+                        />
                     </div>
-                ) : null}
+                </Suspense>
+            ) : null}
 
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-6 text-center">
-                    {result?.status === 'ok' && !running ? (
-                        <>
-                            <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-ok">
-                                <CircleCheck className="size-4" />
-                                {t.render.meshReady}
-                            </span>
-                            {result.meshPath ? (
-                                <span className="selectable max-w-full truncate font-mono text-[10.5px] text-faint" title={t.render.meshPathHint}>
-                                    {result.meshPath}
-                                </span>
-                            ) : null}
-                        </>
+            {meshPath ? null : (
+                <div className="bed-grid flex min-h-0 flex-1 flex-col overflow-auto">
+                    {tone === 'missing' ? (
+                        <div className="m-4 flex flex-col items-start gap-3 rounded-lg border border-warn/50 bg-surface p-4">
+                            <p className="text-[12.5px] leading-relaxed text-fg">{t.render.missing}</p>
+                            <Button title={t.render.openSettingsHint} onClick={onOpenSettings}>
+                                <Settings className="size-3.5" />
+                                {t.render.openSettings}
+                            </Button>
+                        </div>
                     ) : null}
-                    <p className="max-w-[420px] text-[12px] leading-relaxed text-muted">{t.render.viewerSoon}</p>
+
+                    {diags.length > 0 && !running ? (
+                        <div className="m-4 mb-0 flex flex-col overflow-hidden rounded-lg border border-line bg-surface">
+                            <div className="border-b border-line px-3 py-1.5 font-mono text-[10.5px] tracking-[0.12em] text-muted uppercase">
+                                {t.render.diagnostics}
+                            </div>
+                            <DiagnosticList diags={diags} showErrorsFile={result?.status === 'error'} />
+                        </div>
+                    ) : null}
+
+                    {tone !== 'missing' && result?.status !== 'error' ? (
+                        <div className="flex flex-1 items-center justify-center px-6 py-6">
+                            <p className="max-w-[420px] text-center text-[12px] leading-relaxed text-muted">
+                                {running ? t.viewer.waiting : t.viewer.idle}
+                            </p>
+                        </div>
+                    ) : null}
                 </div>
-            </div>
+            )}
 
             {result && !running && result.status !== 'missing' ? (
                 <div className="shrink-0 border-t border-line bg-surface">

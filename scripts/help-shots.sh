@@ -19,6 +19,15 @@ app-main            main              1440  900
 app-empty           empty             1280  800
 render-error        render-error      1440  900
 render-missing      render-missing    1280  800
+viewer              viewer            1440  900
+viewer-wireframe    viewer-wireframe  1440  900
+viewer-split        viewer-split      1440  900
+viewer-top          viewer-top        1440  900
+editor              editor            1440  900
+editor-edit         editor-edit       1440  900
+editor-search       editor-search     1440  900
+problems            problems          1440  900
+save-checkpoint     save-checkpoint   1440  900
 new-workspace       newworkspace      1280  800
 settings-general    settings-general  1280  820
 settings-openscad   settings-openscad 1280  820
@@ -36,11 +45,16 @@ mkdir -p docs/screenshots/es
 # Un solo vite para todas las capturas.
 (cd frontend && pnpm exec vite --port "$PORT" --strictPort >"${TMPDIR:-/tmp}/uishot-vite.log" 2>&1) &
 VITE_PID=$!
-trap 'kill $VITE_PID 2>/dev/null || true; pkill -P $VITE_PID 2>/dev/null || true' EXIT
+# vite corre como nieto (subshell → pnpm → node): además del grupo, se corta
+# lo que siga escuchando en el puerto para no dejar un servidor huérfano.
+trap 'kill $VITE_PID 2>/dev/null || true; pkill -P $VITE_PID 2>/dev/null || true; lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true' EXIT
 for _ in $(seq 1 60); do
     curl -sf "http://localhost:$PORT/uishot.html" >/dev/null && break
     sleep 0.5
 done
+# Pasada de calentamiento: en frío Vite transforma three y el visor 3D en la
+# primera carga, y esa foto sale con el canvas vacío. Se descarta.
+UISHOT_PORT=$PORT UISHOT_OUT="${TMPDIR:-/tmp}/uishot-warmup.png" ./scripts/uishot.sh viewer 1440 900 >/dev/null || true
 
 echo "$SHOTS" | while read -r file view w h; do
     [ -z "$file" ] && continue

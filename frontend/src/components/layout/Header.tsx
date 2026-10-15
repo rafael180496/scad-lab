@@ -1,16 +1,21 @@
-import {Box, Download, Image, Settings} from 'lucide-react'
+import {Box, Download, Image, PanelLeftClose, PanelLeftOpen, Settings} from 'lucide-react'
 import {Button, IconButton} from '../ui/Button'
 import {Logo} from './Logo'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
+import {withKeys} from '../../lib/platform'
 
 export function Header({
     platform,
     workspaceName,
+    sidebarCollapsed,
+    onToggleSidebar,
     onSettings,
 }: {
     platform: string
     workspaceName?: string
+    sidebarCollapsed: boolean
+    onToggleSidebar: () => void
     onSettings: () => void
 }) {
     const t = useT()
@@ -25,6 +30,14 @@ export function Header({
                 platform === 'darwin' ? 'pl-[82px]' : 'pl-3',
             )}
         >
+            <IconButton
+                title={withKeys(sidebarCollapsed ? t.layout.showSidebar : t.layout.hideSidebar, 'mod+b')}
+                aria-pressed={!sidebarCollapsed}
+                onClick={onToggleSidebar}
+                className="-mx-1"
+            >
+                {sidebarCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </IconButton>
             <div className="flex items-center gap-2">
                 <Logo className="size-5 text-fg" />
                 <span className="text-[13.5px] font-semibold tracking-tight">ScadLab</span>

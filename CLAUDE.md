@@ -17,9 +17,12 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 2. **Por fases.** Todo trabajo pertenece a una fase de
    [claude/01-roadmap.md](claude/01-roadmap.md) y se descompone en una lista
    ordenada de tareas antes de tocar código; cada tarea se marca al terminarla.
-3. **Agentes del repo** ([.claude/agents/](.claude/agents/)): `architect` planifica
-   y reparte cada fase; `fullstack-dev` implementa Go/React; `openscad-dev`
-   implementa geometría, CLI de OpenSCAD, 3MF y skills de modelado.
+3. **Agentes del repo** ([.claude/agents/](.claude/agents/)): `architect`
+   (**Opus, esfuerzo medio**) planifica y reparte cada fase; los devs van en
+   **Sonnet, esfuerzo alto**: `fullstack-dev` implementa Go/React y
+   `openscad-dev` geometría, CLI de OpenSCAD, 3MF y skills de modelado. Al
+   lanzar un dev como agente genérico, pasar `model: sonnet` (si no, hereda el
+   modelo de la sesión).
 4. **Verificar antes de cerrar**: `go build ./... && go vet ./... && go test ./...`,
    `cd frontend && pnpm build`, `node frontend/scripts/i18n-check.mjs`.
 5. **CodeGraph**: si existe `.codegraph/`, consultarlo antes de grep y correr
@@ -41,6 +44,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/07-database.md](claude/07-database.md) | `scadlab.db`: tablas, migraciones aditivas |
 | [claude/08-openscad.md](claude/08-openscad.md) | OpenSCAD, skills de modelado, impresoras Bambu, 3MF |
 | [claude/09-agents-ai.md](claude/09-agents-ai.md) | CLIs agénticos, Ollama/OpenAI/Anthropic, MCP, workspaces |
+| [claude/10-editor.md](claude/10-editor.md) | Editor OpenSCAD: lexer, linter (SL001–SL009), formateador, catálogo, guardar como checkpoint |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

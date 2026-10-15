@@ -20,7 +20,7 @@ func newTestApp(t *testing.T) *App {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	eng, err := render.NewEngine(filepath.Join(dir, "cache"))
+	eng, err := render.NewEngine(filepath.Join(dir, "cache", "meshes")) // misma ruta que app.go
 	if err != nil {
 		t.Fatal(err)
 	}

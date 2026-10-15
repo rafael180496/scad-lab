@@ -2,6 +2,10 @@
 
 # ScadLab
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-apoyar-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/rhidalgo)
+[![Patreon](https://img.shields.io/badge/Patreon-suscribirse-F96854?logo=patreon&logoColor=white)](https://www.patreon.com/16966547/join)
+
 **Diseño 3D con OpenSCAD e IA, listo para imprimir en Bambu Lab.**
 
 ScadLab es una app de escritorio para macOS y Windows donde describís una pieza,
@@ -50,3 +54,26 @@ _Todavía no hay una versión publicada._ Ver [releases/macos](releases/macos/RE
 ## Distribución / Empaquetado Windows
 
 _Todavía no hay una versión publicada._ Ver [releases/windows](releases/windows/README.md).
+
+## Apoya el proyecto
+
+ScadLab es gratis, de código abierto y sin telemetría, y va a seguir así. Si te
+ahorra horas de modelado y quieres que siga creciendo, puedes apoyarlo:
+
+<p>
+  <a href="https://buymeacoffee.com/rhidalgo"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-invitame%20un%20caf%C3%A9-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
+  <a href="https://www.patreon.com/16966547/join"><img src="https://img.shields.io/badge/Patreon-suscr%C3%ADbete-F96854?style=for-the-badge&logo=patreon&logoColor=white" alt="Patreon"></a>
+</p>
+
+- **Buy Me a Coffee** — un aporte único: [buymeacoffee.com/rhidalgo](https://buymeacoffee.com/rhidalgo)
+- **Patreon** — una suscripción mensual: [suscribirse](https://www.patreon.com/16966547/join) · [ver la página](https://www.patreon.com/cw/TotoLab2026)
+
+También está a un clic desde la app: el pie de **Configuración**.
+
+## Licencia
+
+[MIT](LICENSE) — Copyright (c) 2026 rafael.
+
+ScadLab **no incluye** OpenSCAD: lo invoca como programa externo instalado por
+el usuario (OpenSCAD se distribuye bajo GPL-2.0). Las librerías que un workspace
+instale en `lib/` (BOSL2, MCAD, NopSCADlib…) conservan su propia licencia.

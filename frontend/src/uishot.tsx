@@ -16,6 +16,12 @@ import {createRoot} from 'react-dom/client'
 import './index.css'
 import App, {type ShotOptions} from './App'
 import type {SettingsTab} from './components/settings/SettingsDialog'
+import {loadMesh} from './lib/mesh'
+import {loadCodeEditor} from './components/editor/lazy'
+import {setLanguage} from './i18n'
+// El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
+// hover del banco con los textos de verdad.
+import catalog from '../../assets/scad/catalog.json'
 
 const q = new URLSearchParams(location.search)
 const view = q.get('view') || 'main'
@@ -27,8 +33,26 @@ const es = lang === 'es'
 type Scenario = 'ok' | 'error' | 'missing' | 'empty'
 const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     main: {scenario: 'ok'},
+    viewer: {scenario: 'ok', shot: {viewer: {view: 'iso', edges: true}}},
+    'viewer-wireframe': {scenario: 'ok', shot: {viewer: {view: 'iso', wireframe: true, color: 4}}},
+    'viewer-split': {scenario: 'ok', shot: {viewer: {view: 'iso', split: true, splitView: 'bottom', color: 4}}},
+    'viewer-top': {scenario: 'ok', shot: {viewer: {view: 'top', ortho: true, edges: true}}},
     'render-error': {scenario: 'error', shot: {select: '004-usb-c-cutout.scad'}},
     'render-missing': {scenario: 'missing'},
+    editor: {scenario: 'ok'},
+    'editor-edit': {scenario: 'ok', shot: {editor: {mode: 'edit'}}},
+    'editor-search': {scenario: 'ok', shot: {editor: {mode: 'search'}}},
+    problems: {scenario: 'error', shot: {select: '004-usb-c-cutout.scad', bottomTab: 'problems'}},
+    'save-checkpoint': {
+        scenario: 'ok',
+        shot: {
+            editor: {
+                mode: 'save',
+                label: es ? 'Tornillos de la tapa' : 'Lid screws',
+                description: es ? 'Cuatro tornillos M2.5 en vez de dos, coloreados' : 'Four M2.5 screws instead of two, colored',
+            },
+        },
+    },
     empty: {scenario: 'empty'},
     newworkspace: {scenario: 'empty', shot: {newWorkspace: true}},
 }
@@ -81,6 +105,7 @@ width  = 92;   // [60:1:160]
 depth  = 64;   // [40:1:120]
 height = 32;   // [16:1:80]
 wall   = 2;    // [1.2:0.2:4]
+lip    = 1.2;
 
 /* [Hidden] */
 $fn = $preview ? 32 : 96;
@@ -94,6 +119,10 @@ color("#2b2f38") difference() {
 color("#ff7a1a")
     translate([width/2, depth/2, height - 0.6])
         linear_extrude(0.6) text("Pi 5", size = 12, halign = "center", valign = "center");
+
+// ${es ? 'tornillos M2.5 de la tapa' : 'M2.5 lid screws'}
+for (p = [[6, 6], [width - 6, depth - 6]])
+    translate([p.x, p.y, height]) cylinder(d = 2.5, h = 4);
 
 module rounded_box(size, r) {
     hull() for (x = [r, size.x - r], y = [r, size.y - r])
@@ -126,10 +155,15 @@ color("#2b2f38") difference() {
 }
 `
 
+// Clave de malla con la forma real (64 hex). En el banco /mesh/<clave>.stl
+// se resuelve a un STL de ejemplo servido por Vite (ver fetch más abajo).
+const fakeKey = (file: string) => (file.slice(0, 3) + 'e1c9a4b7d2f05a68'.repeat(4)).slice(0, 64)
+const meshDir = platform === 'windows' ? 'C:\\Users\\maker\\AppData\\Roaming\\ScadLab\\cache\\meshes\\' : '/Users/maker/Library/Application Support/ScadLab/cache/meshes/'
+
 const okResult = (file: string, ms: number, hit: boolean, warnings = 0) => ({
     fileName: file,
     status: 'ok',
-    meshPath: `~/Library/Application Support/ScadLab/cache/meshes/${file.slice(0, 3)}e1c9a4.stl`,
+    meshPath: `${meshDir}${fakeKey(file)}.stl`,
     cacheHit: hit,
     durationMs: ms,
     diagnostics: Array.from({length: warnings}, (_, i) => ({
@@ -147,10 +181,10 @@ const errorResult = {
     cacheHit: false,
     durationMs: 230,
     diagnostics: [
-        {severity: 'error', line: 27, col: 0, file: '', message: 'Parser error: syntax error'},
-        {severity: 'warning', line: 12, col: 0, file: '', message: es ? 'Se ignora la variable desconocida "usb_w"' : 'Ignoring unknown variable "usb_w"'},
+        {severity: 'error', line: 23, col: 0, file: '', message: 'Parser error: syntax error'},
+        {severity: 'warning', line: 13, col: 0, file: '', message: es ? 'Se ignora la variable desconocida "usb_w"' : 'Ignoring unknown variable "usb_w"'},
     ],
-    log: 'Parsing design (AST generation)...\nWARNING: Ignoring unknown variable "usb_w" in file 004-usb-c-cutout.scad, line 12\nERROR: Parser error: syntax error in file 004-usb-c-cutout.scad, line 27\n',
+    log: 'Parsing design (AST generation)...\nWARNING: Ignoring unknown variable "usb_w" in file 004-usb-c-cutout.scad, line 13\nERROR: Parser error: syntax error in file 004-usb-c-cutout.scad, line 23\n',
     backend: 'manifold',
     version: '2025.06.01',
 }
@@ -170,6 +204,35 @@ const renderState: Record<string, unknown> =
               '006-two-color-logo.scad': okResult('006-two-color-logo.scad', 1240, false),
           }
 
+// Lo que devolvería LintCheckpointSource (backend/scad) sobre cada código:
+// las líneas coinciden con los fuentes de arriba.
+const diag = (severity: string, line: number, col: number, endCol: number, code: string, msg: [string, string]) => ({
+    severity, line, col, endLine: line, endCol, code, source: code === 'syntax' ? 'openscad' : 'scadlab', message: es ? msg[0] : msg[1],
+})
+const lintFor = (file: string) =>
+    file === '004-usb-c-cutout.scad'
+        ? [
+              diag('warning', 2, 9, 30, 'SL005', [
+                  'un checkpoint no debe incluir a otro (003-vent-slots.scad): cada checkpoint es autocontenido; copiá lo que necesites',
+                  'a checkpoint must not include another one (003-vent-slots.scad): each checkpoint is self-contained; copy what you need',
+              ]),
+              diag('info', 7, 1, 7, 'SL009', [
+                  'parámetro «port_z» del Customizer sin rango: agregá // [min:paso:max] al final de la línea',
+                  "Customizer parameter 'port_z' has no range: add // [min:step:max] at the end of the line",
+              ]),
+              diag('error', 23, 1, 0, 'syntax', ['Parser error: syntax error', 'Parser error: syntax error']),
+          ]
+        : [
+              diag('info', 7, 1, 4, 'SL009', [
+                  'parámetro «lip» del Customizer sin rango: agregá // [min:paso:max] al final de la línea',
+                  "Customizer parameter 'lip' has no range: add // [min:step:max] at the end of the line",
+              ]),
+              diag('warning', 23, 1, 4, 'SL003', [
+                  'objeto de primer nivel sin color(): envolvelo en color("…") para que el 3MF multicolor lo asigne a un filamento',
+                  'top-level object without color(): wrap it in color("…") so the multicolor 3MF can map it to a filament',
+              ]),
+          ]
+
 const printers = [
     ['bambu-a1-mini', 'Bambu Lab A1 mini', 180, 180, 180, 4],
     ['bambu-a1', 'Bambu Lab A1', 256, 256, 256, 4],
@@ -182,6 +245,23 @@ const settings = {
     language: lang, theme, openscadPath: '', renderBackend: 'manifold', workspacesRoot: '',
     defaultPrinter: 'bambu-a1-mini', defaultMaterial: 'pla', infillPercent: 15, defaultAgent: 'claude',
     autoRender: true, renderTimeoutSec: 300,
+    editorIndent: 4, editorFontSize: 13, editorWordWrap: false, editorMinimap: false,
+    layout: {sidebarWidth: 264, sidebarCollapsed: false, codeWidth: 440, bottomHeight: 200, dimsCollapsed: view === 'viewer-split'},
+    swatches: ['#ff7a1a', '#e7e9ee', '#2b2f38', '#3ccf7a', '#5aa2ff', '#d32f2f'],
+}
+
+// Malla de ejemplo: frontend/public/uishot/enclosure.stl, generada con
+// OpenSCAD desde la plantilla electronics-enclosure.scad (caja + tapa). Sus
+// medidas, calculadas sobre ese STL, son las que devolvería GetMeshInfo.
+const SAMPLE_STL = '/uishot/enclosure.stl'
+const sampleInfo = {
+    triangles: 4176, min: [0, 0, 0], max: [78, 124, 27.6], size: [78, 124, 27.6],
+    volumeMm3: 30705.3, areaMm2: 35148, watertight: true,
+}
+const realFetch = window.fetch.bind(window)
+window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url
+    return realFetch(url.startsWith('/mesh/') ? SAMPLE_STL : input, init)
 }
 
 const App_ = {
@@ -203,6 +283,14 @@ const App_ = {
         return P(result)
     },
     CancelRender: () => P(undefined),
+    GetMeshInfo: () => P(sampleInfo),
+    SaveSwatches: () => P(undefined),
+    SaveScreenshot: () => P(''),
+    SaveLayout: (l: unknown) => P(l),
+    LintCheckpointSource: (_id: number, file: string) => P(lintFor(file)),
+    FormatScad: (src: string) => P(src),
+    SaveAsCheckpoint: () => P('007-lid-screws.scad'),
+    GetScadCatalog: () => P(catalog),
     DetectTools: () =>
         P([
             {id: 'openscad', found: true, path: '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD', version: '2025.06.01'},
@@ -252,10 +340,38 @@ const App_ = {
     },
     EventsOff: () => {},
     EventsEmit: () => {},
+    BrowserOpenURL: () => {},
 }
 
-createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-        <App shot={cfg.shot} />
-    </StrictMode>,
-)
+// WebGL en headless corre en SwiftShader, en otro proceso: la foto puede
+// salir antes de que ese proceso termine de dibujar y el canvas queda vacío.
+// Un readPixels obliga a esperar a que termine; se repite unos segundos
+// (tiempo virtual) para cubrir también los cuadros que llegan tarde.
+let syncs = 0
+const syncGL = window.setInterval(() => {
+    // Solo los del visor: pedirle un contexto WebGL al canvas 2D de Monaco
+    // (la regla de la derecha) lo deja sin contexto 2D y rompe su dibujo.
+    for (const c of document.querySelectorAll('canvas')) {
+        if (c.closest('.monaco-editor')) continue
+        const gl = c.getContext('webgl2') ?? c.getContext('webgl')
+        gl?.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4))
+    }
+    if (++syncs > 30) window.clearInterval(syncGL)
+}, 100)
+
+// El visor 3D entra con lazy() y la malla por fetch: Chrome headless no
+// espera esas cargas dentro de --virtual-time-budget y la foto saldría con el
+// panel vacío. Se precargan módulo y malla (queda en la caché LRU) antes de
+// montar.
+// El editor (Monaco) también entra con lazy(): mismo motivo. El idioma va
+// antes, porque decide con qué textos carga Monaco sus widgets.
+setLanguage(lang)
+Promise.all([import('./components/viewer/Viewer'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath)])
+    .catch(() => {})
+    .then(() =>
+        createRoot(document.getElementById('root')!).render(
+            <StrictMode>
+                <App shot={cfg.shot} />
+            </StrictMode>,
+        ),
+    )

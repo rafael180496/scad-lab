@@ -9,6 +9,13 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Apoya el proyecto.** ScadLab sigue siendo gratis y de código abierto; quien
+  quiera apoyarlo tiene a un clic **Buy Me a Coffee** (aporte único) y
+  **Patreon** (suscripción mensual): en el pie de Configuración, en un bloque de
+  Configuración → Acerca de (junto con la licencia MIT), en la barra de la
+  ayuda y en el README. El repositorio muestra además el botón «Sponsor» de
+  GitHub.
+
 - **Primera piedra de ScadLab (fase S0).** La app abre en macOS y Windows con su
   forma definitiva: cabecera con los botones de exportación, lista de
   workspaces, árbol de checkpoints, y los paneles del visor 3D, el código y el
@@ -42,8 +49,7 @@ empaquetarla (ver `.claude/specs/releases.md`).
   que tardó, si la malla salió de la caché y qué motor usó OpenSCAD. Si el
   modelo falla, se ve la lista de errores y advertencias con su línea, y la
   salida completa de OpenSCAD se puede desplegar. Si OpenSCAD no está
-  instalado, el visor lo dice y lleva directo a Configuración → OpenSCAD. El
-  visor 3D en sí llega en la fase S2: por ahora se muestra el estado del render.
+  instalado, el visor lo dice y lleva directo a Configuración → OpenSCAD.
 - **El árbol muestra cómo quedó cada checkpoint**: un spinner mientras se
   renderiza y un punto verde (salió bien), ámbar (salió con advertencias) o
   rojo (falló); al pasar el ratón se lee el resumen, con el primer error y su
@@ -62,3 +68,61 @@ empaquetarla (ver `.claude/specs/releases.md`).
   engañoso) y un modelo 2D sugiere extruirlo con `linear_extrude`.
 - En Configuración → OpenSCAD se puede apagar el auto-render y fijar el tiempo
   máximo de un render (de 10 segundos a una hora; 5 minutos por defecto).
+- **Visor 3D (fase S2).** Cuando un render sale bien, la pieza aparece en el
+  panel del visor con materiales PBR y reflejos, apoyada sobre la placa de la
+  impresora del workspace a escala real (cuadrícula de 10 mm y la caja del
+  volumen de impresión). Se orbita, desplaza y hace zoom con ratón, trackpad,
+  pantalla táctil o teclado (flechas, Shift+flechas, `+`/`-`). La barra del visor
+  trae las siete vistas (Frente, Atrás, Izquierda, Derecha, Arriba, Abajo e Iso,
+  también con `1`–`7`), wireframe para ver los triángulos, aristas marcadas,
+  proyección ortográfica o en perspectiva y Encuadrar (`F`). Todo funciona sin
+  internet: la iluminación se genera en la app, no se descarga.
+- **Medidas de la pieza** en una esquina del visor: tamaño X × Y × Z, volumen en
+  cm³, cantidad de triángulos y si la malla es cerrada (lista para laminar) o
+  tiene agujeros.
+- **Seis muestras de color** en la barra del visor, pensadas como los filamentos
+  del AMS: un clic pinta la pieza, doble clic o clic derecho cambia el color, y
+  la paleta se guarda.
+- **Captura PNG** de la vista tal como se ve, con el diálogo nativo para elegir
+  dónde guardarla, y **vista dividida**: una segunda cámara independiente sobre
+  la misma pieza (por ejemplo Iso y Abajo a la vez), cada una con su proyección.
+- **Volver a un checkpoint ya visto es instantáneo**: las mallas quedan en
+  memoria y, al cambiar de checkpoint, la cámara se queda en el mismo ángulo
+  para comparar versiones; mientras llega la nueva, la anterior sigue a la
+  vista. Si el render falla, el visor se oculta y se ven los diagnósticos como
+  antes; las advertencias de un render que salió bien quedan plegadas en una
+  esquina.
+- **Editor de código OpenSCAD (fase S4).** El panel de código es ahora un editor
+  de verdad —Monaco, el de VS Code, incluido en la app, sin internet— con
+  resaltado propio de OpenSCAD (también el encabezado `@checkpoint`, las
+  secciones del Customizer y los rangos `// [min:paso:max]`) en el tema claro u
+  oscuro de la app. Se abre en **solo lectura**, porque los checkpoints no se
+  tocan; con **Editar** o un doble clic se pasa a edición y **Guardar**
+  (⌘S/Ctrl+S) pide un rótulo y una descripción y crea un **checkpoint nuevo,
+  hijo del que se estaba viendo**, que aparece en el árbol y se renderiza solo. Si
+  se cambia de checkpoint o de workspace con cambios sin guardar, pregunta antes.
+  Trae **buscar y reemplazar**, **formatear** (botón o ⇧⌥F/Shift+Alt+F: sangría,
+  espacios y líneas en blanco, sin unir ni partir líneas ni tocar strings y
+  comentarios, y se deshace de una vez) y **autocompletado** de todos los módulos,
+  funciones y variables especiales de OpenSCAD con su firma y su explicación en
+  el idioma de la app, más la ayuda de firma mientras se escriben los argumentos y al pasar el
+  ratón. Mientras se escribe, un **linter** revisa el código con el parser del
+  propio OpenSCAD y con nueve reglas pensadas para imprimir y para el historial
+  (SL001–SL009: encabezado del checkpoint, padre inexistente, piezas sin
+  `color()` que quedarían sin filamento en el 3MF, includes que no existen,
+  checkpoints que incluyen a otros, `$fn` excesivos, `minkowski()` anidados,
+  variables asignadas dos veces y parámetros del Customizer sin rango), y los
+  subraya en el código. Los errores del último render también se marcan, y un
+  clic en cualquier diagnóstico lleva a su línea. Sangría, tamaño de letra,
+  ajuste de líneas y minimapa se eligen en Configuración → General.
+- **Una ventana que se acomoda a cómo trabaja cada uno.** Los bordes entre la barra
+  lateral, el visor, el código y el panel inferior se **arrastran** (doble clic
+  los devuelve a su tamaño) y la disposición se recuerda; la barra lateral se
+  **pliega** con el botón de la cabecera o ⌘B/Ctrl+B. Abajo hay una **barra de
+  estado** con el workspace, la impresora, el modo del editor y si hay cambios
+  sin guardar, la posición del cursor, el conteo de errores y advertencias y la
+  versión de OpenSCAD; el conteo abre el nuevo panel **Problemas**, junto a
+  Agente IA, que junta lo del linter y lo del render con clic a la línea. El
+  panel de medidas del visor se **pliega** a una sola línea, para que en la vista
+  dividida no tape la pieza, y cada botón recuerda su atajo (⌘ en macOS, Ctrl en
+  Windows) al pasar el ratón.

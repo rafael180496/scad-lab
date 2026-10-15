@@ -326,6 +326,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   </div>
   <a class="tlink" href="https://github.com/rafael180496/ScadLab/releases">Descargas</a>
   <a class="tlink" href="https://github.com/rafael180496/ScadLab">Código</a>
+  <a class="tlink" href="https://www.patreon.com/16966547/join" title="Apoya ScadLab con una suscripción mensual en Patreon, o con un café en Buy Me a Coffee">Apoyar</a>
   <button class="iconbtn" id="tgl" title="Cambiar entre tema claro y oscuro">Tema</button>
 </div>
 
@@ -361,6 +362,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>Editor</button>
   <ul>
     <li><a href="#editor">El editor de código</a></li>
+    <li><a href="#ventana">La ventana: paneles y barra de estado</a></li>
   </ul>
 
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>IA</button>
@@ -449,7 +451,10 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <tr><td>Detección de OpenSCAD y de CLIs de agentes</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Skills incluidas y plantilla para skills propias</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Render con OpenSCAD: estado, diagnósticos, auto-render y <code>RENDER_ERRORS.md</code></td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Checkpoints, visor 3D, editor, terminal de agentes, MCP, exportar, costo</td><td><span class="badge dev">En desarrollo</span></td></tr>
+    <tr><td>Visor 3D: navegación, vistas, modos, medidas, colores, captura PNG y vista dividida</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Editor de código: resaltado, buscar y reemplazar, linter, formato, autocompletado y guardar como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Ventana: paneles redimensionables, barra lateral plegable, barra de estado y panel Problemas</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Checkpoints avanzados, terminal de agentes, MCP, exportar, peso y costo</td><td><span class="badge dev">En desarrollo</span></td></tr>
   </table></div>
 
   <h2 id="introduccion--seguir">Por dónde seguir</h2>
@@ -463,6 +468,18 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   <div class="cta">
     <a class="btn" href="https://github.com/rafael180496/ScadLab/releases">Descargar</a>
     <a class="btn ghost" href="https://github.com/rafael180496/ScadLab">Ver el código</a>
+    <a class="btn ghost" href="https://github.com/rafael180496/ScadLab/blob/main/CHANGELOG.md">Cambios</a>
+  </div>
+
+  <h2 id="introduccion--apoyar">Apoya el proyecto</h2>
+  <p>ScadLab es gratis, de código abierto y sin telemetría, y va a seguir así. Si te ahorra horas de modelado y quieres
+  que siga creciendo, puedes apoyarlo con un aporte único en <strong>Buy Me a Coffee</strong> o con una suscripción
+  mensual en <strong>Patreon</strong>. Los dos están también a un clic desde la app, en el pie de
+  <strong>Configuración</strong>.</p>
+  <div class="cta">
+    <a class="btn" href="https://buymeacoffee.com/rhidalgo">☕ Invítame un café</a>
+    <a class="btn ghost" href="https://www.patreon.com/16966547/join">Suscríbete en Patreon</a>
+    <a class="btn ghost" href="https://www.patreon.com/cw/TotoLab2026">Página de Patreon</a>
   </div>
 </article>
 
@@ -704,13 +721,13 @@ color("SteelBlue") difference() {
   <p class="lead">ScadLab corre OpenSCAD sobre cada checkpoint y te dice cómo salió: cuánto tardó, si la malla
   vino de la caché y, si falló, qué error dio y en qué línea.</p>
 
-  <figure class="shot"><img src="docs/screenshots/es/render-error.png" alt="Panel del visor con el render fallido de 004-usb-c-cutout: un error de sintaxis en la línea 27 y una advertencia en la línea 12, y el aviso de que se escribió RENDER_ERRORS.md" loading="lazy"><figcaption>Render fallido: diagnósticos con su línea y el aviso de RENDER_ERRORS.md para el agente. En el árbol, el punto rojo marca el checkpoint roto.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/render-error.png" alt="Panel del visor con el render fallido de 004-usb-c-cutout: un error de sintaxis en la línea 23 y una advertencia en la línea 13, y el aviso de que se escribió RENDER_ERRORS.md; a la derecha, el código con esas líneas marcadas" loading="lazy"><figcaption>Render fallido: diagnósticos con su línea (clic = ir a esa línea en el código) y el aviso de RENDER_ERRORS.md para el agente. En el árbol, el punto rojo marca el checkpoint roto.</figcaption></figure>
 
   <h2 id="render--boton">Renderizar y cancelar</h2>
   <p>Elige un checkpoint y pulsa <strong>Renderizar</strong> en el panel del visor. Mientras corre, el botón pasa a
   <strong>Cancelar</strong>. Solo hay un render a la vez por workspace: si eliges otro checkpoint y lo renderizas,
-  el anterior se cancela. El visor 3D que muestra la malla llega en una fase posterior
-  <span class="badge dev">En desarrollo</span>; por ahora el panel muestra el estado del render.</p>
+  el anterior se cancela. Si el render sale bien, la pieza aparece en el <a href="#visor-navegar">visor 3D</a>
+  debajo de la barra de estado; si falla, el panel muestra los diagnósticos.</p>
 
   <h2 id="render--estado">La barra de estado</h2>
   <div class="tablewrap"><table>
@@ -764,12 +781,17 @@ color("SteelBlue") difference() {
   encuentra. Ver <a href="#requisitos--openscad">Requisitos</a>.</p>
 </article>
 
-<article class="topic" id="visor-navegar" data-title="Navegar el modelo" data-status="dev">
-  <h1>Navegar el modelo <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">El visor renderiza el checkpoint con materiales PBR y reflejos de entorno, para que veas la
-  pieza como se verá impresa y no como una malla plana.</p>
+<article class="topic" id="visor-navegar" data-title="Navegar el modelo">
+  <h1>Navegar el modelo <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Cuando un render sale bien, el visor muestra la pieza con materiales PBR y reflejos de entorno
+  sobre la placa de tu impresora, a escala, para que la veas como se verá impresa y no como una malla plana.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Visor 3D con la barra de vistas y el panel de la pieza seleccionada.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/viewer.png" alt="Visor 3D con la caja de Raspberry Pi y su tapa en naranja sobre la placa cuadriculada de la A1 mini, la barra de vistas, modos y muestras de color arriba y el panel de medidas abajo a la izquierda" loading="lazy"><figcaption>La pieza apoyada en la placa de la impresora del workspace, con las aristas marcadas. Arriba, la barra del visor; abajo a la izquierda, sus medidas.</figcaption></figure>
+
+  <h2 id="visor-navegar--placa">La placa</h2>
+  <p>La placa es la de la impresora del workspace, a escala real: cuadrícula de 10&nbsp;mm (más marcada cada
+  50&nbsp;mm) y la caja del volumen de impresión en líneas tenues. La pieza se apoya en la placa y se centra
+  sobre ella, como haría el laminador. El visor usa Z hacia arriba, igual que OpenSCAD.</p>
 
   <h2 id="visor-navegar--raton">Ratón y trackpad</h2>
   <div class="tablewrap"><table>
@@ -777,107 +799,209 @@ color("SteelBlue") difference() {
     <tr><td>Arrastrar con botón izquierdo</td><td>Orbitar alrededor del modelo</td></tr>
     <tr><td>Arrastrar con botón derecho, o <kbd>Shift</kbd> + arrastrar</td><td>Desplazar (pan)</td></tr>
     <tr><td>Rueda, o pellizco en el trackpad</td><td>Zoom</td></tr>
-    <tr><td>Clic en una pieza</td><td>Seleccionarla y ver sus <a href="#visor-medir">medidas</a></td></tr>
   </table></div>
 
   <h2 id="visor-navegar--tactil">Táctil</h2>
-  <p>Un dedo orbita, dos dedos desplazan y el pellizco hace zoom.</p>
+  <p>Un dedo orbita; con dos, el pellizco hace zoom y el arrastre desplaza.</p>
 
   <h2 id="visor-navegar--teclado">Teclado</h2>
-  <p>Las flechas orbitan, <kbd>Shift</kbd>+flechas desplazan y <kbd>+</kbd> / <kbd>−</kbd> hacen zoom. Lista
-  completa en <a href="#atajos">Atajos de teclado</a>.</p>
+  <p>Haz clic en el visor para darle el foco. Las flechas orbitan, <kbd>Shift</kbd>+flechas desplazan,
+  <kbd>+</kbd> / <kbd>−</kbd> hacen zoom, <kbd>1</kbd>–<kbd>7</kbd> eligen las <a href="#visor-modos--vistas">vistas</a>
+  y <kbd>F</kbd> encuadra la pieza. El botón <strong>?</strong> de la barra del visor recuerda todos los controles.
+  Lista completa en <a href="#atajos">Atajos de teclado</a>.</p>
+
+  <h2 id="visor-navegar--checkpoints">Cambiar de checkpoint</h2>
+  <p>Al elegir otro checkpoint la cámara se queda donde estaba: así se comparan dos versiones desde el mismo
+  ángulo. Mientras llega la malla nueva sigue a la vista la anterior, y volver a uno ya visto es instantáneo
+  (las mallas quedan en memoria). Si el render del checkpoint falla, el visor se oculta y el panel muestra los
+  <a href="#render--diagnosticos">diagnósticos</a>; las advertencias de un render que salió bien quedan plegadas en
+  una esquina del visor.</p>
 </article>
 
-<article class="topic" id="visor-modos" data-title="Modos de vista y cámaras" data-status="dev">
-  <h1>Modos de vista y cámaras <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Wireframe, aristas, proyección ortográfica o en perspectiva y siete vistas predefinidas.</p>
+<article class="topic" id="visor-modos" data-title="Modos de vista y cámaras">
+  <h1>Modos de vista y cámaras <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Wireframe, aristas, proyección ortográfica o en perspectiva y siete vistas predefinidas, todo
+  desde la barra del visor.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Modos de vista y cámaras.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/viewer-top.png" alt="Visor 3D en la vista Arriba con proyección ortográfica: la tapa con sus ranuras de ventilación y la caja con los cuatro standoffs vistas desde arriba, en naranja con las aristas marcadas" loading="lazy"><figcaption>Vista Arriba en ortográfica: sin deformación por la distancia, las ranuras y los standoffs se ven en su posición real.</figcaption></figure>
 
   <h2 id="visor-modos--modos">Modos de render</h2>
   <ul>
     <li><strong>Sólido</strong> (por defecto): materiales PBR con reflejos.</li>
-    <li><strong>Wireframe</strong>: solo la malla, útil para ver la densidad de triángulos (<code>$fn</code> demasiado alto).</li>
-    <li><strong>Aristas</strong>: sólido con los bordes marcados, para leer la forma de piezas monocromas.</li>
+    <li><strong>Wireframe</strong> (<kbd>W</kbd>): solo la malla, útil para ver la densidad de triángulos (<code>$fn</code> demasiado alto).</li>
+    <li><strong>Aristas</strong> (<kbd>E</kbd>): sólido con los bordes de más de 30° marcados, para leer la forma de piezas monocromas.</li>
   </ul>
 
+  <figure class="shot"><img src="docs/screenshots/es/viewer-wireframe.png" alt="Visor 3D en modo wireframe: la caja y la tapa dibujadas solo con los triángulos de la malla, en azul" loading="lazy"><figcaption>Wireframe: los triángulos de la malla STL. Los cilindros de los standoffs concentran la mayoría.</figcaption></figure>
+
   <h2 id="visor-modos--proyeccion">Ortográfica o perspectiva</h2>
-  <p>La ortográfica no deforma por la distancia: es la que conviene para comparar medidas o alinear piezas
-  mirando de frente. La perspectiva es la natural para ver el conjunto.</p>
+  <p>El botón <strong>Persp</strong> / <strong>Orto</strong> (<kbd>O</kbd>) cambia la proyección sin mover la vista.
+  La ortográfica no deforma por la distancia: es la que conviene para comparar medidas o alinear piezas mirando de
+  frente. La perspectiva es la natural para ver el conjunto.</p>
 
   <h2 id="visor-modos--vistas">Las siete vistas</h2>
   <ul class="chips">
-    <li class="chip">Frente</li><li class="chip">Atrás</li><li class="chip">Izquierda</li><li class="chip">Derecha</li>
-    <li class="chip">Arriba</li><li class="chip">Abajo</li><li class="chip">Iso</li>
+    <li class="chip">Frente <kbd>1</kbd></li><li class="chip">Atrás <kbd>2</kbd></li><li class="chip">Izquierda <kbd>3</kbd></li><li class="chip">Derecha <kbd>4</kbd></li>
+    <li class="chip">Arriba <kbd>5</kbd></li><li class="chip">Abajo <kbd>6</kbd></li><li class="chip">Iso <kbd>7</kbd></li>
   </ul>
-  <p><strong>Abajo</strong> es la que se olvida y la que más importa para imprimir: muestra la cara que irá apoyada
-  en la placa.</p>
+  <p>Cada vista mira la pieza desde ese lado y la encuadra. <strong>Abajo</strong> es la que se olvida y la que más
+  importa para imprimir: muestra la cara que irá apoyada en la placa (desde abajo la placa se oculta para no
+  taparla). <strong>Encuadrar</strong> (<kbd>F</kbd>) vuelve a centrar la pieza sin cambiar el ángulo.</p>
 </article>
 
-<article class="topic" id="visor-medir" data-title="Medir una pieza: volumen, peso y costo" data-status="dev">
-  <h1>Medir una pieza: volumen, peso y costo <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Clic en una pieza y ScadLab te dice cuánto mide, cuánto material lleva, cuánto pesará y
-  cuánto cuesta imprimirla.</p>
+<article class="topic" id="visor-medir" data-title="Medir una pieza: volumen, peso y costo">
+  <h1>Medir una pieza: volumen, peso y costo</h1>
+  <p class="lead">El panel de la esquina del visor dice cuánto mide la pieza y cuánto material lleva. El peso y el
+  costo de impresión llegan en una fase posterior.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Medir una pieza: volumen, peso y costo.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/viewer.png" alt="Visor 3D con el panel de medidas abajo a la izquierda: tamaño 78,0 × 124,0 × 27,6 mm, volumen 30,71 cm³, 4176 triángulos y la marca Cerrada" loading="lazy"><figcaption>Panel de la pieza, abajo a la izquierda del visor: tamaño, volumen, triángulos y si la malla es cerrada.</figcaption></figure>
 
   <h2 id="visor-medir--panel">Qué muestra</h2>
   <div class="tablewrap"><table>
     <tr><th>Dato</th><th>De dónde sale</th></tr>
-    <tr><td>Dimensiones X × Y × Z</td><td>Caja envolvente de la pieza, en mm</td></tr>
+    <tr><td>Tamaño X × Y × Z</td><td>Caja envolvente de la malla, en mm</td></tr>
     <tr><td>Volumen</td><td>Volumen sólido de la malla, en cm³</td></tr>
-    <tr><td>Peso</td><td>Volumen × densidad del material, ajustado por el relleno</td></tr>
-    <tr><td>Costo</td><td>Peso × costo por kg del material</td></tr>
+    <tr><td>Triángulos</td><td>Cuántos tiene la malla STL. Muchos suelen ser un <code>$fn</code> demasiado alto</td></tr>
+    <tr><td>Cerrada / Abierta</td><td>Si la malla es estanca (cada arista la comparten exactamente dos caras). Una abierta puede laminarse mal</td></tr>
+    <tr><td>Peso <span class="badge dev">En desarrollo</span></td><td>Volumen × densidad del material, ajustado por el relleno</td></tr>
+    <tr><td>Costo <span class="badge dev">En desarrollo</span></td><td>Peso × costo por kg del material</td></tr>
   </table></div>
-  <p>Una «pieza» es cada bloque de primer nivel con su <code>color()</code>: por eso las skills obligan a la IA a
-  colorear todo. Detalle del cálculo en <a href="#imprimir-costo">Estimación de costo</a>.</p>
+  <p>Hoy las medidas son de la malla entera. Medir cada pieza por separado —cada bloque de primer nivel con su
+  <code>color()</code>, por eso las skills obligan a la IA a colorear todo— llega con el 3MF por piezas
+  <span class="badge dev">En desarrollo</span>. Detalle del cálculo en <a href="#imprimir-costo">Estimación de costo</a>.</p>
 </article>
 
-<article class="topic" id="visor-color" data-title="Colores, captura y vista dividida" data-status="dev">
-  <h1>Colores, captura y vista dividida <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Prueba combinaciones de color, guarda una imagen del modelo y mira dos ángulos a la vez.</p>
+<article class="topic" id="visor-color" data-title="Colores, captura y vista dividida">
+  <h1>Colores, captura y vista dividida <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Prueba colores, guarda una imagen del modelo y mira dos ángulos a la vez.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Colores, captura y vista dividida.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/viewer-split.png" alt="Visor 3D dividido en dos: a la izquierda la caja y la tapa en azul desde la vista Iso, a la derecha las mismas piezas desde Abajo, con la muestra azul seleccionada en la barra" loading="lazy"><figcaption>Vista dividida: Iso a la izquierda y Abajo a la derecha, pintadas con la muestra azul. El marco naranja indica la vista activa.</figcaption></figure>
 
   <h2 id="visor-color--muestras">Seis muestras de color</h2>
-  <p>Una paleta de <strong>6 muestras</strong> personalizables —pensadas como los filamentos que tienes cargados en
-  el AMS— para recolorear piezas en el visor sin tocar el código. Para que el color quede en el modelo (y en el
-  3MF), pídeselo al agente: <em>«cambia la tapa a naranja»</em>.</p>
+  <p>La barra del visor tiene <strong>6 muestras</strong> —pensadas como los filamentos que tienes cargados en el
+  AMS—. Un clic pinta la pieza de ese color; <strong>doble clic</strong> o <strong>clic derecho</strong> abre el
+  selector para cambiar la muestra, y la paleta se guarda. El color es solo del visor: para que quede en el
+  modelo (y en el 3MF), pídeselo al agente: <em>«cambia la tapa a naranja»</em>.</p>
 
   <h2 id="visor-color--png">Captura PNG</h2>
-  <p>El botón <strong>PNG</strong> de la cabecera guarda la vista actual tal como la ves: ángulo, modo y colores.
-  Útil para documentar variantes o compartirlas antes de imprimir.</p>
+  <p>El botón de la cámara de la barra del visor guarda la vista activa tal como la ves —ángulo, modo y color—
+  en un PNG: ScadLab pregunta dónde guardarlo. Útil para documentar variantes o compartirlas antes de imprimir.</p>
 
   <h2 id="visor-color--dividida">Vista dividida</h2>
-  <p>Parte el visor en dos con una <strong>segunda cámara independiente</strong>: por ejemplo Iso a la izquierda y
-  Abajo a la derecha, para ver la forma y la cara de apoyo a la vez.</p>
+  <p>Parte el visor en dos con una <strong>segunda cámara independiente</strong> sobre la misma pieza: por ejemplo
+  Iso a la izquierda y Abajo a la derecha, para ver la forma y la cara de apoyo a la vez. Haz clic en una de las
+  dos para activarla (queda con marco naranja): la barra y el teclado actúan sobre la activa, y cada una tiene su
+  propia proyección. La <strong>×</strong> de la derecha la cierra.</p>
 </article>
 
 <!-- ============================================================== EDITOR -->
-<article class="topic" id="editor" data-title="El editor de código" data-status="dev">
-  <h1>El editor de código <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Monaco —el editor de VS Code— con resaltado de OpenSCAD, un tema oscuro propio y los errores
-  de OpenSCAD marcados en la línea donde ocurren.</p>
+<article class="topic" id="editor" data-title="El editor de código">
+  <h1>El editor de código <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Monaco —el editor de VS Code, incluido en la app, sin internet— con resaltado de OpenSCAD,
+  buscar y reemplazar, formato automático, autocompletado con la documentación de cada módulo y un linter que
+  revisa el código mientras escribes. Guardar nunca toca el checkpoint: crea uno nuevo.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Editor con un error de OpenSCAD subrayado y el panel de buscar y reemplazar abierto.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/editor.png" alt="Panel de código a la derecha con 006-two-color-logo.scad en solo lectura: resaltado de OpenSCAD, el encabezado @checkpoint y las anotaciones del Customizer destacadas, una advertencia subrayada en la línea del for y una sugerencia en la línea de lip" loading="lazy"><figcaption>Código en solo lectura. El linter subraya en ámbar la pieza sin <code>color()</code> (línea 23) y en azul el parámetro sin rango (línea 7); la barra de estado cuenta los problemas.</figcaption></figure>
 
-  <h2 id="editor--lectura">Solo lectura por defecto</h2>
-  <p>Un checkpoint es inmutable, así que el editor lo abre <strong>en solo lectura</strong>. Para tocarlo a mano,
-  activa el <strong>modo edición</strong>: al guardar se crea un checkpoint nuevo hijo del que estabas viendo, igual
-  que si lo hubiera hecho la IA.</p>
+  <h2 id="editor--lectura">Solo lectura y modo edición</h2>
+  <p>Un checkpoint es inmutable, así que el código se abre <strong>en solo lectura</strong> (el candado de la
+  cabecera del panel y de la barra de estado lo dice). Pulsa <strong>Editar</strong> o haz <strong>doble clic</strong>
+  en el código para pasar a edición. Mientras editas, el árbol no cambia: el checkpoint sigue siendo el que era hasta
+  que guardes. <strong>Descartar</strong> (la flecha curva) vuelve al código guardado; si cambias de checkpoint o de
+  workspace con cambios sin guardar, ScadLab pregunta antes de perderlos.</p>
+
+  <h2 id="editor--guardar">Guardar = checkpoint nuevo</h2>
+  <p><kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd> (o <strong>Guardar</strong>) abre un diálogo corto: el <strong>rótulo</strong> da
+  el nombre del archivo (<code>007-tornillos-de-la-tapa.scad</code>; el número lo asigna ScadLab) y la
+  <strong>descripción</strong> va al encabezado <code>@checkpoint</code>. El archivo nuevo es hijo del que estabas
+  viendo, aparece en el árbol, se abre y —con el auto-render activo— se renderiza solo. Igual que si lo hubiera hecho
+  la IA.</p>
+  <figure class="shot"><img src="docs/screenshots/es/save-checkpoint.png" alt="Diálogo Guardar como checkpoint nuevo con el rótulo Tornillos de la tapa, el nombre de archivo que va a quedar y la descripción" loading="lazy"><figcaption>Guardar desde el editor: rótulo, nombre de archivo resultante y descripción del checkpoint hijo.</figcaption></figure>
+
+  <h2 id="editor--escribir">Autocompletado y ayuda de cada módulo</h2>
+  <p>Al escribir aparecen los módulos, funciones, palabras clave y variables especiales (<code>$fn</code>, <code>$fa</code>…)
+  de OpenSCAD con su firma y su explicación en tu idioma. Elegir uno abre el paréntesis con el primer parámetro marcado,
+  y la <strong>ayuda de firma</strong> muestra el resto mientras escribes los argumentos (también con nombre:
+  <code>r = 3</code> marca <code>r</code>). Pasar el ratón sobre un módulo integrado muestra la misma ayuda.</p>
+  <figure class="shot"><img src="docs/screenshots/es/editor-edit.png" alt="Editor en modo edición con una línea nueva cyl y la lista de autocompletado abierta en cylinder, con la firma y la descripción de cada parámetro en español" loading="lazy"><figcaption>Modo edición: el autocompletado propone <code>cylinder</code> con su firma y sus parámetros.</figcaption></figure>
 
   <h2 id="editor--buscar">Buscar y reemplazar</h2>
   <ul>
-    <li><kbd>⌘F</kbd> / <kbd>Ctrl+F</kbd> — buscar.</li>
-    <li><kbd>⌘H</kbd> / <kbd>Ctrl+H</kbd> — reemplazar (solo en modo edición).</li>
+    <li><kbd>⌘F</kbd> / <kbd>Ctrl+F</kbd> — buscar (también en solo lectura), con mayúsculas, palabra completa y expresiones regulares.</li>
+    <li><kbd>⌥⌘F</kbd> o <kbd>⌘H</kbd> / <kbd>Ctrl+H</kbd> — buscar y reemplazar (en modo edición).</li>
+    <li><kbd>Enter</kbd> / <kbd>Shift+Enter</kbd> — siguiente / anterior; <kbd>Esc</kbd> cierra.</li>
   </ul>
+  <figure class="shot"><img src="docs/screenshots/es/editor-search.png" alt="Barra de buscar y reemplazar de Monaco sobre el código, buscando wall con 6 coincidencias resaltadas" loading="lazy"><figcaption>Buscar y reemplazar: <code>wall</code> aparece 6 veces, todas resaltadas.</figcaption></figure>
 
-  <h2 id="editor--errores">Marcadores de error</h2>
-  <p>Cuando OpenSCAD devuelve un <code>ERROR</code> o un <code>WARNING</code>, el editor subraya la línea y muestra el
-  mensaje al pasar el ratón. Por ejemplo:</p>
-  <div class="codewrap"><pre><code>WARNING: Ignoring unknown variable 'wal' in file 003-add-hinge.scad, line 14
-ERROR: Parser error in file 003-add-hinge.scad, line 22: syntax error</code></pre></div>
-  <p>Esos mismos mensajes son los que la <a href="#ia-autoiteracion">auto-iteración</a> le pasa al agente.</p>
+  <h2 id="editor--formato">Formatear</h2>
+  <p>El botón de la varita, <kbd>⇧⌥F</kbd> / <kbd>Shift+Alt+F</kbd> o el menú contextual ordenan el código: sangría
+  por llaves y paréntesis, un espacio alrededor de <code>=</code> y de los operadores, nada de espacios al final ni
+  líneas en blanco de más. Es conservador: <strong>nunca une ni parte líneas</strong>, no toca el interior de strings
+  ni comentarios y respeta la alineación de las anotaciones <code>// [min:paso:max]</code>. Un solo
+  <kbd>⌘Z</kbd> lo deshace. En solo lectura, formatear pasa primero a edición. La sangría (2 o 4 espacios) se elige en
+  Configuración → General → Editor de código.</p>
+
+  <h2 id="editor--linter">El linter</h2>
+  <p>Mientras editas —y una vez al abrir cada checkpoint— ScadLab revisa el código: primero con el parser del propio
+  OpenSCAD (errores de sintaxis, variables y módulos desconocidos, <code>include</code> que no existen) y después con
+  sus reglas propias, pensadas para imprimir y para el flujo de checkpoints. Los problemas se subrayan (rojo: error,
+  ámbar: advertencia, azul: sugerencia) y al pasar el ratón se lee el mensaje con su código.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Código</th><th>Tipo</th><th>Qué avisa</th><th>Por qué importa</th></tr>
+    <tr><td><code>syntax</code></td><td>Error</td><td>Lo que dice OpenSCAD al leer el archivo</td><td>Con un error de sintaxis no hay pieza.</td></tr>
+    <tr><td><code>SL001</code></td><td>Advertencia</td><td>Falta el encabezado <code>// @checkpoint parent=… desc="…"</code> en la línea 1, o está mal escrito</td><td>Sin él, el checkpoint no se cuelga del árbol.</td></tr>
+    <tr><td><code>SL002</code></td><td>Advertencia</td><td><code>parent=</code> apunta a un archivo que no existe</td><td>El checkpoint aparece huérfano en el árbol.</td></tr>
+    <tr><td><code>SL003</code></td><td>Advertencia</td><td>Una pieza del nivel superior sin <code>color()</code></td><td>En el 3MF multicolor quedaría sin filamento asignado.</td></tr>
+    <tr><td><code>SL004</code></td><td>Error</td><td>Un <code>include &lt;…&gt;</code> / <code>use &lt;…&gt;</code> que no se encuentra</td><td>El render falla o pierde piezas.</td></tr>
+    <tr><td><code>SL005</code></td><td>Advertencia</td><td>Un checkpoint incluye a otro checkpoint</td><td>Cada checkpoint tiene que ser autocontenido: si el otro cambia de lugar, este se rompe.</td></tr>
+    <tr><td><code>SL006</code></td><td>Sugerencia</td><td><code>$fn</code> mayor a 256 en el nivel superior</td><td>Cada círculo del modelo tendrá esa resolución: render lento y mallas enormes.</td></tr>
+    <tr><td><code>SL007</code></td><td>Sugerencia</td><td><code>minkowski()</code> dentro de otro <code>minkowski()</code> o <code>hull()</code></td><td>El render puede tardar minutos u horas.</td></tr>
+    <tr><td><code>SL008</code></td><td>Advertencia</td><td>Una variable asignada dos veces en el mismo bloque</td><td>OpenSCAD usa solo la última: suele ser un error.</td></tr>
+    <tr><td><code>SL009</code></td><td>Sugerencia</td><td>Un parámetro del Customizer sin <code>// [min:paso:max]</code></td><td>El Customizer no puede ofrecer un deslizador con límites.</td></tr>
+  </table></div>
+  <p>Los diagnósticos del último render (<a href="#render--diagnosticos">Renderizar y diagnósticos</a>) también se
+  marcan en el código mientras no lo cambies. Haz clic en cualquiera —en el panel del visor o en Problemas— para
+  saltar a esa línea.</p>
+
+  <h2 id="editor--problemas">El panel Problemas</h2>
+  <p>Junto a <strong>Agente IA</strong>, abajo, la pestaña <strong>Problemas</strong> junta lo del linter y lo del
+  último render, errores primero y por línea, con su código y su origen. El contador de la barra de estado
+  (<code>⊗ errores ⚠ advertencias ⓘ sugerencias</code>) la abre.</p>
+  <figure class="shot"><img src="docs/screenshots/es/problems.png" alt="Panel Problemas abierto bajo el visor con cuatro entradas de 004-usb-c-cutout: el error de sintaxis de la línea 23, el include de otro checkpoint, la variable desconocida del render y un parámetro sin rango, cada una con su código, su origen y su línea" loading="lazy"><figcaption>Problemas de un checkpoint roto: linter y render juntos, con clic a la línea.</figcaption></figure>
+
+  <h2 id="editor--opciones">Opciones</h2>
+  <p>En Configuración → General → <strong>Editor de código</strong>: sangría (2 o 4 espacios), tamaño de letra,
+  ajustar las líneas largas y minimapa. El editor sigue al tema claro u oscuro de la app.</p>
+</article>
+
+<!-- ============================================================== VENTANA -->
+<article class="topic" id="ventana" data-title="La ventana: paneles y barra de estado">
+  <h1>La ventana: paneles y barra de estado <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Barra lateral, visor, código y panel inferior se reparten la ventana como prefieras, y ScadLab
+  recuerda la disposición.</p>
+
+  <figure class="shot"><img src="docs/screenshots/es/app-main.png" alt="Ventana principal de ScadLab con la barra lateral, el visor, el código, el panel inferior con las pestañas Agente IA y Problemas, y la barra de estado abajo" loading="lazy"><figcaption>La barra de estado, abajo, resume dónde estás y qué pasa: workspace, impresora, modo del editor, cursor, problemas y versión de OpenSCAD.</figcaption></figure>
+
+  <h2 id="ventana--paneles">Paneles redimensionables</h2>
+  <p>Arrastra el borde entre dos paneles para repartir el espacio: barra lateral ↔ visor, visor ↔ código y visor ↔
+  panel inferior. <strong>Doble clic</strong> en un borde vuelve al tamaño de fábrica; con el borde enfocado
+  (<kbd>Tab</kbd>), las flechas lo mueven de a poco. La disposición se guarda al soltar.</p>
+
+  <h2 id="ventana--lateral">Barra lateral plegable</h2>
+  <p>El botón de la izquierda de la cabecera o <kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd> oculta y muestra la lista de
+  workspaces y el árbol, para dejarle todo el ancho al visor y al código.</p>
+
+  <h2 id="ventana--medidas">Medidas del visor plegables</h2>
+  <p>El panel de medidas de la pieza se pliega con su flecha: queda solo el tamaño en una línea. Útil en la vista
+  dividida, donde el panel completo tapaba la pieza.</p>
+
+  <h2 id="ventana--estado">La barra de estado</h2>
+  <ul>
+    <li><strong>Workspace e impresora</strong> abiertos.</li>
+    <li><strong>Modo del editor</strong> (solo lectura / edición, y si hay cambios sin guardar) y la posición del cursor.</li>
+    <li><strong>Problemas</strong>: errores, advertencias y sugerencias del checkpoint abierto; un clic abre el panel.</li>
+    <li><strong>OpenSCAD</strong>: la versión con la que renderiza ScadLab, o el aviso si no lo encuentra.</li>
+  </ul>
 </article>
 
 <!-- ================================================================== IA -->
@@ -1403,20 +1527,33 @@ color("Black") label();                                    // texto que llena el
 <!-- ========================================================== REFERENCIA -->
 <article class="topic" id="atajos" data-title="Atajos de teclado">
   <h1>Atajos de teclado</h1>
-  <p class="lead"><kbd>⌘</kbd> en macOS, <kbd>Ctrl</kbd> en Windows. Los marcados como planificados pueden
-  cambiar antes de publicarse.</p>
-
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Atajos de teclado.</figcaption></figure>
+  <p class="lead"><kbd>⌘</kbd> en macOS, <kbd>Ctrl</kbd> en Windows. Cada botón de la app recuerda su atajo al
+  pasar el ratón.</p>
   <div class="tablewrap"><table>
     <tr><th>macOS</th><th>Windows</th><th>Qué hace</th></tr>
-    <tr class="sect"><td colspan="3">Editor <span class="badge dev">En desarrollo</span></td></tr>
+    <tr class="sect"><td colspan="3">Ventana</td></tr>
+    <tr><td><kbd>⌘B</kbd></td><td><kbd>Ctrl+B</kbd></td><td>Mostrar u ocultar la barra lateral</td></tr>
+    <tr class="sect"><td colspan="3">Editor de código</td></tr>
+    <tr><td><kbd>⌘S</kbd></td><td><kbd>Ctrl+S</kbd></td><td>Guardar como checkpoint nuevo (en modo edición)</td></tr>
+    <tr><td>Doble clic</td><td>Doble clic</td><td>Pasar de solo lectura a edición</td></tr>
     <tr><td><kbd>⌘F</kbd></td><td><kbd>Ctrl+F</kbd></td><td>Buscar en el código</td></tr>
-    <tr><td><kbd>⌘H</kbd></td><td><kbd>Ctrl+H</kbd></td><td>Buscar y reemplazar (modo edición)</td></tr>
-    <tr><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td><td>Cerrar la búsqueda</td></tr>
-    <tr class="sect"><td colspan="3">Visor 3D <span class="badge dev">En desarrollo</span></td></tr>
+    <tr><td><kbd>⌥⌘F</kbd> o <kbd>⌘H</kbd></td><td><kbd>Ctrl+H</kbd></td><td>Buscar y reemplazar (modo edición)</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td><td>Cerrar la búsqueda o el autocompletado</td></tr>
+    <tr><td><kbd>⇧⌥F</kbd></td><td><kbd>Shift+Alt+F</kbd></td><td>Formatear el código</td></tr>
+    <tr><td><kbd>⌃Espacio</kbd></td><td><kbd>Ctrl+Espacio</kbd></td><td>Abrir el autocompletado</td></tr>
+    <tr><td><kbd>⇧⌘Espacio</kbd></td><td><kbd>Ctrl+Shift+Espacio</kbd></td><td>Ayuda de firma del módulo en curso</td></tr>
+    <tr><td><kbd>F8</kbd> / <kbd>⇧F8</kbd></td><td><kbd>F8</kbd> / <kbd>Shift+F8</kbd></td><td>Ir al problema siguiente / anterior</td></tr>
+    <tr><td><kbd>⌘/</kbd></td><td><kbd>Ctrl+/</kbd></td><td>Comentar o descomentar la línea</td></tr>
+    <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>Deshacer / rehacer (incluido el formato)</td></tr>
+    <tr class="sect"><td colspan="3">Visor 3D (con el visor enfocado: clic en él)</td></tr>
     <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Orbitar</td></tr>
     <tr><td><kbd>Shift</kbd>+flechas</td><td><kbd>Shift</kbd>+flechas</td><td>Desplazar (pan)</td></tr>
     <tr><td><kbd>+</kbd> / <kbd>−</kbd></td><td><kbd>+</kbd> / <kbd>−</kbd></td><td>Zoom</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td><kbd>1</kbd>–<kbd>7</kbd></td><td>Vistas: Frente, Atrás, Izquierda, Derecha, Arriba, Abajo, Iso</td></tr>
+    <tr><td><kbd>F</kbd></td><td><kbd>F</kbd></td><td>Encuadrar la pieza</td></tr>
+    <tr><td><kbd>W</kbd></td><td><kbd>W</kbd></td><td>Wireframe</td></tr>
+    <tr><td><kbd>E</kbd></td><td><kbd>E</kbd></td><td>Aristas</td></tr>
+    <tr><td><kbd>O</kbd></td><td><kbd>O</kbd></td><td>Ortográfica / perspectiva</td></tr>
     <tr class="sect"><td colspan="3">Esta ayuda</td></tr>
     <tr><td><kbd>/</kbd></td><td><kbd>/</kbd></td><td>Ir al buscador</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>↵</kbd></td><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd></td><td>Elegir y abrir un resultado</td></tr>
@@ -1445,6 +1582,18 @@ color("Black") label();                                    // texto que llena el
   Solo se pierde la configuración de <code>scadlab.db</code>; ver <a href="#config-datos">Dónde se guardan tus datos</a>.</p></details>
   <details><summary>¿Por qué hay temas «En desarrollo»?</summary><p>La v0.1.0 es la fundación de la app. La ayuda documenta
   de antemano lo planificado para que se vea a dónde va el proyecto; la insignia desaparece cuando la función llega.</p></details>
+
+  <h2 id="faq--licencia">Licencia</h2>
+  <p>ScadLab es software libre bajo la <strong>licencia MIT</strong> (copyright 2026 rafael). Puedes usarlo, copiarlo,
+  modificarlo, distribuirlo y usarlo en el trabajo o con fines comerciales, siempre que conserves el aviso de
+  copyright y el texto de la licencia en las copias que distribuyas. El texto completo es el archivo
+  <a href="https://github.com/rafael180496/ScadLab/blob/main/LICENSE">LICENSE</a> del repositorio, y es el que vale
+  por encima de este resumen.</p>
+  <p>ScadLab <strong>no incluye</strong> OpenSCAD: lo ejecuta como un programa externo que instalas tú (OpenSCAD se
+  distribuye bajo GPL-2.0). Las librerías que agregues en la carpeta <code>lib/</code> de un workspace (BOSL2, MCAD,
+  NopSCADlib…) conservan su propia licencia, igual que los modelos que diseñes: son tuyos.</p>
+  <details><summary>¿Necesito una cuenta o una licencia?</summary><p>No. Es MIT, no hay registro ni servidor de la app. Los agentes de IA (Claude Code, Codex…) usan tu propia cuenta de cada uno.</p></details>
+  <details><summary>¿Cómo puedo apoyar el proyecto?</summary><p>Con un café en <a href="https://buymeacoffee.com/rhidalgo">Buy Me a Coffee</a> o una suscripción en <a href="https://www.patreon.com/16966547/join">Patreon</a>. También desde la app: pie de Configuración. Ver <a href="#introduccion--apoyar">Apoya el proyecto</a>.</p></details>
 </article>
 
 <div id="foot">

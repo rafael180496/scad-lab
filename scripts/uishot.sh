@@ -46,7 +46,11 @@ fi
 
 # --virtual-time-budget deja que React monte y que las promesas de los mocks
 # resuelvan antes de disparar: sin eso la foto sale en blanco.
+# WebGL (visor 3D) en headless: sin GPU, por SwiftShader vía ANGLE; si no, el
+# canvas sale negro o vacío.
 "$CHROME" --headless=new --disable-gpu --hide-scrollbars \
+    --use-angle=swiftshader --enable-unsafe-swiftshader --use-gl=angle \
+    --run-all-compositor-stages-before-draw \
     --window-size="$W,$H" \
     --virtual-time-budget="$BUDGET" \
     --screenshot="$OUT" \

@@ -137,3 +137,8 @@ body {
         animation-duration: 0ms !important;
     }
 }
+
+/* Editor: línea a la que se saltó desde un diagnóstico (se apaga sola). */
+.monaco-editor .scad-flash-line {
+    background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+}

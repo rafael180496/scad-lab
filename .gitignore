@@ -33,6 +33,9 @@ exports/
 RENDER_ERRORS.md
 *.stl
 !assets/**/*.stl
+# Malla del banco de capturas (frontend/src/uishot.tsx): sin ella las capturas
+# de la ayuda no se pueden regenerar en otra máquina.
+!frontend/public/uishot/*.stl
 *.3mf
 !assets/**/*.3mf
 
