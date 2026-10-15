@@ -98,7 +98,7 @@ func writeRenderErrors(dir string, r Result) error {
 
 	fmt.Fprintf(&b, "## %s\n\n", t(i18n.Msg{ES: "Cómo corregir", EN: "How to fix"}))
 	b.WriteString(t(i18n.Msg{
-		ES: "Corregir en un checkpoint NUEVO cuyo parent sea `%s`: creá el siguiente `NNN-slug.scad` con la primera línea `// @checkpoint parent=%s desc=\"<qué corregiste>\"`. No edites `%s` ni ningún otro checkpoint: son inmutables. Si el error está en un include de `lib/`, corregilo ahí y creá igual el checkpoint nuevo. ScadLab borra este archivo cuando un render sale bien.",
+		ES: "Corregir en un checkpoint NUEVO cuyo parent sea `%s`: crea el siguiente `NNN-slug.scad` con la primera línea `// @checkpoint parent=%s desc=\"<qué corregiste>\"`. No edites `%s` ni ningún otro checkpoint: son inmutables. Si el error está en un include de `lib/`, corrígelo ahí y crea igual el checkpoint nuevo. ScadLab borra este archivo cuando un render sale bien.",
 		EN: "Fix it in a NEW checkpoint whose parent is `%s`: create the next `NNN-slug.scad` with the first line `// @checkpoint parent=%s desc=\"<what you fixed>\"`. Do not edit `%s` or any other checkpoint: they are immutable. If the error is in an include under `lib/`, fix it there and still create the new checkpoint. ScadLab deletes this file when a render succeeds.",
 	}, r.FileName, r.FileName, r.FileName))
 	b.WriteString("\n")

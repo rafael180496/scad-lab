@@ -36,6 +36,11 @@ settings-printing   settings-printing 1280  860
 settings-skills     settings-skills   1280  860
 settings-about      settings-about    1280  700
 app-main-light      main              1440  900
+terminal            terminal          1440  900
+terminal-sessions   terminal-sessions 1440  900
+chat                chat              1440  900
+chat-empty          chat-empty        1440  900
+chat-new            chat-new          1440  900
 '
 
 ONLY="${1:-}"

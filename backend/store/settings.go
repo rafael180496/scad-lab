@@ -26,6 +26,11 @@ type Settings struct {
 	// RenderTimeoutSec es el tope de un render, en segundos (10–3600). Un
 	// modelo con minkowski() o muchas esferas puede tardar minutos con CGAL.
 	RenderTimeoutSec int `json:"renderTimeoutSec"`
+	// AutoIterate avisa al agente de la terminal cuando falla el render del
+	// checkpoint más nuevo del workspace (S5): corrige solo, sin que el
+	// usuario copie el error. Se enciende y apaga desde la barra de la
+	// terminal (App.SetAutoIterate).
+	AutoIterate bool `json:"autoIterate"`
 	// Swatches son las 6 muestras de color del visor 3D (#rrggbb), pensadas
 	// como los filamentos cargados en el AMS. Se cambian desde el visor
 	// (App.SaveSwatches), no desde el diálogo de Configuración.
@@ -134,6 +139,7 @@ func DefaultSettings() Settings {
 		DefaultAgent:     "claude",
 		AutoRender:       true,
 		RenderTimeoutSec: 300,
+		AutoIterate:      true,
 		Swatches:         DefaultSwatches(),
 		EditorIndent:     4,
 		EditorFontSize:   13,

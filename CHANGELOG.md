@@ -9,6 +9,38 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Agentes de IA dentro de ScadLab.** El panel inferior tiene ahora dos
+  terminales de agente (Agente 1 y Agente 2) donde corre Claude Code, opencode,
+  Codex o Antigravity directamente en la carpeta del workspace: ya no hace falta
+  salir a otra ventana para pedirle un modelo. Cada terminal ofrece **Nueva**,
+  **Continuar** la última conversación y **Sesiones**, que lista las
+  conversaciones previas de ese agente en ese workspace para retomarlas
+  (Antigravity solo permite nueva y continuar). Los agentes siguen vivos si se
+  recarga la interfaz y se vuelve a ver su pantalla. El panel se puede maximizar.
+- **Auto-iteración.** Si el render del checkpoint más nuevo falla, ScadLab le
+  avisa al agente de la terminal para que lea `RENDER_ERRORS.md` y lo corrija en
+  un checkpoint nuevo: una sola vez por fallo y con un tope de cinco avisos
+  seguidos, para no gastar cuota en un bucle. Se apaga desde la barra de la
+  terminal.
+- **Chat de diseño con modelos.** La pestaña Chat conversa con Ollama, con
+  cualquier servidor compatible con la API de OpenAI (LM Studio, vLLM,
+  OpenRouter…) o con la API de Anthropic, para pensar ideas y pedir piezas sin
+  salir de ScadLab. El modelo conoce tu workspace —impresora, volumen de
+  impresión, colores del AMS, checkpoints y el código del archivo abierto— gracias
+  a un prompt propio (español e inglés) que le enseña las reglas de checkpoints,
+  color y diseño FDM de Bambu Lab. Responde en streaming; **Detener** corta y
+  conserva lo escrito. Cada bloque de OpenSCAD trae **Guardar como checkpoint**
+  (crea uno nuevo, hijo del archivo abierto) y **Copiar**. El historial queda por
+  workspace. Las claves de API no se guardan: se leen de la variable de entorno
+  que indiques en Configuración → IA, también si la definiste en `~/.zshrc`
+  aunque abras la app desde el Finder.
+
+### Cambiado
+
+- **Español neutro en toda la interfaz.** Algunos textos usaban vos («Elegí»,
+  «Creá», «podés») y otros tú; ahora la interfaz, los mensajes de error y
+  `RENDER_ERRORS.md` usan tú, igual que la ayuda.
+
 - **Apoya el proyecto.** ScadLab sigue siendo gratis y de código abierto; quien
   quiera apoyarlo tiene a un clic **Buy Me a Coffee** (aporte único) y
   **Patreon** (suscripción mensual): en el pie de Configuración, en un bloque de

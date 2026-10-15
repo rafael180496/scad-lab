@@ -6,17 +6,26 @@ import {main} from '../models';
 import {mesh} from '../models';
 import {render} from '../models';
 import {scad} from '../models';
+import {agentsessions} from '../models';
 import {printers} from '../models';
 
+export function CancelChat(arg1:number):Promise<void>;
+
 export function CancelRender(arg1:number):Promise<void>;
+
+export function ChatCheckpointParent(arg1:number,arg2:string):Promise<string>;
 
 export function ChooseDirectory(arg1:string,arg2:string):Promise<string>;
 
 export function ChooseFile(arg1:string):Promise<string>;
 
+export function CloseTerminal(arg1:string):Promise<void>;
+
 export function CreateSkill(arg1:string):Promise<string>;
 
 export function CreateWorkspace(arg1:string,arg2:string):Promise<store.Workspace>;
+
+export function DeleteChat(arg1:number):Promise<void>;
 
 export function DetectTools():Promise<Array<detect.Tool>>;
 
@@ -25,6 +34,8 @@ export function EffectiveWorkspacesRoot():Promise<string>;
 export function FormatScad(arg1:string):Promise<string>;
 
 export function GetBootstrap():Promise<main.Bootstrap>;
+
+export function GetChat(arg1:number):Promise<main.ChatView>;
 
 export function GetMeshInfo(arg1:string):Promise<mesh.Info>;
 
@@ -38,15 +49,27 @@ export function ImportWorkspace(arg1:string,arg2:string):Promise<store.Workspace
 
 export function LintCheckpointSource(arg1:number,arg2:string,arg3:string):Promise<Array<scad.Diagnostic>>;
 
+export function ListAgentChoices():Promise<Array<main.AgentChoice>>;
+
+export function ListAgentSessions(arg1:number,arg2:string):Promise<Array<agentsessions.Session>>;
+
+export function ListChats(arg1:number):Promise<Array<store.Chat>>;
+
 export function ListMaterials():Promise<Array<store.Material>>;
 
 export function ListPrinters():Promise<Array<printers.Printer>>;
+
+export function ListProviderModels(arg1:string):Promise<Array<string>>;
 
 export function ListProviders():Promise<Array<store.AIProvider>>;
 
 export function ListSkills():Promise<Array<main.SkillView>>;
 
+export function ListTerminals():Promise<Array<main.TerminalInfo>>;
+
 export function ListWorkspaces():Promise<Array<store.Workspace>>;
+
+export function NewChat(arg1:number,arg2:string,arg3:string):Promise<store.Chat>;
 
 export function OllamaModels(arg1:string):Promise<Array<string>>;
 
@@ -56,11 +79,15 @@ export function OpenWorkspace(arg1:number):Promise<main.WorkspaceView>;
 
 export function ReadCheckpoint(arg1:number,arg2:string):Promise<string>;
 
+export function ReadTerminalBuffer(arg1:string):Promise<main.TerminalSnapshot>;
+
 export function RemoveWorkspace(arg1:number):Promise<void>;
 
 export function RenderCheckpoint(arg1:number,arg2:string):Promise<render.Result>;
 
 export function RescanWorkspace(arg1:number):Promise<main.WorkspaceView>;
+
+export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function RevealWorkspace(arg1:number):Promise<void>;
 
@@ -78,12 +105,20 @@ export function SaveSettings(arg1:store.Settings):Promise<void>;
 
 export function SaveSwatches(arg1:Array<string>):Promise<void>;
 
+export function SendChatMessage(arg1:number,arg2:string,arg3:string):Promise<store.ChatMessage>;
+
+export function SetAutoIterate(arg1:boolean):Promise<void>;
+
 export function SetCheckpointUI(arg1:number,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function SetLanguage(arg1:string):Promise<void>;
 
 export function SetSkillEnabled(arg1:string,arg2:boolean):Promise<void>;
 
+export function StartAgentTerminal(arg1:number,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number):Promise<string>;
+
 export function SyncWorkspaceSkills(arg1:number):Promise<void>;
 
 export function UpdateWorkspace(arg1:store.Workspace):Promise<void>;
+
+export function WriteTerminal(arg1:string,arg2:string):Promise<void>;

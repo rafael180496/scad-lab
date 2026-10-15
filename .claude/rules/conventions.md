@@ -52,6 +52,15 @@ Misma regla que mini-tools:
 - `<img>` con `alt` descriptivo (qué se ve, no «captura») y `<figcaption>` que
   diga qué mirar.
 
+## Español de la interfaz y la ayuda: tú, no vos
+
+Todo texto en español que ve el usuario —diccionario `es.ts`, mensajes
+`i18n.Msg{ES}` del backend, `RENDER_ERRORS.md`, prompts de `assets/prompts`,
+ayuda `index.html`, README— va en **español neutro con tú**: «Elige», «Crea»,
+«puedes», «Pide», nunca «Elegí», «Creá», «podés», «Pedí». La mezcla aparecía en
+S5 (la ayuda en tú, parte de la interfaz en vos) y se unificó. Los documentos
+internos para desarrolladores (`claude/`, `.claude/`) no entran en esta regla.
+
 ## Estilo
 
 - Go: `gofmt`, `go vet`, comentarios en español que expliquen el *por qué*.

@@ -1,3 +1,24 @@
+export namespace agentsessions {
+	
+	export class Session {
+	    id: string;
+	    title: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Session(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+
+}
+
 export namespace detect {
 	
 	export class Tool {
@@ -23,6 +44,28 @@ export namespace detect {
 
 export namespace main {
 	
+	export class AgentChoice {
+	    id: string;
+	    name: string;
+	    found: boolean;
+	    path: string;
+	    enabled: boolean;
+	    canList: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentChoice(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.found = source["found"];
+	        this.path = source["path"];
+	        this.enabled = source["enabled"];
+	        this.canList = source["canList"];
+	    }
+	}
 	export class Bootstrap {
 	    version: string;
 	    platform: string;
@@ -63,6 +106,44 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ChatView {
+	    chat: store.Chat;
+	    messages: store.ChatMessage[];
+	    running: boolean;
+	    partial: string;
+	    partialSeq: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.chat = this.convertValues(source["chat"], store.Chat);
+	        this.messages = this.convertValues(source["messages"], store.ChatMessage);
+	        this.running = source["running"];
+	        this.partial = source["partial"];
+	        this.partialSeq = source["partialSeq"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SkillView {
 	    name: string;
 	    description: string;
@@ -81,6 +162,44 @@ export namespace main {
 	        this.source = source["source"];
 	        this.dir = source["dir"];
 	        this.enabled = source["enabled"];
+	    }
+	}
+	export class TerminalInfo {
+	    id: string;
+	    kind: string;
+	    agentId: string;
+	    workspaceId: number;
+	    cols: number;
+	    rows: number;
+	    startedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.agentId = source["agentId"];
+	        this.workspaceId = source["workspaceId"];
+	        this.cols = source["cols"];
+	        this.rows = source["rows"];
+	        this.startedAt = source["startedAt"];
+	    }
+	}
+	export class TerminalSnapshot {
+	    data: string;
+	    seq: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = source["data"];
+	        this.seq = source["seq"];
 	    }
 	}
 	export class WorkspaceView {
@@ -466,6 +585,50 @@ export namespace store {
 	        this.sortOrder = source["sortOrder"];
 	    }
 	}
+	export class Chat {
+	    id: number;
+	    workspaceId: number;
+	    providerId: string;
+	    model: string;
+	    title: string;
+	    createdAt: number;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Chat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.workspaceId = source["workspaceId"];
+	        this.providerId = source["providerId"];
+	        this.model = source["model"];
+	        this.title = source["title"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
+	export class ChatMessage {
+	    id: number;
+	    chatId: number;
+	    role: string;
+	    content: string;
+	    createdAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatMessage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.chatId = source["chatId"];
+	        this.role = source["role"];
+	        this.content = source["content"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class Checkpoint {
 	    id: number;
 	    workspaceId: number;
@@ -546,6 +709,7 @@ export namespace store {
 	    defaultAgent: string;
 	    autoRender: boolean;
 	    renderTimeoutSec: number;
+	    autoIterate: boolean;
 	    swatches: string[];
 	    editorIndent: number;
 	    editorFontSize: number;
@@ -570,6 +734,7 @@ export namespace store {
 	        this.defaultAgent = source["defaultAgent"];
 	        this.autoRender = source["autoRender"];
 	        this.renderTimeoutSec = source["renderTimeoutSec"];
+	        this.autoIterate = source["autoIterate"];
 	        this.swatches = source["swatches"];
 	        this.editorIndent = source["editorIndent"];
 	        this.editorFontSize = source["editorFontSize"];

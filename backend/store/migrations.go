@@ -109,6 +109,37 @@ INSERT OR IGNORE INTO ai_providers (id, kind, name, command, config, enabled, so
 	('anthropic',   'anthropic', 'Anthropic API', '',       '{"model":"claude-sonnet-5-5","apiKeyEnv":"ANTHROPIC_API_KEY"}', 0, 7, strftime('%s','now'));
 `,
 	},
+	{
+		version: 2,
+		desc:    "chat de diseño con modelos: chats y chat_messages",
+		sql: `
+-- Un chat pertenece a un workspace y recuerda con qué proveedor y modelo se
+-- abrió. provider_id no es FK a ai_providers a propósito: un proveedor se
+-- puede deshabilitar o renombrar y el chat viejo tiene que seguir legible.
+CREATE TABLE IF NOT EXISTS chats (
+	id           INTEGER PRIMARY KEY AUTOINCREMENT,
+	workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+	provider_id  TEXT NOT NULL,
+	model        TEXT NOT NULL DEFAULT '',
+	title        TEXT NOT NULL DEFAULT '',
+	created_at   INTEGER NOT NULL,
+	updated_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chats_workspace ON chats (workspace_id, updated_at DESC);
+
+-- Solo texto: lo que el usuario escribió y lo que contestó el modelo, en
+-- markdown. El prompt de sistema NO se guarda: se reconstruye en cada turno
+-- con el estado actual del workspace (checkpoints, código abierto).
+CREATE TABLE IF NOT EXISTS chat_messages (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	chat_id    INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+	role       TEXT NOT NULL CHECK (role IN ('user','assistant')),
+	content    TEXT NOT NULL,
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages (chat_id, id);
+`,
+	},
 }
 
 func (s *Store) migrate() error {

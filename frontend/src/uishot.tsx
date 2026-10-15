@@ -19,6 +19,7 @@ import type {SettingsTab} from './components/settings/SettingsDialog'
 import {loadMesh} from './lib/mesh'
 import {loadCodeEditor} from './components/editor/lazy'
 import {setLanguage} from './i18n'
+import {terminalShot} from './components/terminal/shot'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
 import catalog from '../../assets/scad/catalog.json'
@@ -53,6 +54,16 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
             },
         },
     },
+    // Terminal de agentes (S5, bloque 5.A): una sesión de Claude Code simulada
+    // escribiendo un checkpoint, y el menú para retomar una conversación.
+    terminal: {scenario: 'ok', shot: {bottomTab: 'agent'}},
+    'terminal-sessions': {scenario: 'ok', shot: {bottomTab: 'agent'}},
+    // Chat con modelos (S5, bloque 5.B): una conversación cuya respuesta trae un
+    // bloque OpenSCAD con «Guardar como checkpoint», y el aviso sin proveedores.
+    chat: {scenario: 'ok', shot: {bottomTab: 'chat'}},
+    'chat-empty': {scenario: 'ok', shot: {bottomTab: 'chat'}},
+    'chat-new': {scenario: 'ok', shot: {bottomTab: 'chat'}},
+    'chat-stream': {scenario: 'ok', shot: {bottomTab: 'chat'}},
     empty: {scenario: 'empty'},
     newworkspace: {scenario: 'empty', shot: {newWorkspace: true}},
 }
@@ -60,6 +71,9 @@ for (const tab of ['general', 'openscad', 'ai', 'printing', 'skills', 'about'] a
     VIEWS[`settings-${tab}`] = {scenario: 'ok', shot: {settingsTab: tab}}
 }
 const cfg = VIEWS[view] ?? VIEWS.main
+const isTerminalView = view === 'terminal' || view === 'terminal-sessions'
+const isChatView = view.startsWith('chat')
+if (view === 'terminal-sessions') terminalShot.openSessions = true
 
 // Bus de eventos mínimo en lugar del runtime de Wails.
 const handlers = new Map<string, Set<(p: unknown) => void>>()
@@ -213,18 +227,18 @@ const lintFor = (file: string) =>
     file === '004-usb-c-cutout.scad'
         ? [
               diag('warning', 2, 9, 30, 'SL005', [
-                  'un checkpoint no debe incluir a otro (003-vent-slots.scad): cada checkpoint es autocontenido; copiá lo que necesites',
+                  'un checkpoint no debe incluir a otro (003-vent-slots.scad): cada checkpoint es autocontenido; copia lo que necesites',
                   'a checkpoint must not include another one (003-vent-slots.scad): each checkpoint is self-contained; copy what you need',
               ]),
               diag('info', 7, 1, 7, 'SL009', [
-                  'parámetro «port_z» del Customizer sin rango: agregá // [min:paso:max] al final de la línea',
+                  'parámetro «port_z» del Customizer sin rango: agrega // [min:paso:max] al final de la línea',
                   "Customizer parameter 'port_z' has no range: add // [min:step:max] at the end of the line",
               ]),
               diag('error', 23, 1, 0, 'syntax', ['Parser error: syntax error', 'Parser error: syntax error']),
           ]
         : [
               diag('info', 7, 1, 4, 'SL009', [
-                  'parámetro «lip» del Customizer sin rango: agregá // [min:paso:max] al final de la línea',
+                  'parámetro «lip» del Customizer sin rango: agrega // [min:paso:max] al final de la línea',
                   "Customizer parameter 'lip' has no range: add // [min:step:max] at the end of the line",
               ]),
               diag('warning', 23, 1, 4, 'SL003', [
@@ -244,9 +258,9 @@ const printers = [
 const settings = {
     language: lang, theme, openscadPath: '', renderBackend: 'manifold', workspacesRoot: '',
     defaultPrinter: 'bambu-a1-mini', defaultMaterial: 'pla', infillPercent: 15, defaultAgent: 'claude',
-    autoRender: true, renderTimeoutSec: 300,
+    autoRender: true, renderTimeoutSec: 300, autoIterate: true,
     editorIndent: 4, editorFontSize: 13, editorWordWrap: false, editorMinimap: false,
-    layout: {sidebarWidth: 264, sidebarCollapsed: false, codeWidth: 440, bottomHeight: 200, dimsCollapsed: view === 'viewer-split'},
+    layout: {sidebarWidth: 264, sidebarCollapsed: false, codeWidth: 440, bottomHeight: isTerminalView ? 400 : isChatView ? 520 : 200, dimsCollapsed: view === 'viewer-split'},
     swatches: ['#ff7a1a', '#e7e9ee', '#2b2f38', '#3ccf7a', '#5aa2ff', '#d32f2f'],
 }
 
@@ -262,6 +276,122 @@ const realFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url
     return realFetch(url.startsWith('/mesh/') ? SAMPLE_STL : input, init)
+}
+
+// ── Terminal de agentes (bloque 5.A) ────────────────────────────────────────
+// Salida inventada de una sesión de Claude Code, con colores ANSI: es lo que
+// el banco le entrega a xterm.js como «salida reciente» de la terminal abierta.
+const ESC = '\x1b['
+const c = (code: string, text: string) => `${ESC}${code}m${text}${ESC}0m`
+const agentScreen = [
+    c('1;38;5;208', '✻ Claude Code') + c('90', es ? '  ·  Sonnet 5.5  ·  rpi5-case' : '  ·  Sonnet 5.5  ·  rpi5-case'),
+    '',
+    c('1', '> ') + (es ? 'Agrega cuatro tornillos M2.5 a la tapa, en naranja, a 6 mm de las esquinas.' : 'Add four M2.5 screws to the lid, in orange, 6 mm from the corners.'),
+    '',
+    c('38;5;250', '● ') + (es ? 'Leo el último checkpoint y sigo las reglas del workspace.' : 'I will read the latest checkpoint and follow the workspace rules.'),
+    '',
+    c('38;5;250', '● ') + c('1;34', 'Read') + c('90', '(006-two-color-logo.scad)'),
+    c('90', es ? '  ⎿  41 líneas leídas' : '  ⎿  Read 41 lines'),
+    '',
+    c('38;5;250', '● ') + (es
+        ? 'El modelo ya declara `lip` y `wall`; los tornillos usan las mismas.'
+        : 'The model already declares `lip` and `wall`; the screws will reuse them.'),
+    '',
+    c('38;5;250', '● ') + c('1;32', 'Write') + c('90', '(007-lid-screws.scad)'),
+    c('90', es ? '  ⎿  44 líneas escritas' : '  ⎿  Wrote 44 lines'),
+    c('32', '     + // @checkpoint parent=006-two-color-logo.scad desc="' + (es ? 'Tornillos de la tapa' : 'Lid screws') + '"'),
+    c('32', '     + screw_d = 2.5;   // [2:0.1:4]'),
+    c('32', '     + inset   = 6;     // [4:0.5:12]'),
+    c('31', '     - for (p = [[6, 6], [width - 6, depth - 6]])'),
+    c('32', '     + for (p = [[inset, inset], [width - inset, inset],'),
+    c('32', '     +           [inset, depth - inset], [width - inset, depth - inset]])'),
+    c('32', '     +     color("#ff7a1a") translate([p.x, p.y, height]) cylinder(d = screw_d, h = 4);'),
+    '',
+    c('38;5;250', '● ') + (es ? 'Listo: ' : 'Done: ') + c('1', '007-lid-screws.scad') + (es ? ', hija de 006. ScadLab lo renderiza solo.' : ', child of 006. ScadLab renders it on its own.'),
+    '',
+    c('90', '╭' + '─'.repeat(70) + '╮'),
+    c('90', '│ ') + c('1', '>') + ' '.repeat(68) + c('90', '│'),
+    c('90', '╰' + '─'.repeat(70) + '╯'),
+    c('90', es ? '  ? para atajos' : '  ? for shortcuts'),
+].join('\r\n') + '\r\n' + ESC + '3A' + ESC + '4G' // el cursor queda dentro de la caja de entrada
+const toB64 = (text: string) => {
+    let bin = ''
+    for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b)
+    return btoa(bin)
+}
+const sessionAt = (d: number, h: number, m: number) => new Date(2026, 9, d, h, m).getTime()
+const claudeSessions = [
+    {id: '5b0f2c1e-3a47-4d6e-9c18-0a1e7f3b2d11', title: es ? 'Tornillos M2.5 de la tapa' : 'M2.5 lid screws', updatedAt: sessionAt(15, 13, 20)},
+    {id: '7c9d4e2a-1b58-4f0a-8e3d-2b6a9c1f4e22', title: es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS', updatedAt: sessionAt(15, 9, 5)},
+    {id: '9e1a6b3c-2d69-4a1b-9f4e-3c7bad2a5f33', title: es ? 'Recorte USB-C y HDMI' : 'USB-C and HDMI cutouts', updatedAt: sessionAt(14, 17, 42)},
+    {id: 'a2b7c8d4-3e7a-4b2c-8a5f-4d8cbe3b6a44', title: es ? 'Ranuras de ventilación laterales' : 'Side vent slots', updatedAt: sessionAt(13, 11, 30)},
+    {id: 'b3c8d9e5-4f8b-4c3d-9b6a-5e9dcf4c7b55', title: es ? 'Caja Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with sliding lid', updatedAt: sessionAt(9, 16, 15)},
+]
+
+// ── Chat con modelos (S5, bloque 5.B) ──────────────────────────────────────
+// Tres chats inventados; el más reciente trae una respuesta con un bloque
+// OpenSCAD (ese es el que muestra «Copiar» y «Guardar como checkpoint»).
+const chatItems = [
+    {id: 3, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000},
+    {id: 2, workspaceId: 1, providerId: 'ollama', model: 'llama3.2:3b', title: es ? 'Ranuras de ventilación' : 'Ventilation slots', createdAt: 1_789_900_000, updatedAt: 1_789_900_600},
+    {id: 1, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Cuántos milímetros de holgura para una tapa' : 'How much clearance for a lid', createdAt: 1_789_800_000, updatedAt: 1_789_800_400},
+]
+const chatScad = `// @checkpoint parent=006-two-color-logo.scad desc="${es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid'}"
+board_w = 85;   // [60:1:120]
+board_d = 56;   // [40:1:90]
+wall    = 2;    // [1.2:0.2:4]
+height  = 24;   // [16:1:48]
+
+color("#2b2f38") difference() {
+    cube([board_w + 2*wall, board_d + 2*wall, height]);
+    translate([wall, wall, wall]) cube([board_w, board_d, height]);
+}
+`
+const chatMessages = [
+    {
+        id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900,
+        content: es ? 'Haz una caja para una Raspberry Pi 5 con tapa deslizante.' : 'Make a box for a Raspberry Pi 5 with a sliding lid.',
+    },
+    {
+        id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000,
+        content: es
+            ? `Te dejo la caja de la **Raspberry Pi 5**, con paredes de 2 mm que imprimen bien en la A1 mini:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- La tapa conviene en un checkpoint aparte, para imprimirla plana.\n- Dime si quieres ranuras de ventilación o recortes para los puertos.`
+            : `Here is the **Raspberry Pi 5** case, with 2 mm walls that print well on the A1 mini:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- The lid is better as its own checkpoint, so it prints flat.\n- Tell me if you want ventilation slots or port cutouts.`,
+    },
+]
+// En `chat-stream` la respuesta sigue en curso al abrir el panel: GetChat trae
+// lo escrito hasta el trozo 2 y después llegan eventos (el 2 repetido, que
+// hay que descartar, y el 3 y el 4), como pasa al reabrir la pestaña a mitad.
+const streamParts = es
+    ? ['Sumo las ranuras de ventilación en la pared trasera:\n\n```openscad\n', 'slots = 6;\nfor (i = [0 : slots - 1])\n', '    translate([8 + i * 10, board_d, 6])\n', '        cube([6, wall + 1, 14]);\n']
+    : ['Adding ventilation slots on the back wall:\n\n```openscad\n', 'slots = 6;\nfor (i = [0 : slots - 1])\n', '    translate([8 + i * 10, board_d, 6])\n', '        cube([6, wall + 1, 14]);\n']
+const chatMocks = {
+    ListChats: () => P(view === 'chat-new' ? [] : chatItems),
+    GetChat: (id: number) => {
+        if (view === 'chat-stream') {
+            setTimeout(() => {
+                emit('chat:delta', {chatId: id, text: streamParts[1], seq: 2})
+                emit('chat:delta', {chatId: id, text: streamParts[2], seq: 3})
+                emit('chat:delta', {chatId: id, text: streamParts[3], seq: 4})
+            }, 200)
+            return P({
+                chat: chatItems[0],
+                messages: [chatMessages[0], {id: 3, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: chatMessages[1].content}, {id: 4, chatId: 3, role: 'user', createdAt: 1_790_003_100, content: es ? 'Agrega ranuras de ventilación atrás.' : 'Add ventilation slots at the back.'}],
+                running: true, partial: streamParts[0] + streamParts[1], partialSeq: 2,
+            })
+        }
+        return P({
+            chat: chatItems.find((c) => c.id === id) ?? chatItems[0],
+            messages: id === 3 ? chatMessages : [],
+            running: false, partial: '', partialSeq: 0,
+        })
+    },
+    ListProviderModels: () => P(['qwen3-coder:30b', 'llama3.2:3b', 'gemma3:12b']),
+    ChatCheckpointParent: () => P(selectedFile),
+    NewChat: () => P(chatItems[0]),
+    SendChatMessage: () => P(chatMessages[0]),
+    CancelChat: () => P(undefined),
+    DeleteChat: () => P(undefined),
 }
 
 const App_ = {
@@ -290,7 +420,24 @@ const App_ = {
     LintCheckpointSource: (_id: number, file: string) => P(lintFor(file)),
     FormatScad: (src: string) => P(src),
     SaveAsCheckpoint: () => P('007-lid-screws.scad'),
+    ...chatMocks,
     GetScadCatalog: () => P(catalog),
+    // Terminal de agentes: en las vistas `terminal*` hay un Claude Code abierto.
+    ListTerminals: () => P(isTerminalView ? [{id: 'term-1', kind: 'agent', agentId: 'claude', workspaceId: 1, cols: 100, rows: 28, startedAt: 1}] : []),
+    ReadTerminalBuffer: () => P({data: toB64(agentScreen), seq: agentScreen.length}),
+    ResizeTerminal: () => P(undefined),
+    WriteTerminal: () => P(undefined),
+    CloseTerminal: () => P(undefined),
+    SetAutoIterate: () => P(undefined),
+    StartAgentTerminal: () => P('term-1'),
+    ListAgentChoices: () =>
+        P([
+            {id: 'claude', name: 'Claude Code', found: true, path: '/Users/maker/.local/bin/claude', enabled: true, canList: true},
+            {id: 'opencode', name: 'opencode', found: true, path: '/Users/maker/.opencode/bin/opencode', enabled: true, canList: true},
+            {id: 'codex', name: 'Codex', found: true, path: '/Users/maker/.local/bin/codex', enabled: true, canList: true},
+            {id: 'antigravity', name: 'Antigravity', found: false, path: '', enabled: true, canList: false},
+        ]),
+    ListAgentSessions: () => P(claudeSessions),
     DetectTools: () =>
         P([
             {id: 'openscad', found: true, path: '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD', version: '2025.06.01'},
@@ -305,7 +452,7 @@ const App_ = {
             {id: 'opencode', kind: 'cli', name: 'opencode', command: 'opencode', config: {}, enabled: true, sortOrder: 2},
             {id: 'codex', kind: 'cli', name: 'Codex', command: 'codex', config: {}, enabled: true, sortOrder: 3},
             {id: 'antigravity', kind: 'cli', name: 'Antigravity', command: 'agy', config: {}, enabled: true, sortOrder: 4},
-            {id: 'ollama', kind: 'ollama', name: 'Ollama', command: '', config: {baseUrl: 'http://localhost:11434', model: 'qwen3-coder:30b'}, enabled: true, sortOrder: 5},
+            {id: 'ollama', kind: 'ollama', name: 'Ollama', command: '', config: {baseUrl: 'http://localhost:11434', model: 'qwen3-coder:30b'}, enabled: view !== 'chat-empty', sortOrder: 5},
             {id: 'openai', kind: 'openai', name: 'OpenAI-compatible', command: '', config: {baseUrl: 'http://localhost:1234/v1', model: '', apiKeyEnv: 'OPENAI_API_KEY'}, enabled: false, sortOrder: 6},
             {id: 'anthropic', kind: 'anthropic', name: 'Anthropic API', command: '', config: {model: 'claude-sonnet-5-5', apiKeyEnv: 'ANTHROPIC_API_KEY'}, enabled: false, sortOrder: 7},
         ]),
@@ -366,7 +513,7 @@ const syncGL = window.setInterval(() => {
 // El editor (Monaco) también entra con lazy(): mismo motivo. El idioma va
 // antes, porque decide con qué textos carga Monaco sus widgets.
 setLanguage(lang)
-Promise.all([import('./components/viewer/Viewer'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath)])
+Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath)])
     .catch(() => {})
     .then(() =>
         createRoot(document.getElementById('root')!).render(

@@ -250,7 +250,7 @@ func ruleIncludes(a *analysis) {
 			target := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(t.Text, "<"), ">"))
 			if checkpointRe.MatchString(filepath.Base(filepath.FromSlash(target))) {
 				a.addTok(SeverityWarning, CodeIncludesCkpt, t, i18n.Msg{
-					ES: "un checkpoint no debe incluir a otro (%s): cada checkpoint es autocontenido; copiá lo que necesites",
+					ES: "un checkpoint no debe incluir a otro (%s): cada checkpoint es autocontenido; copia lo que necesites",
 					EN: "a checkpoint must not include another one (%s): each checkpoint is self-contained; copy what you need",
 				}, target)
 			}
@@ -454,7 +454,7 @@ func ruleCustomizerRange(a *analysis) {
 			continue
 		}
 		a.addTok(SeverityInfo, CodeCustomizerRange, name, i18n.Msg{
-			ES: "parámetro «%s» del Customizer sin rango: agregá // [min:paso:max] al final de la línea",
+			ES: "parámetro «%s» del Customizer sin rango: agrega // [min:paso:max] al final de la línea",
 			EN: "Customizer parameter '%s' has no range: add // [min:step:max] at the end of the line",
 		}, name.Text)
 	}

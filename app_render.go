@@ -127,7 +127,31 @@ func (a *App) RenderCheckpoint(id int64, fileName string) (render.Result, error)
 		a.renderMu.Unlock()
 	}
 	a.emit(evRenderFinished, RenderFinishedEvent{WorkspaceID: id, Result: res})
+	a.notifyRenderFinished(id, res, isLatest)
 	return res, nil
+}
+
+// renderListener lo registran otros servicios de la app que reaccionan a un
+// render (la auto-iteración de la terminal, S5). latest dice si es el
+// checkpoint más nuevo del workspace: el mismo criterio que RENDER_ERRORS.md.
+type renderListener func(workspaceID int64, res render.Result, latest bool)
+
+// onRenderFinished agrega un listener. Es un hook interno y no el evento de
+// Wails a propósito: no depende de que el runtime reparta los eventos de Go a
+// Go, y se prueba con go test.
+func (a *App) onRenderFinished(l renderListener) {
+	a.renderMu.Lock()
+	a.renderListeners = append(a.renderListeners, l)
+	a.renderMu.Unlock()
+}
+
+func (a *App) notifyRenderFinished(id int64, res render.Result, latest bool) {
+	a.renderMu.Lock()
+	ls := append([]renderListener(nil), a.renderListeners...)
+	a.renderMu.Unlock()
+	for _, l := range ls {
+		l(id, res, latest)
+	}
 }
 
 // CancelRender cancela el render en curso del workspace, si lo hay.

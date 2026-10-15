@@ -312,6 +312,13 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     layout={layout}
                     bottomTab={bottomTab}
                     onBottomTab={setBottomTab}
+                    onOpenAISettings={() => openSettings('ai')}
+                    // El interruptor de la terminal guarda autoIterate por su
+                    // lado: se refleja en boot.settings para que un guardado
+                    // posterior de Configuración no lo pise con el valor viejo.
+                    onAutoIterateChange={(v) =>
+                        setBoot((b) => (b ? ({...b, settings: {...b.settings, autoIterate: v}} as main.Bootstrap) : b))
+                    }
                     onLayoutPreview={preview}
                     onLayoutCommit={commit}
                     onSaved={(name) => {

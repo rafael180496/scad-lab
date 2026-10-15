@@ -81,15 +81,20 @@ Plan: [.claude/specs/s4-editor-openscad.md](../.claude/specs/s4-editor-openscad.
 | 4.9 | Menú nativo Edición en macOS (`appMenu` en `main.go`): sin él WKWebView no entrega ⌘C/⌘V/⌘Z al editor | architect | ✅ |
 | 4.10 | Probar el editor en la ventana real (WKWebView/WebView2): workers de Monaco, copiar/pegar, ⌥⌘F | usuario | ⬜ |
 
-## S5 — Agentes de IA en la app ⬜
+## S5 — Agentes de IA en la app ✅ (falta 5.8, prueba del usuario en la ventana real)
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 5.1 | PTY en Go (ConPTY en Windows) + xterm.js; lanzar el CLI elegido en el workspace | FS |
-| 5.2 | Hasta 2 terminales; elegir agente por terminal | FS |
-| 5.3 | Sesiones: listar/retomar/nueva (Claude `--resume`, equivalentes de cada CLI) | FS |
-| 5.4 | Auto-iteración: render fallido → `RENDER_ERRORS.md` + aviso escrito en la terminal del agente | FS+OS |
-| 5.5 | Chat con Ollama / API OpenAI-compatible / Anthropic para ideas y prompts (sin terminal) | FS |
+Plan: [.claude/specs/s5-agentes-ia.md](../.claude/specs/s5-agentes-ia.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 5.1 | PTY en Go (`backend/pty`, go-pty, ConPTY en Windows, mata el grupo de procesos al cerrar) + xterm.js; el CLI corre en el workspace | FS | ✅ |
+| 5.2 | Hasta 2 terminales de agente; elegir agente por terminal; reenganche al recargar (`ReadTerminalBuffer`) | FS | ✅ |
+| 5.3 | Sesiones por workspace (`backend/agentsessions`): Claude, Codex, opencode verificados contra archivos reales; Antigravity solo nueva/continuar | FS | ✅ |
+| 5.4 | Auto-iteración en Go (`onRenderFinished`, `prompts.Nudge`, una vez por fallo, tope de 5 seguidos) | FS+OS | ✅ |
+| 5.5 | Chat con Ollama / OpenAI-compatible / Anthropic (`backend/llm`, `backend/chat`, migración 2) con guardar bloque como checkpoint | FS | ✅ |
+| 5.6 | Prompts (`backend/prompts`): sistema del chat ES/EN, nudge, extracción de bloques | OS | ✅ |
+| 5.7 | Español neutro (tú) en toda la interfaz y mensajes; regla en `conventions.md` | architect | ✅ |
+| 5.8 | Probar en la ventana real: terminal (PTY con un CLI real, copiar/pegar) y chat contra un servidor real (Ollama no está instalado en esta Mac) | usuario | ⬜ |
 
 ## S6 — Servidor MCP de OpenSCAD ⬜
 

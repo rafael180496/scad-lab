@@ -226,7 +226,7 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 		res.Diagnostics = append(parseOutput(output, req.WorkspaceDir, req.FileName), Diagnostic{
 			Severity: SeverityError,
 			Message: i18n.T(i18n.Msg{
-				ES: "OpenSCAD superó el tiempo máximo de render (%d s). Simplificá el modelo (menos $fn, menos minkowski/hull anidados) o subí el límite en Configuración → OpenSCAD",
+				ES: "OpenSCAD superó el tiempo máximo de render (%d s). Simplifica el modelo (menos $fn, menos minkowski/hull anidados) o sube el límite en Configuración → OpenSCAD",
 				EN: "OpenSCAD exceeded the maximum render time (%d s). Simplify the model (lower $fn, fewer nested minkowski/hull) or raise the limit in Settings → OpenSCAD",
 			}, timeout),
 		})
@@ -251,7 +251,7 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 	msgNot3D := Diagnostic{
 		Severity: SeverityError,
 		Message: i18n.T(i18n.Msg{
-			ES: "OpenSCAD terminó sin escribir la malla. Si el modelo es 2D, extruílo (linear_extrude) para exportarlo a STL",
+			ES: "OpenSCAD terminó sin escribir la malla. Si el modelo es 2D, extrúyelo (linear_extrude) para exportarlo a STL",
 			EN: "OpenSCAD finished without writing the mesh. If the model is 2D, extrude it (linear_extrude) to export it as STL",
 		}),
 	}
@@ -268,7 +268,7 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 		res.Diagnostics = append(res.Diagnostics, Diagnostic{
 			Severity: SeverityError,
 			Message: i18n.T(i18n.Msg{
-				ES: "El modelo está vacío: el nivel superior no genera geometría. Revisá que haya al menos un objeto fuera de module/function, que se llame al módulo principal y que un difference() no reste la pieza entera",
+				ES: "El modelo está vacío: el nivel superior no genera geometría. Revisa que haya al menos un objeto fuera de module/function, que se llame al módulo principal y que un difference() no reste la pieza entera",
 				EN: "The model is empty: the top level produces no geometry. Check that at least one object is outside module/function, that the main module is called, and that a difference() does not subtract the whole part",
 			}),
 		})
@@ -280,7 +280,7 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 			res.Diagnostics = append(res.Diagnostics, Diagnostic{
 				Severity: SeverityError,
 				Message: i18n.T(i18n.Msg{
-					ES: "OpenSCAD terminó con error (%s). Revisá el log del render",
+					ES: "OpenSCAD terminó con error (%s). Revisa el log del render",
 					EN: "OpenSCAD exited with an error (%s). Check the render log",
 				}, exitDescription(runErr)),
 			})

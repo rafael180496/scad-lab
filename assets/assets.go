@@ -8,9 +8,10 @@ package assets
 
 import "embed"
 
-// FS contiene skills/**, workspace/** y scad/** (catálogo del lenguaje para el
-// editor, ver backend/scad). El prefijo all: incluye los archivos
+// FS contiene skills/**, workspace/**, scad/** (catálogo del lenguaje para el
+// editor, ver backend/scad) y prompts/** (prompts de sistema del chat, ver
+// backend/prompts). El prefijo all: incluye los archivos
 // que empiezan con "_" o ".", como la skill _skill-template.
 //
-//go:embed all:skills all:workspace all:scad
+//go:embed all:skills all:workspace all:scad all:prompts
 var FS embed.FS

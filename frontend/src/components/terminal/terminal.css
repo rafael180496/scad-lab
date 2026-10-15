@@ -1,0 +1,9 @@
+/*
+ * xterm.css pinta el visor de la terminal de negro (#000) y solo lo corrige con
+ * el tema una vez dibujada: en el tema claro quedaba un marco negro alrededor.
+ * Se fuerza al token del panel, así sigue al modo claro/oscuro sin pasar por JS.
+ */
+.scadlab-term .xterm .xterm-viewport,
+.scadlab-term .xterm .xterm-scrollable-element {
+    background-color: var(--c-surface) !important;
+}

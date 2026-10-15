@@ -371,7 +371,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li><a href="#ia-reglas">Reglas del workspace: CLAUDE.md y AGENTS.md</a></li>
     <li><a href="#ia-mcp">Servidor MCP de OpenSCAD</a></li>
     <li><a href="#ia-autoiteracion">Auto-iteración de errores</a></li>
-    <li><a href="#ia-ollama">Ollama local</a></li>
+    <li><a href="#ia-ollama">Chat con modelos: Ollama, OpenAI y Anthropic</a></li>
     <li><a href="#ia-prompts">Cómo pedirle un modelo a la IA</a></li>
     <li><a href="#ia-skills">Skills incluidas</a></li>
     <li><a href="#ia-skill-propia">Crear tu propia skill</a></li>
@@ -389,7 +389,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>Configuración</button>
   <ul>
     <li><a href="#config-general">Idioma, OpenSCAD y agentes</a></li>
-    <li><a href="#config-materiales">Ollama, materiales e impresora</a></li>
+    <li><a href="#config-materiales">Modelos de IA, materiales e impresora</a></li>
     <li><a href="#config-datos">Dónde se guardan tus datos</a></li>
   </ul>
 
@@ -454,7 +454,9 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <tr><td>Visor 3D: navegación, vistas, modos, medidas, colores, captura PNG y vista dividida</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Editor de código: resaltado, buscar y reemplazar, linter, formato, autocompletado y guardar como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Ventana: paneles redimensionables, barra lateral plegable, barra de estado y panel Problemas</td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Checkpoints avanzados, terminal de agentes, MCP, exportar, peso y costo</td><td><span class="badge dev">En desarrollo</span></td></tr>
+    <tr><td>Terminal de agentes (Claude Code, opencode, Codex, Antigravity) con sesiones y auto-iteración de errores</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Chat con modelos (Ollama, compatible con OpenAI, Anthropic) y guardar el código como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Checkpoints avanzados, MCP, exportar, peso y costo</td><td><span class="badge dev">En desarrollo</span></td></tr>
   </table></div>
 
   <h2 id="introduccion--seguir">Por dónde seguir</h2>
@@ -556,15 +558,18 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
   mano ahí mismo.</p>
 
   <h2 id="requisitos--agentes">Agentes de IA (opcionales)</h2>
-  <p>ScadLab no trae su propio modelo: usa los CLIs que ya tengas instalados y con sesión iniciada. Detecta
-  cualquiera de estos:</p>
+  <p>ScadLab no trae su propio modelo: usa los CLIs que ya tengas instalados y con sesión iniciada para la
+  <a href="#ia-agentes">terminal</a>, y los servidores de modelos que habilites para el <a href="#ia-ollama">chat</a>.
+  Detecta cualquiera de estos:</p>
   <div class="tablewrap"><table>
     <tr><th>Agente</th><th>Qué necesitas</th></tr>
     <tr><td>Claude Code</td><td>El CLI <code>claude</code> instalado y con sesión iniciada</td></tr>
     <tr><td>opencode</td><td>El CLI <code>opencode</code> con un proveedor configurado</td></tr>
     <tr><td>Codex</td><td>El CLI <code>codex</code> con sesión iniciada</td></tr>
     <tr><td>Antigravity</td><td>El CLI de Antigravity instalado</td></tr>
-    <tr><td>Ollama</td><td>Ollama corriendo en local (por defecto <code>http://localhost:11434</code>) y un modelo descargado</td></tr>
+    <tr><td>Ollama (chat)</td><td>Ollama corriendo en local (por defecto <code>http://localhost:11434</code>) y un modelo descargado</td></tr>
+    <tr><td>Compatible con OpenAI (chat)</td><td>Un servidor con esa API (LM Studio, vLLM, OpenRouter…) y la variable de entorno con su API key</td></tr>
+    <tr><td>Anthropic (chat)</td><td>La variable de entorno con tu API key de Anthropic</td></tr>
   </table></div>
   <p>Cada agente se cobra y se rige por las condiciones de su propio proveedor; ScadLab solo lo ejecuta.</p>
 </article>
@@ -583,12 +588,13 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
     <li>ScadLab crea la estructura y copia las <a href="#ia-skills">skills</a> para todos los CLIs.</li>
   </ol>
 
-  <h2 id="primer-proyecto--pedir">2. Pídele el modelo al agente <span class="badge dev">En desarrollo</span></h2>
-  <p>Abre una terminal de agente en el workspace y describe la pieza con medidas:</p>
+  <h2 id="primer-proyecto--pedir">2. Pídele el modelo al agente <span class="badge ok">Disponible</span></h2>
+  <p>Abre una pestaña <a href="#ia-agentes">Agente</a> del panel inferior, elige tu agente, pulsa <strong>Nueva</strong> y describe la pieza con medidas:</p>
   <div class="prompt"><p>Haz una caja de 60×40×25 mm con paredes de 2 mm y una tapa a presión con holgura de
   0,2 mm. Esquinas redondeadas de 4 mm. Caja en azul y tapa en blanco. Debe caber en la A1 mini.</p></div>
-  <p>El agente crea <code>001-base-box.scad</code>, lo valida con el <a href="#ia-mcp">MCP de OpenSCAD</a> y el
-  checkpoint aparece en el árbol. Un checkpoint mínimo se ve así:</p>
+  <p>El agente crea <code>001-base-box.scad</code>, ScadLab lo renderiza solo y el checkpoint aparece en el árbol;
+  si falla, el agente recibe el aviso para corregirlo (<a href="#ia-autoiteracion">auto-iteración</a>). Un checkpoint
+  mínimo se ve así:</p>
   <div class="codewrap"><pre><code>// @checkpoint parent= desc="Caja base 60x40x25 con tapa a presion"
 /* [Dimensiones] */
 width  = 60;   // [20:1:180]
@@ -964,7 +970,7 @@ color("SteelBlue") difference() {
   saltar a esa línea.</p>
 
   <h2 id="editor--problemas">El panel Problemas</h2>
-  <p>Junto a <strong>Agente IA</strong>, abajo, la pestaña <strong>Problemas</strong> junta lo del linter y lo del
+  <p>Junto a <strong>Agente 1</strong>, <strong>Agente 2</strong> y <strong>Chat</strong>, abajo, la pestaña <strong>Problemas</strong> junta lo del linter y lo del
   último render, errores primero y por línea, con su código y su origen. El contador de la barra de estado
   (<code>⊗ errores ⚠ advertencias ⓘ sugerencias</code>) la abre.</p>
   <figure class="shot"><img src="docs/screenshots/es/problems.png" alt="Panel Problemas abierto bajo el visor con cuatro entradas de 004-usb-c-cutout: el error de sintaxis de la línea 23, el include de otro checkpoint, la variable desconocida del render y un parámetro sin rango, cada una con su código, su origen y su línea" loading="lazy"><figcaption>Problemas de un checkpoint roto: linter y render juntos, con clic a la línea.</figcaption></figure>
@@ -980,7 +986,7 @@ color("SteelBlue") difference() {
   <p class="lead">Barra lateral, visor, código y panel inferior se reparten la ventana como prefieras, y ScadLab
   recuerda la disposición.</p>
 
-  <figure class="shot"><img src="docs/screenshots/es/app-main.png" alt="Ventana principal de ScadLab con la barra lateral, el visor, el código, el panel inferior con las pestañas Agente IA y Problemas, y la barra de estado abajo" loading="lazy"><figcaption>La barra de estado, abajo, resume dónde estás y qué pasa: workspace, impresora, modo del editor, cursor, problemas y versión de OpenSCAD.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/app-main.png" alt="Ventana principal de ScadLab con la barra lateral, el visor, el código, el panel inferior con las pestañas Agente 1, Agente 2, Chat y Problemas, y la barra de estado abajo" loading="lazy"><figcaption>La barra de estado, abajo, resume dónde estás y qué pasa: workspace, impresora, modo del editor, cursor, problemas y versión de OpenSCAD.</figcaption></figure>
 
   <h2 id="ventana--paneles">Paneles redimensionables</h2>
   <p>Arrastra el borde entre dos paneles para repartir el espacio: barra lateral ↔ visor, visor ↔ código y visor ↔
@@ -1005,28 +1011,64 @@ color("SteelBlue") difference() {
 </article>
 
 <!-- ================================================================== IA -->
-<article class="topic" id="ia-agentes" data-title="Agentes en la terminal" data-status="dev">
-  <h1>Agentes en la terminal <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Una terminal integrada que ejecuta el agente que prefieras dentro del workspace. El agente
-  escribe checkpoints y tú los ves aparecer en el árbol.</p>
+<article class="topic" id="ia-agentes" data-title="Agentes en la terminal">
+  <h1>Agentes en la terminal</h1>
+  <p class="lead">Una terminal integrada ejecuta el agente que prefieras dentro del workspace. El agente escribe
+  checkpoints y tú los ves aparecer en el árbol, sin salir de ScadLab.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Terminal con Claude Code abierta bajo el visor, y el selector de agente.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/terminal.png" alt="Claude Code escribiendo un checkpoint en la terminal del workspace: la pestaña Agente 1 del panel inferior con el selector de agente, los botones Nueva, Continuar y Sesiones, el interruptor Auto-iteración activo y la salida del agente con las líneas que escribió" loading="lazy"><figcaption>Claude Code escribiendo un checkpoint en la terminal del workspace. En la barra de arriba: agente, Nueva, Continuar, Sesiones y el interruptor de auto-iteración.</figcaption></figure>
+
+  <h2 id="ia-agentes--abrir">Abrir un agente</h2>
+  <p>El panel inferior tiene cuatro pestañas: <strong>Agente 1</strong>, <strong>Agente 2</strong>,
+  <a href="#ia-ollama"><strong>Chat</strong></a> y <a href="#editor--problemas"><strong>Problemas</strong></a>.</p>
+  <ol class="steps">
+    <li>Abre una pestaña de agente y elige el agente en el selector.</li>
+    <li>Pulsa <strong>Nueva</strong>. El agente arranca en la carpeta del workspace, así que lo que cree aparece como
+      checkpoint en el árbol.</li>
+    <li>Escribe en la terminal lo que quieres, como en cualquier CLI. Para saber cómo pedirlo, mira
+      <a href="#ia-prompts">Cómo pedirle un modelo a la IA</a>.</li>
+  </ol>
+  <p>Si ya hay un agente corriendo en esa pestaña, ScadLab pregunta antes de cerrarlo para abrir otro. Los
+  checkpoints ya guardados no se tocan.</p>
 
   <h2 id="ia-agentes--clis">Qué agentes</h2>
-  <p>Claude Code, opencode, Codex y Antigravity — <strong>solo los que estén instalados</strong>: la
-  <a href="#config-general">detección</a> (ya disponible) decide qué aparece en el selector. Para chat con un modelo
-  local está <a href="#ia-ollama">Ollama</a>.</p>
+  <p>Claude Code, opencode, Codex y Antigravity — <strong>solo los que estén instalados y habilitados</strong> en
+  <a href="#config-general--clis">Configuración → IA</a>: la detección decide qué aparece en el selector. Si no hay
+  ninguno, la pestaña lo avisa con un botón que abre esa configuración. Para conversar con un modelo sin instalar
+  ningún CLI, está el <a href="#ia-ollama">chat con modelos</a>.</p>
 
   <h2 id="ia-agentes--sesiones">Sesiones</h2>
   <ul>
-    <li><strong>Ver</strong> las sesiones anteriores del workspace.</li>
-    <li><strong>Retomar</strong> una sesión con su contexto, también desde el menú de un checkpoint.</li>
-    <li><strong>Nueva</strong> sesión cuando quieras empezar limpio.</li>
+    <li><strong>Nueva</strong> abre una conversación limpia.</li>
+    <li><strong>Continuar</strong> abre la última conversación de ese agente en este workspace.</li>
+    <li><strong>Sesiones</strong> lista las conversaciones anteriores de ese agente en este workspace, con su título y
+      su fecha, para retomar la que elijas.</li>
+  </ul>
+  <figure class="shot"><img src="docs/screenshots/es/terminal-sessions.png" alt="Menú Sesiones desplegado sobre la terminal con cinco conversaciones previas de Claude Code, cada una con su título y su fecha" loading="lazy"><figcaption>Menú Sesiones con las conversaciones previas de Claude Code en este workspace.</figcaption></figure>
+  <div class="note"><span class="lbl">Antigravity</span><p>Antigravity no permite listar sus conversaciones, así que solo
+  ofrece <strong>Nueva</strong> y <strong>Continuar</strong>.</p></div>
+
+  <h2 id="ia-agentes--recargar">Si recargas la interfaz</h2>
+  <p>Los agentes siguen vivos: al recargar la interfaz, cada terminal se vuelve a conectar a su agente y recupera
+  lo que tenía en pantalla. Cuando un agente termina por su cuenta, la terminal avisa con su código de salida y
+  puedes abrir otra sesión.</p>
+
+  <h2 id="ia-agentes--copiar">Copiar y pegar</h2>
+  <ul>
+    <li><kbd>⌘C</kbd> (<kbd>Ctrl+C</kbd> en Windows) copia la selección.</li>
+    <li>En Windows, <kbd>Ctrl+C</kbd> <strong>sin selección</strong> interrumpe al agente, como en cualquier terminal.
+      En macOS, <kbd>⌃C</kbd> siempre le llega al agente.</li>
+    <li><kbd>⌘V</kbd> (<kbd>Ctrl+V</kbd> en Windows) pega; un texto de varias líneas se pega de una vez, no línea
+      por línea.</li>
   </ul>
 
+  <h2 id="ia-agentes--maximizar">Maximizar el panel</h2>
+  <p>El botón de la esquina del panel inferior lo agranda hasta cubrir el visor 3D, útil para leer una respuesta
+  larga; pulsarlo otra vez devuelve el tamaño normal.</p>
+
   <h2 id="ia-agentes--limites">Límites</h2>
-  <p>Hasta <strong>2 terminales</strong> por ventana —por ejemplo una con Claude Code y otra con Codex comparando
-  enfoques— y hasta 4 ventanas.</p>
+  <p>Hasta <strong>2 terminales de agente</strong> a la vez —por ejemplo una con Claude Code y otra con Codex
+  comparando enfoques—. El <strong>×</strong> de la barra cierra la terminal y termina el agente.</p>
 </article>
 
 <article class="topic" id="ia-reglas" data-title="Reglas del workspace: CLAUDE.md y AGENTS.md" data-status="dev">
@@ -1077,51 +1119,112 @@ color("SteelBlue") difference() {
   <a href="#config-general">configuración</a>. No tienes que tocar nada.</p>
 </article>
 
-<article class="topic" id="ia-autoiteracion" data-title="Auto-iteración de errores" data-status="dev">
-  <h1>Auto-iteración de errores <span class="badge dev">En desarrollo</span></h1>
+<article class="topic" id="ia-autoiteracion" data-title="Auto-iteración de errores">
+  <h1>Auto-iteración de errores</h1>
   <p class="lead">Si un checkpoint no renderiza, ScadLab se lo dice al agente y le pide que lo corrija — sin
   que tengas que copiar el error.</p>
 
-  <figure class="shot pending"><span>Captura pendiente</span><figcaption>Auto-iteración de errores.</figcaption></figure>
-
-  <h2 id="ia-autoiteracion--hoy">Lo que ya hace <span class="badge ok">Disponible</span></h2>
+  <h2 id="ia-autoiteracion--hoy">Qué hace</h2>
   <p>Cuando un agente crea un checkpoint, ScadLab lo renderiza solo y, si falla, deja
-  <code>RENDER_ERRORS.md</code> en el workspace; las reglas del workspace le dicen al agente que lo lea. Lo que falta
-  es el aviso automático en la terminal del agente (paso 3). Detalle en
+  <code>RENDER_ERRORS.md</code> en el workspace. Si además hay un <a href="#ia-agentes">agente abierto</a> en ese
+  workspace, le escribe un aviso en su terminal para que lo lea y lo arregle. Detalle del archivo en
   <a href="#render--errores">Renderizar y diagnósticos</a>.</p>
 
   <h2 id="ia-autoiteracion--flujo">Cómo funciona</h2>
   <ol class="steps">
     <li>El agente crea <code>004-add-hinge.scad</code> y ScadLab lo renderiza.</li>
     <li>OpenSCAD falla. ScadLab escribe <code>RENDER_ERRORS.md</code> en el workspace con el archivo, la línea y el mensaje.</li>
-    <li>Le pide al agente activo que lo lea y lo arregle.</li>
+    <li>ScadLab escribe en la terminal del agente un aviso de una línea que pide leer <code>RENDER_ERRORS.md</code> y corregir.</li>
     <li>El agente crea <code>005-fix-hinge.scad</code> con <code>parent=004-…</code>. El 004 queda como estaba.</li>
   </ol>
   <div class="codewrap"><pre><code># RENDER_ERRORS.md
 Archivo: 004-add-hinge.scad
 ERROR: Parser error in file 004-add-hinge.scad, line 31: syntax error
 Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></pre></div>
+  <p>El aviso que ve el agente empieza siempre por «ScadLab:», para que ningún CLI lo tome por un comando:</p>
+  <div class="codewrap"><pre><code>ScadLab: el render de "004-add-hinge.scad" falló con 1 error. Lee RENDER_ERRORS.md y corrígelo en un checkpoint NUEVO con parent=004-add-hinge.scad; no edites el archivo que falló.</code></pre></div>
   <div class="note"><span class="lbl">Por qué un checkpoint nuevo</span><p>Corregir en el lugar rompería la regla de
   inmutabilidad y perderías la pista de qué intentó la IA. Así el árbol muestra también los tropiezos.</p></div>
+
+  <h2 id="ia-autoiteracion--limites">Cuándo avisa y cuándo no</h2>
+  <ul>
+    <li>Solo avisa cuando falla el render del <strong>checkpoint más nuevo</strong>. Renderizar uno viejo mientras
+      recorres el historial no le manda nada al agente.</li>
+    <li>Avisa <strong>una vez por fallo</strong>: si el mismo error se repite, no insiste.</li>
+    <li>Tras <strong>5 avisos seguidos</strong> sin un render correcto, deja de avisar para no gastar la cuota de tu
+      agente en un bucle. Vuelve a funcionar en cuanto un render sale bien.</li>
+    <li>Un render cancelado, o sin OpenSCAD instalado, no cuenta como fallo del modelo y no avisa.</li>
+    <li>Sin ningún agente abierto en ese workspace, no hay a quién avisar: queda <code>RENDER_ERRORS.md</code> para
+      cuando abras uno.</li>
+  </ul>
+  <p>El interruptor <strong>Auto-iteración</strong>, en la barra de la terminal, la enciende o la apaga (viene
+  activa). Apagada, el agente no recibe avisos; <code>RENDER_ERRORS.md</code> se sigue escribiendo.</p>
 </article>
 
-<article class="topic" id="ia-ollama" data-title="Ollama local" data-status="dev">
-  <h1>Ollama local <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Chat con un modelo que corre en tu máquina: sin cuenta, sin coste por token y sin que el
-  diseño salga de tu equipo.</p>
+<article class="topic" id="ia-ollama" data-title="Chat con modelos: Ollama, OpenAI y Anthropic">
+  <h1>Chat con modelos: Ollama, OpenAI y Anthropic</h1>
+  <p class="lead">La pestaña <strong>Chat</strong> conversa con un modelo para pensar ideas y pedir código OpenSCAD,
+  y cada bloque de código se guarda como checkpoint con un clic.</p>
 
-  <figure class="shot"><img src="docs/screenshots/es/settings-ai.png" alt="Configuración, pestaña IA: Claude Code, opencode y Codex encontrados, Antigravity no; abajo Ollama con su URL y modelo" loading="lazy"><figcaption>Configuración → IA: los agentes detectados y el servidor Ollama con su modelo.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/es/chat.png" alt="Panel Chat con una respuesta que incluye un bloque OpenSCAD y los botones Copiar y Guardar como checkpoint" loading="lazy"><figcaption>Una respuesta del modelo con su bloque de OpenSCAD: <strong>Copiar</strong> y <strong>Guardar como checkpoint</strong>.</figcaption></figure>
 
-  <h2 id="ia-ollama--preparar">Prepararlo</h2>
+  <div class="note"><span class="lbl">Chat o terminal</span><p>El chat solo <strong>conversa</strong>: el modelo no
+  toca tus archivos ni renderiza. Para que la IA edite el workspace, cree checkpoints y se corrija sola, usa un
+  <a href="#ia-agentes">agente en la terminal</a>.</p></div>
+
+  <h2 id="ia-ollama--proveedores">Proveedores</h2>
+  <p>Se habilitan en <a href="#config-materiales--ollama">Configuración → IA</a>:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Proveedor</th><th>Qué indicas</th></tr>
+    <tr><td>Ollama</td><td>La URL del servidor (por defecto <code>http://localhost:11434</code>)</td></tr>
+    <tr><td>Compatible con OpenAI</td><td>La URL del servidor y la variable de entorno con su API key — LM Studio, vLLM, OpenRouter…</td></tr>
+    <tr><td>Anthropic</td><td>La variable de entorno con tu API key</td></tr>
+  </table></div>
+  <p><strong>Las claves no se guardan</strong>: ScadLab solo guarda el <em>nombre</em> de la variable de entorno y lee la
+  clave de ahí cuando la necesita. Funciona también si la definiste en <code>~/.zshrc</code>, aunque abras la app
+  desde el Finder.</p>
+
+  <h2 id="ia-ollama--preparar">Preparar Ollama</h2>
+  <p>Si eliges el modelo local, instala Ollama y descarga uno:</p>
   <div class="codewrap"><pre><code>ollama pull qwen2.5-coder:14b     <span class="c"># o el modelo de código que prefieras</span>
 ollama serve                      <span class="c"># si no está corriendo ya</span></code></pre></div>
-  <p>En <a href="#config-materiales">Configuración → Ollama</a> indica la URL (por defecto
-  <code>http://localhost:11434</code>) y el modelo.</p>
+  <p>Con Ollama no hay cuenta, ni coste por token, ni sale nada de tu equipo. Los modelos locales pequeños se
+  equivocan más con la geometría.</p>
 
-  <h2 id="ia-ollama--limites">Qué esperar</h2>
-  <p>Ollama se usa para <strong>chat</strong>: preguntas sobre OpenSCAD, ideas de diseño, explicar un error. Para que
-  la IA escriba checkpoints, valide con el MCP y se corrija sola, usa uno de los <a href="#ia-agentes">agentes de
-  terminal</a>. Los modelos locales pequeños se equivocan más con la geometría.</p>
+  <h2 id="ia-ollama--empezar">Empezar un chat</h2>
+  <figure class="shot"><img src="docs/screenshots/es/chat-new.png" alt="Chat nuevo con el selector de proveedor (Ollama) y el selector de modelo, y sugerencias de qué pedir" loading="lazy"><figcaption>Un chat nuevo: eliges proveedor y modelo, y escribes abajo.</figcaption></figure>
+  <ol class="steps">
+    <li>Abre la pestaña <strong>Chat</strong> y pulsa <strong>Chat nuevo</strong>.</li>
+    <li>Elige el <strong>proveedor</strong> y el <strong>modelo</strong>. La lista de modelos sale del servidor; si no
+      responde, escribe el nombre del modelo a mano.</li>
+    <li>Escribe lo que quieres y envía con <kbd>Enter</kbd> (<kbd>Mayús+Enter</kbd> agrega una línea).</li>
+  </ol>
+  <p>El modelo queda <strong>fijo en ese chat</strong>; para probar otro, empieza un chat nuevo. El historial de chats
+  queda guardado por workspace, y puedes cambiar de conversación o borrar una desde la barra del chat.</p>
+
+  <h2 id="ia-ollama--contexto">Qué sabe el modelo de tu workspace</h2>
+  <ul>
+    <li>El <strong>checkpoint abierto</strong>: su código, hasta unos 12 KB.</li>
+    <li>Los <strong>checkpoints que ya existen</strong>, para sugerir el nombre del siguiente.</li>
+    <li>Los datos de tu <strong>impresora</strong>: el volumen de impresión y los colores del AMS.</li>
+  </ul>
+  <p>Además lleva instrucciones propias sobre las reglas de checkpoints, el color por pieza y el diseño para FDM.
+  No ve nada más: ni tus otros archivos ni el visor.</p>
+
+  <h2 id="ia-ollama--respuesta">La respuesta</h2>
+  <p>Llega en <strong>streaming</strong>, palabra a palabra. <strong>Detener</strong> corta la respuesta en el acto y
+  conserva lo que ya se escribió.</p>
+  <p>Cada bloque de OpenSCAD trae dos botones:</p>
+  <ul>
+    <li><strong>Copiar</strong>: lleva el código al portapapeles.</li>
+    <li><strong>Guardar como checkpoint</strong>: aparece cuando el bloque terminó de llegar. Te pide un rótulo y
+      crea un checkpoint nuevo, hijo del archivo abierto o, si no hay ninguno abierto, del último checkpoint.</li>
+  </ul>
+
+  <h2 id="ia-ollama--sin-proveedor">Si no hay proveedores habilitados</h2>
+  <figure class="shot"><img src="docs/screenshots/es/chat-empty.png" alt="Panel Chat sin proveedores: el aviso «No hay ningún proveedor de chat habilitado» con el botón Abrir Configuración → IA" loading="lazy"><figcaption>Sin proveedores habilitados, el chat lo avisa y te lleva a Configuración → IA.</figcaption></figure>
+  <p>El chat lo avisa con un botón que abre Configuración → IA. Habilita un proveedor, vuelve al panel y pulsa
+  <strong>Ya lo habilité</strong>.</p>
 </article>
 
 <article class="topic" id="ia-prompts" data-title="Cómo pedirle un modelo a la IA">
@@ -1408,25 +1511,34 @@ color("Black") label();                                    // texto que llena el
 
   <h2 id="config-general--clis">CLIs de agentes detectados</h2>
   <p>Lista Claude Code, opencode, Codex y Antigravity con su estado (encontrado / no encontrado) y la ruta. Si
-  instalas uno con la app abierta, pulsa <strong>Volver a detectar</strong>.</p>
+  instalas uno con la app abierta, pulsa <strong>Volver a detectar</strong>. Solo los agentes <strong>habilitados</strong>
+  aparecen en el selector de la <a href="#ia-agentes">terminal</a>, y el <strong>agente por defecto</strong> es el que
+  se preselecciona. Más abajo están los servidores de modelos del <a href="#ia-ollama">chat</a>.</p>
 
   <h2 id="config-general--skills">Skills</h2>
   <p>Lista las incluidas y las tuyas, y permite crear una nueva desde la plantilla: ver
   <a href="#ia-skill-propia">Crear tu propia skill</a>.</p>
 </article>
 
-<article class="topic" id="config-materiales" data-title="Ollama, materiales e impresora" data-status="dev">
-  <h1>Ollama, materiales e impresora <span class="badge dev">En desarrollo</span></h1>
-  <p class="lead">Los ajustes que alimentan el chat local, la estimación de costo y el perfil de impresora de los
-  proyectos nuevos.</p>
+<article class="topic" id="config-materiales" data-title="Modelos de IA, materiales e impresora" data-status="dev">
+  <h1>Modelos de IA, materiales e impresora <span class="badge dev">En desarrollo</span></h1>
+  <p class="lead">Los servidores de modelos del chat, y los ajustes que alimentan la estimación de costo y el perfil de
+  impresora de los proyectos nuevos.</p>
 
   <figure class="shot"><img src="docs/screenshots/es/settings-printing.png" alt="Tabla de materiales con densidad y costo por kilo de PLA, PETG, ABS, ASA y TPU" loading="lazy"><figcaption>Materiales: densidad y costo por kilo, editables.</figcaption></figure>
 
-  <h2 id="config-materiales--ollama">Ollama</h2>
+  <h2 id="config-materiales--ollama">Servidores de modelos (pestaña IA)</h2>
+  <p>Son los proveedores del <a href="#ia-ollama">chat</a>. Habilita los que uses:</p>
   <ul>
-    <li><strong>URL</strong>: por defecto <code>http://localhost:11434</code>. Puede ser otra máquina de tu red.</li>
-    <li><strong>Modelo</strong>: se elige de los que tengas descargados.</li>
+    <li><strong>Ollama</strong>: la URL (por defecto <code>http://localhost:11434</code>; puede ser otra máquina de tu
+      red) y el modelo. <strong>Probar y listar modelos</strong> comprueba la conexión y trae los que tengas
+      descargados.</li>
+    <li><strong>Compatible con OpenAI</strong> (LM Studio, vLLM, OpenRouter…): la URL base y la variable de entorno de
+      la API key.</li>
+    <li><strong>Anthropic</strong>: la variable de entorno de la API key.</li>
   </ul>
+  <p>La clave <strong>nunca se guarda</strong> en ScadLab: solo el nombre de la variable de entorno, de la que se
+  lee cuando hace falta.</p>
 
   <h2 id="config-materiales--materiales">Materiales</h2>
   <p>Una tabla de materiales con <strong>densidad</strong> (g/cm³) y <strong>costo por kg</strong>, más el
@@ -1460,7 +1572,8 @@ color("Black") label();                                    // texto que llena el
 
   <h2 id="config-datos--red">Qué sale a la red</h2>
   <p>ScadLab no tiene cuenta ni telemetría. Lo único que sale de tu máquina es lo que envían los agentes de IA
-  que tú ejecutas a su propio proveedor. Con Ollama local, nada.</p>
+  que tú ejecutas a su propio proveedor y, en el <a href="#ia-ollama">chat</a>, lo que escribes junto con el contexto
+  del checkpoint abierto, hacia el servidor que elijas. Con Ollama local, nada.</p>
 </article>
 
 <!-- ============================================================= RECETAS -->
@@ -1473,7 +1586,8 @@ color("Black") label();                                    // texto que llena el
 
   <ol class="steps">
     <li><strong>Crea el workspace</strong> <em>Llavero</em> con la impresora <strong>A1 mini</strong>.</li>
-    <li><strong>Pídeselo al agente</strong>:
+    <li><strong>Pídeselo al agente</strong> en la terminal (o a un modelo en el <a href="#ia-ollama">Chat</a>, y guarda
+      su código como checkpoint):
       <div class="prompt"><p>Llavero de 50×20×4 mm con esquinas redondeadas de 3 mm y un agujero de 4 mm para la
       anilla. Mi nombre «MARCO» embutido 1 mm, en negro sobre base amarilla. Una pieza por color, sin solapes.</p></div></li>
     <li><strong>Revisa en el visor</strong>: vista <em>Arriba</em> para leer el texto y <em>Abajo</em> para comprobar que la
@@ -1545,6 +1659,12 @@ color("Black") label();                                    // texto que llena el
     <tr><td><kbd>F8</kbd> / <kbd>⇧F8</kbd></td><td><kbd>F8</kbd> / <kbd>Shift+F8</kbd></td><td>Ir al problema siguiente / anterior</td></tr>
     <tr><td><kbd>⌘/</kbd></td><td><kbd>Ctrl+/</kbd></td><td>Comentar o descomentar la línea</td></tr>
     <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>Deshacer / rehacer (incluido el formato)</td></tr>
+    <tr class="sect"><td colspan="3">Terminal de agente</td></tr>
+    <tr><td><kbd>⌘C</kbd></td><td><kbd>Ctrl+C</kbd></td><td>Copiar la selección. En Windows, sin selección, <kbd>Ctrl+C</kbd> interrumpe al agente; en macOS, <kbd>⌃C</kbd> siempre le llega</td></tr>
+    <tr><td><kbd>⌘V</kbd></td><td><kbd>Ctrl+V</kbd></td><td>Pegar en la terminal</td></tr>
+    <tr class="sect"><td colspan="3">Chat</td></tr>
+    <tr><td><kbd>↵</kbd></td><td><kbd>Enter</kbd></td><td>Enviar el mensaje</td></tr>
+    <tr><td><kbd>⇧↵</kbd></td><td><kbd>Shift+Enter</kbd></td><td>Agregar una línea al mensaje</td></tr>
     <tr class="sect"><td colspan="3">Visor 3D (con el visor enfocado: clic en él)</td></tr>
     <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Orbitar</td></tr>
     <tr><td><kbd>Shift</kbd>+flechas</td><td><kbd>Shift</kbd>+flechas</td><td>Desplazar (pan)</td></tr>
@@ -1567,7 +1687,8 @@ color("Black") label();                                    // texto que llena el
   Saber leerlo ayuda a pedir cambios precisos («sube <code>wall</code> a 2,4»), y el <a href="#editor">editor</a> te deja
   tocarlo a mano.</p></details>
   <details><summary>¿Necesito una suscripción de IA?</summary><p>Para los agentes de terminal, la que pida cada CLI
-  (Claude Code, Codex…). Si no quieres pagar, usa <a href="#ia-ollama">Ollama</a> en local, con menos precisión.</p></details>
+  (Claude Code, Codex…); para el chat, la de su proveedor. Si no quieres pagar, usa el
+  <a href="#ia-ollama">chat con Ollama</a> en local, con menos precisión.</p></details>
   <details><summary>¿Por qué la IA no puede editar un checkpoint?</summary><p>Porque el historial se reconstruye de los
   archivos: si uno cambiara, el árbol dejaría de decir la verdad. Ver <a href="#checkpoints--inmutables">por qué son
   inmutables</a>.</p></details>

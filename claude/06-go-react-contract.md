@@ -73,6 +73,33 @@ Settings del editor (en `store.Settings`): `editorIndent` (2 \| 4, default 4),
 bottomHeight, dimsCollapsed}`. Fuera de rango se normalizan al leer; un
 `SaveSettings` con `layout` en cero no pisa el guardado.
 
+## Terminal de agentes — `app_terminal.go` (S5)
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `ListAgentChoices()` | `[]AgentChoice{id, name, found, path, enabled, canList}` | liviano: solo resuelve el ejecutable (no corre `--version`) |
+| `StartAgentTerminal(workspaceId, agentId, mode, sessionId, cols, rows)` | `string` (termId) | `mode`: `new` \| `resume` \| `continue`; máx. 2 terminales de agente; argv sin shell, `sessionId` validado |
+| `WriteTerminal(termId, data)` / `ResizeTerminal(termId, cols, rows)` / `CloseTerminal(termId)` | — | cerrar mata el grupo de procesos |
+| `ListTerminals()` | `[]TerminalInfo{id, kind, agentId, workspaceId, cols, rows, startedAt}` | para reenganchar al recargar la UI |
+| `ReadTerminalBuffer(termId)` | `TerminalSnapshot{data (base64), seq}` | pantalla reciente para redibujar |
+| `ListAgentSessions(workspaceId, agentId)` | `[]agentsessions.Session{id, title, updatedAt}` | filtradas por la carpeta del workspace |
+| `SetAutoIterate(enabled)` | — | setting `autoIterate` (auto-iteración, ver `onRenderFinished`) |
+
+## Chat con modelos — `app_chat.go` (S5)
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `ListChats(workspaceId)` / `GetChat(chatId)` | `[]store.Chat` / `ChatView{chat, messages, running, partial, partialSeq}` | `GetChat` permite retomar un turno en curso |
+| `NewChat(workspaceId, providerId, model)` | `store.Chat` | proveedor y modelo quedan fijos en el chat |
+| `SendChatMessage(chatId, text, currentFile)` | `store.ChatMessage` (el del usuario) | respuesta por eventos `chat:*`; prompt de sistema = `prompts.SystemPrompt` |
+| `CancelChat(chatId)` / `DeleteChat(chatId)` | — | cancelar conserva el parcial |
+| `ListProviderModels(providerId)` | `[]string` | Ollama `/api/tags`, OpenAI `/v1/models`, Anthropic lista fija |
+| `ChatCheckpointParent(workspaceId, currentFile)` | `string` | padre para «Guardar como checkpoint»: el abierto o el último |
+
+Persistencia: migración 2 (`chats`, `chat_messages`). Las API keys se leen de
+la variable que nombra `config.apiKeyEnv` (si no está en el proceso, se pide una
+vez a la shell de login en macOS); nunca se guardan ni viajan al frontend.
+
 ## Eventos (Go → React)
 
 Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
@@ -82,6 +109,11 @@ Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
 | `render:started` | `{workspaceId, fileName}` | `RenderCheckpoint` (también el auto-render del watcher) |
 | `render:finished` | `{workspaceId, result}` | `RenderCheckpoint`, siempre, aunque falle el motor (un cancelado llega con `status: cancelled`) |
 | `checkpoints:changed` | `WorkspaceView` | watcher: algún `.scad` de la raíz cambió (debounce 300 ms) |
+| `terminal:data` | `{id, data (base64), seq}` | PTY de una terminal de agente (S5) |
+| `terminal:exit` | `{id, code}` | el proceso de la terminal terminó |
+| `chat:delta` | `{chatId, text, seq}` | turno de chat en curso (deltas agrupados cada 40 ms) |
+| `chat:done` | `{chatId, messageId, cancelled}` | fin del turno (también al cancelar con texto parcial) |
+| `chat:error` | `{chatId, message, messageId}` | error del proveedor; si había texto, se guardó como respuesta parcial |
 
 Watcher (`backend/watch`): raíz del workspace abierto, no recursivo, solo
 `.scad`. Si aparece un `.scad` nuevo y `autoRender` está activo, renderiza el

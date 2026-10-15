@@ -32,10 +32,27 @@ type App struct {
 	scad      openscadCache
 	emitter   func(name string, payload any) // nil en tests: ver emit
 
+	renderListeners []renderListener // ver onRenderFinished (app_render.go)
+
 	// Watcher del workspace abierto (app_workspaces.go). Uno solo en S1.
 	watchMu   sync.Mutex
 	watcher   *watch.Watcher
 	watchedID int64
+
+	// Servicios de S5+ (terminal, chat…): cada uno vive en su app_*.go con su
+	// propio estado y se registra acá para cerrarse con la app, sin que cada
+	// fase tenga que tocar este archivo.
+	hooksMu       sync.Mutex
+	shutdownHooks []func()
+}
+
+// onShutdown registra una función a correr al cerrar la app, antes de cerrar el
+// motor y la base (una terminal que muere después de la base no puede guardar
+// su estado). Se corren en orden inverso al registro.
+func (a *App) onShutdown(f func()) {
+	a.hooksMu.Lock()
+	a.shutdownHooks = append(a.shutdownHooks, f)
+	a.hooksMu.Unlock()
 }
 
 // NewApp crea la App; el trabajo real va en startup.
@@ -81,6 +98,13 @@ func (a *App) shutdown(context.Context) {
 	// que mata los OpenSCAD en curso: si no, quedarían procesos huérfanos
 	// consumiendo CPU después de cerrar la ventana.
 	a.stopWatcher()
+	a.hooksMu.Lock()
+	hooks := a.shutdownHooks
+	a.shutdownHooks = nil
+	a.hooksMu.Unlock()
+	for i := len(hooks) - 1; i >= 0; i-- {
+		hooks[i]()
+	}
 	if a.engine != nil {
 		a.engine.Close()
 	}

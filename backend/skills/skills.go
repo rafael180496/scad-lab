@@ -51,7 +51,7 @@ var nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
 var (
 	errBadName = i18n.New(i18n.Msg{
-		ES: "nombre de skill inválido: usá minúsculas, números y guiones (kebab-case)",
+		ES: "nombre de skill inválido: usa minúsculas, números y guiones (kebab-case)",
 		EN: "invalid skill name: use lowercase letters, digits and hyphens (kebab-case)",
 	})
 	errExists = i18n.New(i18n.Msg{ES: "ya existe una skill con ese nombre", EN: "a skill with that name already exists"})
