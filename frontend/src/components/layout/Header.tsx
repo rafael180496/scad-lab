@@ -8,6 +8,7 @@ import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {withKeys} from '../../lib/platform'
+import {TitleBarDoubleClick} from '../../../wailsjs/go/main/App'
 
 // Ancho de cabecera (a interfaz 100 %) por debajo del cual los botones pasan a solo ícono.
 const HEADER_COMPACT_W = 900
@@ -65,6 +66,14 @@ export function Header({
         <header
             ref={ref}
             data-lock
+            // Doble clic en la cabecera = doble clic en la barra de título nativa
+            // (agrandar/restaurar, o lo que diga la preferencia de macOS). Solo
+            // sobre el fondo arrastrable: un botón, una pestaña o un menú tienen
+            // su propio doble clic (renombrar, etc.).
+            onDoubleClick={(e) => {
+                if ((e.target as HTMLElement).closest('.no-drag, button, input, a, [role="tab"]')) return
+                void TitleBarDoubleClick().catch(() => {})
+            }}
             className={cn(
                 'drag flex h-11 min-w-0 shrink-0 items-center gap-3 overflow-clip border-b border-line bg-surface pr-2',
                 // Semáforos de macOS (TitleBarHiddenInset) a la izquierda.

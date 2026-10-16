@@ -382,6 +382,10 @@ export function SyncWorkspaceSkills(arg1) {
   return window['go']['main']['App']['SyncWorkspaceSkills'](arg1);
 }
 
+export function TitleBarDoubleClick() {
+  return window['go']['main']['App']['TitleBarDoubleClick']();
+}
+
 export function TrashCheckpoint(arg1, arg2, arg3) {
   return window['go']['main']['App']['TrashCheckpoint'](arg1, arg2, arg3);
 }

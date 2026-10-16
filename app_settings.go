@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -61,8 +63,31 @@ func (a *App) EffectiveWorkspacesRoot() string {
 }
 
 // ChooseDirectory abre el diálogo nativo de carpetas. "" si se cancela.
+//
+// start puede no existir todavía (la carpeta de workspaces se crea recién al
+// crear el primero): el diálogo de Wails falla con «default directory … does
+// not exist» en vez de abrirse, así que se le pasa la carpeta existente más
+// cercana.
 func (a *App) ChooseDirectory(title, start string) (string, error) {
-	return wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, DefaultDirectory: start})
+	return wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, DefaultDirectory: existingDir(start)})
+}
+
+// existingDir devuelve p si es una carpeta existente, o su ancestro existente
+// más cercano. "" si p está vacío o no es absoluto (el diálogo abre donde
+// quiera el sistema).
+func existingDir(p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || !filepath.IsAbs(p) {
+		return ""
+	}
+	for d := filepath.Clean(p); ; d = filepath.Dir(d) {
+		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
+			return d
+		}
+		if parent := filepath.Dir(d); parent == d {
+			return ""
+		}
+	}
 }
 
 // ChooseFile abre el diálogo nativo para elegir un ejecutable (p. ej. OpenSCAD).

@@ -204,6 +204,8 @@ export function SyncWorkspaceMCP(arg1:number):Promise<mcpconf.Report>;
 
 export function SyncWorkspaceSkills(arg1:number):Promise<void>;
 
+export function TitleBarDoubleClick():Promise<void>;
+
 export function TrashCheckpoint(arg1:number,arg2:string,arg3:boolean):Promise<Array<string>>;
 
 export function UpdateWorkspace(arg1:store.Workspace):Promise<void>;

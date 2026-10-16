@@ -130,7 +130,7 @@ func (a *App) pickExportPath(defaultDir, suggested, format string) (string, erro
 	}
 	return wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{
 		Title:            title,
-		DefaultDirectory: defaultDir,
+		DefaultDirectory: existingDir(defaultDir),
 		DefaultFilename:  suggested,
 		Filters:          []wruntime.FileFilter{filter},
 	})

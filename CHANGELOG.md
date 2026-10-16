@@ -7,6 +7,24 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+### Agregado
+
+- **Doble clic en la cabecera agranda la ventana.** En macOS la barra de título
+  nativa está oculta y la cabecera de ScadLab hace de barra, pero el doble clic no
+  hacía nada. Ahora agranda o restaura la ventana —o la minimiza, o no hace nada, si
+  así lo elegiste en Ajustes del Sistema → Escritorio y Dock—, igual que en
+  cualquier otra app. Sobre un botón o una pestaña de proyecto, el doble clic sigue
+  siendo de ese control.
+
+### Corregido
+
+- **«Elegir…» no abría el diálogo de carpetas si la carpeta todavía no existía.**
+  En «Nuevo workspace», la ubicación predeterminada (`~/Documents/ScadLab`) se crea
+  recién con el primer workspace, y el diálogo nativo se negaba a abrir con «default
+  directory … does not exist», un aviso por cada clic. Ahora abre en la carpeta
+  existente más cercana. Lo mismo valía para Configuración → carpeta de workspaces
+  y para el diálogo de exportar.
+
 ## [0.1.0] - 2026-10-16
 
 ### Agregado
