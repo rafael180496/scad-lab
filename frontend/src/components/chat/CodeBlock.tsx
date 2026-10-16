@@ -1,25 +1,9 @@
 import {useRef, useState} from 'react'
 import {Check, Copy, GitBranchPlus} from 'lucide-react'
-import {ClipboardSetText} from '../../../wailsjs/runtime/runtime'
+import {copyText} from '../../lib/clipboard'
 import {useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {isScadBlock} from './scadBlock'
-
-// Copia al portapapeles. navigator.clipboard puede estar bloqueado en la
-// webview (exige un contexto seguro y un gesto); el runtime de Wails lo hace
-// por el sistema operativo y es el respaldo.
-async function copyText(text: string): Promise<boolean> {
-    try {
-        await navigator.clipboard.writeText(text)
-        return true
-    } catch {
-        try {
-            return await ClipboardSetText(text)
-        } catch {
-            return false
-        }
-    }
-}
 
 export type CodeActions = {
     /** Guardar este bloque como checkpoint; sin ella (o con `undefined`) no hay botón. */

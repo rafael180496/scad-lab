@@ -12,6 +12,8 @@ import {
     NeutralToneMapping,
     type Object3D,
     PMREMGenerator,
+    Raycaster,
+    Vector2,
     Vector3,
 } from 'three'
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -37,8 +39,24 @@ export type PaneHandle = {
     capture: () => HTMLCanvasElement
 }
 
+// El modelo por partes (S7): una geometría por color, con el color que le da el
+// modelo, y cuál está seleccionada. La selección vive en el visor (la comparten
+// las dos vistas de la vista dividida), no en cada Canvas.
+export type PartsScene = {
+    geoms: BufferGeometry[]
+    /** Color de cada parte (#RRGGBB); '' = sin color propio, se usa la muestra. */
+    colors: string[]
+    /** true = cada parte con su color; false = todas con la muestra elegida. */
+    modelColors: boolean
+    selected: number | null
+    onSelect: (index: number | null) => void
+}
+
 type SceneProps = {
     geometry: BufferGeometry | null
+    parts?: PartsScene
+    /** El modelo no cabe en la placa: contorno de la cama en rojo. */
+    overflow?: boolean
     bed: BedVolume
     color: string
     wireframe: boolean
@@ -97,7 +115,7 @@ function gridLines(x: number, y: number, step: number, every: number, major: boo
 // Bed: la placa de la impresora del workspace a escala, con cuadrícula de
 // 10 mm (más marcada cada 50) y la caja del volumen de impresión en líneas
 // tenues. Centrada en el origen, como la pieza.
-function Bed({bed, theme}: {bed: BedVolume; theme: ThemeColors}) {
+function Bed({bed, theme, overflow}: {bed: BedVolume; theme: ThemeColors; overflow: boolean}) {
     const minor = useMemo(() => gridLines(bed.x, bed.y, 10, 5, false), [bed.x, bed.y])
     const major = useMemo(() => gridLines(bed.x, bed.y, 10, 5, true), [bed.x, bed.y])
     const volume = useMemo(() => {
@@ -136,8 +154,32 @@ function Bed({bed, theme}: {bed: BedVolume; theme: ThemeColors}) {
                 </lineSegments>
             </group>
             <lineSegments geometry={volume}>
-                <lineBasicMaterial color={theme.lineStrong} transparent opacity={0.35} toneMapped={false} />
+                <lineBasicMaterial color={overflow ? theme.danger : theme.lineStrong} transparent opacity={overflow ? 0.7 : 0.35} toneMapped={false} />
             </lineSegments>
+            {overflow ? <OverflowFrame bed={bed} color={theme.danger} /> : null}
+        </group>
+    )
+}
+
+// OverflowFrame es el contorno de la cama en rojo cuando la pieza no cabe: cuatro
+// tiras sobre el borde (una línea de WebGL mide 1 px y no se vería). Lleva su
+// propia ref a la capa 1 porque aparece después del montaje del grupo.
+const FRAME_MM = 3
+function OverflowFrame({bed, color}: {bed: BedVolume; color: string}) {
+    const hx = bed.x / 2
+    const hy = bed.y / 2
+    const strip = (x: number, y: number, w: number, h: number) => (
+        <mesh position={[x, y, 0.03]}>
+            <planeGeometry args={[w, h]} />
+            <meshBasicMaterial color={color} toneMapped={false} />
+        </mesh>
+    )
+    return (
+        <group ref={onLayer1}>
+            {strip(0, hy - FRAME_MM / 2, bed.x, FRAME_MM)}
+            {strip(0, -hy + FRAME_MM / 2, bed.x, FRAME_MM)}
+            {strip(-hx + FRAME_MM / 2, 0, FRAME_MM, bed.y - 2 * FRAME_MM)}
+            {strip(hx - FRAME_MM / 2, 0, FRAME_MM, bed.y - 2 * FRAME_MM)}
         </group>
     )
 }
@@ -177,6 +219,108 @@ function Model({geometry, color, wireframe, edges}: {geometry: BufferGeometry; c
                 </lineSegments>
             ) : null}
         </>
+    )
+}
+
+// Parts dibuja el modelo por partes. La selección resalta la parte (brillo del
+// color de acento y su contorno) y atenúa el resto.
+//
+// El clic NO se resuelve con los onClick de R3F: cada objeto con manejadores entra
+// en la lista que R3F recorre con un raycast en CADA movimiento del ratón, y sin
+// una estructura de aceleración eso son decenas de ms por movimiento en una malla
+// grande. Acá se lanza UN rayo, al soltar el botón, y solo si el ratón casi no se
+// movió desde que se pulsó (si no, era un arrastre de la órbita o del desplazamiento).
+const CLICK_SLOP_PX = 4
+const DIM_OPACITY = 0.32
+
+function Parts({parts, swatch, wireframe, edges, accent}: {parts: PartsScene; swatch: string; wireframe: boolean; edges: boolean; accent: string}) {
+    const gl = useThree((s) => s.gl)
+    const get = useThree((s) => s.get)
+    const group = useRef<Group>(null)
+    // El manejador va por ref: el visor se vuelve a dibujar al activar el panel (en el
+    // pointerdown de ese mismo clic) y re-suscribir los listeners ahí perdería el
+    // «botón pulsado» y el clic se ignoraría.
+    const onSelectRef = useRef(parts.onSelect)
+    onSelectRef.current = parts.onSelect
+    const hasSel = parts.selected !== null
+
+    useEffect(() => {
+        const el = gl.domElement
+        const ray = new Raycaster()
+        const ndc = new Vector2()
+        let down: {x: number; y: number} | null = null
+        const onDown = (e: PointerEvent) => {
+            down = e.button === 0 ? {x: e.clientX, y: e.clientY} : null
+        }
+        const onUp = (e: PointerEvent) => {
+            const d = down
+            down = null
+            if (!d || e.button !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_SLOP_PX) return
+            const r = el.getBoundingClientRect()
+            if (r.width === 0 || r.height === 0) return
+            ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+            ray.setFromCamera(ndc, get().camera)
+            // Recursivo (cada parte es un grupo con su malla y sus aristas); solo cuentan
+            // las mallas, que son las que llevan el índice de la parte.
+            const hit = group.current ? ray.intersectObjects(group.current.children, true).find((h) => h.object.userData.part !== undefined) : undefined
+            onSelectRef.current(hit ? (hit.object.userData.part as number) : null)
+        }
+        const cancel = () => {
+            down = null
+        }
+        el.addEventListener('pointerdown', onDown)
+        el.addEventListener('pointerup', onUp)
+        el.addEventListener('pointercancel', cancel)
+        return () => {
+            el.removeEventListener('pointerdown', onDown)
+            el.removeEventListener('pointerup', onUp)
+            el.removeEventListener('pointercancel', cancel)
+        }
+    }, [gl, get])
+
+    return (
+        <group ref={group}>
+            {parts.geoms.map((g, i) => {
+                const own = parts.modelColors ? parts.colors[i] : ''
+                const color = own || swatch
+                const selected = parts.selected === i
+                const dim = hasSel && !selected
+                return (
+                    <group key={i}>
+                        <mesh geometry={g} userData={{part: i}}>
+                            {wireframe ? (
+                                <meshBasicMaterial color={color} wireframe transparent={dim} opacity={dim ? DIM_OPACITY : 1} />
+                            ) : (
+                                <meshPhysicalMaterial
+                                    color={color}
+                                    emissive={selected ? accent : '#000000'}
+                                    emissiveIntensity={selected ? 0.2 : 0}
+                                    roughness={0.5}
+                                    metalness={0}
+                                    clearcoat={0.15}
+                                    clearcoatRoughness={0.35}
+                                    transparent={dim}
+                                    opacity={dim ? DIM_OPACITY : 1}
+                                    depthWrite={!dim}
+                                    polygonOffset
+                                    polygonOffsetFactor={2}
+                                    polygonOffsetUnits={4}
+                                />
+                            )}
+                        </mesh>
+                        {selected && !wireframe ? (
+                            <lineSegments geometry={edgesOf(g)}>
+                                <lineBasicMaterial color={accent} toneMapped={false} />
+                            </lineSegments>
+                        ) : edges && !wireframe && !dim ? (
+                            <lineSegments geometry={edgesOf(g)}>
+                                <lineBasicMaterial color={edgeColor(color)} />
+                            </lineSegments>
+                        ) : null}
+                    </group>
+                )
+            })}
+        </group>
     )
 }
 
@@ -272,10 +416,14 @@ function Scene(p: SceneProps) {
             <Environment />
             <ambientLight intensity={0.15} />
             <directionalLight position={[60, -90, 160]} intensity={0.8} />
-            <Bed bed={p.bed} theme={p.theme} />
+            <Bed bed={p.bed} theme={p.theme} overflow={!!p.overflow} />
             {p.geometry ? (
                 <>
-                    <Model geometry={p.geometry} color={p.color} wireframe={p.wireframe} edges={p.edges} />
+                    {p.parts ? (
+                        <Parts parts={p.parts} swatch={p.color} wireframe={p.wireframe} edges={p.edges} accent={p.theme.accent} />
+                    ) : (
+                        <Model geometry={p.geometry} color={p.color} wireframe={p.wireframe} edges={p.edges} />
+                    )}
                     {/* drei dibuja las sombras de contacto mirando a +Y; el grupo
                         las gira para que miren a +Z (la escena es Z arriba). */}
                     <group rotation={[Math.PI / 2, 0, 0]}>
@@ -300,7 +448,7 @@ const ORBIT_STEP = Math.PI / 12
 const PAN_STEP = 0.06
 const ZOOM_STEP = 0.85
 
-export type PaneKeyCommand = 'wireframe' | 'edges' | 'ortho'
+export type PaneKeyCommand = 'wireframe' | 'edges' | 'ortho' | 'deselect'
 
 export function ViewPane({
     scene,
@@ -338,6 +486,8 @@ export function ViewPane({
         else if (k === 'w' || k === 'W') onCommand('wireframe')
         else if (k === 'e' || k === 'E') onCommand('edges')
         else if (k === 'o' || k === 'O') onCommand('ortho')
+        // Esc solo cuando hay algo que deseleccionar: si no, se lo deja al modo enfoque.
+        else if (k === 'Escape' && scene.parts?.selected != null) onCommand('deselect')
         else handled = false
         if (handled) e.preventDefault()
     }

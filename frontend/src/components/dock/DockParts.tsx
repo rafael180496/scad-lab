@@ -1,6 +1,6 @@
 import {useLayoutEffect, useRef} from 'react'
 import type {IDockviewHeaderActionsProps, IDockviewPanelHeaderProps, IDockviewPanelProps, IWatermarkPanelProps, IDockviewPanel} from 'dockview-react'
-import {Ellipsis, Maximize2, Minimize2, X} from 'lucide-react'
+import {ArrowDownToLine, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, Ellipsis, Maximize2, Minimize2, Minus, Plus, X} from 'lucide-react'
 import {fmt, useT, type Dict} from '../../i18n'
 import {editorSession} from '../../lib/editorSession'
 import {keys, withKeys} from '../../lib/platform'
@@ -8,16 +8,24 @@ import {cn} from '../../lib/cn'
 import {Menu, useMenu, type MenuEntry} from '../ui/Menu'
 import {
     applyPreset,
+    canMinimize,
     dockState,
     dockPanel,
     floatPanel,
     hideOthers,
     hidePanel,
+    isMinimized,
+    movePanelBeside,
+    movePanelTo,
+    moveDisabled,
+    otherPanels,
     panelStatus,
+    restoreGroup,
     showPanel,
-    splitPanel,
     syncSoon,
     toggleMaximize,
+    toggleMinimize,
+    type MoveTarget,
 } from './dock'
 import {PRESET_IDS} from './layouts'
 import {PANEL_ICON, PANEL_IDS, PANEL_SHORTCUT, isPanelId, panelHint, panelTitle, type PanelId} from './panels'
@@ -73,18 +81,33 @@ function ProblemsBadge() {
 // DockTab es la pestaña de editor: ícono + título en letra normal, la × (o un
 // punto de estado que se vuelve × al pasar el ratón). Cerrar aquí OCULTA el
 // panel; su contenido (visor, modelo del editor, terminal) sigue vivo.
-export function DockTab({api}: IDockviewPanelHeaderProps) {
+export function DockTab({api, containerApi}: IDockviewPanelHeaderProps) {
     const t = useT()
     const id = api.id as PanelId
     const dot = useTabDot(id)
+    const menu = useMenu()
+    // Se redibuja al minimizar o restaurar el grupo de esta pestaña.
+    dockState.use((s) => s.minimized)
     if (!isPanelId(id)) return null
     const Icon = PANEL_ICON[id]
+    const panel = containerApi.getPanel(id)
+    const minimized = isMinimized(api.group)
     return (
         <div
             className="scadlab-tab"
-            title={panelHint(t, id)}
+            title={minimized ? fmt(t.dock.minimizedTabHint, {panel: panelTitle(t, id)}) : panelHint(t, id)}
             data-dot={dot ? '' : undefined}
-            onDoubleClick={() => toggleMaximize(api.group.panels.find((p) => p.id === id))}
+            // Un grupo minimizado se restaura con un clic en cualquiera de sus pestañas
+            // (con un doble clic, que además lo activa, no se maximiza: se restaura).
+            onClick={() => {
+                if (minimized) restoreGroup(api.group)
+            }}
+            onDoubleClick={() => {
+                if (minimized) restoreGroup(api.group)
+                else toggleMaximize(api.group.panels.find((p) => p.id === id))
+            }}
+            // El menú contextual es el mismo del botón «…» del grupo.
+            onContextMenu={menu.openContext}
             onAuxClick={(e) => {
                 if (e.button !== 1) return
                 e.preventDefault()
@@ -111,71 +134,151 @@ export function DockTab({api}: IDockviewPanelHeaderProps) {
                     <X className="icon-ui-12" />
                 </button>
             </span>
+            {menu.anchor && panel ? (
+                <Menu anchor={menu.anchor} point={menu.point} entries={panelMenuEntries(t, panel)} onClose={menu.close} label={t.dock.groupMenu} />
+            ) : null}
         </div>
     )
 }
 
 // ── Menú de la pestaña (clic derecho y botón «…» del grupo) ────────────────
 
-type TabAction = {separator?: false; label: string; title: string; run: () => void; disabled?: boolean} | {separator: true}
+const MOVE_ICON = {left: ArrowLeftToLine, right: ArrowRightToLine, top: ArrowUpToLine, bottom: ArrowDownToLine} as const
 
-export function tabActions(t: Dict, panel: IDockviewPanel): TabAction[] {
+// «Mover a…»: destinos explícitos que no dependen de arrastrar. Se calculan al
+// abrir el menú (el menú se arma al dibujarse), así que el estado de cada destino
+// —deshabilitado si no cambiaría nada— es el del momento.
+function moveEntries(t: Dict, panel: IDockviewPanel): MenuEntry[] {
+    const id = panel.id as PanelId
+    const name = panelTitle(t, id)
+    const dest = (target: MoveTarget, label: string, hint: string): MenuEntry => {
+        const Icon = target === 'center' ? undefined : MOVE_ICON[target]
+        return {
+            label,
+            title: fmt(hint, {panel: name}),
+            icon: Icon ? <Icon className="icon-ui-14" /> : undefined,
+            disabled: moveDisabled(panel, target),
+            onSelect: () => movePanelTo(panel, target),
+        }
+    }
+    const mates = otherPanels(panel)
+    const floating = panel.api.location.type === 'floating'
+    return [
+        {kind: 'heading', label: fmt(t.dock.move.heading, {panel: name})},
+        dest('left', t.dock.move.left, t.dock.move.leftHint),
+        dest('right', t.dock.move.right, t.dock.move.rightHint),
+        dest('top', t.dock.move.top, t.dock.move.topHint),
+        dest('bottom', t.dock.move.bottom, t.dock.move.bottomHint),
+        dest('center', t.dock.move.center, t.dock.move.centerHint),
+        mates.length
+            ? {
+                  label: t.dock.move.beside,
+                  title: fmt(t.dock.move.besideHint, {panel: name}),
+                  submenu: mates.map(
+                      (mate): MenuEntry => ({
+                          label: panelTitle(t, mate),
+                          title: fmt(t.dock.move.besideTo, {panel: name, mate: panelTitle(t, mate)}),
+                          icon: (() => {
+                              const Icon = PANEL_ICON[mate]
+                              return <Icon className="icon-ui-14" />
+                          })(),
+                          disabled: panel.api.group.panels.some((p) => p.id === mate),
+                          onSelect: () => movePanelBeside(panel, mate),
+                      }),
+                  ),
+              }
+            : {label: t.dock.move.beside, title: t.dock.move.besideNoneHint, disabled: true},
+        {kind: 'separator'},
+        floating
+            ? {label: t.dock.tab.dock, title: t.dock.tab.dock, onSelect: () => dockPanel(panel)}
+            : {label: t.dock.tab.float, title: t.dock.tab.float, onSelect: () => floatPanel(panel)},
+    ]
+}
+
+export function panelMenuEntries(t: Dict, panel: IDockviewPanel): MenuEntry[] {
     const id = panel.id as PanelId
     const floating = panel.api.location.type === 'floating'
     const maximized = panel.api.isMaximized()
     const alone = panel.group.panels.length < 2
+    const minimized = isMinimized(panel.group)
     return [
-        {label: t.dock.tab.hide, title: t.dock.closeTab, run: () => hidePanel(id)},
-        {label: t.dock.tab.hideOthers, title: t.dock.tab.hideOthers, run: () => hideOthers(id), disabled: alone},
-        {separator: true},
+        {label: t.dock.tab.hide, title: t.dock.closeTab, onSelect: () => hidePanel(id)},
+        {label: t.dock.tab.hideOthers, title: t.dock.tab.hideOthers, onSelect: () => hideOthers(id), disabled: alone},
+        {kind: 'separator'},
+        {
+            label: minimized ? t.dock.unminimizePanel : t.dock.minimizePanel,
+            title: withKeys(minimized ? t.dock.unminimizePanelHint : canMinimize(panel.group) ? t.dock.minimizePanelHint : t.dock.minimizeAloneHint, 'mod+shift+m'),
+            keys: keys('mod+shift+m'),
+            disabled: !minimized && !canMinimize(panel.group),
+            onSelect: () => toggleMinimize(panel.group),
+        },
         {
             label: maximized ? t.dock.tab.restore : t.dock.tab.maximize,
             title: maximized ? t.dock.restorePanelHint : t.dock.maximizePanelHint,
-            run: () => toggleMaximize(panel),
+            onSelect: () => toggleMaximize(panel),
         },
+        {kind: 'separator'},
+        {id: 'move', label: t.dock.tab.move, title: t.dock.tab.moveHint, submenu: moveEntries(t, panel)},
         floating
-            ? {label: t.dock.tab.dock, title: t.dock.tab.dock, run: () => dockPanel(panel)}
-            : {label: t.dock.tab.float, title: t.dock.tab.float, run: () => floatPanel(panel)},
-        {separator: true},
-        {label: t.dock.tab.moveRight, title: t.dock.tab.moveRight, run: () => splitPanel(panel, 'right'), disabled: alone},
-        {label: t.dock.tab.moveDown, title: t.dock.tab.moveDown, run: () => splitPanel(panel, 'bottom'), disabled: alone},
+            ? {label: t.dock.tab.dock, title: t.dock.tab.dock, onSelect: () => dockPanel(panel)}
+            : {label: t.dock.tab.float, title: t.dock.tab.float, onSelect: () => floatPanel(panel)},
     ]
 }
 
-// ── Acciones del grupo: maximizar y más opciones ───────────────────────────
+// ── Acciones del grupo: minimizar, maximizar y más opciones ────────────────
 
 export function GroupActions({group, activePanel}: IDockviewHeaderActionsProps) {
     const t = useT()
     const menu = useMenu()
     dockState.use((s) => s.maximized) // vuelve a dibujar el botón al maximizar o restaurar
+    dockState.use((s) => s.minimized) // ...y al minimizar o restaurar
     if (!activePanel) return null
     const maximized = group.api.isMaximized()
-    const entries: MenuEntry[] = tabActions(t, activePanel).map((a) =>
-        a.separator ? {kind: 'separator'} : {label: a.label, title: a.title, disabled: a.disabled, onSelect: a.run},
-    )
+    const minimized = isMinimized(group)
+    const minimizable = minimized || canMinimize(group)
+    // Minimizado al lado de otro grupo (franja angosta): solo cabe el botón de restaurar.
+    const strip = minimized && group.element.dataset.min === 'strip'
+    const minimizeTitle = minimized ? t.dock.unminimizePanelHint : minimizable ? t.dock.minimizePanelHint : t.dock.minimizeAloneHint
     return (
         <div className="scadlab-group-actions">
             <button
                 type="button"
                 className="scadlab-group-action"
-                aria-pressed={maximized}
-                title={maximized ? t.dock.restorePanelHint : t.dock.maximizePanelHint}
-                aria-label={maximized ? t.dock.restorePanel : t.dock.maximizePanel}
-                onClick={() => toggleMaximize(activePanel)}
+                aria-pressed={minimized}
+                disabled={!minimizable}
+                title={withKeys(minimizeTitle, 'mod+shift+m')}
+                aria-label={minimized ? t.dock.unminimizePanel : t.dock.minimizePanel}
+                onClick={() => toggleMinimize(group)}
+                data-group-minimize=""
             >
-                {maximized ? <Minimize2 className="icon-ui-14" /> : <Maximize2 className="icon-ui-14" />}
+                {minimized ? <Plus className="icon-ui-14" /> : <Minus className="icon-ui-14" />}
             </button>
-            <button
-                type="button"
-                className="scadlab-group-action"
-                aria-expanded={menu.open}
-                title={t.dock.groupMenuHint}
-                aria-label={t.dock.groupMenuHint}
-                onClick={menu.toggle}
-            >
-                <Ellipsis className="icon-ui-14" />
-            </button>
-            {menu.anchor ? <Menu anchor={menu.anchor} entries={entries} onClose={menu.close} align="end" label={t.dock.groupMenu} /> : null}
+            {strip ? null : (
+                <>
+                    <button
+                        type="button"
+                        className="scadlab-group-action"
+                        aria-pressed={maximized}
+                        title={maximized ? t.dock.restorePanelHint : t.dock.maximizePanelHint}
+                        aria-label={maximized ? t.dock.restorePanel : t.dock.maximizePanel}
+                        onClick={() => toggleMaximize(activePanel)}
+                    >
+                        {maximized ? <Minimize2 className="icon-ui-14" /> : <Maximize2 className="icon-ui-14" />}
+                    </button>
+                    <button
+                        type="button"
+                        className="scadlab-group-action"
+                        aria-expanded={menu.open}
+                        title={t.dock.groupMenuHint}
+                        aria-label={t.dock.groupMenuHint}
+                        onClick={menu.toggle}
+                        data-group-menu=""
+                    >
+                        <Ellipsis className="icon-ui-14" />
+                    </button>
+                </>
+            )}
+            {menu.anchor ? <Menu anchor={menu.anchor} entries={panelMenuEntries(t, activePanel)} onClose={menu.close} align="end" label={t.dock.groupMenu} /> : null}
         </div>
     )
 }

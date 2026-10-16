@@ -27,8 +27,10 @@ import (
 // terminales y auto-iteración. El PTY vive en backend/pty; las sesiones
 // previas de cada CLI, en backend/agentsessions.
 
-// maxAgentTerminals es el tope de terminales de agente abiertas a la vez: cada
-// una es un CLI que consume cuota y CPU, y la interfaz tiene dos pestañas.
+// maxAgentTerminals es el tope de terminales de agente abiertas a la vez POR
+// PROYECTO (desde S8; antes era global): cada una es un CLI que consume cuota y
+// CPU, y la interfaz tiene dos pestañas de agente. Con hasta 4 proyectos abiertos
+// el máximo total es 8.
 const maxAgentTerminals = 2
 
 // Auto-iteración: tras maxNudgeStreak avisos seguidos sin que el checkpoint
@@ -98,7 +100,8 @@ type terminalService struct {
 	lang         func() string
 	submitWait   time.Duration
 	runAsync     func(func())
-	maxTerminals int
+	maxTerminals int // por workspace
+	closeTerm    func(id string) error
 }
 
 var (
@@ -140,6 +143,7 @@ func newTerminalService(a *App) *terminalService {
 		a.emit(event, payload)
 	})
 	s.write = s.mgr.Write
+	s.closeTerm = s.mgr.Close
 	s.alive = s.mgr.Has
 	s.autoIterate = func() bool {
 		if a.store == nil {
@@ -157,18 +161,47 @@ func (s *terminalService) forget(id string) {
 	s.mu.Unlock()
 }
 
-// openCount cuenta las terminales de agente vivas y descarta de meta las que
-// ya murieron. Con s.mu tomado.
-func (s *terminalService) openCount() int {
+// openCount cuenta las terminales de agente vivas del workspace y descarta de
+// meta las que ya murieron (de cualquier workspace). Con s.mu tomado.
+func (s *terminalService) openCount(workspaceID int64) int {
 	n := 0
-	for id := range s.meta {
-		if s.alive(id) {
-			n++
-		} else {
+	for id, m := range s.meta {
+		if !s.alive(id) {
 			delete(s.meta, id)
+		} else if m.workspaceID == workspaceID {
+			n++
 		}
 	}
 	return n
+}
+
+// aliveFor son las terminales de agente vivas del workspace (indicador de la
+// pestaña del proyecto).
+func (s *terminalService) aliveFor(workspaceID int64) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.openCount(workspaceID)
+}
+
+// closeWorkspace cierra las terminales de agente del workspace (mata sus CLIs) y
+// olvida su racha de avisos. Lo usa CloseProject. Devuelve cuántas cerró. El
+// cierre va fuera de s.mu: mgr.Close emite terminal:exit y eso vuelve a forget.
+func (s *terminalService) closeWorkspace(workspaceID int64) int {
+	s.mu.Lock()
+	var ids []string
+	for id, m := range s.meta {
+		if m.workspaceID == workspaceID {
+			ids = append(ids, id)
+		}
+	}
+	delete(s.streak, workspaceID)
+	s.mu.Unlock()
+	for _, id := range ids {
+		if err := s.closeTerm(id); err != nil {
+			log.Printf("scadlab: cerrar la terminal %s: %v", id, err)
+		}
+	}
+	return len(ids)
 }
 
 func (a *App) context() context.Context {
@@ -202,7 +235,9 @@ func (a *App) ListAgentChoices() ([]AgentChoice, error) {
 
 // StartAgentTerminal abre el CLI de agentId en la carpeta del workspace y
 // devuelve el id de la terminal. mode: "new" | "resume" (con sessionId) |
-// "continue" (la última sesión). Máximo 2 terminales de agente a la vez.
+// "continue" (la última sesión). Máximo 2 terminales de agente a la vez por
+// proyecto. El agente recibe, además, las carpetas de los otros proyectos
+// abiertos (ver addDirArgs).
 func (a *App) StartAgentTerminal(workspaceId int64, agentId, mode, sessionId string, cols, rows int) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
@@ -228,7 +263,84 @@ func (a *App) StartAgentTerminal(workspaceId int64, agentId, mode, sessionId str
 	if exe == "" {
 		return "", i18n.Errorf(i18n.Msg{ES: "no se encontró %s en este equipo; indica su comando en Configuración → IA", EN: "%s was not found on this computer; set its command in Settings → AI"}, p.Name)
 	}
+	args = a.agentLaunchArgs(p.ID, w, args)
 	return a.terminals().startAgent(w, p, exe, mode, args, cols, rows)
+}
+
+// agentLaunchArgs arma los argumentos con que se lanza un CLI, en este orden:
+//
+//  1. el servidor MCP (Codex no lee configuración de proyecto: le llega por -c; a
+//     Claude por --mcp-config, que es variádico);
+//  2. las carpetas de los otros proyectos abiertos (--add-dir);
+//  3. los del modo de arranque (-c, --resume <id>, resume --last…).
+//
+// El orden importa para Claude: --mcp-config y --add-dir aceptan varios valores
+// y se comen cualquier argumento que no empiece con «-», así que cada grupo tiene
+// que terminar en otro flag (o en nada). Los de arranque son flags, y en Codex
+// los subcomandos (resume) van al final, después de todos los flags globales.
+func (a *App) agentLaunchArgs(agentID string, w store.Workspace, sessionArgs []string) []string {
+	out := a.mcpLaunchArgs(agentID, w.Path)
+	out = append(out, a.addDirArgs(agentID, w.ID)...)
+	return append(out, sessionArgs...)
+}
+
+// addDirArgs son los flags para que el agente vea los OTROS proyectos abiertos
+// (para reutilizar piezas; las reglas del workspace dicen que solo se escribe en
+// el propio). Solo entran los que existen en disco. Se fijan al lanzar el
+// agente: abrir otro proyecto después no cambia a uno ya abierto («Nueva» lo
+// relanza).
+func (a *App) addDirArgs(agentID string, workspaceID int64) []string {
+	if !agentSupportsAddDir(agentID) {
+		return nil
+	}
+	ids, _, err := a.projects().load()
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, id := range ids {
+		if id == workspaceID {
+			continue
+		}
+		w, err := a.store.GetWorkspace(id)
+		if err != nil {
+			continue
+		}
+		if st, err := os.Stat(w.Path); err != nil || !st.IsDir() {
+			continue
+		}
+		dirs = append(dirs, absDir(w.Path))
+	}
+	return buildAddDirArgs(agentID, dirs)
+}
+
+// agentSupportsAddDir dice si el CLI tiene una opción para carpetas extra.
+// opencode no la tiene (verificado): solo ve la suya.
+func agentSupportsAddDir(agentID string) bool {
+	switch agentID {
+	case agentsessions.Claude, agentsessions.Codex, agentsessions.Antigravity:
+		return true
+	}
+	return false
+}
+
+// buildAddDirArgs repite `--add-dir <carpeta>` por cada una (sin duplicados), la
+// forma que aceptan los tres CLIs. En Claude la opción es variádica, pero
+// repetirla evita depender de dónde termina la lista.
+func buildAddDirArgs(agentID string, dirs []string) []string {
+	if !agentSupportsAddDir(agentID) {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, "--add-dir", d)
+	}
+	return out
 }
 
 // agentProvider devuelve el proveedor si es un CLI habilitado.
@@ -249,8 +361,8 @@ func (a *App) agentProvider(agentID string) (store.AIProvider, error) {
 func (s *terminalService) startAgent(w store.Workspace, p store.AIProvider, exe, mode string, args []string, cols, rows int) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.openCount() >= s.maxTerminals {
-		return "", i18n.Errorf(i18n.Msg{ES: "ya hay %d terminales de agente abiertas; cierra una antes de abrir otra", EN: "there are already %d agent terminals open; close one before opening another"}, s.maxTerminals)
+	if s.openCount(w.ID) >= s.maxTerminals {
+		return "", i18n.Errorf(i18n.Msg{ES: "ya hay %d terminales de agente abiertas en este proyecto; cierra una antes de abrir otra", EN: "there are already %d agent terminals open in this project; close one before opening another"}, s.maxTerminals)
 	}
 	s.nextID++
 	id := fmt.Sprintf("term-%d", s.nextID)
@@ -317,7 +429,7 @@ func (a *App) ListTerminals() ([]TerminalInfo, error) {
 	s := a.terminals()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.openCount()
+	s.openCount(0) // solo para descartar las muertas
 	out := []TerminalInfo{}
 	for _, in := range s.mgr.List() {
 		m := s.meta[in.ID]

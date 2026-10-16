@@ -8,24 +8,34 @@
 
 **Diseño 3D con OpenSCAD e IA, listo para imprimir en Bambu Lab.**
 
-ScadLab es una app de escritorio para macOS y Windows donde describís una pieza,
+ScadLab es una app de escritorio para macOS y Windows donde describes una pieza,
 un agente de IA (Claude Code, opencode, Codex o Antigravity, u Ollama en local)
-la escribe en OpenSCAD dentro de tu proyecto, y vos la ves, la medís, comparás
-versiones y la exportás a STL o 3MF multicolor para tu A1, A1 mini, P1S, X1C o H2D.
+la escribe en OpenSCAD dentro de tu proyecto, y tú la ves, la mides, comparas
+versiones y la exportas a STL o 3MF multicolor para tu A1, A1 mini, P1S, X1C o H2D.
 
-📖 [Documentación](https://rafael180496.github.io/ScadLab/)
+📖 **Ayuda:** [English](https://rafael180496.github.io/ScadLab/) ·
+[Español](https://rafael180496.github.io/ScadLab/es/)
 
-## Qué hace (y qué viene)
+## Qué hace
+
+Todo lo de esta tabla está implementado y probado contra un OpenSCAD real; lo único
+pendiente es la verificación manual en ventanas reales (ver abajo).
 
 | | Estado |
 |---|---|
-| Workspaces con reglas para la IA y skills de modelado instaladas para todos los agentes | ✅ v0.1.0 |
-| Detección de OpenSCAD y de los CLIs de IA, configuración de Ollama / APIs | ✅ v0.1.0 |
-| Árbol de checkpoints inmutables con ramas | ✅ lectura · 🛠 menú contextual |
-| Visor 3D PBR, vistas, wireframe, vista dividida, medición y costo | 🛠 en desarrollo |
-| Editor Monaco con resaltado OpenSCAD y marcadores de error | 🛠 en desarrollo |
-| Terminal integrada con el agente, servidor MCP de OpenSCAD, auto-iteración | 🛠 en desarrollo |
-| Exportación STL / 3MF multicolor (AMS) / PNG | 🛠 en desarrollo |
+| Workspaces con reglas para la IA y skills de modelado para todos los agentes; detección de OpenSCAD y de los CLIs; configuración de Ollama / OpenAI / Anthropic | ✅ |
+| Árbol de checkpoints inmutables con ramas, padre activo, papelera, renombrar, comparar con el padre y retomar la sesión que los creó | ✅ |
+| Render con OpenSCAD (Manifold/CGAL), caché de mallas, diagnósticos con línea y `RENDER_ERRORS.md` | ✅ |
+| Visor 3D PBR: siete vistas, wireframe, aristas, ortográfica/perspectiva, vista dividida, captura PNG | ✅ |
+| Medición por partes (color), peso, filamento y costo estimados, aviso si no cabe en la placa | ✅ |
+| Editor Monaco con resaltado OpenSCAD, linter (SL001–SL009), formateo, autocompletado y guardar como checkpoint | ✅ |
+| Paneles acoplables (mover, dividir, flotar, minimizar, ocultar), diseños guardados y modo enfoque | ✅ |
+| Varios proyectos a la vez: pestañas de proyecto (hasta 4) con indicadores de fondo | ✅ |
+| Terminal integrada con el agente (PTY), sesiones, auto-iteración de errores y chat con modelos | ✅ |
+| Servidor MCP de OpenSCAD (`render`, `measure`, `preview`, `export`…) configurado solo en cada CLI | ✅ |
+| Exportación STL / 3MF multicolor para Bambu (una parte por color con su extrusor) / STL por color / PNG, y abrir en Bambu Studio | ✅ |
+| Interfaz y ayuda en inglés y español | ✅ |
+| Probar en una Windows real y en las ventanas reales de Wails (WebGL, Monaco, arrastre de pestañas), con CLIs de agente reales y en Bambu Studio | ⬜ pendiente de verificación manual |
 
 Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
@@ -33,8 +43,26 @@ Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
 - macOS 11+ (Apple Silicon) o Windows 10/11 (x64, WebView2).
 - [OpenSCAD](https://openscad.org/downloads.html) — se recomienda un snapshot 2025
-  (backend Manifold y 3MF con colores).
+  (backend Manifold y 3MF con colores). ScadLab **no lo incluye**.
 - Opcional: Claude Code, opencode, Codex, Antigravity (`agy`) u Ollama.
+
+## Descargas
+
+> **Todavía no hay una versión publicada.** La primera (0.1.0) está implementada y
+> documentada, pero aún no se ha empaquetado ni subido a Releases.
+
+Cuando exista, los archivos estarán en los assets del Release
+(`https://github.com/rafael180496/ScadLab/releases/download/vX.Y.Z/…`):
+
+| Sistema | Archivo |
+|---|---|
+| macOS (Apple Silicon) | `ScadLab-vX.Y.Z.dmg` |
+| Windows (x64) | `ScadLab-vX.Y.Z-windows-amd64.exe` (portable) |
+
+Los binarios no van firmados: macOS pide «clic derecho → Abrir» la primera vez y
+Windows muestra el aviso de SmartScreen. Mientras tanto puedes compilarla desde el código
+(`wails build`, ver «Desarrollo»). Más en la ayuda:
+[Instalación](https://rafael180496.github.io/ScadLab/es/#instalacion).
 
 ## Desarrollo
 
@@ -61,7 +89,7 @@ ScadLab es gratis, de código abierto y sin telemetría, y va a seguir así. Si 
 ahorra horas de modelado y quieres que siga creciendo, puedes apoyarlo:
 
 <p>
-  <a href="https://buymeacoffee.com/rhidalgo"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-invitame%20un%20caf%C3%A9-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
+  <a href="https://buymeacoffee.com/rhidalgo"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-inv%C3%ADtame%20un%20caf%C3%A9-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
   <a href="https://www.patreon.com/16966547/join"><img src="https://img.shields.io/badge/Patreon-suscr%C3%ADbete-F96854?style=for-the-badge&logo=patreon&logoColor=white" alt="Patreon"></a>
 </p>
 

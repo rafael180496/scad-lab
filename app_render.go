@@ -4,19 +4,16 @@ import (
 	"context"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"scadlab/backend/checkpoint"
 	"scadlab/backend/detect"
 	"scadlab/backend/i18n"
 	"scadlab/backend/render"
 	"scadlab/backend/store"
-	"scadlab/backend/watch"
-	"scadlab/backend/workspace"
 )
 
 // Eventos Wails que emite el render (Go → React). Los nombres son contrato con
@@ -81,6 +78,11 @@ func (a *App) RenderCheckpoint(id int64, fileName string) (render.Result, error)
 	}
 	req := render.Request{WorkspaceKey: renderKey(id), WorkspaceDir: w.Path, FileName: fileName}
 
+	// El render en curso lo ven los indicadores de las pestañas de proyecto
+	// (ProjectActivity); se da por terminado ANTES de emitir render:finished para
+	// que quien reconsulta al recibirlo ya lo vea apagado.
+	endRender := a.projects().trackRender(id)
+	defer endRender()
 	a.emit(evRenderStarted, RenderStartedEvent{WorkspaceID: id, FileName: fileName})
 	res, err := a.engine.Render(a.ctx, req, opts)
 	if res.FileName == "" {
@@ -92,6 +94,7 @@ func (a *App) RenderCheckpoint(id int64, fileName string) (render.Result, error)
 		// para siempre.
 		res.Status = render.StatusError
 		res.Diagnostics = append(res.Diagnostics, render.Diagnostic{Severity: render.SeverityError, Message: err.Error()})
+		endRender()
 		a.emit(evRenderFinished, RenderFinishedEvent{WorkspaceID: id, Result: res})
 		return res, err
 	}
@@ -126,6 +129,7 @@ func (a *App) RenderCheckpoint(id int64, fileName string) (render.Result, error)
 		a.results[id][fileName] = res
 		a.renderMu.Unlock()
 	}
+	endRender()
 	a.emit(evRenderFinished, RenderFinishedEvent{WorkspaceID: id, Result: res})
 	a.notifyRenderFinished(id, res, isLatest)
 	return res, nil
@@ -187,27 +191,11 @@ func validateRenderSettings(s store.Settings) error {
 }
 
 // validCheckpointName valida igual que ReadCheckpoint: un nombre suelto, sin
-// carpetas, terminado en .scad. Así la UI no puede hacer correr OpenSCAD —ni
-// escribir RENDER_ERRORS.md— fuera del workspace.
-func validCheckpointName(fileName string) error {
-	if fileName == "" || fileName != filepath.Base(fileName) || !strings.EqualFold(filepath.Ext(fileName), ".scad") {
-		return i18n.New(i18n.Msg{ES: "nombre de checkpoint inválido", EN: "invalid checkpoint name"})
-	}
-	return nil
-}
+// carpetas, terminado en .scad (ver checkpoint.ValidName).
+func validCheckpointName(fileName string) error { return checkpoint.ValidName(fileName) }
 
 // latestCheckpoint es el .scad de número más alto del workspace ("" si no hay).
-func latestCheckpoint(dir string) string {
-	files, err := workspace.Scan(dir)
-	if err != nil {
-		return ""
-	}
-	names := make([]string, len(files))
-	for i, f := range files {
-		names[i] = f.FileName
-	}
-	return watch.Newest(names)
-}
+func latestCheckpoint(dir string) string { return checkpoint.Latest(dir) }
 
 func renderKey(id int64) string { return "ws:" + strconv.FormatInt(id, 10) }
 

@@ -1,14 +1,11 @@
 import {useEffect, useState} from 'react'
 import type {BufferGeometry} from 'three'
 import {ChevronDown, ChevronUp, CircleCheck, TriangleAlert} from 'lucide-react'
-import {fmt, locale, useT} from '../../i18n'
+import {fmt, useT} from '../../i18n'
+import {num} from '../../lib/printFormat'
 import {getMeshInfo, infoFromGeometry, type MeshFacts} from '../../lib/meshInfo'
 
-function num(v: number, digits: number): string {
-    return v.toLocaleString(locale(), {minimumFractionDigits: digits, maximumFractionDigits: digits})
-}
-
-function Row({label, hint, children}: {label: string; hint: string; children: React.ReactNode}) {
+export function Row({label, hint, children}: {label: string; hint: string; children: React.ReactNode}) {
     return (
         <div className="flex items-baseline justify-between gap-4" title={hint}>
             <span className="font-mono text-ui-10 tracking-[0.1em] text-faint uppercase">{label}</span>

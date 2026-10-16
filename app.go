@@ -34,10 +34,10 @@ type App struct {
 
 	renderListeners []renderListener // ver onRenderFinished (app_render.go)
 
-	// Watcher del workspace abierto (app_workspaces.go). Uno solo en S1.
-	watchMu   sync.Mutex
-	watcher   *watch.Watcher
-	watchedID int64
+	// Un watcher por proyecto abierto (app_workspaces.go, S8): los de fondo
+	// siguen vigilando su carpeta.
+	watchMu  sync.Mutex
+	watchers map[int64]*watch.Watcher
 
 	// Servicios de S5+ (terminal, chat…): cada uno vive en su app_*.go con su
 	// propio estado y se registra acá para cerrarse con la app, sin que cada

@@ -19,6 +19,31 @@ export namespace agentsessions {
 
 }
 
+export namespace checkpoint {
+	
+	export class TrashedItem {
+	    name: string;
+	    original: string;
+	    parent: string;
+	    description: string;
+	    trashedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrashedItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.original = source["original"];
+	        this.parent = source["parent"];
+	        this.description = source["description"];
+	        this.trashedAt = source["trashedAt"];
+	    }
+	}
+
+}
+
 export namespace detect {
 	
 	export class Tool {
@@ -38,6 +63,111 @@ export namespace detect {
 	        this.path = source["path"];
 	        this.version = source["version"];
 	    }
+	}
+
+}
+
+export namespace estimate {
+	
+	export class Options {
+	    infillPercent: number;
+	    wallLoops: number;
+	    lineWidthMm: number;
+	    filamentDiameterMm: number;
+	    defaultMaterialId: string;
+	    partMaterials: Record<number, string>;
+	    currency: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Options(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.infillPercent = source["infillPercent"];
+	        this.wallLoops = source["wallLoops"];
+	        this.lineWidthMm = source["lineWidthMm"];
+	        this.filamentDiameterMm = source["filamentDiameterMm"];
+	        this.defaultMaterialId = source["defaultMaterialId"];
+	        this.partMaterials = source["partMaterials"];
+	        this.currency = source["currency"];
+	    }
+	}
+	export class PartResult {
+	    index: number;
+	    materialId: string;
+	    volumeMm3: number;
+	    effectiveMm3: number;
+	    massG: number;
+	    lengthM: number;
+	    cost: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PartResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.materialId = source["materialId"];
+	        this.volumeMm3 = source["volumeMm3"];
+	        this.effectiveMm3 = source["effectiveMm3"];
+	        this.massG = source["massG"];
+	        this.lengthM = source["lengthM"];
+	        this.cost = source["cost"];
+	    }
+	}
+	export class Total {
+	    massG: number;
+	    lengthM: number;
+	    cost: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Total(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.massG = source["massG"];
+	        this.lengthM = source["lengthM"];
+	        this.cost = source["cost"];
+	    }
+	}
+	export class Result {
+	    parts: PartResult[];
+	    total: Total;
+	    currency: string;
+	    assumptions: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.parts = this.convertValues(source["parts"], PartResult);
+	        this.total = this.convertValues(source["total"], Total);
+	        this.currency = source["currency"];
+	        this.assumptions = source["assumptions"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -159,6 +289,26 @@ export namespace main {
 	        this.canList = source["canList"];
 	    }
 	}
+	export class AntigravityMCP {
+	    state: string;
+	    agyPath: string;
+	    command: string;
+	    current: string;
+	    detail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AntigravityMCP(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.agyPath = source["agyPath"];
+	        this.command = source["command"];
+	        this.current = source["current"];
+	        this.detail = source["detail"];
+	    }
+	}
 	export class Bootstrap {
 	    version: string;
 	    platform: string;
@@ -236,6 +386,174 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class CheckpointPair {
+	    file: string;
+	    parent: string;
+	    parentSource: string;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CheckpointPair(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.parent = source["parent"];
+	        this.parentSource = source["parentSource"];
+	        this.source = source["source"];
+	    }
+	}
+	export class CheckpointResume {
+	    kind: string;
+	    terminalId: string;
+	    agentId: string;
+	    chatId: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CheckpointResume(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.terminalId = source["terminalId"];
+	        this.agentId = source["agentId"];
+	        this.chatId = source["chatId"];
+	    }
+	}
+	export class MCPStatus {
+	    enabled: boolean;
+	    binary: string;
+	    binaryError: string;
+	    workspaceDir: string;
+	    command: string;
+	    files: mcpconf.FileReport[];
+	    codexFlags: string[];
+	    openscad: boolean;
+	    openscadPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MCPStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.binary = source["binary"];
+	        this.binaryError = source["binaryError"];
+	        this.workspaceDir = source["workspaceDir"];
+	        this.command = source["command"];
+	        this.files = this.convertValues(source["files"], mcpconf.FileReport);
+	        this.codexFlags = source["codexFlags"];
+	        this.openscad = source["openscad"];
+	        this.openscadPath = source["openscadPath"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class OpenProjectEntry {
+	    workspace: store.Workspace;
+	    missing: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenProjectEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace = this.convertValues(source["workspace"], store.Workspace);
+	        this.missing = source["missing"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class OpenProjectsView {
+	    projects: OpenProjectEntry[];
+	    activeId: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenProjectsView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projects = this.convertValues(source["projects"], OpenProjectEntry);
+	        this.activeId = source["activeId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ProjectActivityEntry {
+	    id: number;
+	    rendering: boolean;
+	    latestFile: string;
+	    lastRenderStatus: string;
+	    renderFailed: boolean;
+	    agentsAlive: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProjectActivityEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.rendering = source["rendering"];
+	        this.latestFile = source["latestFile"];
+	        this.lastRenderStatus = source["lastRenderStatus"];
+	        this.renderFailed = source["renderFailed"];
+	        this.agentsAlive = source["agentsAlive"];
+	    }
 	}
 	export class SkillView {
 	    name: string;
@@ -317,6 +635,7 @@ export namespace main {
 	    workspace: store.Workspace;
 	    checkpoints: store.Checkpoint[];
 	    missing: boolean;
+	    activeParent: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorkspaceView(source);
@@ -327,6 +646,62 @@ export namespace main {
 	        this.workspace = this.convertValues(source["workspace"], store.Workspace);
 	        this.checkpoints = this.convertValues(source["checkpoints"], store.Checkpoint);
 	        this.missing = source["missing"];
+	        this.activeParent = source["activeParent"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace mcpconf {
+	
+	export class FileReport {
+	    agent: string;
+	    name: string;
+	    path: string;
+	    status: string;
+	    detail?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agent = source["agent"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.status = source["status"];
+	        this.detail = source["detail"];
+	    }
+	}
+	export class Report {
+	    files: FileReport[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Report(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.files = this.convertValues(source["files"], FileReport);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -375,6 +750,91 @@ export namespace mesh {
 	        this.areaMm2 = source["areaMm2"];
 	        this.watertight = source["watertight"];
 	    }
+	}
+
+}
+
+export namespace parts {
+	
+	export class Part {
+	    index: number;
+	    name: string;
+	    color: string;
+	    uncolored: boolean;
+	    url: string;
+	    info: mesh.Info;
+	
+	    static createFrom(source: any = {}) {
+	        return new Part(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.name = source["name"];
+	        this.color = source["color"];
+	        this.uncolored = source["uncolored"];
+	        this.url = source["url"];
+	        this.info = this.convertValues(source["info"], mesh.Info);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Model {
+	    key: string;
+	    parts: Part[];
+	    total: mesh.Info;
+	    plate: printers.Volume;
+	    fits: boolean;
+	    overflow: printers.Volume;
+	
+	    static createFrom(source: any = {}) {
+	        return new Model(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.parts = this.convertValues(source["parts"], Part);
+	        this.total = this.convertValues(source["total"], mesh.Info);
+	        this.plate = this.convertValues(source["plate"], printers.Volume);
+	        this.fits = source["fits"];
+	        this.overflow = this.convertValues(source["overflow"], printers.Volume);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -766,6 +1226,8 @@ export namespace store {
 	    label: string;
 	    description: string;
 	    sessionId: string;
+	    agentId: string;
+	    chatId: number;
 	    collapsed: boolean;
 	    fileMtime: number;
 	    createdAt: number;
@@ -783,6 +1245,8 @@ export namespace store {
 	        this.label = source["label"];
 	        this.description = source["description"];
 	        this.sessionId = source["sessionId"];
+	        this.agentId = source["agentId"];
+	        this.chatId = source["chatId"];
 	        this.collapsed = source["collapsed"];
 	        this.fileMtime = source["fileMtime"];
 	        this.createdAt = source["createdAt"];
@@ -854,10 +1318,15 @@ export namespace store {
 	    defaultMaterial: string;
 	    infillPercent: number;
 	    defaultAgent: string;
+	    wallLoops: number;
+	    lineWidthMm: number;
+	    filamentDiameterMm: number;
+	    currency: string;
 	    bambuStudioPath: string;
 	    autoRender: boolean;
 	    renderTimeoutSec: number;
 	    autoIterate: boolean;
+	    mcpEnabled: boolean;
 	    swatches: string[];
 	    editorIndent: number;
 	    editorFontSize: number;
@@ -869,6 +1338,8 @@ export namespace store {
 	    layout: Layout;
 	    dockLayout: string;
 	    dockLayouts: DockLayoutEntry[];
+	    openProjects: number[];
+	    activeProject: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -885,10 +1356,15 @@ export namespace store {
 	        this.defaultMaterial = source["defaultMaterial"];
 	        this.infillPercent = source["infillPercent"];
 	        this.defaultAgent = source["defaultAgent"];
+	        this.wallLoops = source["wallLoops"];
+	        this.lineWidthMm = source["lineWidthMm"];
+	        this.filamentDiameterMm = source["filamentDiameterMm"];
+	        this.currency = source["currency"];
 	        this.bambuStudioPath = source["bambuStudioPath"];
 	        this.autoRender = source["autoRender"];
 	        this.renderTimeoutSec = source["renderTimeoutSec"];
 	        this.autoIterate = source["autoIterate"];
+	        this.mcpEnabled = source["mcpEnabled"];
 	        this.swatches = source["swatches"];
 	        this.editorIndent = source["editorIndent"];
 	        this.editorFontSize = source["editorFontSize"];
@@ -900,6 +1376,8 @@ export namespace store {
 	        this.layout = this.convertValues(source["layout"], Layout);
 	        this.dockLayout = source["dockLayout"];
 	        this.dockLayouts = this.convertValues(source["dockLayouts"], DockLayoutEntry);
+	        this.openProjects = source["openProjects"];
+	        this.activeProject = source["activeProject"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

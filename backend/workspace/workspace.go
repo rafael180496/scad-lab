@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
@@ -92,6 +93,95 @@ func Create(root, name, printerID string) (string, error) {
 	return dir, nil
 }
 
+// Marcas del bloque de reglas que gestiona ScadLab dentro de CLAUDE.md y
+// AGENTS.md. Solo se reescribe lo que está entre ellas: lo que el usuario
+// agregue antes o después queda intacto. Sin esto, actualizar las reglas (MCP,
+// ramas, papelera…) en un workspace viejo obligaba a elegir entre dejar al
+// agente con reglas desactualizadas o pisar lo que el usuario hubiera escrito.
+const (
+	rulesBegin = "<!-- scadlab:rules:begin — ScadLab actualiza este bloque solo; escribe lo tuyo fuera de él -->"
+	rulesEnd   = "<!-- scadlab:rules:end -->"
+	// legacyTitleSuffix identifica un archivo generado por ScadLab antes de
+	// las marcas: su primera línea era «# <nombre> — workspace de ScadLab».
+	legacyTitleSuffix = "— workspace de ScadLab"
+)
+
+// mergeRules escribe las reglas en dir/name respetando el contenido ajeno:
+//   - sin archivo: lo crea con el bloque;
+//   - con marcas: reemplaza solo el bloque (sin tocar el archivo si no cambió);
+//   - generado por una versión anterior (sin marcas, con nuestro título): lo
+//     copia a .scadlab/backup/ por si el usuario lo editó, y lo reemplaza;
+//   - un archivo del usuario sin marcas (p. ej. una carpeta importada): agrega
+//     el bloque arriba y conserva todo su contenido debajo.
+func mergeRules(dir, name, rules string) error {
+	path := filepath.Join(dir, name)
+	block := rulesBegin + "\n" + strings.TrimRight(rules, "\n") + "\n" + rulesEnd + "\n"
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return writeFileAtomic(path, []byte(block))
+	}
+	if err != nil {
+		return err
+	}
+	cur := string(raw)
+	var next string
+	switch b, e := strings.Index(cur, rulesBegin), strings.Index(cur, rulesEnd); {
+	case b >= 0 && e > b:
+		next = cur[:b] + strings.TrimRight(block, "\n") + cur[e+len(rulesEnd):]
+	case strings.Contains(firstLineOf(cur), legacyTitleSuffix):
+		if err := backupRules(dir, name, raw); err != nil {
+			return err
+		}
+		next = block
+	default:
+		next = block + "\n" + cur
+	}
+	if next == cur {
+		return nil
+	}
+	return writeFileAtomic(path, []byte(next))
+}
+
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// backupRules guarda la versión anterior en .scadlab/backup/<nombre>.<fecha>.
+func backupRules(dir, name string, raw []byte) error {
+	bdir := filepath.Join(dir, ".scadlab", "backup")
+	if err := os.MkdirAll(bdir, 0o755); err != nil {
+		return err
+	}
+	stamp := time.Now().UTC().Format("20060102-150405")
+	return os.WriteFile(filepath.Join(bdir, name+"."+stamp), raw, 0o644)
+}
+
+// writeFileAtomic escribe con temporal + rename en la misma carpeta, para que
+// un agente que lee el archivo nunca vea uno a medio escribir.
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
 // WriteRules (re)escribe CLAUDE.md, AGENTS.md y printer.json. Se vuelve a
 // llamar cuando cambia la impresora del workspace.
 func WriteRules(dir, name, printerID string) error {
@@ -117,7 +207,7 @@ func WriteRules(dir, name, printerID string) error {
 		return err
 	}
 	for _, f := range []string{"CLAUDE.md", "AGENTS.md"} {
-		if err := os.WriteFile(filepath.Join(dir, f), buf.Bytes(), 0o644); err != nil {
+		if err := mergeRules(dir, f, buf.String()); err != nil {
 			return err
 		}
 	}

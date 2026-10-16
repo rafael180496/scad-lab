@@ -30,9 +30,13 @@ const MAX_ENTRIES = 24
 const CREASE_MAX_TRIANGLES = 400_000
 const CREASE_ANGLE = (30 * Math.PI) / 180
 
-type Entry = {geometry: BufferGeometry; bytes: number}
+// Una entrada es una malla entera (una geometría) o un modelo por partes (una
+// por color, clave `parts:<clave>`): las dos comparten tope y orden de uso, así
+// que un modelo por partes no se queda a medias en la caché.
+type Entry = {geometries: BufferGeometry[]; bytes: number}
 const cache = new Map<string, Entry>()
 const inflight = new Map<string, Promise<BufferGeometry>>()
+const inflightParts = new Map<string, Promise<BufferGeometry[]>>()
 const edges = new WeakMap<BufferGeometry, EdgesGeometry>()
 let totalBytes = 0
 
@@ -48,31 +52,45 @@ function evict() {
         if (cache.size <= 1 || (totalBytes <= MAX_BYTES && cache.size <= MAX_ENTRIES)) break
         cache.delete(key)
         totalBytes -= entry.bytes
-        edges.get(entry.geometry)?.dispose()
-        entry.geometry.dispose()
+        for (const g of entry.geometries) {
+            edges.get(g)?.dispose()
+            g.dispose()
+        }
     }
+}
+
+// parse lee un STL binario, sin normales todavía.
+function parse(buf: ArrayBuffer): BufferGeometry {
+    const g = new STLLoader().parse(buf)
+    g.deleteAttribute('normal')
+    return g
+}
+
+// shade calcula las normales: con pliegue (suaves en curvas, vivas en aristas)
+// hasta CREASE_MAX_TRIANGLES; planas por cara por encima.
+function shade(g: BufferGeometry): BufferGeometry {
+    const triangles = g.attributes.position.count / 3
+    let out = g
+    if (triangles <= CREASE_MAX_TRIANGLES) {
+        out = toCreasedNormals(g, CREASE_ANGLE)
+        g.dispose()
+    } else {
+        g.computeVertexNormals()
+    }
+    out.computeBoundingBox()
+    out.computeBoundingSphere()
+    return out
 }
 
 // prepare deja la pieza como la pondría el slicer: centrada en XY sobre la
 // placa y apoyada en Z=0. La escena es Z arriba, igual que OpenSCAD.
 function prepare(buf: ArrayBuffer): BufferGeometry {
-    let g: BufferGeometry = new STLLoader().parse(buf)
-    g.deleteAttribute('normal')
+    const g = parse(buf)
     g.computeBoundingBox()
     const box = g.boundingBox ?? new Box3()
     const c = box.getCenter(new Vector3())
     g.translate(-c.x, -c.y, -box.min.z)
-    const triangles = g.attributes.position.count / 3
-    if (triangles <= CREASE_MAX_TRIANGLES) {
-        const creased = toCreasedNormals(g, CREASE_ANGLE)
-        g.dispose()
-        g = creased
-    } else {
-        g.computeVertexNormals()
-    }
-    g.computeBoundingBox()
-    g.computeBoundingSphere()
-    return g
+    return shade(g)
 }
 
 // cachedMesh devuelve la geometría si ya está en la caché (y la marca como
@@ -82,7 +100,7 @@ export function cachedMesh(key: string): BufferGeometry | undefined {
     if (!e) return undefined
     cache.delete(key)
     cache.set(key, e)
-    return e.geometry
+    return e.geometries[0]
 }
 
 export function loadMesh(meshPath: string): Promise<BufferGeometry> {
@@ -99,13 +117,69 @@ export function loadMesh(meshPath: string): Promise<BufferGeometry> {
         .then((buf) => {
             const geometry = prepare(buf)
             const bytes = sizeOf(geometry)
-            cache.set(key, {geometry, bytes})
+            cache.set(key, {geometries: [geometry], bytes})
             totalBytes += bytes
             evict()
             return geometry
         })
         .finally(() => inflight.delete(key))
     inflight.set(key, p)
+    return p
+}
+
+// ── Modelo por partes (S7) ──────────────────────────────────────────────────
+//
+// Cada parte (un color) llega por GET /parts/<clave>/NN.stl. Se apoyan todas con
+// UNA sola traslación —el centro en XY y el mínimo en Z de la unión de las
+// partes—, no cada una con la suya: así quedan una dentro de la otra tal como
+// las modeló OpenSCAD, y en el mismo lugar que la malla entera.
+
+export const partsCacheKey = (modelKey: string) => 'parts:' + modelKey
+
+export function cachedParts(modelKey: string): BufferGeometry[] | undefined {
+    const k = partsCacheKey(modelKey)
+    const e = cache.get(k)
+    if (!e) return undefined
+    cache.delete(k)
+    cache.set(k, e)
+    return e.geometries
+}
+
+export function loadParts(modelKey: string, urls: string[]): Promise<BufferGeometry[]> {
+    const hit = cachedParts(modelKey)
+    if (hit) return Promise.resolve(hit)
+    const k = partsCacheKey(modelKey)
+    const pending = inflightParts.get(k)
+    if (pending) return pending
+    const p = Promise.all(
+        urls.map((u) =>
+            fetch(u).then((res) => {
+                if (!res.ok) throw new Error(`HTTP ${res.status} (${u})`)
+                return res.arrayBuffer()
+            }),
+        ),
+    )
+        .then((bufs) => {
+            const raw = bufs.map(parse)
+            const union = new Box3()
+            for (const g of raw) {
+                g.computeBoundingBox()
+                if (g.boundingBox && !g.boundingBox.isEmpty()) union.union(g.boundingBox)
+            }
+            const c = union.isEmpty() ? new Vector3() : union.getCenter(new Vector3())
+            const z = union.isEmpty() ? 0 : union.min.z
+            const geometries = raw.map((g) => {
+                g.translate(-c.x, -c.y, -z)
+                return shade(g)
+            })
+            const bytes = geometries.reduce((n, g) => n + sizeOf(g), 0)
+            cache.set(k, {geometries, bytes})
+            totalBytes += bytes
+            evict()
+            return geometries
+        })
+        .finally(() => inflightParts.delete(k))
+    inflightParts.set(k, p)
     return p
 }
 

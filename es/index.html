@@ -1,0 +1,2637 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayuda de ScadLab</title>
+<meta name="description" content="Documentación de ScadLab: diseña modelos 3D en OpenSCAD con ayuda de agentes de IA (Claude Code, opencode, Codex, Antigravity, Ollama) y déjalos listos para imprimir en Bambu Lab. App de escritorio para macOS y Windows.">
+<meta name="color-scheme" content="light dark">
+<link rel="alternate" hreflang="en" href="https://rafael180496.github.io/ScadLab/">
+<link rel="alternate" hreflang="es" href="https://rafael180496.github.io/ScadLab/es/">
+<link rel="alternate" hreflang="x-default" href="https://rafael180496.github.io/ScadLab/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2314171e%22/%3E%3Cpath d=%22M16 5 26 10.8 16 16.6 6 10.8Z%22 fill=%22%23ff7a1a%22/%3E%3Cpath d=%22M6 10.8 16 16.6V28L6 22.2Z%22 fill=%22%235e6677%22/%3E%3Cpath d=%22M26 10.8 16 16.6V28l10-5.8Z%22 fill=%22%23aeb4c0%22/%3E%3Cpath d=%22M6 10.8 16 16.6 26 10.8%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.6%22 stroke-width=%22.8%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E">
+<meta property="og:title" content="Ayuda de ScadLab">
+<meta property="og:image" content="../docs/screenshots/es/app-main.png">
+<meta property="og:description" content="Diseña en OpenSCAD con agentes de IA y exporta a 3MF multicolor para tu Bambu Lab.">
+<style>
+/* ==========================================================================
+   Página de AYUDA, no una landing. Misma anatomía que la ayuda de mini-tools:
+   índice jerárquico a la izquierda, un tema por pantalla, «en esta página» a
+   la derecha, buscador y anterior/siguiente.
+
+   Un solo archivo y CERO peticiones externas: ni CDN, ni fuentes remotas, ni
+   analítica. El logo es un SVG en línea.
+
+   Los temas marcados con data-status="dev" describen funcionalidad
+   planificada: llevan la insignia «En desarrollo» en el título y un punto en
+   el índice (lo pone el script).
+   ========================================================================== */
+:root{
+  --primary:#c2410c; --on-primary:#fff;
+  --secondary:#047857; --tertiary:#a16207; --error:#b91c1c;
+  --surface:#fbf9f7; --on-surface:#1c1917;
+  --lowest:#fff; --low:#f5f2ef; --container:#efebe7; --high:#e7e2dd; --highest:#ddd6cf;
+  --on-surface-variant:#57534e; --outline:#78716c; --outline-variant:#d6d0ca;
+  --shadow:0 10px 30px rgb(28 25 23 / .10);
+  --topbar:56px;
+}
+:root[data-theme="dark"]{
+  --primary:#fb923c; --on-primary:#2a1003;
+  --secondary:#34d399; --tertiary:#facc15; --error:#fca5a5;
+  --surface:#121110; --on-surface:#ece7e2;
+  --lowest:#0b0a09; --low:#1a1816; --container:#211e1b; --high:#2b2724; --highest:#36312d;
+  --on-surface-variant:#b9b1a9; --outline:#8a827a; --outline-variant:#3d3833;
+  --shadow:0 12px 34px rgb(0 0 0 / .45);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--surface);color:var(--on-surface);overflow-x:hidden;
+  font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased;
+}
+code,kbd,pre{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+a{color:var(--primary)}
+img{max-width:100%;height:auto;display:block}
+button{font:inherit;color:inherit}
+
+/* ---------------------------------------------------------------- Barra ---- */
+.topbar{
+  position:fixed;inset:0 0 auto 0;height:var(--topbar);z-index:40;
+  display:flex;align-items:center;gap:12px;padding:0 16px;
+  background:var(--lowest);border-bottom:1px solid var(--outline-variant);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.02em;text-decoration:none;color:inherit;font-size:15.5px;white-space:nowrap}
+.mark{width:28px;height:28px;flex:none;display:block}
+.ver{
+  font-size:11.5px;color:var(--on-surface-variant);border:1px solid var(--outline-variant);
+  border-radius:999px;padding:1px 9px;white-space:nowrap
+}
+.topbar .spacer{flex:1}
+.tlink{text-decoration:none;color:var(--on-surface-variant);font-size:13.5px;padding:5px 9px;border-radius:8px;white-space:nowrap}
+.tlink:hover{background:var(--high);color:var(--on-surface)}
+.iconbtn{
+  border:1px solid var(--outline-variant);background:var(--container);color:var(--on-surface-variant);
+  border-radius:8px;padding:5px 10px;font-size:13px;cursor:pointer;white-space:nowrap
+}
+.iconbtn:hover{color:var(--on-surface)}
+a.iconbtn{text-decoration:none}
+#menubtn{display:none}
+
+/* ------------------------------------------------------------- Buscador ---- */
+.search{position:relative;width:min(340px,38vw);min-width:0}
+.search input{
+  width:100%;background:var(--low);border:1px solid var(--outline-variant);border-radius:9px;
+  color:var(--on-surface);padding:7px 30px 7px 30px;font-size:13.5px;font-family:inherit
+}
+.search input:focus{outline:2px solid var(--primary);outline-offset:-1px;border-color:transparent}
+.search .mag{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:13px;pointer-events:none}
+.search .hint{
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--on-surface-variant);
+  border:1px solid var(--outline-variant);border-radius:5px;padding:0 5px;pointer-events:none
+}
+.search input:focus ~ .hint,.search input:not(:placeholder-shown) ~ .hint{display:none}
+#results{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;max-height:min(62vh,520px);overflow-y:auto;
+  background:var(--lowest);border:1px solid var(--outline-variant);border-radius:11px;box-shadow:var(--shadow);
+  padding:5px;z-index:50
+}
+#results.open{display:block}
+#results .r{
+  display:block;width:100%;text-align:left;border:0;background:transparent;border-radius:8px;
+  padding:7px 10px;cursor:pointer
+}
+#results .r:hover,#results .r.sel{background:var(--high)}
+#results .r b{display:block;font-size:13.5px;font-weight:600}
+#results .r span{display:block;font-size:11.5px;color:var(--on-surface-variant)}
+#results .none{padding:12px;font-size:13px;color:var(--on-surface-variant);margin:0}
+
+/* --------------------------------------------------------------- Marco ----- */
+.layout{
+  display:grid;grid-template-columns:286px minmax(0,1fr) 232px;
+  padding-top:var(--topbar);align-items:start
+}
+.toc,.onpage{
+  position:sticky;top:var(--topbar);height:calc(100vh - var(--topbar));overflow-y:auto;
+  scrollbar-width:thin
+}
+.toc{border-right:1px solid var(--outline-variant);padding:14px 8px 40px;background:var(--lowest)}
+.onpage{padding:26px 18px 40px}
+main{padding:26px clamp(20px,3.4vw,46px) 70px;min-width:0}
+
+/* ------------------------------------------------------------- Índice ------ */
+.toc .grp{
+  display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;cursor:pointer;
+  padding:7px 10px;border-radius:8px;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--on-surface-variant);margin-top:6px;text-align:left
+}
+.toc .grp:hover{background:var(--high);color:var(--on-surface)}
+.toc .grp .caret{transition:transform .14s ease;font-size:10px;opacity:.75}
+.toc .grp[aria-expanded="false"] .caret{transform:rotate(-90deg)}
+.toc ul{list-style:none;margin:0;padding:0}
+.toc .grp[aria-expanded="false"] + ul{display:none}
+.toc a{
+  display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--on-surface-variant);font-size:13.5px;
+  padding:5px 10px 5px 26px;border-radius:8px;border-left:2px solid transparent;line-height:1.4
+}
+.toc a:hover{background:var(--high);color:var(--on-surface)}
+.toc a.active{
+  background:color-mix(in srgb,var(--primary) 15%,transparent);color:var(--primary);font-weight:600;
+  border-left-color:var(--primary)
+}
+/* Punto para los temas en desarrollo: se ve en el índice sin leer el tema. */
+.toc a .devdot{width:7px;height:7px;border-radius:50%;background:var(--tertiary);flex:none;margin-left:auto;opacity:.85}
+.toc .legend{font-size:11.5px;color:var(--on-surface-variant);padding:14px 10px 0;display:flex;align-items:center;gap:7px}
+.toc .legend .devdot{width:7px;height:7px;border-radius:50%;background:var(--tertiary);display:inline-block}
+
+/* -------------------------------------------------------- En esta página --- */
+.onpage h6{
+  margin:0 0 8px;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--on-surface-variant)
+}
+.onpage ol{list-style:none;margin:0;padding:0}
+.onpage a{
+  display:block;text-decoration:none;color:var(--on-surface-variant);font-size:12.5px;line-height:1.4;
+  padding:4px 8px;border-left:2px solid var(--outline-variant)
+}
+.onpage a:hover{color:var(--on-surface)}
+.onpage a.here{color:var(--primary);border-left-color:var(--primary);font-weight:600}
+.onpage.empty{visibility:hidden}
+
+/* ---------------------------------------------------------- Contenido ------ */
+.topic{display:none;max-width:820px;scroll-margin-top:calc(var(--topbar) + 16px)}
+.topic.active{display:block;animation:in .16s ease}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.topic.active{animation:none}}
+.crumbs{font-size:12.5px;color:var(--on-surface-variant);margin:0 0 10px}
+.crumbs a{color:inherit;text-decoration:none}
+.crumbs a:hover{color:var(--primary)}
+.crumbs .sep{opacity:.5;margin:0 6px}
+h1{font-size:clamp(25px,3.4vw,34px);line-height:1.18;letter-spacing:-.025em;margin:0 0 12px;text-wrap:balance}
+h2{font-size:21px;letter-spacing:-.015em;margin:34px 0 8px;line-height:1.25;scroll-margin-top:calc(var(--topbar) + 16px)}
+h3{font-size:16.5px;margin:22px 0 6px;letter-spacing:-.01em}
+.lead{font-size:17px;color:var(--on-surface-variant);margin:0 0 20px;text-wrap:pretty}
+p,ul,ol{max-width:74ch}
+li{margin:5px 0}
+figure{margin:20px 0}
+figcaption{font-size:12.5px;color:var(--on-surface-variant);margin-top:8px}
+.shot{border:1px solid var(--outline-variant);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);background:var(--lowest)}
+/* Hueco reservado para la captura: sin imágenes inventadas mientras la
+   pantalla no exista. */
+.shot.pending{
+  margin:20px 0;box-shadow:none;border:1.5px dashed var(--outline);background:var(--low);
+  aspect-ratio:16/8;display:grid;place-content:center;gap:4px;text-align:center;padding:16px;max-width:760px
+}
+.shot img{display:block;width:100%;height:auto}
+.shot:not(.pending) figcaption{margin:0;padding:9px 14px;border-top:1px solid var(--outline-variant)}
+.shot.pending span{font-size:13px;color:var(--on-surface-variant);font-weight:600;letter-spacing:.03em}
+.shot.pending figcaption{margin:4px 0 0;font-size:12px}
+
+.badge{
+  display:inline-block;vertical-align:middle;font-size:11.5px;font-weight:700;letter-spacing:.04em;
+  padding:2px 9px;border-radius:999px;margin-left:8px;white-space:nowrap;line-height:1.6
+}
+.badge.dev{color:var(--tertiary);background:color-mix(in srgb,var(--tertiary) 14%,transparent);border:1px solid color-mix(in srgb,var(--tertiary) 45%,transparent)}
+.badge.ok{color:var(--secondary);background:color-mix(in srgb,var(--secondary) 14%,transparent);border:1px solid color-mix(in srgb,var(--secondary) 45%,transparent)}
+h1 .badge{font-size:12px;letter-spacing:.02em}
+
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:16px 0;max-width:none}
+.card{background:var(--container);border:1px solid var(--outline-variant);border-radius:12px;padding:15px 17px}
+.card h3{margin:0 0 5px;font-size:15px}
+.card p{font-size:13.5px;color:var(--on-surface-variant);margin:0;max-width:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px;padding:0;list-style:none;max-width:none}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--outline-variant);
+  color:var(--on-surface-variant);background:var(--low);margin:0}
+.cta{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 6px}
+.btn{text-decoration:none;font-weight:600;font-size:14px;padding:9px 18px;border-radius:9px;
+  background:var(--primary);color:var(--on-primary);border:1px solid transparent;display:inline-block}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--on-surface);border-color:var(--outline)}
+.btn.ghost:hover{background:var(--high);filter:none}
+
+.codewrap{position:relative;margin:12px 0}
+pre{
+  background:var(--lowest);border:1px solid var(--outline-variant);border-radius:10px;
+  padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.6;margin:0;max-width:100%
+}
+pre .c{color:var(--on-surface-variant)}
+.copy{
+  position:absolute;top:7px;right:7px;border:1px solid var(--outline-variant);background:var(--container);
+  color:var(--on-surface-variant);border-radius:7px;padding:3px 9px;font-size:11.5px;cursor:pointer;opacity:0;
+  transition:opacity .13s ease
+}
+.codewrap:hover .copy,.copy:focus{opacity:1}
+@media (hover:none){.copy{opacity:1}}
+.copy:hover{color:var(--on-surface)}
+:not(pre)>code{background:var(--high);border:1px solid var(--outline-variant);border-radius:5px;padding:1px 5px;font-size:.88em;overflow-wrap:anywhere}
+kbd{background:var(--high);border:1px solid var(--outline);border-bottom-width:2px;border-radius:5px;padding:1px 6px;font-size:.85em;white-space:nowrap}
+
+/* Bloque de prompt: lo que se le escribe al agente, distinto del código. */
+.prompt{
+  border:1px solid var(--outline-variant);border-left:3px solid var(--secondary);background:var(--low);
+  border-radius:0 10px 10px 0;padding:10px 15px;margin:12px 0;max-width:74ch;font-size:14.5px
+}
+.prompt::before{content:"Prompt";display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--secondary);margin-bottom:2px}
+.prompt p{margin:0}
+
+.note{border-left:3px solid var(--primary);background:var(--low);padding:11px 15px;border-radius:0 10px 10px 0;margin:16px 0;max-width:74ch}
+.note.warn{border-left-color:var(--error)}
+.note.tip{border-left-color:var(--secondary)}
+.note.dev{border-left-color:var(--tertiary)}
+.note p{margin:0;font-size:14px;max-width:none}
+.note .lbl{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--primary);margin-bottom:3px}
+.note.warn .lbl{color:var(--error)}
+.note.tip .lbl{color:var(--secondary)}
+.note.dev .lbl{color:var(--tertiary)}
+
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding-left:36px;margin:12px 0}
+.steps li::before{
+  content:counter(s);position:absolute;left:0;top:1px;width:24px;height:24px;border-radius:50%;
+  background:var(--primary);color:var(--on-primary);display:grid;place-items:center;font-size:12.5px;font-weight:700
+}
+.tablewrap{overflow-x:auto;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--outline-variant);padding:8px 11px;text-align:left;vertical-align:top}
+th{color:var(--on-surface-variant);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+tr.sect td{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--on-surface-variant);background:var(--low)}
+details{border:1px solid var(--outline-variant);border-radius:10px;padding:0 15px;margin:10px 0;background:var(--low);max-width:74ch}
+details[open]{padding-bottom:8px}
+summary{cursor:pointer;padding:12px 0;font-weight:600}
+.two{display:grid;gap:24px;grid-template-columns:1fr 1fr;align-items:start;max-width:none}
+.two>*,.grid>*,.next>*{min-width:0}
+.tree{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:13px}
+
+.next{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:18px 0;max-width:none}
+.next a{
+  display:block;text-decoration:none;color:inherit;border:1px solid var(--outline-variant);border-radius:11px;
+  padding:13px 15px;background:var(--low)
+}
+.next a:hover{border-color:var(--primary);background:var(--container)}
+.next a b{display:block;font-size:14.5px;margin-bottom:2px}
+.next a span{font-size:12.5px;color:var(--on-surface-variant)}
+
+/* ------------------------------------------------------- Pie del tema ------ */
+.pagenav{display:flex;gap:12px;justify-content:space-between;margin-top:48px;padding-top:20px;border-top:1px solid var(--outline-variant)}
+.pagenav a{
+  text-decoration:none;color:inherit;border:1px solid var(--outline-variant);border-radius:10px;
+  padding:10px 15px;max-width:48%;background:var(--low)
+}
+.pagenav a:hover{border-color:var(--primary)}
+.pagenav small{display:block;font-size:11px;color:var(--on-surface-variant);text-transform:uppercase;letter-spacing:.06em}
+.pagenav b{font-size:14px;font-weight:600}
+.pagenav .n{margin-left:auto;text-align:right}
+.pagefoot{margin-top:22px;font-size:12.5px;color:var(--on-surface-variant);max-width:none}
+
+/* -------------------------------------------------------- Adaptativo ------- */
+.scrim{display:none}
+@media(max-width:1180px){
+  .layout{grid-template-columns:270px minmax(0,1fr)}
+  .onpage{display:none}
+}
+@media(max-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  #menubtn{display:inline-block}
+  .search{width:auto;flex:1}
+  .topbar{gap:8px;padding:0 10px}
+  .topbar .ver,.topbar .tlink{display:none}
+  .toc{
+    position:fixed;top:var(--topbar);left:0;bottom:0;width:min(320px,86vw);z-index:35;
+    transform:translateX(-101%);transition:transform .18s ease;box-shadow:var(--shadow)
+  }
+  body.nav-open .toc{transform:none}
+  body.nav-open .scrim{display:block;position:fixed;inset:var(--topbar) 0 0 0;z-index:30;background:rgb(0 0 0 / .45)}
+  .two{grid-template-columns:1fr}
+  main{padding:20px 16px 60px}
+  .pagenav a{max-width:none;flex:1}
+}
+@media(max-width:560px){
+  .brand{font-size:0;gap:0}
+  .search .hint{display:none}
+  .pagenav{flex-direction:column}
+  .pagenav .n{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="iconbtn" id="menubtn" aria-label="Abrir el índice">☰</button>
+  <a class="brand" href="#introduccion">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#14171e"/><path d="M16 5 26 10.8 16 16.6 6 10.8Z" fill="#ff7a1a"/><path d="M6 10.8 16 16.6V28L6 22.2Z" fill="#5e6677"/><path d="M26 10.8 16 16.6V28l10-5.8Z" fill="#aeb4c0"/><path d="M6 10.8 16 16.6 26 10.8" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width=".8" stroke-linejoin="round"/></svg>
+    ScadLab
+  </a>
+  <span class="ver" title="Esta ayuda describe la versión 0.1.0, la primera de ScadLab. Todavía no hay binarios publicados; todo lo que describe está implementado, y solo faltan pruebas manuales en ventanas reales.">v0.1.0 · sin publicar</span>
+  <div class="spacer"></div>
+  <div class="search">
+    <input id="q" type="search" placeholder="Buscar en la ayuda…" autocomplete="off" spellcheck="false" aria-label="Buscar en la ayuda">
+    <span class="mag">⌕</span><span class="hint">/</span>
+    <div id="results" role="listbox"></div>
+  </div>
+  <a class="tlink" href="https://github.com/rafael180496/ScadLab/releases">Descargas</a>
+  <a class="tlink" href="https://github.com/rafael180496/ScadLab">Código</a>
+  <a class="tlink" href="https://www.patreon.com/16966547/join" title="Apoya ScadLab con una suscripción mensual en Patreon, o con un café en Buy Me a Coffee">Apoyar</a>
+  <a class="iconbtn" id="langsw" href="../index.html" data-base="../index.html" hreflang="en" lang="en" title="Read this help in English">English</a>
+  <button class="iconbtn" id="tgl" title="Cambiar entre tema claro y oscuro">Tema</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="layout">
+
+<nav class="toc" id="toc" aria-label="Índice de la ayuda">
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Empezar</button>
+  <ul>
+    <li><a href="#introduccion">Qué es ScadLab</a></li>
+    <li><a href="#instalacion">Instalación</a></li>
+    <li><a href="#requisitos">Requisitos: OpenSCAD y agentes</a></li>
+    <li><a href="#primer-proyecto">Tu primer proyecto</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Workspaces y checkpoints</button>
+  <ul>
+    <li><a href="#workspaces">Workspaces</a></li>
+    <li><a href="#checkpoints">Checkpoints: el historial</a></li>
+    <li><a href="#checkpoints-arbol">Árbol, ramas y menú</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Visor 3D</button>
+  <ul>
+    <li><a href="#render">Renderizar y diagnósticos</a></li>
+    <li><a href="#visor-navegar">Navegar el modelo</a></li>
+    <li><a href="#visor-modos">Modos de vista y cámaras</a></li>
+    <li><a href="#visor-medir">Medir una pieza: volumen, peso y costo</a></li>
+    <li><a href="#visor-color">Colores, captura y vista dividida</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Editor</button>
+  <ul>
+    <li><a href="#editor">El editor de código</a></li>
+    <li><a href="#ventana">La ventana: paneles y barra de estado</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>IA</button>
+  <ul>
+    <li><a href="#ia-agentes">Agentes en la terminal</a></li>
+    <li><a href="#ia-reglas">Reglas del workspace: CLAUDE.md y AGENTS.md</a></li>
+    <li><a href="#ia-mcp">Servidor MCP de ScadLab</a></li>
+    <li><a href="#ia-autoiteracion">Auto-iteración de errores</a></li>
+    <li><a href="#ia-ollama">Chat con modelos: Ollama, OpenAI y Anthropic</a></li>
+    <li><a href="#ia-prompts">Cómo pedirle un modelo a la IA</a></li>
+    <li><a href="#ia-skills">Skills incluidas</a></li>
+    <li><a href="#ia-skill-propia">Crear tu propia skill</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Imprimir</button>
+  <ul>
+    <li><a href="#imprimir-impresoras">Impresoras Bambu Lab</a></li>
+    <li><a href="#imprimir-reglas">Reglas de diseño FDM</a></li>
+    <li><a href="#imprimir-exportar">Exportar STL, 3MF y PNG</a></li>
+    <li><a href="#imprimir-multicolor">Multicolor con AMS</a></li>
+    <li><a href="#imprimir-costo">Estimación de costo</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Configuración</button>
+  <ul>
+    <li><a href="#config-general">Idioma, OpenSCAD y agentes</a></li>
+    <li><a href="#config-materiales">Modelos de IA, materiales e impresora</a></li>
+    <li><a href="#config-datos">Dónde se guardan tus datos</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Recetas</button>
+  <ul>
+    <li><a href="#receta-multicolor">De idea a 3MF multicolor en 5 pasos</a></li>
+    <li><a href="#receta-ramificar">Ramificar para probar dos variantes</a></li>
+    <li><a href="#receta-plantilla">Arrancar desde una plantilla</a></li>
+  </ul>
+
+  <button class="grp" aria-expanded="true"><span class="caret">▾</span>Referencia</button>
+  <ul>
+    <li><a href="#atajos">Atajos de teclado</a></li>
+    <li><a href="#faq">Preguntas frecuentes</a></li>
+  </ul>
+
+</nav>
+
+<main id="main">
+
+<!-- ============================================================ EMPEZAR -->
+<article class="topic" id="introduccion" data-title="Qué es ScadLab">
+  <h1>Qué es ScadLab</h1>
+  <p class="lead">Una app de escritorio para diseñar modelos 3D en OpenSCAD conversando con agentes de IA,
+  ver cada versión en un visor 3D y dejar el modelo listo para imprimir en tu Bambu Lab — STL, o 3MF
+  multicolor para el AMS.</p>
+
+  <ul class="chips">
+    <li class="chip">OpenSCAD</li><li class="chip">Claude Code</li><li class="chip">opencode</li>
+    <li class="chip">Codex</li><li class="chip">Antigravity</li><li class="chip">Ollama</li>
+    <li class="chip">Bambu Lab A1 · A1 mini · P1S · X1C · H2D</li><li class="chip">STL · 3MF</li>
+    <li class="chip">macOS · Windows</li><li class="chip">Español · English</li>
+  </ul>
+
+  <figure class="shot"><img src="../docs/screenshots/es/app-main.png" alt="Ventana de ScadLab: lista de workspaces y árbol de checkpoints con ramas a la izquierda, panel del visor con el estado del render al centro, código del checkpoint a la derecha y el panel del agente de IA abajo" loading="lazy"><figcaption>Ventana principal: workspaces y árbol de checkpoints a la izquierda, visor al centro, código a la derecha y agente de IA abajo.</figcaption></figure>
+
+  <h2 id="introduccion--idea">La idea</h2>
+  <p>OpenSCAD describe un modelo con código: es preciso, paramétrico y se versiona como texto. Lo difícil es
+  escribirlo. ScadLab pone un agente de IA a escribir ese código por ti, y se encarga de lo que rodea a esa
+  conversación:</p>
+  <div class="grid">
+    <div class="card"><h3>Cada cambio es un checkpoint</h3><p>La IA nunca sobrescribe un archivo: cada versión es un <code>.scad</code> nuevo en un árbol con ramas. Volver atrás es hacer clic.</p></div>
+    <div class="card"><h3>Lo ves al instante</h3><p>Visor 3D con materiales realistas, medidas, peso y costo estimado de cada pieza.</p></div>
+    <div class="card"><h3>Los errores se corrigen solos</h3><p>Si OpenSCAD falla al renderizar, ScadLab le pasa el error al agente para que lo arregle en un checkpoint nuevo.</p></div>
+    <div class="card"><h3>Pensado para Bambu Lab</h3><p>Perfil de impresora por proyecto, aviso si no cabe en la placa y 3MF con color por pieza para el AMS.</p></div>
+    <div class="card"><h3>Tus agentes, no uno nuestro</h3><p>Usa el CLI que ya tengas instalado —Claude Code, opencode, Codex, Antigravity— o un modelo local con Ollama.</p></div>
+    <div class="card"><h3>Local</h3><p>Tus proyectos son carpetas en tu disco y la configuración vive en una base SQLite local. Sin cuenta.</p></div>
+  </div>
+
+  <h2 id="introduccion--estado">Estado del proyecto</h2>
+  <p>Esta ayuda describe la versión <strong>0.1.0</strong>, la primera de ScadLab. <strong>Todavía no hay una versión
+  publicada</strong>: no hay binarios en Releases hasta que se prepare la primera (mientras tanto, puedes
+  <a href="#instalacion--compilar">compilarla desde el código</a>). Todo lo que documenta esta página está
+  implementado y verificado con OpenSCAD real; nada está «en desarrollo».</p>
+  <div class="tablewrap"><table>
+    <tr><th>Área</th><th>Estado en v0.1.0</th></tr>
+    <tr><td>Workspaces, configuración, idioma ES/EN</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Detección de OpenSCAD y de CLIs de agentes</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Skills incluidas y plantilla para skills propias</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Render con OpenSCAD: estado, diagnósticos, auto-render y <code>RENDER_ERRORS.md</code></td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Visor 3D: navegación, vistas, modos, medidas, colores, captura PNG y vista dividida</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Editor de código: resaltado, buscar y reemplazar, linter, formato, autocompletado y guardar como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Ventana: paneles acoplables (mover, dividir, flotar, minimizar y ocultar), diseños guardados, modo enfoque, barra lateral plegable, barra de estado y panel Problemas</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Varios proyectos a la vez: pestañas de proyecto con indicadores de fondo, reordenar, atajos y reapertura al arrancar</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Terminal de agentes (Claude Code, opencode, Codex, Antigravity) con sesiones y auto-iteración de errores</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Chat con modelos (Ollama, compatible con OpenAI, Anthropic) y guardar el código como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Exportar: STL, 3MF multicolor para Bambu (una parte por color con su extrusor), STL por color y abrir en Bambu Studio</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Servidor MCP de ScadLab: los agentes renderizan, validan, miden y ven sus modelos, configurado solo en cada CLI</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Medición por partes: selección en el visor, peso, filamento y costo estimados, aviso de placa y panel Impresión</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Checkpoints avanzados: menú contextual, renombrar, papelera, padre activo, comparar con el padre y retomar la sesión que los creó</td><td><span class="badge ok">Disponible</span></td></tr>
+  </table></div>
+
+  <h3>Lo que todavía falta</h3>
+  <p>No son funciones: es verificación a mano, en ventanas y programas reales, que no se puede automatizar.</p>
+  <ul>
+    <li>Abrir ScadLab en una <strong>Windows real</strong>: el <code>.exe</code> se compila desde macOS y aún no se ha ejecutado allí.</li>
+    <li>El visor 3D, el editor y el arrastre de pestañas dentro de la ventana real (WebGL de WKWebView / WebView2, los workers de Monaco, <kbd>Ctrl+Tab</kbd>).</li>
+    <li>La terminal con un CLI de agente real, el chat contra un servidor real y una sesión de cada agente usando las herramientas MCP.</li>
+    <li>Abrir en Bambu Studio un 3MF exportado, asignar el AMS y laminar.</li>
+  </ul>
+
+  <h2 id="introduccion--seguir">Por dónde seguir</h2>
+  <div class="next">
+    <a href="#instalacion"><b>Instalación</b><span>macOS (Apple Silicon) y Windows</span></a>
+    <a href="#requisitos"><b>Requisitos</b><span>OpenSCAD y, opcional, un agente</span></a>
+    <a href="#primer-proyecto"><b>Tu primer proyecto</b><span>De una carpeta vacía a una pieza</span></a>
+    <a href="#receta-multicolor"><b>Recetas</b><span>Flujos completos, paso a paso</span></a>
+  </div>
+
+  <div class="cta">
+    <a class="btn" href="https://github.com/rafael180496/ScadLab/releases">Descargar</a>
+    <a class="btn ghost" href="https://github.com/rafael180496/ScadLab">Ver el código</a>
+    <a class="btn ghost" href="https://github.com/rafael180496/ScadLab/blob/main/CHANGELOG.md">Cambios</a>
+  </div>
+
+  <h2 id="introduccion--apoyar">Apoya el proyecto</h2>
+  <p>ScadLab es gratis, de código abierto y sin telemetría, y va a seguir así. Si te ahorra horas de modelado y quieres
+  que siga creciendo, puedes apoyarlo con un aporte único en <strong>Buy Me a Coffee</strong> o con una suscripción
+  mensual en <strong>Patreon</strong>. Los dos están también a un clic desde la app, en el pie de
+  <strong>Configuración</strong>.</p>
+  <div class="cta">
+    <a class="btn" href="https://buymeacoffee.com/rhidalgo">☕ Invítame un café</a>
+    <a class="btn ghost" href="https://www.patreon.com/16966547/join">Suscríbete en Patreon</a>
+    <a class="btn ghost" href="https://www.patreon.com/cw/TotoLab2026">Página de Patreon</a>
+  </div>
+</article>
+
+<article class="topic" id="instalacion" data-title="Instalación">
+  <h1>Instalación</h1>
+  <p class="lead">Un ejecutable para macOS (Apple Silicon) y otro para Windows (x64). Los binarios no están
+  firmados todavía, así que el sistema avisa la primera vez que los abres.</p>
+
+  <div class="note dev"><span class="lbl">Sin versión publicada</span><p>Todavía no hay binarios en
+  <a href="https://github.com/rafael180496/ScadLab/releases">Releases</a>. Cuando se publique la primera, los archivos
+  estarán en <code>https://github.com/rafael180496/ScadLab/releases/download/vX.Y.Z/…</code>:
+  <code>ScadLab-vX.Y.Z.dmg</code> para macOS y <code>ScadLab-vX.Y.Z-windows-amd64.exe</code> para Windows. Mientras
+  tanto, <a href="#instalacion--compilar">compílala desde el código</a>.</p></div>
+
+  <h2 id="instalacion--macos">macOS (Apple Silicon)</h2>
+  <ol class="steps">
+    <li>Descarga el <code>.dmg</code> para macOS desde <a href="https://github.com/rafael180496/ScadLab/releases">Releases</a>.</li>
+    <li>Ábrelo y arrastra <code>ScadLab.app</code> a <strong>Aplicaciones</strong>.</li>
+    <li>La primera vez, <strong>clic derecho → Abrir</strong> (no doble clic) y confirma en el diálogo.</li>
+  </ol>
+  <div class="note warn"><span class="lbl">Gatekeeper</span><p>Si macOS dice que la app «está dañada» o «no se
+  puede verificar el desarrollador», es porque no está firmada ni notarizada. Ve a <strong>Ajustes del Sistema →
+  Privacidad y seguridad</strong> y pulsa <strong>Abrir igualmente</strong>, o quita la marca de cuarentena desde
+  la terminal:</p></div>
+  <div class="codewrap"><pre><code>xattr -dr com.apple.quarantine /Applications/ScadLab.app</code></pre></div>
+  <p>Solo hay build para Apple Silicon (M1 y posteriores). En un Mac con Intel no está soportada.</p>
+
+  <h2 id="instalacion--windows">Windows (x64)</h2>
+  <ol class="steps">
+    <li>Descarga el archivo para Windows desde <a href="https://github.com/rafael180496/ScadLab/releases">Releases</a>.</li>
+    <li>Ejecuta el <code>.exe</code>: es portable, no necesita instalador.</li>
+    <li>Si aparece <strong>«Windows protegió su PC»</strong>, pulsa <strong>Más información → Ejecutar de todas formas</strong>.</li>
+  </ol>
+  <div class="note warn"><span class="lbl">SmartScreen</span><p>El aviso aparece porque el ejecutable no está firmado
+  con un certificado de código y todavía tiene pocas descargas. No es un diagnóstico de virus. Si prefieres no
+  aceptarlo, compila desde el código fuente.</p></div>
+  <p>ScadLab usa <strong>WebView2</strong> (el motor de Edge) para su interfaz. Viene incluido en Windows 10 y 11
+  actualizados; si faltara, la app te lo indica al arrancar.</p>
+
+  <h2 id="instalacion--compilar">Compilar desde el código</h2>
+  <p>Necesitas Go, Node.js y la CLI de Wails v2:</p>
+  <div class="codewrap"><pre><code>go install github.com/wailsapp/wails/v2/cmd/wails@latest
+git clone https://github.com/rafael180496/ScadLab.git
+cd ScadLab
+wails build            <span class="c"># binario en build/bin/</span></code></pre></div>
+
+  <h2 id="instalacion--siguiente">Después de instalar</h2>
+  <p>ScadLab no incluye OpenSCAD: necesitas instalarlo aparte. Sigue con <a href="#requisitos">Requisitos</a>.</p>
+</article>
+
+<article class="topic" id="requisitos" data-title="Requisitos: OpenSCAD y agentes">
+  <h1>Requisitos: OpenSCAD y agentes</h1>
+  <p class="lead">OpenSCAD es obligatorio: es el que convierte el código en geometría. Los agentes de IA son
+  opcionales, pero son la mitad de la gracia.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-openscad.png" alt="Configuración, pestaña OpenSCAD: ruta vacía para autodetectar, OpenSCAD encontrado con su versión y el selector de motor de render" loading="lazy"><figcaption>Configuración → OpenSCAD: detección automática, versión encontrada y motor de render.</figcaption></figure>
+
+  <h2 id="requisitos--openscad">OpenSCAD</h2>
+  <p>Descárgalo desde <a href="https://openscad.org/downloads.html">openscad.org</a>. Se recomienda una
+  <strong>versión de desarrollo reciente (snapshot)</strong> en lugar de la estable 2021.01: renderiza mucho más
+  rápido con el motor Manifold y exporta 3MF con color, que es lo que hace falta para el multicolor.</p>
+  <div class="two">
+    <div>
+      <h3>macOS</h3>
+      <div class="codewrap"><pre><code>brew install --cask openscad@snapshot</code></pre></div>
+      <p>Ruta típica:<br><code>/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD</code></p>
+    </div>
+    <div>
+      <h3>Windows</h3>
+      <div class="codewrap"><pre><code>winget install OpenSCAD.OpenSCAD</code></pre></div>
+      <p>Ruta típica:<br><code>C:\Program Files\OpenSCAD\openscad.exe</code></p>
+    </div>
+  </div>
+
+  <h2 id="requisitos--deteccion">Detección automática <span class="badge ok">Disponible</span></h2>
+  <p>Al arrancar, ScadLab busca OpenSCAD en las rutas habituales y en el <code>PATH</code>, y muestra la versión
+  que encontró en <a href="#config-general">Configuración</a>. Si lo instalaste en otro sitio, indica la ruta a
+  mano ahí mismo.</p>
+
+  <h2 id="requisitos--agentes">Agentes de IA (opcionales)</h2>
+  <p>ScadLab no trae su propio modelo: usa los CLIs que ya tengas instalados y con sesión iniciada para la
+  <a href="#ia-agentes">terminal</a>, y los servidores de modelos que habilites para el <a href="#ia-ollama">chat</a>.
+  Detecta cualquiera de estos:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Agente</th><th>Qué necesitas</th></tr>
+    <tr><td>Claude Code</td><td>El CLI <code>claude</code> instalado y con sesión iniciada</td></tr>
+    <tr><td>opencode</td><td>El CLI <code>opencode</code> con un proveedor configurado</td></tr>
+    <tr><td>Codex</td><td>El CLI <code>codex</code> con sesión iniciada</td></tr>
+    <tr><td>Antigravity</td><td>El CLI de Antigravity instalado</td></tr>
+    <tr><td>Ollama (chat)</td><td>Ollama corriendo en local (por defecto <code>http://localhost:11434</code>) y un modelo descargado</td></tr>
+    <tr><td>Compatible con OpenAI (chat)</td><td>Un servidor con esa API (LM Studio, vLLM, OpenRouter…) y la variable de entorno con su API key</td></tr>
+    <tr><td>Anthropic (chat)</td><td>La variable de entorno con tu API key de Anthropic</td></tr>
+  </table></div>
+  <p>Cada agente se cobra y se rige por las condiciones de su propio proveedor; ScadLab solo lo ejecuta.</p>
+</article>
+
+<article class="topic" id="primer-proyecto" data-title="Tu primer proyecto">
+  <h1>Tu primer proyecto</h1>
+  <p class="lead">De una carpeta vacía a una pieza que puedes imprimir: crea un workspace, pídele algo al
+  agente y mira el resultado.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/new-workspace.png" alt="Diálogo Nuevo workspace con el nombre, la carpeta donde se crea y el selector de impresora Bambu Lab" loading="lazy"><figcaption>Diálogo de nuevo workspace: nombre, carpeta donde se crea e impresora.</figcaption></figure>
+
+  <h2 id="primer-proyecto--crear">1. Crea el workspace <span class="badge ok">Disponible</span></h2>
+  <ol class="steps">
+    <li>Pulsa <strong>Nuevo workspace</strong>.</li>
+    <li>Ponle nombre (por ejemplo <em>Caja sensores</em>) y elige una carpeta vacía.</li>
+    <li>ScadLab crea la estructura y copia las <a href="#ia-skills">skills</a> para todos los CLIs.</li>
+  </ol>
+
+  <h2 id="primer-proyecto--pedir">2. Pídele el modelo al agente <span class="badge ok">Disponible</span></h2>
+  <p>Abre el panel <a href="#ia-agentes">Agente</a>, elige tu agente, pulsa <strong>Nueva</strong> y describe la pieza con medidas:</p>
+  <div class="prompt"><p>Haz una caja de 60×40×25 mm con paredes de 2 mm y una tapa a presión con holgura de
+  0,2 mm. Esquinas redondeadas de 4 mm. Caja en azul y tapa en blanco. Debe caber en la A1 mini.</p></div>
+  <p>El agente crea <code>001-base-box.scad</code>, ScadLab lo renderiza solo y el checkpoint aparece en el árbol;
+  si falla, el agente recibe el aviso para corregirlo (<a href="#ia-autoiteracion">auto-iteración</a>). Un checkpoint
+  mínimo se ve así:</p>
+  <div class="codewrap"><pre><code>// @checkpoint parent= desc="Caja base 60x40x25 con tapa a presion"
+/* [Dimensiones] */
+width  = 60;   // [20:1:180]
+depth  = 40;   // [20:1:180]
+height = 25;   // [5:0.5:150]
+wall   = 2;    // [1.2:0.2:5]
+
+color("SteelBlue") difference() {
+  cube([width, depth, height]);
+  translate([wall, wall, wall]) cube([width-2*wall, depth-2*wall, height]);
+}</code></pre></div>
+
+  <h2 id="primer-proyecto--iterar">3. Itera</h2>
+  <p>Cada petición nueva genera un checkpoint nuevo: <em>«agrega cuatro agujeros de 3 mm en la base para
+  tornillos M3»</em> crea <code>002-…</code> con <code>parent=001-…</code>. Si no te gusta, haz clic en el
+  anterior y pide otra cosa: eso crea una <a href="#checkpoints-arbol">rama</a>.</p>
+
+  <h2 id="primer-proyecto--imprimir">4. Exporta</h2>
+  <p>Con el checkpoint que te guste seleccionado, pulsa <strong>3MF</strong> en la cabecera y ábrelo en Bambu
+  Studio. Detalle en <a href="#imprimir-exportar">Exportar</a>.</p>
+</article>
+
+<!-- ============================================== WORKSPACES Y CHECKPOINTS -->
+<article class="topic" id="workspaces" data-title="Workspaces">
+  <h1>Workspaces</h1>
+  <p class="lead">Un workspace es un proyecto: una carpeta en tu disco con los checkpoints, la configuración
+  de la impresora y las reglas para los agentes.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/app-main-light.png" alt="Barra lateral con tres workspaces y el árbol de checkpoints del abierto, en tema claro" loading="lazy"><figcaption>Workspaces a la izquierda (tema claro): el abierto lleva el punto naranja.</figcaption></figure>
+
+  <h2 id="workspaces--estructura">Qué hay dentro <span class="badge ok">Disponible</span></h2>
+  <div class="codewrap"><pre class="tree"><code>caja-sensores/
+├── 001-base-box.scad          <span class="c"># checkpoints: uno por versión</span>
+├── 002-m3-holes.scad
+├── printer.json               <span class="c"># impresora del proyecto</span>
+├── CLAUDE.md                  <span class="c"># reglas para Claude Code</span>
+├── AGENTS.md                  <span class="c"># reglas para opencode, Codex, Antigravity</span>
+├── lib/                       <span class="c"># librerías (BOSL2, MCAD…) si las usas</span>
+├── .claude/skills/            <span class="c"># skills, copiadas para cada CLI</span>
+├── .agents/skills/
+├── .opencode/skills/
+└── .agent/skills/</code></pre></div>
+  <p>Es una carpeta normal: puedes abrirla con cualquier editor, versionarla con Git o copiarla a otra máquina.
+  ScadLab la reconoce al volver a abrirla.</p>
+
+  <h2 id="workspaces--abrir">Crear, abrir y recientes <span class="badge ok">Disponible</span></h2>
+  <ul>
+    <li><strong>Nuevo workspace</strong>: nombre + carpeta. Si la carpeta ya tiene <code>.scad</code>, se respetan.</li>
+    <li><strong>Abrir</strong>: elige una carpeta existente; ScadLab completa lo que falte (skills, reglas) sin tocar tus archivos <code>.scad</code>.</li>
+    <li>La lista de recientes se guarda en la <a href="#config-datos">base local</a>.</li>
+  </ul>
+
+  <h2 id="workspaces--pestanas">Varios proyectos: pestañas de proyecto <span class="badge ok">Disponible</span></h2>
+  <p>Puedes tener <strong>hasta 4 proyectos abiertos a la vez</strong>, cada uno en su pestaña, en la cabecera, a la
+  derecha del logo. Es una sola ventana: no se abren ventanas nuevas del sistema.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/projects-tabs.png" alt="Cabecera de ScadLab con tres pestañas de proyecto: la primera activa y subrayada en naranja, la segunda con un indicador de render en curso y un punto de cambios sin guardar, la tercera con un triángulo rojo de render fallido y un ícono verde de agente en marcha" loading="lazy"><figcaption>Tres proyectos abiertos. La activa va subrayada; las de fondo muestran qué pasa en ellas: render en curso, último render fallido, agente en marcha y cambios sin guardar.</figcaption></figure>
+  <ul>
+    <li><strong>Abrir otro</strong>: el botón <strong>+</strong> de la cabecera lista tus workspaces (los ya abiertos llevan una marca y te llevan a su pestaña) y ofrece <em>Nuevo workspace…</em>. Hacer clic en un workspace de la barra lateral también lo abre como pestaña. Con 4 abiertos el <strong>+</strong> se apaga, y su aviso te dice que cierres uno.</li>
+    <li><strong>Cambiar de pestaña es instantáneo y no pierde nada</strong>: cada proyecto conserva su checkpoint elegido, el código sin guardar (y si estabas editando), la comparación con el padre abierta, la parte seleccionada en el visor y el chat que tenías. La barra lateral, el visor, el código, Problemas, Impresión y el chat siguen al proyecto que está al frente.</li>
+    <li><strong>Los de fondo siguen trabajando</strong>: su carpeta se sigue vigilando, el auto-render sigue respondiendo a lo que escriba un agente, y sus agentes y la auto-iteración siguen corriendo. Los paneles <strong>Agente 1</strong> y <strong>Agente 2</strong> muestran las terminales del proyecto activo (hasta <strong>2 por proyecto</strong>, 8 en total); las de los demás siguen vivas, con su pantalla intacta, hasta que vuelvas a ellas.</li>
+    <li><strong>Reordenar</strong>: arrastra una pestaña, o usa su menú (clic derecho): <em>Mover a la izquierda</em> / <em>a la derecha</em>, <em>Cerrar</em>, <em>Cerrar los demás</em> y <em>Mostrar en el Finder</em> (en Windows, en el Explorador).</li>
+    <li><strong>Cerrar</strong> con la × o con el atajo: si el proyecto tiene cambios sin guardar o agentes en marcha, ScadLab te dice qué se pierde antes de cerrar (los agentes se detienen). Cerrar el último deja la pantalla vacía.</li>
+    <li>Al abrir ScadLab se <strong>reabren las pestañas</strong> que tenías y la que estaba al frente.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/projects-plus-menu.png" alt="Menú del botón + de la cabecera: lista los cuatro workspaces, los tres abiertos con una marca, y al final «Nuevo workspace…»" loading="lazy"><figcaption>El menú <strong>+</strong>: los workspaces ya abiertos llevan una marca; el resto se abre en una pestaña nueva.</figcaption></figure>
+  <p>En ventanas angostas (o con la interfaz agrandada) las pestañas se acortan con puntos suspensivos y dejan solo el
+  indicador más importante; nunca empujan los botones de exportar fuera de la ventana. Pasa el ratón sobre una pestaña
+  para ver el nombre completo y su carpeta.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/projects-narrow.png" alt="ScadLab en una ventana de 1024 píxeles: las tres pestañas de proyecto se acortan con puntos suspensivos y los botones STL, 3MF y PNG siguen visibles a la derecha" loading="lazy"><figcaption>A 1024 px las pestañas se acortan; la cabecera no desborda.</figcaption></figure>
+
+  <h3 id="workspaces--pestanas-atajos">Atajos de las pestañas de proyecto</h3>
+  <div class="tablewrap"><table>
+    <tr><th>macOS</th><th>Windows</th><th>Qué hace</th></tr>
+    <tr><td><kbd>⌃Tab</kbd> / <kbd>⌃⇧Tab</kbd></td><td><kbd>Ctrl+Tab</kbd> / <kbd>Ctrl+Shift+Tab</kbd></td><td>Pestaña de proyecto siguiente / anterior</td></tr>
+    <tr><td><kbd>⌘1</kbd> … <kbd>⌘4</kbd></td><td><kbd>Ctrl+1</kbd> … <kbd>4</kbd></td><td>Ir a la pestaña 1, 2, 3 o 4</td></tr>
+    <tr><td><kbd>⌘W</kbd></td><td><kbd>Ctrl+W</kbd></td><td>Cerrar el proyecto activo (con confirmación si pierde algo). En Windows, con el foco en una terminal de agente, <kbd>Ctrl+W</kbd> es de la shell (borrar palabra): ahí se usa <kbd>Ctrl+Shift+W</kbd></td></tr>
+  </table></div>
+  <p>No chocan con los demás atajos: el dock usa <kbd>⌘⇧1</kbd>…<kbd>7</kbd>, el visor usa <kbd>1</kbd>–<kbd>7</kbd> sin modificador y
+  el editor y la terminal no usan estas combinaciones. Con un diálogo abierto no actúan.</p>
+
+  <h3 id="workspaces--pestanas-agentes">Cada agente ve los otros proyectos abiertos</h3>
+  <p>Al abrir un agente desde ScadLab, se le agregan las carpetas de los <strong>otros proyectos abiertos</strong> en ese
+  momento (<code>--add-dir</code> en Claude Code, Codex y Antigravity) y sus reglas le dicen que puede <em>leerlas</em> para
+  reutilizar piezas, pero que solo escribe en el suyo. Dos salvedades:</p>
+  <ul>
+    <li><strong>opencode</strong> no tiene una opción equivalente: solo ve la carpeta de su propio proyecto.</li>
+    <li>Las carpetas se fijan <strong>al abrir el agente</strong>: si abres otro proyecto después, un agente que ya estaba abierto no se entera. Pulsa <em>Nueva</em> en su terminal para relanzarlo con la lista actual.</li>
+  </ul>
+
+  <h2 id="workspaces--skills">Sincronización de skills <span class="badge ok">Disponible</span></h2>
+  <p>Al crear o abrir un workspace, ScadLab copia las skills incluidas y las tuyas en las cuatro ubicaciones
+  que leen los CLIs. Así da igual qué agente uses: todos siguen las mismas reglas. Ver
+  <a href="#ia-skills">Skills incluidas</a>.</p>
+</article>
+
+<article class="topic" id="checkpoints" data-title="Checkpoints: el historial">
+  <h1>Checkpoints: el historial <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Cada versión del modelo es un archivo <code>.scad</code> inmutable. El historial no está en una
+  base de datos: se reconstruye leyendo los archivos.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/app-main.png" alt="Árbol de checkpoints con una rama desde 002-sliding-lid y el estado de render de cada uno" loading="lazy"><figcaption>Árbol de checkpoints: 005-snap-lid es una rama que sale de 002-sliding-lid. El punto de cada nodo es su estado de render.</figcaption></figure>
+
+  <h2 id="checkpoints--formato">El formato</h2>
+  <ul>
+    <li><strong>Nombre</strong>: <code>NNN-slug.scad</code> — número de tres dígitos (el siguiente al mayor que exista)
+      y un slug corto en kebab-case: <code>001-base-box.scad</code>, <code>002-rounded-corners.scad</code>.</li>
+    <li><strong>Primera línea</strong>, siempre:</li>
+  </ul>
+  <div class="codewrap"><pre><code>// @checkpoint parent=002-rounded-corners.scad desc="Agrega bisagra lateral"</code></pre></div>
+  <p>En el primer checkpoint <code>parent=</code> va vacío. <code>desc</code> dice qué cambia respecto al padre, en
+  una frase y sin comillas dobles dentro.</p>
+
+  <h2 id="checkpoints--inmutables">Por qué son inmutables</h2>
+  <p>La IA <strong>nunca sobrescribe</strong> un checkpoint, ni siquiera uno con error: el arreglo va en uno
+  nuevo. Así cualquier versión que viste sigue existiendo exactamente igual, y comparar o volver atrás no
+  depende de que nadie haya guardado nada. Cada checkpoint es <strong>autocontenido</strong> (copia todo el
+  código del padre): no hace <code>include</code> de otro checkpoint.</p>
+
+  <h2 id="checkpoints--cargar">Cargar un checkpoint</h2>
+  <p>Un clic en el árbol lo selecciona y, si nunca se renderizó y el auto-render está activo, lo renderiza. Las
+  mallas quedan en una <strong>caché en disco</strong>, así que volver a una versión que ya viste no recalcula
+  nada. Ver <a href="#render">Renderizar y diagnósticos</a>.</p>
+
+  <h2 id="checkpoints--tooltip">La descripción</h2>
+  <p>Al pasar el ratón sobre un checkpoint, el tooltip muestra su <code>desc</code> (es la forma rápida de saber qué
+  cambió sin abrir el código), el archivo, <strong>quién lo creó</strong> —el agente y la sesión, o «Guardado desde el
+  chat»— y cuándo.</p>
+
+  <h2 id="checkpoints--meta">Qué guarda ScadLab junto a los checkpoints</h2>
+  <p>La carpeta <code>.scadlab/</code> del workspace guarda dos cosas que no son modelos: la
+  <a href="#checkpoints-arbol--papelera">papelera</a> y el <a href="#checkpoints-arbol--activo">padre activo</a>
+  (<code>.scadlab/active-parent</code>, una línea con un nombre de archivo). Los rótulos, el plegado y el vínculo con
+  la sesión del agente viven en la base local <code>scadlab.db</code>: si la pierdes, el árbol se reconstruye igual
+  leyendo los archivos y solo se van esos detalles. Ninguna de las dos cosas toca tus <code>.scad</code>.</p>
+</article>
+
+<article class="topic" id="checkpoints-arbol" data-title="Árbol, ramas y menú">
+  <h1>Árbol, ramas y menú <span class="badge ok">Disponible</span></h1>
+  <p class="lead">El historial es un árbol, no una lista: puedes volver a cualquier punto y probar otra idea sin
+  perder la anterior. Haz clic derecho sobre un checkpoint (o pulsa «…» al pasar el ratón) para todo lo que sigue.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/tree-active-branch.png" alt="Árbol de checkpoints con el padre activo 003-vent-slots marcado con un ícono de rama y una barra de acento, y la rama que lleva a él resaltada" loading="lazy"><figcaption>El padre activo (003-vent-slots) lleva el ícono de rama; los conectores de la rama que baja hasta él van en color de acento.</figcaption></figure>
+
+  <h2 id="checkpoints-arbol--activo">Ramificar y el padre activo</h2>
+  <p>El <strong>padre activo</strong> es el checkpoint del que cuelga el <em>próximo</em> que se cree, sea el agente de
+  la terminal, el chat, el servidor MCP o tú al guardar desde el editor. Se marca en el árbol con un ícono de rama.
+  Para ramificar, haz clic derecho en el checkpoint de donde quieres partir y elige <strong>Ramificar desde aquí</strong>:
+  el agente lo lee de <code>.scadlab/active-parent</code> (lo dicen las <a href="#ia-reglas">reglas del workspace</a>) y la
+  herramienta <code>create_checkpoint</code> lo usa por defecto.</p>
+  <ul>
+    <li><strong>Avanza solo.</strong> Cuando se crea un checkpoint hijo del activo, el nuevo pasa a ser el activo: sigues
+      trabajando en la misma rama sin volver a marcarla. Una variante que sale de otro padre no mueve el activo.</li>
+    <li><strong>Sin padre activo</strong>, rige lo de siempre: el próximo cuelga del checkpoint más nuevo, y el árbol marca
+      ese.</li>
+    <li>Si mandas el activo a la <a href="#checkpoints-arbol--papelera">papelera</a>, el activo pasa a su padre.</li>
+  </ul>
+  <div class="codewrap"><pre class="tree"><code>001-base-box
+├── 002-rounded-corners
+│   ├── 003-snap-lid            <span class="c"># padre activo: el próximo cuelga de aquí</span>
+│   └── 005-alt-screw-lid      <span class="c"># parent=002: rama nueva</span>
+└── 004-tall-version           <span class="c"># parent=001</span></code></pre></div>
+
+  <h2 id="checkpoints-arbol--menu">Menú contextual</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/tree-menu.png" alt="Menú contextual de 003-vent-slots con Ver código, Comparar con el padre, Ramificar desde aquí, Renombrar, Retomar en Claude Code, Plegar rama, Copiar nombre, Mostrar en el Finder, Mover a la papelera y Mover con su rama a la papelera" loading="lazy"><figcaption>El menú de un checkpoint creado por Claude Code: «Retomar en Claude Code» solo aparece con un vínculo.</figcaption></figure>
+  <div class="tablewrap"><table>
+    <tr><th>Acción</th><th>Qué hace</th></tr>
+    <tr><td>Ver código</td><td>Elige el checkpoint y abre su código en el panel <a href="#editor">Código</a></td></tr>
+    <tr><td>Comparar con el padre</td><td>Muestra en el panel Código <a href="#checkpoints-arbol--comparar">qué cambió</a> respecto del padre. Deshabilitada en una raíz</td></tr>
+    <tr><td>Ramificar desde aquí</td><td>Lo marca como <a href="#checkpoints-arbol--activo">padre activo</a></td></tr>
+    <tr><td>Renombrar <kbd>F2</kbd></td><td>Cambia el <a href="#checkpoints-arbol--renombrar">nombre que se muestra</a>, en la propia fila</td></tr>
+    <tr><td>Retomar sesión</td><td>Reabre <a href="#checkpoints-arbol--sesion">la conversación</a> en la que se creó: «Retomar en Claude Code» (o el agente que fuera) o «Abrir el chat»</td></tr>
+    <tr><td>Plegar / desplegar rama</td><td>Oculta o muestra los checkpoints que cuelgan de este</td></tr>
+    <tr><td>Copiar nombre</td><td>Copia el nombre del archivo al portapapeles</td></tr>
+    <tr><td>Mostrar en el Finder / Explorador</td><td>Abre la carpeta del workspace con el archivo seleccionado</td></tr>
+    <tr><td>Mover a la papelera <kbd>⌫</kbd></td><td>Saca <em>solo ese</em> checkpoint del árbol. Sus hijos se quedan, con el padre perdido (marcados con ⚠)</td></tr>
+    <tr><td>Mover con su rama a la papelera</td><td>Se lleva el checkpoint y todos sus descendientes. La confirmación dice cuántos son</td></tr>
+  </table></div>
+
+  <h2 id="checkpoints-arbol--renombrar">Renombrar</h2>
+  <p>Renombrar cambia el <strong>rótulo</strong>: el nombre que se ve en el árbol, hasta 80 letras. El archivo <em>no</em>
+  cambia de nombre, porque sus hijos lo nombran en su <code>parent=</code> y un checkpoint es inmutable. Intro guarda, Esc
+  cancela, y dejarlo vacío vuelve a mostrar el nombre del archivo.</p>
+
+  <h2 id="checkpoints-arbol--papelera">La papelera</h2>
+  <p>ScadLab <strong>nunca borra</strong> un checkpoint: «borrar» lo mueve a <code>.scadlab/trash/</code> del workspace,
+  con la fecha delante del nombre. El ícono de papelera de la cabecera del árbol muestra cuántos hay y abre la lista,
+  con su descripción, cuándo se descartó y el botón <strong>Restaurar</strong>.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/trash.png" alt="Diálogo Papelera de checkpoints con tres checkpoints descartados, cada uno con su descripción, la fecha y un botón Restaurar" loading="lazy"><figcaption>La papelera: restaurar devuelve el archivo (y su rótulo y su vínculo con la sesión) al árbol.</figcaption></figure>
+  <ul>
+    <li>Restaurar devuelve el checkpoint a su nombre; si ese número ya lo ocupa otro, toma el siguiente libre con el mismo
+      slug. El archivo no se reescribe, así que sus hijos —que lo nombran— solo se reenganchan si volvió con su nombre.</li>
+    <li>No hay «vaciar papelera» en la app. Si quieres liberar el espacio, borra la carpeta <code>.scadlab/trash/</code> a mano.</li>
+  </ul>
+
+  <h2 id="checkpoints-arbol--comparar">Comparar con el padre</h2>
+  <p>El panel Código se convierte en un visor de diferencias de solo lectura: a la izquierda el padre, a la derecha el
+  checkpoint, con lo agregado y lo quitado resaltado y el resto plegado. En un panel angosto se muestra en una sola
+  columna; el botón de la barra lo cambia a mano. <strong>Volver al código</strong> (o elegir otro checkpoint) lo cierra.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/diff-parent.png" alt="El panel Código comparando 006-two-color-logo con su padre 005-snap-lid, lado a lado: el ancho pasa de 88 a 92 y se agrega el bloque del logo" loading="lazy"><figcaption>Comparar 006 con su padre: el ancho cambia de 88 a 92 y aparece el bloque del logo.</figcaption></figure>
+
+  <h2 id="checkpoints-arbol--sesion">Retomar la sesión que lo creó</h2>
+  <p>Cuando aparece un checkpoint nuevo y hay una terminal de agente abierta en ese workspace, ScadLab guarda qué
+  agente y qué sesión lo crearon (la más reciente de ese agente para la carpeta). Los que guardas desde el chat
+  recuerdan el chat. Después, <strong>Retomar sesión</strong> abre el agente en la terminal con esa conversación
+  (<code>--resume</code>) o abre el chat. Lo que guardas tú desde el editor no se atribuye al agente, y Antigravity, que
+  no lista sus sesiones, no se puede retomar por id.</p>
+
+  <h2 id="checkpoints-arbol--plegar">Plegar y conectores</h2>
+  <p>Cada rama se puede plegar para que el árbol no crezca sin fin. Las líneas de conexión dibujan quién viene
+  de quién aunque la numeración salte.</p>
+
+  <h2 id="checkpoints-arbol--teclado">Con el teclado</h2>
+  <p>Con el foco en un checkpoint del árbol: <kbd>↑</kbd> <kbd>↓</kbd> se mueven, <kbd>←</kbd> <kbd>→</kbd> pliegan y
+  despliegan, <kbd>Intro</kbd> lo elige, <kbd>F2</kbd> lo renombra, <kbd>⌫</kbd> / <kbd>Supr</kbd> lo manda a la papelera
+  (con confirmación) y la tecla de menú o <kbd>Shift+F10</kbd> abre el menú. Esas teclas son del árbol: con el foco en el
+  editor o en la terminal no hacen nada. Ver <a href="#atajos">Atajos de teclado</a>.</p>
+</article>
+
+<!-- ============================================================ VISOR 3D -->
+<article class="topic" id="render" data-title="Renderizar y diagnósticos">
+  <h1>Renderizar y diagnósticos <span class="badge ok">Disponible</span></h1>
+  <p class="lead">ScadLab corre OpenSCAD sobre cada checkpoint y te dice cómo salió: cuánto tardó, si la malla
+  vino de la caché y, si falló, qué error dio y en qué línea.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/render-error.png" alt="Panel del visor con el render fallido de 004-usb-c-cutout: un error de sintaxis en la línea 23 y una advertencia en la línea 13, y el aviso de que se escribió RENDER_ERRORS.md; a la derecha, el código con esas líneas marcadas" loading="lazy"><figcaption>Render fallido: diagnósticos con su línea (clic = ir a esa línea en el código) y el aviso de RENDER_ERRORS.md para el agente. En el árbol, el punto rojo marca el checkpoint roto.</figcaption></figure>
+
+  <h2 id="render--boton">Renderizar y cancelar</h2>
+  <p>Elige un checkpoint y pulsa <strong>Renderizar</strong> en el panel del visor. Mientras corre, el botón pasa a
+  <strong>Cancelar</strong>. Solo hay un render a la vez por workspace: si eliges otro checkpoint y lo renderizas,
+  el anterior se cancela. Si el render sale bien, la pieza aparece en el <a href="#visor-navegar">visor 3D</a>
+  debajo de la barra de estado; si falla, el panel muestra los diagnósticos.</p>
+
+  <h2 id="render--estado">La barra de estado</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Dato</th><th>Qué significa</th></tr>
+    <tr><td>Duración</td><td>Lo que tardó OpenSCAD, en segundos</td></tr>
+    <tr><td>Desde caché</td><td>La malla no se volvió a calcular: el código y sus <code>include</code>/<code>use</code> no cambiaron desde la última vez. Volver a un checkpoint ya renderizado es inmediato, incluso tras reiniciar la app</td></tr>
+    <tr><td>Motor</td><td><code>manifold</code> o <code>cgal</code>. Si tu OpenSCAD es viejo y no conoce Manifold, ScadLab cae a CGAL solo</td></tr>
+    <tr><td>Versión</td><td>La versión de OpenSCAD que hizo el render</td></tr>
+  </table></div>
+
+  <h2 id="render--arbol">El estado en el árbol</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Indicador</th><th>Estado</th></tr>
+    <tr><td>Spinner</td><td>Renderizando</td></tr>
+    <tr><td>Punto verde</td><td>Salió bien</td></tr>
+    <tr><td>Punto ámbar</td><td>Salió, pero con advertencias (una variable sin definir, un <code>include</code> que no encontró…)</td></tr>
+    <tr><td>Punto rojo</td><td>Falló</td></tr>
+    <tr><td>Sin punto</td><td>Todavía no se renderizó</td></tr>
+  </table></div>
+  <p>Al pasar el ratón sobre el indicador se lee el resumen: la duración, cuántas advertencias hubo o el primer
+  error con su línea.</p>
+
+  <h2 id="render--diagnosticos">Diagnósticos y salida de OpenSCAD</h2>
+  <p>Si el render tiene errores o advertencias, el panel los lista con su severidad, la <strong>línea</strong> y el
+  mensaje (y el archivo, si el error está en un <code>include</code>). Un modelo que no genera nada —por ejemplo,
+  todo dentro de un <code>difference()</code> que se resta entero— también cuenta como error. Debajo,
+  <strong>Salida de OpenSCAD</strong> despliega el texto completo que imprimió OpenSCAD, que se puede seleccionar y
+  copiar.</p>
+
+  <h2 id="render--auto">Auto-render</h2>
+  <p>ScadLab vigila la carpeta del workspace abierto. Cuando aparece un <code>.scad</code> nuevo —por ejemplo, porque
+  un agente lo creó desde la terminal— el árbol se actualiza solo y, con el auto-render activo, ese checkpoint se
+  renderiza sin que toques nada. Si llegan varios a la vez, se renderiza el de número más alto. Elegir en el árbol
+  un checkpoint que nunca se renderizó también lo renderiza. Se apaga en
+  <a href="#config-general">Configuración → OpenSCAD</a>.</p>
+
+  <h2 id="render--errores">RENDER_ERRORS.md</h2>
+  <p>Cuando un render falla, ScadLab escribe <code>RENDER_ERRORS.md</code> en la raíz del workspace: el archivo, los
+  errores con su línea, el código alrededor de cada una, las advertencias y la instrucción de corregirlo en un
+  checkpoint <strong>nuevo</strong> cuyo padre sea el que falló. Las reglas del workspace le dicen al agente que lo
+  lea. Cuando un render sale bien, el archivo se borra; uno cancelado o sin OpenSCAD no lo toca.</p>
+  <p>El archivo describe siempre el <strong>checkpoint más nuevo</strong>, que es sobre el que trabaja el agente.
+  Renderizar uno viejo mientras recorres el historial no lo escribe ni lo borra: abrir un checkpoint roto ya
+  superado no le manda al agente errores que ya corrigió, y abrir uno viejo que anda no esconde que el último
+  está roto. Ver
+  <a href="#ia-autoiteracion">Auto-iteración de errores</a>.</p>
+
+  <h2 id="render--sin-openscad">Si OpenSCAD no está</h2>
+  <p>El panel lo avisa con un botón que abre <a href="#config-general">Configuración</a> en la pestaña OpenSCAD,
+  donde puedes indicar la ruta del ejecutable. Si lo instalas con la app abierta, el próximo render ya lo
+  encuentra. Ver <a href="#requisitos--openscad">Requisitos</a>.</p>
+</article>
+
+<article class="topic" id="visor-navegar" data-title="Navegar el modelo">
+  <h1>Navegar el modelo <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Cuando un render sale bien, el visor muestra la pieza con materiales PBR y reflejos de entorno
+  sobre la placa de tu impresora, a escala, para que la veas como se verá impresa y no como una malla plana.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/viewer.png" alt="Visor 3D con la caja de Raspberry Pi y su tapa en naranja sobre la placa cuadriculada de la A1 mini, la barra de vistas, modos y muestras de color arriba y el panel de medidas abajo a la izquierda" loading="lazy"><figcaption>La pieza apoyada en la placa de la impresora del workspace, con las aristas marcadas. Arriba, la barra del visor; abajo a la izquierda, sus medidas.</figcaption></figure>
+
+  <h2 id="visor-navegar--placa">La placa</h2>
+  <p>La placa es la de la impresora del workspace, a escala real: cuadrícula de 10&nbsp;mm (más marcada cada
+  50&nbsp;mm) y la caja del volumen de impresión en líneas tenues. La pieza se apoya en la placa y se centra
+  sobre ella, como haría el laminador. El visor usa Z hacia arriba, igual que OpenSCAD.</p>
+
+  <h2 id="visor-navegar--raton">Ratón y trackpad</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Gesto</th><th>Acción</th></tr>
+    <tr><td>Arrastrar con botón izquierdo</td><td>Orbitar alrededor del modelo</td></tr>
+    <tr><td>Arrastrar con botón derecho, o <kbd>Shift</kbd> + arrastrar</td><td>Desplazar (pan)</td></tr>
+    <tr><td>Rueda, o pellizco en el trackpad</td><td>Zoom</td></tr>
+  </table></div>
+
+  <h2 id="visor-navegar--tactil">Táctil</h2>
+  <p>Un dedo orbita; con dos, el pellizco hace zoom y el arrastre desplaza.</p>
+
+  <h2 id="visor-navegar--teclado">Teclado</h2>
+  <p>Haz clic en el visor para darle el foco. Las flechas orbitan, <kbd>Shift</kbd>+flechas desplazan,
+  <kbd>+</kbd> / <kbd>−</kbd> hacen zoom, <kbd>1</kbd>–<kbd>7</kbd> eligen las <a href="#visor-modos--vistas">vistas</a>
+  y <kbd>F</kbd> encuadra la pieza. El botón <strong>?</strong> de la barra del visor recuerda todos los controles.
+  Lista completa en <a href="#atajos">Atajos de teclado</a>.</p>
+
+  <h2 id="visor-navegar--checkpoints">Cambiar de checkpoint</h2>
+  <p>Al elegir otro checkpoint la cámara se queda donde estaba: así se comparan dos versiones desde el mismo
+  ángulo. Mientras llega la malla nueva sigue a la vista la anterior, y volver a uno ya visto es instantáneo
+  (las mallas quedan en memoria). Si el render del checkpoint falla, el visor se oculta y el panel muestra los
+  <a href="#render--diagnosticos">diagnósticos</a>; las advertencias de un render que salió bien quedan plegadas en
+  una esquina del visor.</p>
+</article>
+
+<article class="topic" id="visor-modos" data-title="Modos de vista y cámaras">
+  <h1>Modos de vista y cámaras <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Wireframe, aristas, proyección ortográfica o en perspectiva y siete vistas predefinidas, todo
+  desde la barra del visor.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/viewer-top.png" alt="Visor 3D en la vista Arriba con proyección ortográfica: la tapa con sus ranuras de ventilación y la caja con los cuatro standoffs vistas desde arriba, en naranja con las aristas marcadas" loading="lazy"><figcaption>Vista Arriba en ortográfica: sin deformación por la distancia, las ranuras y los standoffs se ven en su posición real.</figcaption></figure>
+
+  <h2 id="visor-modos--modos">Modos de render</h2>
+  <ul>
+    <li><strong>Sólido</strong> (por defecto): materiales PBR con reflejos.</li>
+    <li><strong>Wireframe</strong> (<kbd>W</kbd>): solo la malla, útil para ver la densidad de triángulos (<code>$fn</code> demasiado alto).</li>
+    <li><strong>Aristas</strong> (<kbd>E</kbd>): sólido con los bordes de más de 30° marcados, para leer la forma de piezas monocromas.</li>
+  </ul>
+
+  <figure class="shot"><img src="../docs/screenshots/es/viewer-wireframe.png" alt="Visor 3D en modo wireframe: la caja y la tapa dibujadas solo con los triángulos de la malla, en azul" loading="lazy"><figcaption>Wireframe: los triángulos de la malla STL. Los cilindros de los standoffs concentran la mayoría.</figcaption></figure>
+
+  <h2 id="visor-modos--proyeccion">Ortográfica o perspectiva</h2>
+  <p>El botón <strong>Persp</strong> / <strong>Orto</strong> (<kbd>O</kbd>) cambia la proyección sin mover la vista.
+  La ortográfica no deforma por la distancia: es la que conviene para comparar medidas o alinear piezas mirando de
+  frente. La perspectiva es la natural para ver el conjunto.</p>
+
+  <h2 id="visor-modos--vistas">Las siete vistas</h2>
+  <ul class="chips">
+    <li class="chip">Frente <kbd>1</kbd></li><li class="chip">Atrás <kbd>2</kbd></li><li class="chip">Izquierda <kbd>3</kbd></li><li class="chip">Derecha <kbd>4</kbd></li>
+    <li class="chip">Arriba <kbd>5</kbd></li><li class="chip">Abajo <kbd>6</kbd></li><li class="chip">Iso <kbd>7</kbd></li>
+  </ul>
+  <p>Cada vista mira la pieza desde ese lado y la encuadra. <strong>Abajo</strong> es la que se olvida y la que más
+  importa para imprimir: muestra la cara que irá apoyada en la placa (desde abajo la placa se oculta para no
+  taparla). <strong>Encuadrar</strong> (<kbd>F</kbd>) vuelve a centrar la pieza sin cambiar el ángulo.</p>
+</article>
+
+<article class="topic" id="visor-medir" data-title="Medir una pieza: volumen, peso y costo">
+  <h1>Medir una pieza: volumen, peso y costo <span class="badge ok">Disponible</span></h1>
+  <p class="lead">El visor entiende el modelo <strong>por partes</strong>: cada color es una parte. Haz clic en una y
+  ves su tamaño, su volumen y cuánto pesa, cuánto filamento lleva y cuánto cuesta imprimirla. Si la pieza no cabe en la
+  placa, te lo avisa antes de que lo descubras en el laminador.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/viewer-parts.png" alt="Visor 3D con una placa con nombre en dos colores, base blanca y texto rojo; el texto está seleccionado con su contorno naranja, la base atenuada y, abajo a la derecha, la tarjeta de la parte con su tamaño, volumen, peso, filamento, costo y material" loading="lazy"><figcaption>Una parte seleccionada: se resalta, el resto se atenúa y la tarjeta de abajo a la derecha da sus medidas y su estimación.</figcaption></figure>
+
+  <h2 id="visor-medir--panel">El panel de la pieza</h2>
+  <p>La esquina de abajo a la izquierda mide <strong>el modelo entero</strong>:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Dato</th><th>De dónde sale</th></tr>
+    <tr><td>Tamaño X × Y × Z</td><td>Caja envolvente de la malla, en mm</td></tr>
+    <tr><td>Volumen</td><td>Volumen sólido de la malla, en cm³</td></tr>
+    <tr><td>Triángulos</td><td>Cuántos tiene la malla STL. Muchos suelen ser un <code>$fn</code> demasiado alto</td></tr>
+    <tr><td>Cerrada / Abierta</td><td>Si la malla es estanca (cada arista la comparten exactamente dos caras). Una abierta puede laminarse mal</td></tr>
+  </table></div>
+
+  <h2 id="visor-medir--partes">Partes y selección</h2>
+  <p>Cada <code>color()</code> del <code>.scad</code> es una parte (por eso las skills obligan a la IA a colorear todo; un
+  modelo sin color es una sola parte). Un clic la <strong>selecciona</strong>: se resalta con su contorno y el resto
+  se atenúa. <kbd>Esc</kbd> o un clic en el vacío deselecciona. Un arrastre para orbitar nunca selecciona sin querer, y la
+  <a href="#visor-color">vista dividida</a> conserva la selección.</p>
+  <p>La tarjeta de la parte muestra:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Dato</th><th>Qué es</th></tr>
+    <tr><td>Color, tamaño, volumen, triángulos y Cerrada / Abierta</td><td>Lo mismo que el panel de la pieza, pero de esa parte sola</td></tr>
+    <tr><td>Peso ≈</td><td>Gramos estimados con el material de la parte</td></tr>
+    <tr><td>Filamento ≈</td><td>Metros de filamento que consume, según el diámetro configurado</td></tr>
+    <tr><td>Costo ≈</td><td>Peso × costo por kg del material, en tu moneda</td></tr>
+    <tr><td>Material</td><td>Selector por parte: cambia su densidad y su costo, y la estimación se recalcula al instante</td></tr>
+  </table></div>
+  <p>El interruptor <strong>Modelo / Muestra</strong> de la barra del visor decide con qué se pinta: <em>Modelo</em> usa el color
+  que le dio cada <code>color()</code>; <em>Muestra</em> pinta todo con el color que elijas entre las seis muestras (al
+  elegir una muestra pasa solo a ese modo). Un modelo sin <code>color()</code> siempre se pinta con la muestra.</p>
+  <p>Los números de peso, filamento y costo son <strong>estimaciones</strong>; la fórmula, explicada en simple, está en
+  <a href="#imprimir-costo">Estimación de costo</a>, y la tabla completa de todas las partes, en el panel Impresión.</p>
+
+  <h2 id="visor-medir--placa">Aviso: no cabe en la placa</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/plate-overflow.png" alt="Visor 3D con una placa de 215 mm que sobrepasa la cama de una A1 mini: el contorno de la cama en rojo, un aviso arriba a la izquierda que dice que no cabe y cuánto sobra en X, y el mismo aviso en rojo en la barra de estado" loading="lazy"><figcaption>Una placa de 215 mm en una A1 mini (180 mm): contorno rojo, aviso con lo que sobra y el mismo aviso en la barra de estado.</figcaption></figure>
+  <p>ScadLab compara la caja del modelo con el <strong>volumen de impresión de la impresora del workspace</strong>. Si
+  no cabe, el contorno de la cama se pinta en <strong>rojo</strong> y un aviso dice cuántos mm sobran en cada eje y qué
+  probar: rotar la pieza, partirla en dos o elegir una impresora más grande. El aviso también aparece en la barra de
+  estado, y un clic en él abre el panel Impresión.</p>
+</article>
+
+<article class="topic" id="visor-color" data-title="Colores, captura y vista dividida">
+  <h1>Colores, captura y vista dividida <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Prueba colores, guarda una imagen del modelo y mira dos ángulos a la vez.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/viewer-split.png" alt="Visor 3D dividido en dos: a la izquierda la caja y la tapa en azul desde la vista Iso, a la derecha las mismas piezas desde Abajo, con la muestra azul seleccionada en la barra" loading="lazy"><figcaption>Vista dividida: Iso a la izquierda y Abajo a la derecha, pintadas con la muestra azul. El marco naranja indica la vista activa.</figcaption></figure>
+
+  <h2 id="visor-color--muestras">Seis muestras de color</h2>
+  <p>La barra del visor tiene <strong>6 muestras</strong> —pensadas como los filamentos que tienes cargados en el
+  AMS—. Un clic pinta la pieza de ese color; <strong>doble clic</strong> o <strong>clic derecho</strong> abre el
+  selector para cambiar la muestra, y la paleta se guarda. El color es solo del visor: para que quede en el
+  modelo (y en el 3MF), pídeselo al agente: <em>«cambia la tapa a naranja»</em>.</p>
+
+  <h2 id="visor-color--png">Captura PNG</h2>
+  <p>El botón de la cámara de la barra del visor guarda la vista activa tal como la ves —ángulo, modo y color—
+  en un PNG: ScadLab pregunta dónde guardarlo. Útil para documentar variantes o compartirlas antes de imprimir.</p>
+
+  <h2 id="visor-color--dividida">Vista dividida</h2>
+  <p>Parte el visor en dos con una <strong>segunda cámara independiente</strong> sobre la misma pieza: por ejemplo
+  Iso a la izquierda y Abajo a la derecha, para ver la forma y la cara de apoyo a la vez. Haz clic en una de las
+  dos para activarla (queda con marco naranja): la barra y el teclado actúan sobre la activa, y cada una tiene su
+  propia proyección. La <strong>×</strong> de la derecha la cierra.</p>
+</article>
+
+<!-- ============================================================== EDITOR -->
+<article class="topic" id="editor" data-title="El editor de código">
+  <h1>El editor de código <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Monaco —el editor de VS Code, incluido en la app, sin internet— con resaltado de OpenSCAD,
+  buscar y reemplazar, formato automático, autocompletado con la documentación de cada módulo y un linter que
+  revisa el código mientras escribes. Guardar nunca toca el checkpoint: crea uno nuevo.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/editor.png" alt="Panel de código a la derecha con 006-two-color-logo.scad en solo lectura: resaltado de OpenSCAD, el encabezado @checkpoint y las anotaciones del Customizer destacadas, una advertencia subrayada en la línea del for y una sugerencia en la línea de lip" loading="lazy"><figcaption>Código en solo lectura. El linter subraya en ámbar la pieza sin <code>color()</code> (línea 23) y en azul el parámetro sin rango (línea 7); la barra de estado cuenta los problemas.</figcaption></figure>
+
+  <h2 id="editor--lectura">Solo lectura y modo edición</h2>
+  <p>Un checkpoint es inmutable, así que el código se abre <strong>en solo lectura</strong> (el candado de la
+  cabecera del panel y de la barra de estado lo dice). Pulsa <strong>Editar</strong> o haz <strong>doble clic</strong>
+  en el código para pasar a edición. Mientras editas, el árbol no cambia: el checkpoint sigue siendo el que era hasta
+  que guardes. <strong>Descartar</strong> (la flecha curva) vuelve al código guardado; si cambias de checkpoint o de
+  workspace con cambios sin guardar, ScadLab pregunta antes de perderlos.</p>
+
+  <h2 id="editor--guardar">Guardar = checkpoint nuevo</h2>
+  <p><kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd> (o <strong>Guardar</strong>) abre un diálogo corto: el <strong>rótulo</strong> da
+  el nombre del archivo (<code>007-tornillos-de-la-tapa.scad</code>; el número lo asigna ScadLab) y la
+  <strong>descripción</strong> va al encabezado <code>@checkpoint</code>. El archivo nuevo es hijo del que estabas
+  viendo, aparece en el árbol, se abre y —con el auto-render activo— se renderiza solo. Igual que si lo hubiera hecho
+  la IA.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/save-checkpoint.png" alt="Diálogo Guardar como checkpoint nuevo con el rótulo Tornillos de la tapa, el nombre de archivo que va a quedar y la descripción" loading="lazy"><figcaption>Guardar desde el editor: rótulo, nombre de archivo resultante y descripción del checkpoint hijo.</figcaption></figure>
+
+  <h2 id="editor--escribir">Autocompletado y ayuda de cada módulo</h2>
+  <p>Al escribir aparecen los módulos, funciones, palabras clave y variables especiales (<code>$fn</code>, <code>$fa</code>…)
+  de OpenSCAD con su firma y su explicación en tu idioma. Elegir uno abre el paréntesis con el primer parámetro marcado,
+  y la <strong>ayuda de firma</strong> muestra el resto mientras escribes los argumentos (también con nombre:
+  <code>r = 3</code> marca <code>r</code>). Pasar el ratón sobre un módulo integrado muestra la misma ayuda.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/editor-edit.png" alt="Editor en modo edición con una línea nueva cyl y la lista de autocompletado abierta en cylinder, con la firma y la descripción de cada parámetro en español" loading="lazy"><figcaption>Modo edición: el autocompletado propone <code>cylinder</code> con su firma y sus parámetros.</figcaption></figure>
+
+  <h2 id="editor--buscar">Buscar y reemplazar</h2>
+  <ul>
+    <li><kbd>⌘F</kbd> / <kbd>Ctrl+F</kbd> — buscar (también en solo lectura), con mayúsculas, palabra completa y expresiones regulares.</li>
+    <li><kbd>⌥⌘F</kbd> o <kbd>⌘H</kbd> / <kbd>Ctrl+H</kbd> — buscar y reemplazar (en modo edición).</li>
+    <li><kbd>Enter</kbd> / <kbd>Shift+Enter</kbd> — siguiente / anterior; <kbd>Esc</kbd> cierra.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/editor-search.png" alt="Barra de buscar y reemplazar de Monaco sobre el código, buscando wall con 6 coincidencias resaltadas" loading="lazy"><figcaption>Buscar y reemplazar: <code>wall</code> aparece 6 veces, todas resaltadas.</figcaption></figure>
+
+  <h2 id="editor--formato">Formatear</h2>
+  <p>El botón de la varita, <kbd>⇧⌥F</kbd> / <kbd>Shift+Alt+F</kbd> o el menú contextual ordenan el código: sangría
+  por llaves y paréntesis, un espacio alrededor de <code>=</code> y de los operadores, nada de espacios al final ni
+  líneas en blanco de más. Es conservador: <strong>nunca une ni parte líneas</strong>, no toca el interior de strings
+  ni comentarios y respeta la alineación de las anotaciones <code>// [min:paso:max]</code>. Un solo
+  <kbd>⌘Z</kbd> lo deshace. En solo lectura, formatear pasa primero a edición. La sangría (2 o 4 espacios) se elige en
+  Configuración → General → Editor de código.</p>
+
+  <h2 id="editor--linter">El linter</h2>
+  <p>Mientras editas —y una vez al abrir cada checkpoint— ScadLab revisa el código: primero con el parser del propio
+  OpenSCAD (errores de sintaxis, variables y módulos desconocidos, <code>include</code> que no existen) y después con
+  sus reglas propias, pensadas para imprimir y para el flujo de checkpoints. Los problemas se subrayan (rojo: error,
+  ámbar: advertencia, azul: sugerencia) y al pasar el ratón se lee el mensaje con su código.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Código</th><th>Tipo</th><th>Qué avisa</th><th>Por qué importa</th></tr>
+    <tr><td><code>syntax</code></td><td>Error</td><td>Lo que dice OpenSCAD al leer el archivo</td><td>Con un error de sintaxis no hay pieza.</td></tr>
+    <tr><td><code>SL001</code></td><td>Advertencia</td><td>Falta el encabezado <code>// @checkpoint parent=… desc="…"</code> en la línea 1, o está mal escrito</td><td>Sin él, el checkpoint no se cuelga del árbol.</td></tr>
+    <tr><td><code>SL002</code></td><td>Advertencia</td><td><code>parent=</code> apunta a un archivo que no existe</td><td>El checkpoint aparece huérfano en el árbol.</td></tr>
+    <tr><td><code>SL003</code></td><td>Advertencia</td><td>Una pieza del nivel superior sin <code>color()</code></td><td>En el 3MF multicolor quedaría sin filamento asignado.</td></tr>
+    <tr><td><code>SL004</code></td><td>Error</td><td>Un <code>include &lt;…&gt;</code> / <code>use &lt;…&gt;</code> que no se encuentra</td><td>El render falla o pierde piezas.</td></tr>
+    <tr><td><code>SL005</code></td><td>Advertencia</td><td>Un checkpoint incluye a otro checkpoint</td><td>Cada checkpoint tiene que ser autocontenido: si el otro cambia de lugar, este se rompe.</td></tr>
+    <tr><td><code>SL006</code></td><td>Sugerencia</td><td><code>$fn</code> mayor a 256 en el nivel superior</td><td>Cada círculo del modelo tendrá esa resolución: render lento y mallas enormes.</td></tr>
+    <tr><td><code>SL007</code></td><td>Sugerencia</td><td><code>minkowski()</code> dentro de otro <code>minkowski()</code> o <code>hull()</code></td><td>El render puede tardar minutos u horas.</td></tr>
+    <tr><td><code>SL008</code></td><td>Advertencia</td><td>Una variable asignada dos veces en el mismo bloque</td><td>OpenSCAD usa solo la última: suele ser un error.</td></tr>
+    <tr><td><code>SL009</code></td><td>Sugerencia</td><td>Un parámetro del Customizer sin <code>// [min:paso:max]</code></td><td>El Customizer no puede ofrecer un deslizador con límites.</td></tr>
+  </table></div>
+  <p>Los diagnósticos del último render (<a href="#render--diagnosticos">Renderizar y diagnósticos</a>) también se
+  marcan en el código mientras no lo cambies. Haz clic en cualquiera —en el panel del visor o en Problemas— para
+  saltar a esa línea.</p>
+
+  <h2 id="editor--problemas">El panel Problemas</h2>
+  <p>Junto a <strong>Agente 1</strong>, <strong>Agente 2</strong> y <strong>Chat</strong>, abajo, la pestaña <strong>Problemas</strong> junta lo del linter y lo del
+  último render, errores primero y por línea, con su código y su origen. El contador de la barra de estado
+  (<code>⊗ errores ⚠ advertencias ⓘ sugerencias</code>) la abre.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/problems.png" alt="Panel Problemas abierto bajo el visor con cuatro entradas de 004-usb-c-cutout: el error de sintaxis de la línea 23, el include de otro checkpoint, la variable desconocida del render y un parámetro sin rango, cada una con su código, su origen y su línea" loading="lazy"><figcaption>Problemas de un checkpoint roto: linter y render juntos, con clic a la línea.</figcaption></figure>
+
+  <h2 id="editor--opciones">Opciones</h2>
+  <p>En Configuración → General → <strong>Editor de código</strong>: sangría (2 o 4 espacios), tamaño de letra,
+  ajustar las líneas largas y minimapa. El editor sigue al tema claro u oscuro de la app.</p>
+</article>
+
+<!-- ============================================================== VENTANA -->
+<article class="topic" id="ventana" data-title="La ventana: paneles y barra de estado">
+  <h1>La ventana: paneles y barra de estado <span class="badge ok">Disponible</span></h1>
+  <p class="lead">El área de trabajo funciona como un editor de código: el visor 3D, el código, los agentes, el chat y
+  los problemas son <strong>paneles acoplables</strong>. Los mueves, los divides, los pones en pestañas, los
+  haces flotar o los ocultas, y ScadLab recuerda cómo los dejaste.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/dock-default.png" alt="Ventana principal de ScadLab con el diseño predeterminado: el visor 3D arriba a la izquierda, el código a la derecha y, debajo del visor, un grupo de pestañas con Agente 1, Agente 2, Chat y Problemas; la pestaña activa de cada grupo se funde con su contenido y las demás quedan más oscuras" loading="lazy"><figcaption>El diseño predeterminado: visor y código arriba, agentes, chat y problemas en pestañas debajo del visor. La barra de estado, abajo, resume dónde estás.</figcaption></figure>
+
+  <h2 id="ventana--paneles">Los siete paneles</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Panel</th><th>Qué es</th><th>Atajo</th></tr>
+    <tr><td><strong>Visor 3D</strong></td><td>La pieza del checkpoint abierto, con su estado de render y sus diagnósticos.</td><td><kbd>⌘⇧1</kbd> / <kbd>Ctrl+Shift+1</kbd></td></tr>
+    <tr><td><strong>Código</strong></td><td>El editor OpenSCAD del checkpoint abierto.</td><td><kbd>⌘⇧2</kbd> / <kbd>Ctrl+Shift+2</kbd></td></tr>
+    <tr><td><strong>Agente 1</strong> y <strong>Agente 2</strong></td><td>Las dos terminales de agente de IA.</td><td><kbd>⌘⇧3</kbd> y <kbd>⌘⇧4</kbd></td></tr>
+    <tr><td><strong>Chat</strong></td><td>El chat con modelos.</td><td><kbd>⌘⇧5</kbd> / <kbd>Ctrl+Shift+5</kbd></td></tr>
+    <tr><td><strong>Problemas</strong></td><td>Errores y advertencias del linter y del render.</td><td><kbd>⌘⇧6</kbd> / <kbd>Ctrl+Shift+6</kbd></td></tr>
+    <tr><td><strong>Impresión</strong></td><td>Peso, filamento y costo estimados de cada parte del modelo. Ver <a href="#imprimir-costo">Estimación de costo</a>.</td><td><kbd>⌘⇧7</kbd> / <kbd>Ctrl+Shift+7</kbd></td></tr>
+  </table></div>
+  <p>Cada panel existe una sola vez: abrirlo de nuevo lleva al que ya está. La <strong>barra lateral</strong> (workspaces
+  y checkpoints) no es un panel: se queda a la izquierda y se pliega aparte.</p>
+
+  <h2 id="ventana--pestanas">Pestañas</h2>
+  <p>Cada panel tiene su <strong>pestaña</strong>, con el aspecto de las de un editor: ícono y nombre en letra normal;
+  la pestaña activa se funde con su contenido y muestra la <strong>×</strong>, y las demás, más oscuras, la muestran al
+  pasar el ratón. Algunas llevan un <strong>punto de estado</strong> en lugar de la ×: naranja en <em>Código</em> cuando
+  hay cambios sin guardar, verde en <em>Agente</em> mientras el agente está en marcha; al pasar el ratón el punto vuelve a
+  ser una ×. <em>Problemas</em> suma el número de entradas.</p>
+  <ul>
+    <li><strong>Arrastra una pestaña</strong> para reordenarla dentro de su grupo o llevarla a otro grupo.</li>
+    <li><strong>Doble clic</strong> en una pestaña maximiza su grupo; otro doble clic lo restaura.</li>
+    <li><strong>Clic derecho</strong> en la pestaña (o el botón <strong>⋯</strong> de la barra del grupo): <em>Ocultar</em>,
+      <em>Ocultar los demás del grupo</em>, <em>Minimizar / Restaurar panel</em>, <em>Maximizar / Restaurar</em>,
+      <a href="#ventana--mover"><em>Mover a…</em></a> y <em>Flotar / Acoplar</em>.</li>
+    <li>En la barra de cada grupo, a la izquierda de maximizar, el botón <strong>–</strong> lo
+      <a href="#ventana--minimizar">minimiza</a>.</li>
+    <li>Con muchas pestañas en un grupo angosto, la barra se desplaza en horizontal (rueda o trackpad) y un menú lista
+      las que quedaron fuera de la vista.</li>
+  </ul>
+
+  <h2 id="ventana--dividir">Dividir y acoplar</h2>
+  <p>Mientras arrastras una pestaña, sobre cada grupo aparece una zona resaltada: suéltala <strong>en el centro</strong> para
+  sumarla como pestaña de ese grupo, o <strong>en un borde</strong> (izquierda, derecha, arriba o abajo) para
+  <strong>dividir</strong> y que el panel quede en un grupo nuevo a ese lado. Así armas, por ejemplo, el chat al lado de
+  la terminal en vez de en pestañas.</p>
+
+  <p>Soltar en el borde de un grupo divide <em>ese</em> grupo. Para llevar un panel al borde de <em>toda</em> el área
+  (por ejemplo, el chat en una columna completa a la izquierda) usa <a href="#ventana--mover"><strong>Mover a…</strong></a>:
+  no depende de arrastrar.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/dock-custom.png" alt="Un diseño propio: el chat dividido a la derecha de las terminales, debajo del visor, y el panel Problemas flotando sobre el visor como una ventana dentro de la app" loading="lazy"><figcaption>Un diseño propio: el chat dividido junto a las terminales y Problemas flotando sobre el visor.</figcaption></figure>
+
+  <h2 id="ventana--mover">Mover a… (sin arrastrar)</h2>
+  <p>El menú <strong>⋯</strong> del grupo y el <strong>clic derecho</strong> de cada pestaña tienen <strong>Mover a…</strong>, con
+  destinos que funcionan siempre, sin arrastrar. Sirve para <strong>cualquier panel</strong> —Visor 3D, Código, Agente 1,
+  Agente 2, Chat y Problemas— y <strong>mover no destruye nada</strong>: solo cambia de lugar; el visor conserva su cámara, el
+  editor su texto y la terminal su agente.</p>
+  <ul>
+    <li><strong>Izquierda</strong>, <strong>Derecha</strong>, <strong>Arriba</strong> y <strong>Abajo</strong>: el panel va al
+      borde de <em>toda</em> el área de paneles. Si ya hay un grupo ocupando ese borde, entra a él como pestaña; si no, se
+      crea uno nuevo que abarca todo el borde.</li>
+    <li><strong>Centro</strong>: como pestaña del grupo acoplado más grande (casi siempre el del visor).</li>
+    <li><strong>Junto a…</strong>: lista los demás paneles que están a la vista; el elegido se suma como pestaña del
+      grupo de ese panel.</li>
+    <li><strong>Flotar</strong> / <strong>Acoplar</strong>: saca el panel a una ventana flotante o lo devuelve a la grilla.</li>
+  </ul>
+  <p>Un destino que no cambiaría nada (por ejemplo, <em>Derecha</em> para un panel que ya está solo en ese borde) aparece
+  apagado. Arrastrar la pestaña sigue funcionando para quien lo prefiera: mientras arrastras, el destino se marca con un
+  recuadro de color de acento con borde.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/dock-move-menu.png" alt="El menú de las opciones del grupo de Código abierto en Mover a: arriba, una fila para volver atrás; después Izquierda, Derecha (apagada, porque Código ya está solo en ese borde), Arriba, Abajo, Centro y Junto a con una flecha, y al final Flotar" loading="lazy"><figcaption>«Mover a…» del panel de código: cuatro bordes, el centro, «Junto a…» con los demás paneles, y Flotar.</figcaption></figure>
+
+  <h2 id="ventana--minimizar">Minimizar un panel</h2>
+  <p>El botón <strong>–</strong> de la barra de cada grupo (<em>Minimizar panel</em>), <kbd>⌘⇧M</kbd> /
+  <kbd>Ctrl+Shift+M</kbd> con el grupo activo o <strong>Ver → Minimizar panel</strong> lo achican <strong>sin cerrarlo</strong>:</p>
+  <ul>
+    <li>Un grupo <strong>apilado</strong> arriba o abajo de otro queda reducido a <strong>su barra de pestañas</strong>.</li>
+    <li>Un grupo <strong>lado a lado</strong> con otro queda como una <strong>franja angosta</strong> con los íconos de sus
+      pestañas en vertical (un punto verde o naranja sigue a la vista si hay un agente en marcha o cambios sin guardar).</li>
+    <li>Un grupo <strong>flotante</strong> se reduce a su barra de pestañas.</li>
+  </ul>
+  <p>Los demás paneles se reparten el espacio liberado. Para <strong>restaurar</strong>: un clic en cualquier pestaña o
+  ícono del grupo, el botón <strong>+</strong> (<em>Restaurar panel</em>) o un doble clic en el vacío de su barra; vuelve
+  exactamente a su tamaño anterior. Nada se destruye: es la misma regla de <a href="#ventana--ocultar">ocultar</a>. Un grupo sin
+  otro al lado que ocupe su espacio no se puede minimizar (el botón sale apagado). Lo minimizado se guarda con el diseño,
+  también en los diseños con nombre.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/dock-minimized.png" alt="La ventana con el visor 3D grande: el código minimizado a una franja angosta a la derecha, con solo su ícono y el botón de restaurar, y los agentes, el chat y los problemas minimizados a su barra de pestañas, abajo" loading="lazy"><figcaption>El código minimizado a una franja a la derecha y los agentes a su barra, abajo: el visor se queda con el resto.</figcaption></figure>
+
+  <h2 id="ventana--tamano">Tamaño de los paneles</h2>
+  <p>Todo borde entre dos grupos es un <strong>divisor</strong> que se arrastra en las dos direcciones: la línea es de
+  1&nbsp;px, pero la zona para agarrarlo mide unos 6&nbsp;px y el cursor cambia al pasar por encima.
+  <strong>Doble clic en un divisor</strong> reparte el espacio a partes iguales entre sus dos lados.</p>
+  <ul>
+    <li>Ningún panel se puede dejar inutilizable: el visor no baja de unos 200 × 150&nbsp;px, el código y las terminales
+      de unos 240 × 120&nbsp;px (estas medidas crecen con el tamaño de la interfaz).</li>
+    <li>Los tamaños se guardan con el diseño, también en los diseños con nombre.</li>
+    <li>Si achicas la ventana, los grupos se reparten el espacio <strong>en proporción</strong> en vez de salirse de ella.</li>
+  </ul>
+
+  <h2 id="ventana--flotar">Paneles flotantes</h2>
+  <p><strong>Flotar</strong> (clic derecho en la pestaña) saca el panel a una ventana que va <em>dentro</em> de ScadLab,
+  encima de los demás. Se mueve arrastrando su barra de pestañas y se redimensiona desde cualquier borde o esquina,
+  sin poder salirse de la ventana. <strong>Acoplar</strong> lo devuelve a la grilla. Un grupo flotante puede llevar
+  varias pestañas.</p>
+  <div class="note"><span class="lbl">Ventanas del sistema</span><p>Los paneles no se pueden sacar a una ventana nativa
+  de Windows o macOS (por ejemplo, para llevar el visor a un segundo monitor): ScadLab corre en una sola ventana
+  del sistema y los flotantes viven dentro de ella. Para trabajar en varios proyectos a la vez, usa las
+  <a href="#workspaces--pestanas">pestañas de proyecto</a> de la cabecera.</p></div>
+
+  <h2 id="ventana--ocultar">Ocultar y mostrar</h2>
+  <p>Cualquier panel se oculta con la <strong>×</strong> de su pestaña, con su casilla del <a href="#ventana--ver">menú
+  Ver</a> o con su atajo, y se vuelve a mostrar igual: reaparece junto a las pestañas con las que estaba. <strong>Ocultar
+  no destruye nada</strong>: el visor conserva su cámara, el editor su texto y su historial de deshacer, y la terminal su
+  pantalla y su agente, que sigue corriendo. Solo el botón <strong>×</strong> de la barra de la terminal termina al agente.</p>
+  <p>Si ocultas <em>todos</em> los paneles, el área de trabajo muestra una pantalla con botones para volver a abrirlos o
+  aplicar un diseño; nunca queda un hueco en blanco. La barra lateral y la barra de estado también se pueden ocultar,
+  y todo se recuerda al reabrir la app.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/dock-hidden.png" alt="La ventana con solo el visor 3D visible y la barra lateral oculta: el visor ocupa todo el ancho y la pestaña Visor 3D es la única" loading="lazy"><figcaption>Solo el visor, con la barra lateral oculta: los demás paneles siguen vivos, solo fuera de la vista.</figcaption></figure>
+
+  <h2 id="ventana--ver">El menú Ver</h2>
+  <p>El menú <strong>Ver</strong> de la cabecera reúne todo: una casilla por cada <strong>panel</strong> (con su atajo), la
+  <strong>barra lateral</strong> y la <strong>barra de estado</strong>, <em>Maximizar panel</em>, <em>Minimizar panel</em>, el <em>Modo enfoque</em> y
+  los <strong>diseños</strong>.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/dock-view-menu.png" alt="El menú Ver desplegado: casillas marcadas para los siete paneles con sus atajos, después Barra lateral y Barra de estado, Maximizar panel, Minimizar panel, Modo enfoque, los cuatro diseños de fábrica, Restablecer diseño, Guardar diseño como y Diseños guardados" loading="lazy"><figcaption>El menú Ver, con una casilla por panel y los diseños al final.</figcaption></figure>
+
+  <h2 id="ventana--disenos">Diseños</h2>
+  <p>Un <strong>diseño</strong> es dónde está cada panel y su tamaño. ScadLab trae cuatro:</p>
+  <ul>
+    <li><strong>Predeterminado</strong>: visor y código arriba; agentes, chat, problemas e impresión debajo.</li>
+    <li><strong>Modelado</strong>: visor grande; código y agentes como pestañas a la derecha.</li>
+    <li><strong>Código e IA</strong>: código grande, el agente al lado y el visor chico.</li>
+    <li><strong>Pantalla dividida</strong>: visor y código a partes iguales, agentes abajo.</li>
+  </ul>
+  <p><strong>Restablecer diseño</strong> vuelve al predeterminado. Para guardar el tuyo, usa <strong>Ver → Guardar diseño
+  como…</strong>, ponle nombre (si ya existe uno igual, te pregunta antes de reemplazarlo) y aparecerá en el menú.
+  <strong>Ver → Diseños guardados…</strong> los lista para aplicarlos o borrarlos.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/dock-layouts.png" alt="El diálogo Diseños guardados con tres diseños propios —Revisión con agente, Solo código y chat y Presentación—, cada uno con Aplicar y Borrar, y debajo los cuatro diseños de fábrica con Aplicar" loading="lazy"><figcaption>Diseños guardados: los tuyos (Aplicar / Borrar) y los de fábrica.</figcaption></figure>
+  <p>El diseño actual se guarda solo y se restaura al abrir la app. Si el diseño guardado estuviera dañado o fuera de una
+  versión distinta, ScadLab abre con el predeterminado en vez de fallar.</p>
+
+  <h2 id="ventana--enfoque">Modo enfoque</h2>
+  <p><kbd>⌘⇧0</kbd> / <kbd>Ctrl+Shift+0</kbd> (o <strong>Ver → Modo enfoque</strong>) deja <strong>solo el panel activo</strong>, sin
+  barra lateral, sin barra de estado y sin los demás paneles. <kbd>Esc</kbd> —o el mismo atajo, o el botón de la
+  esquina— vuelve exactamente al diseño anterior. Con el foco dentro del editor o de la terminal, <kbd>Esc</kbd> sigue
+  siendo de ellos: sal con el atajo.</p>
+
+  <h2 id="ventana--atajos">Atajos</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Atajo</th><th>Qué hace</th></tr>
+    <tr><td><kbd>⌘⇧1</kbd> … <kbd>⌘⇧7</kbd> (Windows: <kbd>Ctrl+Shift+1</kbd> … <kbd>7</kbd>)</td><td>Muestra y enfoca Visor, Código, Agente 1, Agente 2, Chat, Problemas o Impresión. Si ya está enfocado, lo oculta.</td></tr>
+    <tr><td><kbd>⌘⇧0</kbd> / <kbd>Ctrl+Shift+0</kbd></td><td>Modo enfoque.</td></tr>
+    <tr><td><kbd>⌘⇧M</kbd> / <kbd>Ctrl+Shift+M</kbd></td><td>Minimiza o restaura el grupo de paneles activo.</td></tr>
+    <tr><td><kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd></td><td>Pliega o muestra la barra lateral.</td></tr>
+  </table></div>
+  <p>En macOS, el sistema reserva <kbd>⌘⇧3</kbd>, <kbd>⌘⇧4</kbd> y <kbd>⌘⇧5</kbd> para las capturas de pantalla y no llegan a
+  ScadLab: para esos paneles usa <kbd>⌘⌥3</kbd>, <kbd>⌘⌥4</kbd> y <kbd>⌘⌥5</kbd> (valen también para el resto) o el menú Ver. Los atajos
+  no pisan los del editor ni los de la terminal.</p>
+
+  <h2 id="ventana--pequena">Ventanas pequeñas y letra grande</h2>
+  <p>La ventana admite hasta <strong>1024 × 640</strong>. Cuando un panel se queda sin espacio, sus barras se
+  adaptan en vez de cortar controles: los botones de la terminal, del editor y de la cabecera pasan a mostrar
+  <strong>solo el ícono</strong> (el nombre sigue en la ayuda emergente al pasar el ratón) y, si ni así caben, se
+  reparten en una segunda fila. La barra de pestañas y sus medidas también crecen con el
+  <a href="#config-general--apariencia">tamaño de la interfaz</a>.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/small-1024.png" alt="Ventana de ScadLab en su tamaño mínimo de 1024 por 640: los grupos se reparten el espacio, las pestañas se desplazan con un menú para las que no caben y la barra de la terminal reparte sus botones" loading="lazy"><figcaption>En la ventana mínima (1024 × 640) nada queda cortado: los grupos se reparten el espacio y las barras se adaptan.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/dock-150.png" alt="La ventana con la interfaz al 150 %: la barra de pestañas, su texto y sus íconos son más grandes y los paneles conservan sus tamaños mínimos escalados" loading="lazy"><figcaption>Con la interfaz al 150 %, las pestañas y los tamaños mínimos de los paneles crecen con ella.</figcaption></figure>
+
+  <h2 id="ventana--lateral">Barra lateral plegable</h2>
+  <p>El botón de la izquierda de la cabecera, <kbd>⌘B</kbd> / <kbd>Ctrl+B</kbd> o la casilla del menú Ver oculta y muestra
+  la lista de workspaces y el árbol, para dejarle todo el ancho a los paneles. Su ancho, y el reparto entre workspaces y
+  checkpoints, se arrastran y se recuerdan.</p>
+
+  <h2 id="ventana--restablecer">Restablecer el diseño</h2>
+  <p><strong>Ver → Restablecer diseño</strong> devuelve los paneles al predeterminado. En <strong>Configuración → General</strong>,
+  <strong>Restablecer el diseño</strong> hace eso y además devuelve la barra lateral a su tamaño de fábrica y muestra las
+  barras ocultas. Más sobre la letra y la interfaz en <a href="#config-general--apariencia">Apariencia y tamaños</a>.</p>
+
+  <h2 id="ventana--medidas">Medidas del visor plegables</h2>
+  <p>El panel de medidas de la pieza se pliega con su flecha: queda solo el tamaño en una línea. Útil en la vista
+  dividida, donde el panel completo tapaba la pieza.</p>
+
+  <h2 id="ventana--estado">La barra de estado</h2>
+  <ul>
+    <li><strong>Workspace e impresora</strong> abiertos.</li>
+    <li><strong>Modo del editor</strong> (solo lectura / edición, y si hay cambios sin guardar) y la posición del cursor.</li>
+    <li><strong>Problemas</strong>: errores, advertencias y sugerencias del checkpoint abierto; un clic muestra el panel.</li>
+    <li><strong>OpenSCAD</strong>: la versión con la que renderiza ScadLab, o el aviso si no lo encuentra.</li>
+  </ul>
+</article>
+
+<!-- ================================================================== IA -->
+<article class="topic" id="ia-agentes" data-title="Agentes en la terminal">
+  <h1>Agentes en la terminal</h1>
+  <p class="lead">Una terminal integrada ejecuta el agente que prefieras dentro del workspace. El agente escribe
+  checkpoints y tú los ves aparecer en el árbol, sin salir de ScadLab.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/terminal.png" alt="Claude Code escribiendo un checkpoint en la terminal del workspace: el panel Agente 1 con el selector de agente, los botones Nueva, Continuar y Sesiones, el interruptor Auto-iteración activo y la salida del agente con las líneas que escribió" loading="lazy"><figcaption>Claude Code escribiendo un checkpoint en la terminal del workspace. En la barra de arriba: agente, Nueva, Continuar, Sesiones y el interruptor de auto-iteración.</figcaption></figure>
+
+  <h2 id="ia-agentes--abrir">Abrir un agente</h2>
+  <p>Debajo del visor hay, en pestañas, cuatro paneles: <strong>Agente 1</strong>, <strong>Agente 2</strong>,
+  <a href="#ia-ollama"><strong>Chat</strong></a> y <a href="#editor--problemas"><strong>Problemas</strong></a>
+  (puedes moverlos, ver <a href="#ventana">La ventana</a>).</p>
+  <ol class="steps">
+    <li>Abre el panel de un agente y elige el agente en el selector.</li>
+    <li>Pulsa <strong>Nueva</strong>. El agente arranca en la carpeta del workspace, así que lo que cree aparece como
+      checkpoint en el árbol.</li>
+    <li>Escribe en la terminal lo que quieres, como en cualquier CLI. Para saber cómo pedirlo, mira
+      <a href="#ia-prompts">Cómo pedirle un modelo a la IA</a>.</li>
+  </ol>
+  <p>Si ya hay un agente corriendo en esa pestaña, ScadLab pregunta antes de cerrarlo para abrir otro. Los
+  checkpoints ya guardados no se tocan.</p>
+
+  <h2 id="ia-agentes--clis">Qué agentes</h2>
+  <p>Claude Code, opencode, Codex y Antigravity — <strong>solo los que estén instalados y habilitados</strong> en
+  <a href="#config-general--clis">Configuración → IA</a>: la detección decide qué aparece en el selector. Si no hay
+  ninguno, la pestaña lo avisa con un botón que abre esa configuración. Para conversar con un modelo sin instalar
+  ningún CLI, está el <a href="#ia-ollama">chat con modelos</a>.</p>
+
+  <p>En la barra del panel, el indicador <strong>MCP ✓</strong> confirma que el agente dispone de las herramientas del
+  <a href="#ia-mcp">servidor MCP de ScadLab</a> en este workspace.</p>
+
+  <h2 id="ia-agentes--sesiones">Sesiones</h2>
+  <ul>
+    <li><strong>Nueva</strong> abre una conversación limpia.</li>
+    <li><strong>Continuar</strong> abre la última conversación de ese agente en este workspace.</li>
+    <li><strong>Sesiones</strong> lista las conversaciones anteriores de ese agente en este workspace, con su título y
+      su fecha, para retomar la que elijas.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/terminal-sessions.png" alt="Menú Sesiones desplegado sobre la terminal con cinco conversaciones previas de Claude Code, cada una con su título y su fecha" loading="lazy"><figcaption>Menú Sesiones con las conversaciones previas de Claude Code en este workspace.</figcaption></figure>
+  <div class="note"><span class="lbl">Antigravity</span><p>Antigravity no permite listar sus conversaciones, así que solo
+  ofrece <strong>Nueva</strong> y <strong>Continuar</strong>.</p></div>
+
+  <h2 id="ia-agentes--recargar">Si recargas la interfaz</h2>
+  <p>Los agentes siguen vivos: al recargar la interfaz, cada terminal se vuelve a conectar a su agente y recupera
+  lo que tenía en pantalla. Cuando un agente termina por su cuenta, la terminal avisa con su código de salida y
+  puedes abrir otra sesión.</p>
+
+  <h2 id="ia-agentes--copiar">Copiar y pegar</h2>
+  <ul>
+    <li><kbd>⌘C</kbd> (<kbd>Ctrl+C</kbd> en Windows) copia la selección.</li>
+    <li>En Windows, <kbd>Ctrl+C</kbd> <strong>sin selección</strong> interrumpe al agente, como en cualquier terminal.
+      En macOS, <kbd>⌃C</kbd> siempre le llega al agente.</li>
+    <li><kbd>⌘V</kbd> (<kbd>Ctrl+V</kbd> en Windows) pega; un texto de varias líneas se pega de una vez, no línea
+      por línea.</li>
+  </ul>
+
+  <h2 id="ia-agentes--maximizar">Maximizar el panel</h2>
+  <p>El botón de la esquina de la barra del panel (o un doble clic en su pestaña) agranda su grupo hasta cubrir toda el
+  área de trabajo, útil para leer una respuesta larga; pulsarlo otra vez devuelve el tamaño normal.</p>
+
+  <h2 id="ia-agentes--limites">Límites</h2>
+  <p>Hasta <strong>2 terminales de agente</strong> a la vez —por ejemplo una con Claude Code y otra con Codex
+  comparando enfoques—. El <strong>×</strong> de la barra cierra la terminal y termina el agente.</p>
+</article>
+
+<article class="topic" id="ia-reglas" data-title="Reglas del workspace: CLAUDE.md y AGENTS.md">
+  <h1>Reglas del workspace: CLAUDE.md y AGENTS.md</h1>
+  <p class="lead">Cada workspace lleva un archivo de reglas que el agente lee al empezar. Es lo que garantiza
+  que el historial no se rompa, use el agente que use.</p>
+
+  <h2 id="ia-reglas--cuales">Qué archivo lee cada agente</h2>
+  <ul>
+    <li><code>CLAUDE.md</code> — Claude Code.</li>
+    <li><code>AGENTS.md</code> — opencode, Codex y Antigravity.</li>
+  </ul>
+
+  <h2 id="ia-reglas--obligatorias">Las reglas obligatorias</h2>
+  <ol>
+    <li><strong>Nunca sobrescribir</strong> ni borrar un <code>.scad</code>: cada cambio es un checkpoint nuevo.</li>
+    <li><strong>Usar colores</strong>: toda pieza de primer nivel dentro de <code>color(...)</code>.</li>
+    <li><strong>Validar</strong> cada checkpoint con las herramientas del <a href="#ia-mcp">servidor MCP de ScadLab</a> (o con OpenSCAD por línea de comandos si no están) antes de darlo por terminado.</li>
+    <li>Parámetros arriba, con comentarios de Customizer; todo en milímetros.</li>
+    <li>Respetar <code>printer.json</code>: el modelo tiene que caber en la placa.</li>
+  </ol>
+  <div class="note tip"><span class="lbl">Consejo</span><p>Puedes añadir reglas propias al final del archivo —«usa
+  siempre insertos M3 de 4,2 mm», «nada de voladizos mayores de 45°»—, pero no quites las obligatorias: son las
+  que mantienen el árbol de checkpoints coherente.</p></div>
+
+  <h2 id="ia-reglas--bloque">Tus notas no se pisan</h2>
+  <p>Las reglas de ScadLab van dentro de un bloque marcado en <code>CLAUDE.md</code> y <code>AGENTS.md</code>
+  (entre <code>&lt;!-- scadlab:rules:begin --&gt;</code> y <code>&lt;!-- scadlab:rules:end --&gt;</code>). Cada vez que
+  abres el workspace, ScadLab actualiza <strong>solo ese bloque</strong> con las reglas de la versión actual (por
+  ejemplo, las herramientas MCP o las ramas): lo que escribas antes o después del bloque queda como está.</p>
+  <ul>
+    <li>Si el archivo lo había creado una versión anterior de ScadLab (sin marcas), se guarda una copia en
+      <code>.scadlab/backup/</code> antes de reemplazarlo, por si lo habías editado.</li>
+    <li>Si importas una carpeta que ya tenía su propio <code>CLAUDE.md</code>, el bloque se agrega arriba y tus
+      instrucciones quedan debajo, intactas.</li>
+  </ul>
+</article>
+
+<article class="topic" id="ia-mcp" data-title="Servidor MCP de ScadLab">
+  <h1>Servidor MCP de ScadLab</h1>
+  <p class="lead">Un servidor MCP que le da al agente herramientas para <strong>renderizar, validar, medir y ver</strong>
+  sus modelos con el mismo OpenSCAD y el mismo motor que usa la app. ScadLab lo deja configurado solo en cada
+  workspace para Claude Code y opencode, y se lo pasa a Codex por flags; <strong>Antigravity</strong> solo tiene
+  configuración global, así que se agrega con un botón y tu permiso.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-mcp.png" alt="Configuración, pestaña IA, bloque Servidor MCP de ScadLab: el interruptor encendido, el comando que usan los agentes con el botón Copiar y la lista de archivos del workspace (Claude Code, opencode y Gemini CLI anterior configurados, Codex por flags) con el botón Volver a sincronizar, y la fila de Antigravity con los botones Agregar a Antigravity y Quitar de Antigravity" loading="lazy"><figcaption>Configuración → IA: el interruptor, el comando que usan los agentes, el estado de los archivos del workspace abierto y la fila de Antigravity (configuración global) con sus botones.</figcaption></figure>
+
+  <h2 id="ia-mcp--que">Qué es y para qué sirve</h2>
+  <p>MCP (<em>Model Context Protocol</em>) es la forma estándar de darle herramientas a un agente de IA. El servidor
+  de ScadLab es el propio programa lanzado como <code>ScadLab --mcp --workspace &lt;carpeta&gt;</code>: no abre ninguna
+  ventana, trabaja sobre los archivos del workspace y <strong>funciona aunque la app esté cerrada</strong> (por
+  ejemplo, con un agente lanzado desde una terminal externa).</p>
+  <p>Sin él, el agente tiene que adivinar si su código compila y cómo quedó la pieza. Con él lo comprueba antes de
+  decirte que terminó: renderiza, lee los diagnósticos con su línea, mide la pieza, mira cómo se ve y la exporta.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/terminal-mcp.png" alt="Claude Code usando las herramientas de ScadLab en la terminal del workspace: render, measure y preview, con el indicador MCP en verde en la barra del panel" loading="lazy"><figcaption>Claude Code usando las herramientas de ScadLab: renderiza, mide y mira la pieza. En la barra del panel, el indicador «MCP ✓».</figcaption></figure>
+
+  <h2 id="ia-mcp--herramientas">Qué herramientas tiene</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Herramienta</th><th>Qué hace</th></tr>
+    <tr><td><code>list_checkpoints</code></td><td>El árbol del workspace: archivo, padre, descripción y último estado de render conocido.</td></tr>
+    <tr><td><code>read_checkpoint</code></td><td>Devuelve el código de un checkpoint.</td></tr>
+    <tr><td><code>create_checkpoint</code></td><td>Crea un checkpoint nuevo (<code>NNN-slug.scad</code>, con su encabezado) a partir de un padre. <strong>Nunca sobrescribe</strong> uno existente.</td></tr>
+    <tr><td><code>render</code></td><td>Renderiza un checkpoint (por defecto, el más nuevo) y devuelve el estado, los diagnósticos con su línea, la duración, el tamaño, el volumen, los triángulos, si es estanco y si cabe en la placa. Escribe o borra <code>RENDER_ERRORS.md</code> con la misma regla que la app.</td></tr>
+    <tr><td><code>lint</code></td><td>Los diagnósticos del linter (OpenSCAD y las reglas SL001–SL009) de un archivo o de un código suelto.</td></tr>
+    <tr><td><code>format</code></td><td>Devuelve el código formateado; no escribe archivos.</td></tr>
+    <tr><td><code>measure</code></td><td>Medidas de la pieza, volumen de la impresora, si cabe y el peso estimado con el material por defecto (sólido al 100 %).</td></tr>
+    <tr><td><code>preview</code></td><td>Una <strong>imagen PNG</strong> de la pieza (isométrica, frente, arriba, derecha…) renderizada con OpenSCAD, para que el agente vea lo que modeló.</td></tr>
+    <tr><td><code>printer_info</code></td><td>La impresora del workspace: volumen, boquilla, ranuras del AMS y reglas clave.</td></tr>
+    <tr><td><code>export</code></td><td>Exporta a STL, 3MF o STL por color en la carpeta <code>exports/</code> del workspace, con las partes y los avisos.</td></tr>
+    <tr><td><code>list_templates</code> / <code>get_template</code></td><td>Lista y lee las plantillas de <code>openscad-templates</code>.</td></tr>
+  </table></div>
+  <p>Todas las rutas se resuelven <strong>dentro del workspace</strong>, un checkpoint nunca se sobrescribe ni se
+  borra, y lo único que se escribe fuera de él es la caché de mallas.</p>
+
+  <h2 id="ia-mcp--config">Cómo se configura en cada CLI</h2>
+  <p>Al crear, importar o abrir un workspace, ScadLab escribe la entrada <code>scadlab</code> en el archivo de
+  configuración <strong>del proyecto</strong> que lee cada CLI. Nunca toca la configuración global de tu usuario por
+  su cuenta; la única excepción es Antigravity, y solo cuando tú lo pides (ver más abajo).</p>
+  <div class="tablewrap"><table>
+    <tr><th>CLI</th><th>Archivo en el workspace</th><th>Entrada</th></tr>
+    <tr><td>Claude Code</td><td><code>.mcp.json</code></td><td><code>mcpServers.scadlab</code></td></tr>
+    <tr><td>opencode</td><td><code>opencode.json</code></td><td><code>mcp.scadlab</code></td></tr>
+    <tr><td>Gemini CLI (anterior)</td><td><code>.gemini/settings.json</code></td><td><code>mcpServers.scadlab</code></td></tr>
+    <tr><td>Codex</td><td>— (no lee configuración de proyecto)</td><td>flags al lanzarlo, ver abajo</td></tr>
+    <tr><td>Antigravity</td><td>— (solo configuración global; ver abajo)</td><td>botón <strong>Agregar a Antigravity</strong></td></tr>
+  </table></div>
+  <div class="note"><span class="lbl">Ojo</span><p><code>.gemini/settings.json</code> es el archivo del <strong>Gemini
+  CLI anterior</strong> (<code>gemini</code>), el que Antigravity reemplazó. <strong>Antigravity (<code>agy</code>) no lo
+  lee</strong>: lo comprobamos con <code>agy mcp list</code>, que con ese archivo en el proyecto sigue diciendo «No MCP
+  servers configured». ScadLab lo sigue escribiendo para quien todavía usa <code>gemini</code>, pero para Antigravity
+  hace falta el botón.</p></div>
+  <p>En todos el comando es el mismo: el ejecutable de ScadLab con <code>--mcp --workspace</code> y la carpeta del
+  workspace. Si mueves la app o la actualizas, la ruta del ejecutable cambia: ScadLab la corrige la próxima vez que
+  abras el workspace.</p>
+
+  <h3>Lo que ScadLab respeta de tus archivos</h3>
+  <ul>
+    <li><strong>Fusiona solo la clave <code>scadlab</code></strong>: el resto del archivo —tus otros servidores,
+      tus ajustes, el orden y la sangría— queda exactamente como estaba. Si añadiste campos propios a la entrada
+      (un <code>timeout</code>, por ejemplo), se conservan.</li>
+    <li>Si el archivo <strong>no es un JSON válido</strong> (o el bloque no es un objeto), <strong>no lo toca</strong>:
+      lo marca como «No se tocó» en Configuración → IA para que lo arregles tú.</li>
+    <li>Si tu proyecto tiene un <code>opencode.jsonc</code> <strong>con comentarios</strong> y ningún
+      <code>opencode.json</code>, tampoco lo toca (editarlo borraría tus comentarios): agrega la entrada a mano
+      con el comando que muestra Configuración → IA.</li>
+    <li>Sincronizar varias veces no cambia nada si ya estaba al día: no se reescribe el archivo.</li>
+  </ul>
+
+  <h3 id="ia-mcp--codex">Codex: por flags al abrirlo desde ScadLab</h3>
+  <p>Codex no lee configuración de proyecto. Por eso, cuando lo abres en la terminal de ScadLab, la app le añade al
+  arrancar dos flags <code>-c</code> con el comando del servidor
+  (<code>mcp_servers.scadlab.command</code> y <code>mcp_servers.scadlab.args</code>). Solo vale para el Codex que
+  abres desde ScadLab; si lo lanzas por tu cuenta en otra terminal, no verá el servidor.</p>
+
+  <h3 id="ia-mcp--antigravity">Antigravity: configuración global, con tu permiso</h3>
+  <p>Antigravity no lee configuración de proyecto ni acepta pasarle un servidor al arrancar: su única configuración
+  de servidores MCP es <strong>global</strong> (carpeta <code>~/.gemini</code>) y se maneja con el comando
+  <code>agy mcp</code>. Por eso ScadLab no la toca sola. En <strong>Configuración → IA → Servidor MCP de
+  ScadLab</strong> hay una fila <strong>Antigravity</strong> con su estado y dos botones:</p>
+  <ul>
+    <li><strong>Agregar a Antigravity</strong>: antes de hacer nada te avisa de que va a <strong>modificar la
+      configuración global de Antigravity</strong>, es decir, la de <strong>todos</strong> tus proyectos y no solo este
+      workspace. Si aceptas, ejecuta <code>agy mcp add</code> con el ejecutable de ScadLab y <code>--mcp</code>. Si ya
+      había un servidor <code>scadlab</code> con otra ruta (porque moviste la app), lo reemplaza; tus otros servidores no
+      se tocan.</li>
+    <li><strong>Quitar de Antigravity</strong>: igual, con confirmación; ejecuta <code>agy mcp remove scadlab</code>.</li>
+  </ul>
+  <p>El estado puede ser <em>agy no instalado</em>, <em>No configurado</em>, <em>Configurado</em>, <em>Otra ruta</em>
+  (la app se movió: «Agregar» lo corrige), <em>Desactivado</em> o <em>No se pudo leer</em>; sale de
+  <code>agy mcp list</code>.</p>
+  <p>La entrada global es <code>scadlab</code> → <code>&lt;ScadLab&gt; --mcp</code>, <strong>sin
+  <code>--workspace</code></strong>: el servidor usa la carpeta desde la que se lanza, y Antigravity lo lanza en la
+  carpeta del proyecto, así que <strong>una sola entrada sirve a todos tus workspaces</strong>. Ese es el punto
+  delicado: si en tu versión de Antigravity el servidor no se lanzara dentro de la carpeta del proyecto, la herramienta
+  te lo dirá al usarla (esa carpeta no sería un workspace). En ese caso, quítalo desde aquí y agrégalo a mano con
+  <code>--workspace</code>.</p>
+
+  <h3 id="ia-mcp--claude-flags">Claude Code: sin aprobación cuando lo abres desde ScadLab</h3>
+  <p>Un servidor que viene en el <code>.mcp.json</code> del proyecto queda <em>pendiente de aprobación</em> hasta que
+  Claude Code te pregunta, la primera vez, si confías en él (lo comprobamos con <code>claude mcp list</code>:
+  «Pending approval»). Para no frenarte, cuando abres Claude Code en la terminal de ScadLab la app le pasa el servidor
+  con <code>--mcp-config</code>, que no necesita esa aprobación. Si lo abres por tu cuenta en otra terminal, se usa el
+  <code>.mcp.json</code> y Claude te pregunta una sola vez.</p>
+
+  <h2 id="ia-mcp--apagar">Encenderlo, apagarlo y sincronizar</h2>
+  <p>En <strong>Configuración → IA → Servidor MCP de ScadLab</strong>:</p>
+  <ul>
+    <li>El <strong>interruptor</strong> lo enciende o apaga para todos los workspaces. Apagado, ScadLab quita su
+      entrada de los archivos (y borra el archivo si solo existía por ella) y deja de pasarle los flags a Codex.
+      Viene encendido.</li>
+    <li>El <strong>comando que usan los agentes</strong> se puede copiar, por si quieres configurar un CLI que ScadLab
+      no conoce.</li>
+    <li>Para el workspace abierto se ve el estado de cada archivo: <em>Configurado</em>, <em>Falta</em>,
+      <em>Desactualizado</em> (la app se movió) o <em>No se tocó</em>. <strong>Volver a sincronizar</strong> repite la
+      escritura sin esperar a que abras el workspace.</li>
+    <li>La fila de <strong>Antigravity</strong> es aparte porque su configuración es global: se agrega o se quita con
+      sus botones, ver <a href="#ia-mcp--antigravity">Antigravity</a>. El interruptor y «Volver a sincronizar» no la
+      tocan.</li>
+  </ul>
+  <p>Si ScadLab no encuentra OpenSCAD, el bloque lo avisa: <code>render</code>, <code>preview</code> y
+  <code>export</code> no funcionan hasta que lo instales o indiques su ruta en la pestaña
+  <a href="#config-general">OpenSCAD</a>.</p>
+
+  <h2 id="ia-mcp--indicador">El indicador «MCP ✓»</h2>
+  <p>En la barra de cada panel de agente, a la izquierda de la auto-iteración, <strong>MCP ✓</strong> dice que el
+  servidor está configurado en este workspace. Pasa a <strong>MCP !</strong> (en ámbar) si algún archivo no quedó al
+  día y a <strong>MCP apagado</strong> si lo apagaste. Un clic abre Configuración → IA con el detalle.</p>
+
+  <h2 id="ia-mcp--verificar">Cómo comprobar que un agente lo ve</h2>
+  <ol class="steps">
+    <li>Abre una terminal normal en la carpeta del workspace.</li>
+    <li>Para Claude Code, corre <code>claude mcp list</code>: <code>scadlab</code> aparece como <em>Connected</em> o,
+      si todavía no lo aprobaste, como <em>Pending approval</em> (se aprueba la primera vez que abres
+      <code>claude</code> en esa carpeta). Dentro de una sesión, el comando <code>/mcp</code> muestra el estado real.</li>
+    <li>Para opencode, corre <code>opencode debug config</code> y busca <code>scadlab</code> dentro de
+      <code>mcp</code>. Su <code>opencode mcp list</code> solo lista servidores dentro de un repositorio git: en un
+      workspace que no es repositorio puede decir que no hay ninguno aunque la sesión sí lo use.</li>
+    <li>Para Antigravity, corre <code>agy mcp list</code> en cualquier carpeta: <code>scadlab</code> tiene que salir
+      como <em>enabled</em> con la ruta de ScadLab y <code>--mcp</code>. No sirve mirar el workspace: <code>agy</code> no lee
+      <code>.gemini/settings.json</code>.</li>
+    <li>Para Codex, ábrelo desde la terminal de ScadLab y pídele que use la herramienta <code>render</code> (o que
+      liste sus herramientas): fuera de ScadLab no recibe el servidor.</li>
+  </ol>
+
+  <h2 id="ia-mcp--problemas">Si un CLI no lo ve</h2>
+  <ul>
+    <li><strong>Claude Code te pide aprobar el servidor.</strong> Es normal: la primera vez que abre un proyecto con
+      <code>.mcp.json</code> pregunta si confías en él. Acéptalo.</li>
+    <li><strong>El archivo aparece como «No se tocó».</strong> Tiene un JSON roto o un formato que ScadLab no se
+      atreve a editar. Corrígelo (o agrega la entrada a mano con el comando que muestra Configuración → IA) y pulsa
+      <strong>Volver a sincronizar</strong>.</li>
+    <li><strong>Aparece como «Desactualizado».</strong> Moviste o actualizaste la app y la ruta cambió: pulsa
+      <strong>Volver a sincronizar</strong>.</li>
+    <li><strong>Abriste el CLI con la app cerrada.</strong> Funciona igual (el servidor es la propia app lanzada sin
+      ventana), pero la ruta que dice el archivo tiene que seguir existiendo.</li>
+    <li><strong>Codex no lo ve.</strong> Ábrelo desde la terminal de ScadLab: solo ahí recibe los flags.</li>
+    <li><strong>Antigravity no lo ve.</strong> Pulsa <strong>Agregar a Antigravity</strong> en Configuración → IA: con el
+      archivo del workspace no basta. Si dice <em>agy no instalado</em>, instala Antigravity o revisa que el comando
+      <code>agy</code> exista en tu equipo.</li>
+    <li><strong>Las herramientas fallan al renderizar.</strong> Revisa que ScadLab encuentre OpenSCAD (pestaña
+      OpenSCAD de la configuración).</li>
+  </ul>
+</article>
+
+<article class="topic" id="ia-autoiteracion" data-title="Auto-iteración de errores">
+  <h1>Auto-iteración de errores</h1>
+  <p class="lead">Si un checkpoint no renderiza, ScadLab se lo dice al agente y le pide que lo corrija — sin
+  que tengas que copiar el error.</p>
+
+  <h2 id="ia-autoiteracion--hoy">Qué hace</h2>
+  <p>Cuando un agente crea un checkpoint, ScadLab lo renderiza solo y, si falla, deja
+  <code>RENDER_ERRORS.md</code> en el workspace. Si además hay un <a href="#ia-agentes">agente abierto</a> en ese
+  workspace, le escribe un aviso en su terminal para que lo lea y lo arregle. Detalle del archivo en
+  <a href="#render--errores">Renderizar y diagnósticos</a>.</p>
+
+  <h2 id="ia-autoiteracion--flujo">Cómo funciona</h2>
+  <ol class="steps">
+    <li>El agente crea <code>004-add-hinge.scad</code> y ScadLab lo renderiza.</li>
+    <li>OpenSCAD falla. ScadLab escribe <code>RENDER_ERRORS.md</code> en el workspace con el archivo, la línea y el mensaje.</li>
+    <li>ScadLab escribe en la terminal del agente un aviso de una línea que pide leer <code>RENDER_ERRORS.md</code> y corregir.</li>
+    <li>El agente crea <code>005-fix-hinge.scad</code> con <code>parent=004-…</code>. El 004 queda como estaba.</li>
+  </ol>
+  <div class="codewrap"><pre><code># RENDER_ERRORS.md
+Archivo: 004-add-hinge.scad
+ERROR: Parser error in file 004-add-hinge.scad, line 31: syntax error
+Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></pre></div>
+  <p>El aviso que ve el agente empieza siempre por «ScadLab:», para que ningún CLI lo tome por un comando:</p>
+  <div class="codewrap"><pre><code>ScadLab: el render de "004-add-hinge.scad" falló con 1 error. Lee RENDER_ERRORS.md y corrígelo en un checkpoint NUEVO con parent=004-add-hinge.scad; no edites el archivo que falló.</code></pre></div>
+  <div class="note"><span class="lbl">Por qué un checkpoint nuevo</span><p>Corregir en el lugar rompería la regla de
+  inmutabilidad y perderías la pista de qué intentó la IA. Así el árbol muestra también los tropiezos.</p></div>
+
+  <h2 id="ia-autoiteracion--limites">Cuándo avisa y cuándo no</h2>
+  <ul>
+    <li>Solo avisa cuando falla el render del <strong>checkpoint más nuevo</strong>. Renderizar uno viejo mientras
+      recorres el historial no le manda nada al agente.</li>
+    <li>Avisa <strong>una vez por fallo</strong>: si el mismo error se repite, no insiste.</li>
+    <li>Tras <strong>5 avisos seguidos</strong> sin un render correcto, deja de avisar para no gastar la cuota de tu
+      agente en un bucle. Vuelve a funcionar en cuanto un render sale bien.</li>
+    <li>Un render cancelado, o sin OpenSCAD instalado, no cuenta como fallo del modelo y no avisa.</li>
+    <li>Sin ningún agente abierto en ese workspace, no hay a quién avisar: queda <code>RENDER_ERRORS.md</code> para
+      cuando abras uno.</li>
+  </ul>
+  <p>El interruptor <strong>Auto-iteración</strong>, en la barra de la terminal, la enciende o la apaga (viene
+  activa). Apagada, el agente no recibe avisos; <code>RENDER_ERRORS.md</code> se sigue escribiendo.</p>
+</article>
+
+<article class="topic" id="ia-ollama" data-title="Chat con modelos: Ollama, OpenAI y Anthropic">
+  <h1>Chat con modelos: Ollama, OpenAI y Anthropic</h1>
+  <p class="lead">La pestaña <strong>Chat</strong> conversa con un modelo para pensar ideas y pedir código OpenSCAD,
+  y cada bloque de código se guarda como checkpoint con un clic.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/chat.png" alt="Panel Chat con una respuesta que incluye un bloque OpenSCAD y los botones Copiar y Guardar como checkpoint" loading="lazy"><figcaption>Una respuesta del modelo con su bloque de OpenSCAD: <strong>Copiar</strong> y <strong>Guardar como checkpoint</strong>.</figcaption></figure>
+
+  <div class="note"><span class="lbl">Chat o terminal</span><p>El chat solo <strong>conversa</strong>: el modelo no
+  toca tus archivos ni renderiza. Para que la IA edite el workspace, cree checkpoints y se corrija sola, usa un
+  <a href="#ia-agentes">agente en la terminal</a>.</p></div>
+
+  <h2 id="ia-ollama--proveedores">Proveedores</h2>
+  <p>Se habilitan en <a href="#config-materiales--ollama">Configuración → IA</a>:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Proveedor</th><th>Qué indicas</th></tr>
+    <tr><td>Ollama</td><td>La URL del servidor (por defecto <code>http://localhost:11434</code>)</td></tr>
+    <tr><td>Compatible con OpenAI</td><td>La URL del servidor y la variable de entorno con su API key — LM Studio, vLLM, OpenRouter…</td></tr>
+    <tr><td>Anthropic</td><td>La variable de entorno con tu API key</td></tr>
+  </table></div>
+  <p><strong>Las claves no se guardan</strong>: ScadLab solo guarda el <em>nombre</em> de la variable de entorno y lee la
+  clave de ahí cuando la necesita. Funciona también si la definiste en <code>~/.zshrc</code>, aunque abras la app
+  desde el Finder.</p>
+
+  <h2 id="ia-ollama--preparar">Preparar Ollama</h2>
+  <p>Si eliges el modelo local, instala Ollama y descarga uno:</p>
+  <div class="codewrap"><pre><code>ollama pull qwen2.5-coder:14b     <span class="c"># o el modelo de código que prefieras</span>
+ollama serve                      <span class="c"># si no está corriendo ya</span></code></pre></div>
+  <p>Con Ollama no hay cuenta, ni coste por token, ni sale nada de tu equipo. Los modelos locales pequeños se
+  equivocan más con la geometría.</p>
+
+  <h2 id="ia-ollama--empezar">Empezar un chat</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-new.png" alt="Chat nuevo con el selector de proveedor (Ollama) y el selector de modelo, y sugerencias de qué pedir" loading="lazy"><figcaption>Un chat nuevo: eliges proveedor y modelo, y escribes abajo.</figcaption></figure>
+  <ol class="steps">
+    <li>Abre la pestaña <strong>Chat</strong> y pulsa <strong>Chat nuevo</strong>.</li>
+    <li>Elige el <strong>proveedor</strong> y el <strong>modelo</strong>. La lista de modelos sale del servidor; si no
+      responde, escribe el nombre del modelo a mano.</li>
+    <li>Escribe lo que quieres y envía con <kbd>Enter</kbd> (<kbd>Mayús+Enter</kbd> agrega una línea).</li>
+  </ol>
+  <p>El modelo queda <strong>fijo en ese chat</strong>; para probar otro, empieza un chat nuevo. El historial de chats
+  queda guardado por workspace, y puedes cambiar de conversación o borrar una desde la barra del chat.</p>
+
+  <h2 id="ia-ollama--contexto">Qué sabe el modelo de tu workspace</h2>
+  <ul>
+    <li>El <strong>checkpoint abierto</strong>: su código, hasta unos 12 KB.</li>
+    <li>Los <strong>checkpoints que ya existen</strong>, para sugerir el nombre del siguiente.</li>
+    <li>Los datos de tu <strong>impresora</strong>: el volumen de impresión y los colores del AMS.</li>
+  </ul>
+  <p>Además lleva instrucciones propias sobre las reglas de checkpoints, el color por pieza y el diseño para FDM.
+  No ve nada más: ni tus otros archivos ni el visor.</p>
+
+  <h2 id="ia-ollama--respuesta">La respuesta</h2>
+  <p>Llega en <strong>streaming</strong>, palabra a palabra. <strong>Detener</strong> corta la respuesta en el acto y
+  conserva lo que ya se escribió.</p>
+  <p>Cada bloque de OpenSCAD trae dos botones:</p>
+  <ul>
+    <li><strong>Copiar</strong>: lleva el código al portapapeles.</li>
+    <li><strong>Guardar como checkpoint</strong>: aparece cuando el bloque terminó de llegar. Te pide un rótulo y
+      crea un checkpoint nuevo, hijo del archivo abierto o, si no hay ninguno abierto, del último checkpoint.</li>
+  </ul>
+
+  <h2 id="ia-ollama--sin-proveedor">Si no hay proveedores habilitados</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-empty.png" alt="Panel Chat sin proveedores: el aviso «No hay ningún proveedor de chat habilitado» con el botón Abrir Configuración → IA" loading="lazy"><figcaption>Sin proveedores habilitados, el chat lo avisa y te lleva a Configuración → IA.</figcaption></figure>
+  <p>El chat lo avisa con un botón que abre Configuración → IA. Habilita un proveedor, vuelve al panel y pulsa
+  <strong>Ya lo habilité</strong>.</p>
+</article>
+
+<article class="topic" id="ia-prompts" data-title="Cómo pedirle un modelo a la IA">
+  <h1>Cómo pedirle un modelo a la IA</h1>
+  <p class="lead">La IA no ve tu pieza ni tu impresora: lo que no le digas lo va a suponer. Estos patrones
+  funcionan con cualquier agente.</p>
+
+  <h2 id="ia-prompts--medidas">Da medidas y holguras</h2>
+  <div class="prompt"><p>Soporte de pared para un taladro. La empuñadura mide 45 mm de diámetro; deja 1 mm de
+  holgura. Dos agujeros avellanados para tornillos de 4 mm, separados 60 mm.</p></div>
+
+  <h2 id="ia-prompts--impresion">Di cómo se imprime</h2>
+  <div class="prompt"><p>Debe imprimirse sin soportes, apoyado en la cara trasera. Ningún voladizo de más de 45°.</p></div>
+
+  <h2 id="ia-prompts--colores">Pide colores por pieza</h2>
+  <div class="prompt"><p>Placa con mi nombre «LUCÍA»: base de 80×25×3 mm en blanco y el texto en relieve de 1 mm en
+  negro, para imprimirla con el AMS lite.</p></div>
+
+  <h2 id="ia-prompts--parametros">Pide parámetros</h2>
+  <div class="prompt"><p>Haz que el ancho, el alto y el grosor de pared sean parámetros con rango para el Customizer.</p></div>
+  <p>Así luego cambias medidas sin pedirle nada más a la IA.</p>
+
+  <h2 id="ia-prompts--plantillas">Parte de una plantilla</h2>
+  <div class="prompt"><p>Usa la plantilla de caja de electrónica para un Arduino Nano con un hueco para el USB-C en
+  el lado corto.</p></div>
+  <p>Las plantillas disponibles están en <a href="#ia-skills--templates">openscad-templates</a>.</p>
+</article>
+
+<article class="topic" id="ia-skills" data-title="Skills incluidas">
+  <h1>Skills incluidas <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Instrucciones empaquetadas que le enseñan al agente a escribir OpenSCAD correcto e imprimible
+  en Bambu Lab. Se copian a cada workspace para todos los CLIs.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Configuración, pestaña Skills: las cinco skills incluidas con su interruptor y una skill propia, gear-helper" loading="lazy"><figcaption>Configuración → Skills: incluidas y propias, cada una con su interruptor.</figcaption></figure>
+
+  <h2 id="ia-skills--donde">Dónde se copian</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Carpeta</th><th>La lee</th></tr>
+    <tr><td><code>.claude/skills</code></td><td>Claude Code</td></tr>
+    <tr><td><code>.agents/skills</code></td><td>Codex y otros agentes compatibles</td></tr>
+    <tr><td><code>.opencode/skills</code></td><td>opencode</td></tr>
+    <tr><td><code>.agent/skills</code></td><td>Antigravity</td></tr>
+  </table></div>
+  <p>Cada skill es una carpeta con un <code>SKILL.md</code> (cuándo usarla y sus reglas) más
+  <code>references/</code> y <code>templates/</code> que el agente carga solo cuando hacen falta.</p>
+
+  <h2 id="ia-skills--lista">Las cinco skills</h2>
+  <div class="grid">
+    <div class="card"><h3>openscad-core</h3><p>La base: checkpoints inmutables, color obligatorio, parámetros de Customizer, CSG limpio, rendimiento y cómo leer errores. Si otra skill la contradice, gana esta.</p></div>
+    <div class="card"><h3>bambu-lab-printers</h3><p>Perfiles de A1 mini, A1, P1P, P1S, P2S, X1C, X1E, H2D y H2S (volumen, boquilla, AMS) y reglas FDM: voladizos, holguras, insertos, texto mínimo.</p></div>
+    <div class="card"><h3>openscad-3mf-multicolor</h3><p>Modelos para AMS: una pieza por <code>color()</code>, cómo exportar a 3MF y cómo lo interpreta Bambu Studio.</p></div>
+    <div class="card"><h3>openscad-templates</h3><p>Plantillas paramétricas para arrancar un proyecto sin partir de cero.</p></div>
+    <div class="card"><h3>openscad-libraries</h3><p>Cuándo y cómo usar BOSL2, MCAD y NopSCADlib desde la carpeta <code>lib/</code> del workspace.</p></div>
+  </div>
+
+  <h2 id="ia-skills--templates">Plantillas de openscad-templates</h2>
+  <ul class="chips">
+    <li class="chip">Caja con tapa</li><li class="chip">Caja de electrónica</li><li class="chip">Soporte de pared</li>
+    <li class="chip">Clip de cable</li><li class="chip">Perilla</li><li class="chip">Engranaje</li>
+    <li class="chip">Bisagra print-in-place</li><li class="chip">Soporte de teléfono</li>
+    <li class="chip">Placa con nombre bicolor</li><li class="chip">Bin Gridfinity</li>
+  </ul>
+  <p>Pídelas por su nombre: <em>«arranca con la plantilla de bin Gridfinity, 2×3 unidades y 6 de alto»</em>.</p>
+
+  <h2 id="ia-skills--actualizar">Actualizaciones</h2>
+  <p>Las skills viajan dentro de la app: al actualizar ScadLab y abrir un workspace, se copian las versiones
+  nuevas. Tus skills propias no se tocan.</p>
+</article>
+
+<article class="topic" id="ia-skill-propia" data-title="Crear tu propia skill">
+  <h1>Crear tu propia skill <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Si siempre le explicas lo mismo al agente —tus tornillos, tu estilo, tus piezas estándar—,
+  conviértelo en una skill y deja de repetirlo.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Campo Nueva skill bajo la lista de skills, con el botón para crearla desde la plantilla y el de abrir la carpeta" loading="lazy"><figcaption>Nueva skill: se escribe el nombre en kebab-case y se crea desde la plantilla.</figcaption></figure>
+
+  <h2 id="ia-skill-propia--crear">Crearla desde Configuración</h2>
+  <ol class="steps">
+    <li>Ve a <strong>Configuración → Skills</strong> y pulsa <strong>Nueva skill</strong>.</li>
+    <li>ScadLab parte de la plantilla <code>_skill-template</code>: te pide nombre (kebab-case) y descripción.</li>
+    <li>Edita el <code>SKILL.md</code> generado. Al abrir cualquier workspace, la skill se copia junto con las incluidas.</li>
+  </ol>
+
+  <h2 id="ia-skill-propia--formato">El formato de SKILL.md</h2>
+  <div class="codewrap"><pre><code>---
+name: mis-insertos-m3
+description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi taller.
+  Úsala SIEMPRE que el modelo lleve tornillos, insertos o tuercas.
+---
+
+# Insertos y tornillos M3
+
+- Inserto térmico M3 × 5 mm: agujero de 4,2 mm, profundidad 5,5 mm.
+- Paso de tornillo M3: 3,4 mm. Cabeza avellanada: 6,5 mm a 90°.
+- Tuerca M3 cautiva: hexágono de 6,4 mm entre caras, 2,6 mm de alto.</code></pre></div>
+
+  <h2 id="ia-skill-propia--consejos">Consejos</h2>
+  <ul>
+    <li>La <code>description</code> dice <strong>cuándo</strong> usarla: es lo que hace que el agente la cargue.</li>
+    <li>Mantén el <code>SKILL.md</code> corto; lo extenso va en <code>references/</code> y el código listo para copiar en <code>templates/*.scad</code>.</li>
+    <li>No contradigas a <code>openscad-core</code>: sus reglas son el contrato con la app.</li>
+  </ul>
+</article>
+
+<!-- ============================================================ IMPRIMIR -->
+<article class="topic" id="imprimir-impresoras" data-title="Impresoras Bambu Lab">
+  <h1>Impresoras Bambu Lab</h1>
+  <p class="lead">Cada workspace tiene su impresora, y con ella el volumen de impresión que el modelo tiene que
+  respetar.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-printing.png" alt="Configuración, pestaña Impresión: impresora por defecto A1 mini con su volumen, material, relleno y la tabla de materiales" loading="lazy"><figcaption>Configuración → Impresión: impresora por defecto con su volumen, material y relleno.</figcaption></figure>
+
+  <h2 id="imprimir-impresoras--perfiles">Perfiles incluidos</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Impresora</th><th>Volumen (mm)</th><th>Multicolor</th></tr>
+    <tr><td>A1 mini</td><td>180 × 180 × 180</td><td>AMS lite (4)</td></tr>
+    <tr><td>A1</td><td>256 × 256 × 256</td><td>AMS lite (4)</td></tr>
+    <tr><td>P1P / P1S</td><td>256 × 256 × 256</td><td>AMS, hasta 4 unidades</td></tr>
+    <tr><td>P2S</td><td>256 × 256 × 256*</td><td>AMS / AMS 2 Pro</td></tr>
+    <tr><td>X1 Carbon / X1E</td><td>256 × 256 × 256</td><td>AMS, hasta 4 unidades</td></tr>
+    <tr><td>H2D</td><td>325 × 320 × 325*</td><td>AMS 2 Pro / AMS HT</td></tr>
+    <tr><td>H2S</td><td>340 × 320 × 340*</td><td>AMS 2 Pro / AMS HT</td></tr>
+  </table></div>
+  <p>* Valores nominales pendientes de confirmar con la ficha oficial. Deja siempre 2–5 mm de margen.</p>
+
+  <h2 id="imprimir-impresoras--printerjson">printer.json</h2>
+  <p>La impresora del workspace se guarda en <code>printer.json</code>, que también leen los agentes:</p>
+  <div class="codewrap"><pre><code>{
+  "id": "bambu-a1-mini",
+  "name": "Bambu Lab A1 mini",
+  "build_volume": { "x": 180, "y": 180, "z": 180 },
+  "nozzle_mm": 0.4,
+  "multicolor_system": "AMS lite"
+}</code></pre></div>
+
+  <h2 id="imprimir-impresoras--aviso">Aviso si no cabe</h2>
+  <p>Si la caja envolvente del checkpoint supera el volumen de la impresora, el visor dibuja la placa y avisa
+  qué eje se pasa. La IA recibe la misma regla: pídele <em>«que quepa en la A1 mini»</em> y lo tendrá en cuenta.</p>
+  <p>Si el modelo no entra en la placa de la impresora del workspace, el visor marca la cama en rojo y dice cuántos
+  milímetros sobran en cada eje, con sugerencias (rotarlo, partirlo o elegir otra impresora). El mismo aviso aparece en
+  la barra de estado. Ver <a href="#imprimir-costo">Estimación de costo</a>.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/plate-overflow.png" alt="Visor con la cama de una A1 mini marcada en rojo y el aviso de cuántos milímetros sobran por eje" loading="lazy"><figcaption>Una pieza que no cabe en la A1 mini: la cama en rojo y lo que sobra por eje.</figcaption></figure>
+
+</article>
+
+<article class="topic" id="imprimir-reglas" data-title="Reglas de diseño FDM">
+  <h1>Reglas de diseño FDM</h1>
+  <p class="lead">El resumen de lo que la skill <code>bambu-lab-printers</code> le exige al agente — y lo que
+  conviene recordar al pedir una pieza. Valores para boquilla de 0,4 mm.</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Tema</th><th>Regla práctica</th></tr>
+    <tr><td>Voladizos</td><td>Hasta 45° sin soporte. Más inclinado: chaflán, cambiar la orientación o partir la pieza.</td></tr>
+    <tr><td>Puentes</td><td>Cortos (≈ 10–20 mm) salen bien; los largos se descuelgan.</td></tr>
+    <tr><td>Paredes</td><td>Mínimo 0,8 mm; 1,2–2 mm para piezas que trabajan. Múltiplos de 0,4 mm.</td></tr>
+    <tr><td>Holguras de encaje</td><td>0,2 mm ajustado, 0,3 mm deslizante, 0,4–0,5 mm para print-in-place.</td></tr>
+    <tr><td>Agujeros horizontales</td><td>Forma de gota (teardrop) para que no necesiten soporte.</td></tr>
+    <tr><td>Insertos térmicos M3</td><td>Agujero ≈ 4,0–4,2 mm según el fabricante del inserto.</td></tr>
+    <tr><td>Texto</td><td>Al menos 4–5 mm de alto y 0,6–1 mm de relieve o hundido.</td></tr>
+    <tr><td>Primera capa</td><td>Chaflán de 0,4 mm en el borde inferior contra la «pata de elefante».</td></tr>
+    <tr><td>Piezas altas y finas</td><td>En impresoras de cama móvil (A1, A1 mini) orientar el lado largo en Y o añadir orejas.</td></tr>
+  </table></div>
+
+  <h2 id="imprimir-reglas--ejemplo">Ejemplo: agujero en gota</h2>
+  <div class="codewrap"><pre><code>module teardrop_hole(d = 5, len = 20) {
+  rotate([90, 0, 0]) linear_extrude(len, center = true)
+    hull() {
+      circle(d = d, $fn = 48);
+      rotate(45) square(d / 2);   // punta a 45°: imprime sin soporte
+    }
+}</code></pre></div>
+</article>
+
+<article class="topic" id="imprimir-exportar" data-title="Exportar STL, 3MF y PNG">
+  <h1>Exportar STL, 3MF y PNG <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Tres botones en la cabecera exportan el checkpoint seleccionado. Están activos cuando ese checkpoint
+  tiene un render correcto; si no, siguen apagados y su descripción (pasa el ratón) dice por qué.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/export-3mf.png" alt="Diálogo Exportar a 3MF: formato 3MF para Bambu Studio elegido, dos partes (Color 1 grafito en el extrusor E1 y Color 2 naranja en el E2) con sus triángulos, sin avisos, y los botones Cancelar, Exportar y Exportar y abrir en Bambu Studio" loading="lazy"><figcaption>El diálogo de 3MF: una fila por parte, con su color, sus triángulos y el extrusor que le toca.</figcaption></figure>
+
+  <div class="tablewrap"><table>
+    <tr><th>Botón</th><th>Atajo</th><th>Qué genera</th><th>Cuándo usarlo</th></tr>
+    <tr><td><strong>STL</strong></td><td><kbd>⇧⌘E</kbd> / <kbd>Ctrl+Shift+E</kbd></td><td>La malla del render, de un solo cuerpo y sin color. Abre directo el diálogo de guardar</td><td>Piezas de un color, o para otros laminadores</td></tr>
+    <tr><td><strong>3MF</strong></td><td><kbd>⌘E</kbd> / <kbd>Ctrl+E</kbd></td><td>Abre el diálogo de exportación: una parte por color, cada una con su extrusor</td><td>Multicolor con AMS, o para conservar las piezas separadas</td></tr>
+    <tr><td><strong>PNG</strong></td><td>—</td><td>Imagen de la vista activa del visor, tal como se ve</td><td>Documentar o compartir el diseño</td></tr>
+  </table></div>
+
+  <h2 id="imprimir-exportar--3mf">El diálogo de 3MF</h2>
+  <p>Antes de elegir dónde guardar, el diálogo te muestra <strong>qué va a salir</strong>. La primera vez OpenSCAD
+  renderiza el modelo con sus colores (unos segundos; después queda en caché) y la tabla lista:</p>
+  <ul>
+    <li><strong>Una parte por cada <code>color()</code></strong> del modelo, con su muestra de color, su nombre y su
+    cantidad de triángulos. La geometría sin <code>color()</code> sale como una parte más, <em>Default</em>
+    (amarillo), y el diálogo la marca como «sin color()».</li>
+    <li><strong>El extrusor</strong> (E1, E2…) que Bambu Studio le asigna a cada parte, en el orden en que aparecen
+    los colores en el modelo.</li>
+    <li><strong>Avisos</strong>, que no impiden exportar: más colores de los que admite la impresora del workspace
+    (por ejemplo, cinco colores en una A1 mini, que admite cuatro a la vez), geometría sin <code>color()</code>, o dos
+    colores casi iguales que usarían dos filamentos distintos.</li>
+  </ul>
+
+  <figure class="shot"><img src="../docs/screenshots/es/export-3mf-warning.png" alt="Diálogo Exportar a 3MF con cinco partes, de E1 a E5, y un aviso en ámbar: el modelo usa 5 colores y la Bambu Lab A1 mini admite 4 a la vez" loading="lazy"><figcaption>Cinco colores en una A1 mini: el aviso lo dice antes de exportar, y la exportación sigue disponible.</figcaption></figure>
+
+  <h2 id="imprimir-exportar--formatos">Los tres formatos</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Formato</th><th>Cómo sale</th><th>Para qué</th></tr>
+    <tr><td><strong>STL</strong></td><td>Un solo archivo <code>.stl</code>, sin color</td><td>Una pieza de un solo color; cualquier laminador</td></tr>
+    <tr><td><strong>3MF para Bambu Studio</strong></td><td>Un objeto con una parte por color y su extrusor, en un <code>.3mf</code></td><td>Multicolor con AMS: Bambu Studio lo abre listo para asignar filamentos</td></tr>
+    <tr><td><strong>Un STL por color</strong></td><td>Un <code>.zip</code> con un <code>.stl</code> por parte</td><td>OrcaSlicer, PrusaSlicer, Cura u otro que no lee las partes del 3MF</td></tr>
+  </table></div>
+  <p>El nombre que propone el diálogo de guardar es <code>&lt;workspace&gt;-&lt;checkpoint&gt;</code> con la extensión del
+  formato, y abre en la carpeta <code>exports/</code> del workspace si existe.</p>
+
+  <h2 id="imprimir-exportar--despues">Tras exportar</h2>
+  <p>Un aviso te dice dónde quedó el archivo y te ofrece dos botones: <strong>Mostrar en el Finder</strong>
+  (<strong>Explorador</strong> en Windows) y, si ScadLab encontró Bambu Studio, <strong>Abrir en Bambu Studio</strong>.
+  En el diálogo de 3MF, <strong>Exportar y abrir en Bambu Studio</strong> hace las dos cosas de una vez. Bambu Studio
+  <strong>solo se abre cuando tú lo pides</strong> con uno de esos botones, nunca solo.</p>
+
+  <h2 id="imprimir-exportar--bambu">Abrir en Bambu Studio</h2>
+  <p>ScadLab busca la app en su ruta de instalación (macOS: <code>/Applications/BambuStudio.app</code> o la misma
+  carpeta dentro de tu <code>~/Applications</code>; Windows: <code>Program Files\Bambu Studio</code>). Si la tienes en
+  otro lado, indícala en <a href="#config-materiales--bambu">Configuración → Impresión → Ruta de Bambu Studio</a>. Si no
+  está, el botón no aparece y el diálogo te lleva a esa configuración.</p>
+
+  <h2 id="imprimir-exportar--comprobar">Comprueba el 3MF en Bambu Studio</h2>
+  <p>La primera vez que exportes un modelo multicolor, vale la pena hacer esta comprobación a mano:</p>
+  <ol class="steps">
+    <li>Abre el archivo en Bambu Studio (con <strong>Abrir en Bambu Studio</strong>, o con <strong>Archivo → Importar</strong>
+    o arrastrándolo a la ventana).</li>
+    <li>Si pregunta si cargarlo como un objeto con varias partes, responde que sí.</li>
+    <li>Revisa la lista de objetos: tiene que verse <strong>un objeto con una parte por color</strong>, cada parte con su
+    extrusor (1, 2…) y el nombre de su color.</li>
+    <li><strong>Asigna los filamentos del AMS</strong> a cada extrusor y lamina. No deberían aparecer errores de
+    geometría.</li>
+  </ol>
+  <p>Un modelo sin <code>color()</code> sale como un objeto de una sola parte.</p>
+  <div class="note"><span class="lbl">Los colores del filamento los pones tú</span><p>El 3MF lleva el color de cada parte
+  como referencia, pero el filamento real lo eliges en el AMS de Bambu Studio.</p></div>
+</article>
+
+<article class="topic" id="imprimir-multicolor" data-title="Multicolor con AMS">
+  <h1>Multicolor con AMS</h1>
+  <p class="lead">Una pieza por color en OpenSCAD, un 3MF con esas partes, y en Bambu Studio cada parte va a un
+  filamento del AMS o AMS lite.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/export-3mf-warning.png" alt="Diálogo de exportación con cinco partes, cada una con su extrusor, y el aviso de que la A1 mini admite cuatro colores a la vez" loading="lazy"><figcaption>Al exportar, el diálogo lista cada color como una parte con su extrusor y avisa si hay más colores de los que admite tu impresora.</figcaption></figure>
+
+  <h2 id="imprimir-multicolor--regla">La regla: una pieza por color</h2>
+  <p>Cada bloque de primer nivel va dentro de su <code>color()</code>, y las piezas no deben solaparse: donde dos
+  colores ocupan el mismo volumen, el slicer no sabe cuál poner. Resta una de otra si se tocan:</p>
+  <div class="codewrap"><pre><code>// @checkpoint parent= desc="Placa con nombre bicolor"
+/* [Placa] */
+w = 80; d = 25; h = 3;
+txt = "LUCIA";
+relief = 1;
+
+module label() {
+  translate([w/2, d/2, h - relief])
+    linear_extrude(relief) text(txt, size = 11, halign = "center", valign = "center");
+}
+
+color("White") difference() { cube([w, d, h]); label(); }   // base con el hueco
+color("Black") label();                                    // texto que llena el hueco</code></pre></div>
+  <p>Aquí el texto está <strong>embutido</strong> en la base (misma altura total): sale plano y se imprime sin
+  cambios de altura entre colores.</p>
+
+  <h2 id="imprimir-multicolor--exportar">Exportar <span class="badge ok">Disponible</span></h2>
+  <p>El botón <strong>3MF</strong> (<kbd>⌘E</kbd> / <kbd>Ctrl+E</kbd>) abre el diálogo de exportación: genera el archivo
+  con <strong>una parte por color</strong>, cada una con su extrusor, que Bambu Studio abre con las partes asignables a
+  filamentos. Si prefieres otro laminador, elige <em>Un STL por color</em> y obtienes un <code>.zip</code>. Requiere una
+  versión de OpenSCAD que exporte 3MF con color (ver <a href="#requisitos--openscad">Requisitos</a>). Detalle y
+  comprobación en <a href="#imprimir-exportar">Exportar STL, 3MF y PNG</a>.</p>
+
+  <h2 id="imprimir-multicolor--limites">Cuántos colores</h2>
+  <p>AMS lite (A1, A1 mini): 4. AMS: 4 por unidad, hasta 16 encadenando unidades. Cada cambio de color purga
+  filamento: menos colores y menos capas con cambio es más rápido y desperdicia menos.</p>
+</article>
+
+<article class="topic" id="imprimir-costo" data-title="Estimación de costo">
+  <h1>Estimación de costo <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Una cifra rápida para decidir antes de abrir el laminador: cuánto pesa cada parte, cuántos metros de
+  filamento lleva y cuánto cuesta imprimirla.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/print-panel.png" alt="Panel Impresión debajo del visor: una tabla con las dos partes de la placa (color, material, peso, filamento y costo) y su total, y los parámetros del cálculo: relleno, perímetros, ancho de línea, diámetro del filamento, material y moneda" loading="lazy"><figcaption>El panel Impresión: una fila por parte con su material, peso, filamento y costo, el total, y los parámetros del cálculo.</figcaption></figure>
+
+  <h2 id="imprimir-costo--panel">El panel Impresión</h2>
+  <p>Ábrelo en <strong>Ver → Impresión</strong> (<kbd>⌘⇧7</kbd> / <kbd>Ctrl+Shift+7</kbd>); en los diseños de fábrica es una pestaña junto a
+  Problemas. Necesita un render correcto del checkpoint.</p>
+  <ul>
+    <li><strong>Tabla por parte</strong>: color, material (se cambia en la propia fila), peso, metros de filamento y costo, y el
+      <strong>total</strong>. Un clic en una fila selecciona esa parte en el visor.</li>
+    <li><strong>Parámetros</strong>: relleno, perímetros, ancho de línea, diámetro del filamento, material por defecto y
+      moneda. Al cambiarlos, la estimación se recalcula en el acto. Valen <strong>solo para ese cálculo</strong>; los de
+      siempre se fijan en <a href="#config-materiales--estimacion">Configuración → Impresión</a>, y <em>Restablecer</em> vuelve a ellos.</li>
+    <li><strong>Exportar 3MF</strong>: abre el mismo diálogo de <a href="#imprimir-exportar">Exportar</a>.</li>
+  </ul>
+
+  <h2 id="imprimir-costo--calculo">Cómo se calcula (en simple)</h2>
+  <p>Una pieza no se imprime maciza: se imprimen las <strong>paredes</strong> enteras y el interior solo en parte
+  (el <strong>relleno</strong>). El cálculo, por cada parte:</p>
+  <ol>
+    <li><strong>Pared</strong> = perímetros × ancho de línea (por defecto 2 × 0,42 mm = 0,84 mm de espesor).</li>
+    <li><strong>Cáscara</strong> = superficie de la pieza × espesor de pared. Es el material de las paredes, que se imprime
+      macizo. Si la pieza es tan delgada que la pared ocupa más que su volumen, cuenta solo el volumen (no se
+      cuenta material de más).</li>
+    <li><strong>Interior</strong> = volumen − cáscara, y solo se imprime el <strong>% de relleno</strong> de él.</li>
+    <li><strong>Volumen efectivo</strong> = cáscara + interior × relleno.</li>
+    <li><strong>Peso</strong> = volumen efectivo × densidad del material.</li>
+    <li><strong>Filamento</strong> = volumen efectivo ÷ área de la sección del filamento (por defecto 1,75 mm de diámetro).</li>
+    <li><strong>Costo</strong> = peso ÷ 1000 × costo por kg del material.</li>
+  </ol>
+
+  <h2 id="imprimir-costo--ejemplo">Ejemplo</h2>
+  <p>Un cubo de 20 mm de lado: volumen 8000 mm³ y superficie 2400 mm². Con la pared de 0,84 mm, la cáscara es
+  2400 × 0,84 = 2016 mm³ y el interior, 8000 − 2016 = 5984 mm³. Con 15 % de relleno, el volumen efectivo es
+  2016 + 5984 × 0,15 = <strong>2913,6 mm³</strong>. En PLA (1,24 g/cm³) pesa 2,9136 × 1,24 ≈ <strong>3,61 g</strong>, lleva
+  unos <strong>1,21 m</strong> de filamento de 1,75 mm y, con PLA a 20 la moneda por kg, cuesta ≈ <strong>0,07</strong>.</p>
+
+  <h2 id="imprimir-costo--materiales">Densidades por defecto</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Material</th><th>Densidad (g/cm³)</th></tr>
+    <tr><td>PLA</td><td>1,24</td></tr>
+    <tr><td>PETG</td><td>1,27</td></tr>
+    <tr><td>ABS</td><td>1,04</td></tr>
+    <tr><td>ASA</td><td>1,07</td></tr>
+    <tr><td>TPU</td><td>1,21</td></tr>
+  </table></div>
+  <p>Densidad y costo por kg se cambian en <a href="#config-materiales--materiales">Configuración → Impresión → Materiales</a>.
+  El costo por kg se escribe en tu propia moneda: ScadLab solo la muestra, <strong>no convierte</strong>.</p>
+  <div class="note"><span class="lbl">Es una estimación</span><p>Sin soportes, balsa ni borde, sin la purga del AMS al cambiar
+  de color y sin mirar la forma del relleno (giroide, rejilla…). Para el número exacto, el que da Bambu Studio al
+  laminar. El MCP (<code>measure</code>) usa esta misma fórmula, así que lo que ve el agente es lo que ves tú.</p></div>
+</article>
+
+<!-- ======================================================= CONFIGURACIÓN -->
+<article class="topic" id="config-general" data-title="Idioma, OpenSCAD y agentes">
+  <h1>Idioma, OpenSCAD y agentes <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Lo básico de Configuración: en qué idioma te habla la app, qué tan grande se ve, dónde está OpenSCAD
+  y qué agentes encontró.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-general.png" alt="Configuración, pestaña General: idioma, tema y carpeta de workspaces" loading="lazy"><figcaption>Configuración → General: idioma, tema y carpeta de workspaces.</figcaption></figure>
+
+  <h2 id="config-general--idioma">Idioma</h2>
+  <p>Español o English. El cambio se aplica al momento y se recuerda.</p>
+
+  <h2 id="config-general--apariencia">Apariencia y tamaños</h2>
+  <p>El bloque <strong>Apariencia</strong> de la pestaña General te deja ajustar la app a tu vista y a tu pantalla.
+  <strong>Todo se ve y se guarda al instante</strong>: no hace falta pulsar Guardar.</p>
+  <ul>
+    <li><strong>Tamaño de la interfaz</strong>: Compacto (90 %), Normal (100 %), Grande (115 %), Más grande
+    (130 %) o Máximo (150 %). Agranda o reduce el <em>texto y los íconos</em> de toda la aplicación; los espacios
+    no cambian, así que no es un zoom de la ventana.</li>
+    <li><strong>Tamaño de letra de cada área</strong>: el editor de código, la terminal y el chat tienen cada uno
+    su tamaño (de 9 a 28 px), independiente del de la interfaz. Una <strong>vista previa</strong> muestra cómo se
+    lee cada una mientras eliges.</li>
+    <li><strong>Restablecer apariencia</strong> vuelve la interfaz al 100 % y las tres letras a 13 px.</li>
+  </ul>
+  <p>Con el teclado: <kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> (<kbd>Ctrl</kbd> en Windows) suben, bajan y
+  restablecen el tamaño de la interfaz; con el foco <em>dentro</em> del editor, la terminal o el chat, esos mismos
+  atajos cambian la letra de <em>esa</em> área. Un aviso breve dice el valor al que quedó.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-appearance.png" alt="Configuración, pestaña General, bloque Apariencia: selector del tamaño de la interfaz, tres campos de tamaño de letra para el editor, la terminal y el chat con su vista previa, y los botones Restablecer apariencia y Restablecer el diseño" loading="lazy"><figcaption>Configuración → General → Apariencia: tamaño de la interfaz, letra de cada área con vista previa y los botones para restablecer.</figcaption></figure>
+
+  <figure class="shot"><img src="../docs/screenshots/es/appearance-150.png" alt="Ventana principal con el tamaño de la interfaz al 150 %: el texto y los íconos son más grandes mientras la terminal conserva su propia letra de 13 píxeles" loading="lazy"><figcaption>La interfaz al 150 %: el texto y los íconos crecen; la terminal y el editor mantienen su propia letra.</figcaption></figure>
+
+  <h2 id="config-general--openscad">Ruta de OpenSCAD</h2>
+  <p>Muestra la ruta detectada y su versión. Si no lo encontró, o tienes varias versiones, escribe o elige la
+  ruta del ejecutable. <strong>Probar</strong> comprueba que responde.</p>
+
+  <h2 id="config-general--render">Auto-render y tiempo máximo</h2>
+  <p>En la pestaña OpenSCAD: <strong>Renderizar automáticamente los checkpoints nuevos</strong> (activo por defecto;
+  ver <a href="#render--auto">Auto-render</a>) y el <strong>tiempo máximo de render</strong>, de 10 a 3600 segundos
+  (300 por defecto). Un render que lo supera se corta y se marca como error: con CGAL, un modelo con
+  <code>minkowski()</code> o muchas esferas puede tardar minutos.</p>
+
+  <h2 id="config-general--clis">CLIs de agentes detectados</h2>
+  <p>Lista Claude Code, opencode, Codex y Antigravity con su estado (encontrado / no encontrado) y la ruta. Si
+  instalas uno con la app abierta, pulsa <strong>Volver a detectar</strong>. Solo los agentes <strong>habilitados</strong>
+  aparecen en el selector de la <a href="#ia-agentes">terminal</a>, y el <strong>agente por defecto</strong> es el que
+  se preselecciona. Más abajo está el bloque del <a href="#ia-mcp">servidor MCP de ScadLab</a> y, después, los
+  servidores de modelos del <a href="#ia-ollama">chat</a>.</p>
+
+  <h2 id="config-general--skills">Skills</h2>
+  <p>Lista las incluidas y las tuyas, y permite crear una nueva desde la plantilla: ver
+  <a href="#ia-skill-propia">Crear tu propia skill</a>.</p>
+</article>
+
+<article class="topic" id="config-materiales" data-title="Modelos de IA, materiales e impresora">
+  <h1>Modelos de IA, materiales e impresora <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Los servidores de modelos del chat, y los ajustes que alimentan la estimación de costo y el perfil de
+  impresora de los proyectos nuevos.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-printing.png" alt="Configuración, pestaña Impresión: impresora, material y relleno por defecto, los datos de la estimación (perímetros, ancho de línea, diámetro del filamento y moneda), ruta de Bambu Studio con su estado de detección y tabla de materiales con densidad y costo por kilo" loading="lazy"><figcaption>Impresión: los datos de la estimación, la ruta de Bambu Studio (con su estado de detección) y los materiales con densidad y costo por kilo, editables.</figcaption></figure>
+
+  <h2 id="config-materiales--bambu">Ruta de Bambu Studio</h2>
+  <p>En la pestaña <strong>Impresión</strong>. La usa <a href="#imprimir-exportar--bambu">Abrir en Bambu Studio</a> tras
+  exportar. <strong>Vacío = autodetectar</strong>: ScadLab busca la app en su ruta de instalación y, debajo del campo,
+  te dice si la encontró y dónde. Si la tienes en otra carpeta, escribe la ruta o pulsa <strong>Elegir…</strong>
+  (en macOS, la carpeta <code>BambuStudio.app</code>; en Windows, <code>bambu-studio.exe</code>). Se aplica al
+  guardar.</p>
+
+  <h2 id="config-materiales--ollama">Servidores de modelos (pestaña IA)</h2>
+  <p>Son los proveedores del <a href="#ia-ollama">chat</a>. Habilita los que uses:</p>
+  <ul>
+    <li><strong>Ollama</strong>: la URL (por defecto <code>http://localhost:11434</code>; puede ser otra máquina de tu
+      red) y el modelo. <strong>Probar y listar modelos</strong> comprueba la conexión y trae los que tengas
+      descargados.</li>
+    <li><strong>Compatible con OpenAI</strong> (LM Studio, vLLM, OpenRouter…): la URL base y la variable de entorno de
+      la API key.</li>
+    <li><strong>Anthropic</strong>: la variable de entorno de la API key.</li>
+  </ul>
+  <p>La clave <strong>nunca se guarda</strong> en ScadLab: solo el nombre de la variable de entorno, de la que se
+  lee cuando hace falta.</p>
+
+  <h2 id="config-materiales--estimacion">Datos de la estimación</h2>
+  <p>En la pestaña <strong>Impresión</strong>, junto al relleno, están los valores con los que se estima el peso y el costo
+  de una pieza (la <a href="#imprimir-costo--calculo">fórmula</a>):</p>
+  <div class="tablewrap"><table>
+    <tr><th>Ajuste</th><th>Rango</th><th>Por defecto</th></tr>
+    <tr><td>Relleno (%)</td><td>0–100</td><td>15</td></tr>
+    <tr><td>Perímetros</td><td>1–10</td><td>2</td></tr>
+    <tr><td>Ancho de línea (mm)</td><td>0,2–1,5</td><td>0,42</td></tr>
+    <tr><td>Diámetro del filamento (mm)</td><td>1,0–3,5</td><td>1,75</td></tr>
+    <tr><td>Moneda</td><td>código de 3 letras (USD, EUR, GTQ…)</td><td>USD</td></tr>
+  </table></div>
+  <p>Un valor fuera de rango no da error: vuelve al de fábrica. La moneda solo se <strong>muestra</strong>: el costo por kg de
+  cada material va escrito en esa misma moneda. El panel <a href="#imprimir-costo">Impresión</a> puede cambiar estos valores
+  para un solo cálculo sin tocar los de aquí.</p>
+
+  <h2 id="config-materiales--materiales">Materiales</h2>
+  <p>Una tabla de materiales con <strong>densidad</strong> (g/cm³) y <strong>costo por kg</strong>, más el
+  <strong>material por defecto</strong>. Al editar un valor, la estimación del panel Impresión se actualiza al salir del
+  campo.</p>
+
+  <h2 id="config-materiales--impresora">Impresora por defecto</h2>
+  <p>El perfil que se pone en <code>printer.json</code> al crear un workspace. Cada proyecto puede cambiarlo
+  después.</p>
+</article>
+
+<article class="topic" id="config-datos" data-title="Dónde se guardan tus datos">
+  <h1>Dónde se guardan tus datos <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Dos sitios, los dos en tu máquina: tus proyectos en las carpetas que elijas, y la
+  configuración en una base SQLite.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/settings-about.png" alt="Configuración, pestaña Acerca de: versión, plataforma, carpeta de datos y versión del schema" loading="lazy"><figcaption>Configuración → Acerca de: dónde están tus datos.</figcaption></figure>
+
+  <h2 id="config-datos--sqlite">La base de configuración</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Sistema</th><th>Ruta de <code>scadlab.db</code></th></tr>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/ScadLab/</code></td></tr>
+    <tr><td>Windows</td><td><code>%AppData%\ScadLab\</code></td></tr>
+  </table></div>
+  <p>Guarda idioma, rutas, agentes detectados, workspaces recientes, materiales y preferencias. <strong>No guarda
+  tus modelos</strong>: esos están en los <code>.scad</code> de cada workspace.</p>
+
+  <h2 id="config-datos--respaldo">Copias de seguridad</h2>
+  <p>Para respaldar tus diseños, copia las carpetas de los workspaces (o versiónalas con Git). Para llevarte la
+  configuración, copia <code>scadlab.db</code> con la app cerrada.</p>
+
+  <h2 id="config-datos--red">Qué sale a la red</h2>
+  <p>ScadLab no tiene cuenta ni telemetría. Lo único que sale de tu máquina es lo que envían los agentes de IA
+  que tú ejecutas a su propio proveedor y, en el <a href="#ia-ollama">chat</a>, lo que escribes junto con el contexto
+  del checkpoint abierto, hacia el servidor que elijas. Con Ollama local, nada.</p>
+</article>
+
+<!-- ============================================================= RECETAS -->
+<article class="topic" id="receta-multicolor" data-title="De idea a 3MF multicolor en 5 pasos">
+  <h1>De idea a 3MF multicolor para la A1 mini en 5 pasos <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Un llavero bicolor con tu nombre, de la idea al archivo que abre Bambu Studio con los colores
+  asignados al AMS lite.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/export-3mf.png" alt="Diálogo Exportar a 3MF con dos partes, una por color, cada una con su extrusor" loading="lazy"><figcaption>El paso 5: el diálogo de exportación muestra una parte por color y su extrusor.</figcaption></figure>
+
+  <ol class="steps">
+    <li><strong>Crea el workspace</strong> <em>Llavero</em> con la impresora <strong>A1 mini</strong>.</li>
+    <li><strong>Pídeselo al agente</strong> en la terminal (o a un modelo en el <a href="#ia-ollama">Chat</a>, y guarda
+      su código como checkpoint):
+      <div class="prompt"><p>Llavero de 50×20×4 mm con esquinas redondeadas de 3 mm y un agujero de 4 mm para la
+      anilla. Mi nombre «MARCO» embutido 1 mm, en negro sobre base amarilla. Una pieza por color, sin solapes.</p></div></li>
+    <li><strong>Revisa en el visor</strong>: vista <em>Arriba</em> para leer el texto y <em>Abajo</em> para comprobar que la
+      base es plana. Haz clic en el texto para ver su volumen.</li>
+    <li><strong>Ajusta</strong> si hace falta: <em>«el texto es muy fino, súbelo a 8 mm de alto con fuente en negrita»</em>.
+      Eso crea un checkpoint nuevo; el anterior sigue ahí.</li>
+    <li><strong>Exporta 3MF</strong> (<kbd>⌘E</kbd>): el diálogo te muestra dos partes, una por color, con su extrusor.
+      Pulsa <strong>Exportar y abrir en Bambu Studio</strong>, asigna amarillo y negro a dos ranuras del AMS lite y lamina.</li>
+  </ol>
+  <div class="note tip"><span class="lbl">Consejo</span><p>Con el texto embutido (no en relieve), los cambios de color
+  ocurren solo en el último milímetro: menos purga y más rápido.</p></div>
+</article>
+
+<article class="topic" id="receta-ramificar" data-title="Ramificar para probar dos variantes">
+  <h1>Ramificar un diseño para probar dos variantes <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Tienes una caja que funciona y quieres probar dos tapas distintas sin perder ninguna.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/tree-active-branch.png" alt="Árbol de checkpoints con el padre activo 003-vent-slots marcado con un ícono de rama" loading="lazy"><figcaption>Con 003 como padre activo, lo próximo que cree el agente cuelga de 003 aunque ya existan otros checkpoints más nuevos.</figcaption></figure>
+
+  <ol class="steps">
+    <li>Parte del checkpoint bueno, por ejemplo <code>003-base-box-final.scad</code>.</li>
+    <li>Haz clic derecho sobre él y elige <strong>Ramificar desde aquí</strong>: queda marcado como
+      <a href="#checkpoints-arbol--activo">padre activo</a>.</li>
+    <li>Pide la primera variante:
+      <div class="prompt"><p>Añade una tapa a presión con un labio de 2 mm y 0,2 mm de holgura.</p></div>
+      Se crea <code>004-snap-lid.scad</code> (parent=003) y <strong>pasa a ser el padre activo</strong>: el árbol avanza solo.</li>
+    <li><strong>Vuelve al 003</strong>: clic derecho → <em>Ramificar desde aquí</em>. Es el paso que abre la segunda rama;
+      sin él, la próxima petición seguiría colgando del 004.</li>
+    <li>Pide la segunda:
+      <div class="prompt"><p>Partiendo de este checkpoint, añade una tapa atornillada con cuatro tornillos M3 en las esquinas.</p></div>
+      Se crea <code>005-screw-lid.scad</code>, también con parent=003: el árbol muestra dos ramas.</li>
+    <li>Compáralas con la <a href="#visor-color--dividida">vista dividida</a> o mirando el <a href="#visor-medir">peso</a> de cada tapa,
+      o usa <a href="#checkpoints-arbol--comparar">Comparar con el padre</a> para ver qué cambió en cada una.</li>
+    <li>Exporta la que gane. La otra queda en el árbol por si cambias de idea; si ya no la quieres, mándala a la
+      <a href="#checkpoints-arbol--papelera">papelera</a> (con su rama, si tiene hijos): se puede restaurar.</li>
+  </ol>
+</article>
+
+<article class="topic" id="receta-plantilla" data-title="Arrancar desde una plantilla">
+  <h1>Arrancar desde una plantilla</h1>
+  <p class="lead">Un bin Gridfinity a medida en un par de minutos, usando las plantillas de
+  <code>openscad-templates</code>.</p>
+
+  <figure class="shot"><img src="../docs/screenshots/es/terminal-mcp.png" alt="Terminal de agente usando las herramientas MCP de ScadLab para crear, renderizar y medir un checkpoint" loading="lazy"><figcaption>El agente trabaja con las herramientas del servidor MCP: <code>get_template</code>, <code>create_checkpoint</code>, <code>render</code> y <code>preview</code>.</figcaption></figure>
+
+  <ol class="steps">
+    <li>Crea un workspace con tu impresora.</li>
+    <li>Pide:
+      <div class="prompt"><p>Usa la plantilla de bin Gridfinity: 2×1 unidades, 6 unidades de alto, con dos divisiones
+      y etiqueta frontal. En gris.</p></div></li>
+    <li>El agente lee la plantilla con la herramienta MCP <code>get_template</code>, la guarda como <code>001-gridfinity-bin.scad</code> con los parámetros que pediste (<code>create_checkpoint</code>), la renderiza y la mira con <code>preview</code>.</li>
+    <li>Para otro tamaño no hace falta otra petición larga: <em>«ahora 3×2 y sin divisiones»</em> crea el siguiente
+      checkpoint cambiando solo los parámetros.</li>
+  </ol>
+</article>
+
+<!-- ========================================================== REFERENCIA -->
+<article class="topic" id="atajos" data-title="Atajos de teclado">
+  <h1>Atajos de teclado</h1>
+  <p class="lead"><kbd>⌘</kbd> en macOS, <kbd>Ctrl</kbd> en Windows. Cada botón de la app recuerda su atajo al
+  pasar el ratón.</p>
+  <div class="tablewrap"><table>
+    <tr><th>macOS</th><th>Windows</th><th>Qué hace</th></tr>
+    <tr class="sect"><td colspan="3">Ventana</td></tr>
+    <tr><td><kbd>⌘B</kbd></td><td><kbd>Ctrl+B</kbd></td><td>Mostrar u ocultar la barra lateral</td></tr>
+    <tr><td><kbd>⌘⇧1</kbd> … <kbd>⌘⇧7</kbd></td><td><kbd>Ctrl+Shift+1</kbd> … <kbd>7</kbd></td><td>Mostrar y enfocar Visor, Código, Agente 1, Agente 2, Chat, Problemas o Impresión (si ya está enfocado, lo oculta)</td></tr>
+    <tr><td><kbd>⌘⇧M</kbd></td><td><kbd>Ctrl+Shift+M</kbd></td><td>Minimizar o restaurar el grupo de paneles activo</td></tr>
+    <tr><td><kbd>⌘⇧0</kbd></td><td><kbd>Ctrl+Shift+0</kbd></td><td>Modo enfoque</td></tr>
+    <tr><td><kbd>⌘+</kbd> / <kbd>⌘−</kbd></td><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd></td><td>Agrandar / reducir el texto y los íconos de la interfaz (90, 100, 115, 130, 150 %)</td></tr>
+    <tr><td><kbd>⌘0</kbd></td><td><kbd>Ctrl+0</kbd></td><td>Volver la interfaz al 100 %</td></tr>
+    <tr><td><kbd>⌘+</kbd> / <kbd>⌘−</kbd> / <kbd>⌘0</kbd> con el foco en el editor, la terminal o el chat</td><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd> / <kbd>Ctrl+0</kbd></td><td>Subir, bajar o restablecer la letra de <em>esa</em> área (9–28 px, 13 por defecto), sin tocar la interfaz</td></tr>
+    <tr class="sect"><td colspan="3">Pestañas de proyecto</td></tr>
+    <tr><td><kbd>⌃Tab</kbd> / <kbd>⌃⇧Tab</kbd></td><td><kbd>Ctrl+Tab</kbd> / <kbd>Ctrl+Shift+Tab</kbd></td><td>Pestaña de proyecto siguiente / anterior</td></tr>
+    <tr><td><kbd>⌘1</kbd> … <kbd>⌘4</kbd></td><td><kbd>Ctrl+1</kbd> … <kbd>4</kbd></td><td>Ir a la pestaña de proyecto 1, 2, 3 o 4</td></tr>
+    <tr><td><kbd>⌘W</kbd></td><td><kbd>Ctrl+W</kbd> (con el foco en una terminal de agente: <kbd>Ctrl+Shift+W</kbd>)</td><td>Cerrar el proyecto activo, con confirmación si pierde algo</td></tr>
+    <tr class="sect"><td colspan="3">Exportar</td></tr>
+    <tr><td><kbd>⌘E</kbd></td><td><kbd>Ctrl+E</kbd></td><td>Exportar a 3MF (abre el diálogo con las partes y los extrusores)</td></tr>
+    <tr><td><kbd>⇧⌘E</kbd></td><td><kbd>Ctrl+Shift+E</kbd></td><td>Exportar a STL (directo al diálogo de guardar)</td></tr>
+    <tr class="sect"><td colspan="3">Editor de código</td></tr>
+    <tr><td><kbd>⌘S</kbd></td><td><kbd>Ctrl+S</kbd></td><td>Guardar como checkpoint nuevo (en modo edición)</td></tr>
+    <tr><td>Doble clic</td><td>Doble clic</td><td>Pasar de solo lectura a edición</td></tr>
+    <tr><td><kbd>⌘F</kbd></td><td><kbd>Ctrl+F</kbd></td><td>Buscar en el código</td></tr>
+    <tr><td><kbd>⌥⌘F</kbd> o <kbd>⌘H</kbd></td><td><kbd>Ctrl+H</kbd></td><td>Buscar y reemplazar (modo edición)</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td><td>Cerrar la búsqueda o el autocompletado</td></tr>
+    <tr><td><kbd>⇧⌥F</kbd></td><td><kbd>Shift+Alt+F</kbd></td><td>Formatear el código</td></tr>
+    <tr><td><kbd>⌃Espacio</kbd></td><td><kbd>Ctrl+Espacio</kbd></td><td>Abrir el autocompletado</td></tr>
+    <tr><td><kbd>⇧⌘Espacio</kbd></td><td><kbd>Ctrl+Shift+Espacio</kbd></td><td>Ayuda de firma del módulo en curso</td></tr>
+    <tr><td><kbd>F8</kbd> / <kbd>⇧F8</kbd></td><td><kbd>F8</kbd> / <kbd>Shift+F8</kbd></td><td>Ir al problema siguiente / anterior</td></tr>
+    <tr><td><kbd>⌘/</kbd></td><td><kbd>Ctrl+/</kbd></td><td>Comentar o descomentar la línea</td></tr>
+    <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd></td><td>Deshacer / rehacer (incluido el formato)</td></tr>
+    <tr class="sect"><td colspan="3">Árbol de checkpoints (con el foco en un checkpoint)</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Pasar al checkpoint anterior o siguiente</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td><kbd>←</kbd> <kbd>→</kbd></td><td>Plegar o desplegar su rama</td></tr>
+    <tr><td><kbd>F2</kbd></td><td><kbd>F2</kbd></td><td>Renombrar (el nombre que se muestra) en la propia fila</td></tr>
+    <tr><td><kbd>⌫</kbd></td><td><kbd>Supr</kbd></td><td>Mover a la papelera, con confirmación</td></tr>
+    <tr><td><kbd>Shift+F10</kbd> o tecla de menú</td><td><kbd>Shift+F10</kbd> o tecla de menú</td><td>Abrir el menú del checkpoint (también, clic derecho)</td></tr>
+    <tr class="sect"><td colspan="3">Terminal de agente</td></tr>
+    <tr><td><kbd>⌘C</kbd></td><td><kbd>Ctrl+C</kbd></td><td>Copiar la selección. En Windows, sin selección, <kbd>Ctrl+C</kbd> interrumpe al agente; en macOS, <kbd>⌃C</kbd> siempre le llega</td></tr>
+    <tr><td><kbd>⌘V</kbd></td><td><kbd>Ctrl+V</kbd></td><td>Pegar en la terminal</td></tr>
+    <tr class="sect"><td colspan="3">Chat</td></tr>
+    <tr><td><kbd>↵</kbd></td><td><kbd>Enter</kbd></td><td>Enviar el mensaje</td></tr>
+    <tr><td><kbd>⇧↵</kbd></td><td><kbd>Shift+Enter</kbd></td><td>Agregar una línea al mensaje</td></tr>
+    <tr class="sect"><td colspan="3">Visor 3D (con el visor enfocado: clic en él)</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Orbitar</td></tr>
+    <tr><td><kbd>Shift</kbd>+flechas</td><td><kbd>Shift</kbd>+flechas</td><td>Desplazar (pan)</td></tr>
+    <tr><td><kbd>+</kbd> / <kbd>−</kbd></td><td><kbd>+</kbd> / <kbd>−</kbd></td><td>Zoom</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td><kbd>1</kbd>–<kbd>7</kbd></td><td>Vistas: Frente, Atrás, Izquierda, Derecha, Arriba, Abajo, Iso</td></tr>
+    <tr><td><kbd>F</kbd></td><td><kbd>F</kbd></td><td>Encuadrar la pieza</td></tr>
+    <tr><td><kbd>W</kbd></td><td><kbd>W</kbd></td><td>Wireframe</td></tr>
+    <tr><td><kbd>E</kbd></td><td><kbd>E</kbd></td><td>Aristas</td></tr>
+    <tr><td><kbd>O</kbd></td><td><kbd>O</kbd></td><td>Ortográfica / perspectiva</td></tr>
+    <tr class="sect"><td colspan="3">Esta ayuda</td></tr>
+    <tr><td><kbd>/</kbd></td><td><kbd>/</kbd></td><td>Ir al buscador</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>↵</kbd></td><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd></td><td>Elegir y abrir un resultado</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td><td>Cerrar el buscador</td></tr>
+  </table></div>
+</article>
+
+<article class="topic" id="faq" data-title="Preguntas frecuentes">
+  <h1>Preguntas frecuentes</h1>
+  <details><summary>¿Necesito saber OpenSCAD?</summary><p>No para empezar: describes la pieza y la IA escribe el código.
+  Saber leerlo ayuda a pedir cambios precisos («sube <code>wall</code> a 2,4»), y el <a href="#editor">editor</a> te deja
+  tocarlo a mano.</p></details>
+  <details><summary>¿Necesito una suscripción de IA?</summary><p>Para los agentes de terminal, la que pida cada CLI
+  (Claude Code, Codex…); para el chat, la de su proveedor. Si no quieres pagar, usa el
+  <a href="#ia-ollama">chat con Ollama</a> en local, con menos precisión.</p></details>
+  <details><summary>¿Por qué la IA no puede editar un checkpoint?</summary><p>Porque el historial se reconstruye de los
+  archivos: si uno cambiara, el árbol dejaría de decir la verdad. Ver <a href="#checkpoints--inmutables">por qué son
+  inmutables</a>.</p></details>
+  <details><summary>¿Funciona con impresoras que no son Bambu Lab?</summary><p>El STL sirve para cualquier slicer y las
+  reglas FDM son las mismas. Lo específico de Bambu son los perfiles incluidos y el flujo de 3MF multicolor con AMS.</p></details>
+  <details><summary>Exporté a 3MF y Bambu Studio no muestra los colores</summary><p>Comprueba que cada pieza de primer
+  nivel tiene su <code>color()</code>, que no se solapan, y que tu OpenSCAD es una versión reciente que exporta color en
+  3MF (<a href="#requisitos--openscad">Requisitos</a>). Al importar, acepta cargarlo como un objeto con varias partes.</p></details>
+  <details><summary>¿Hay versión para Linux o Mac con Intel?</summary><p>No se publican binarios para esas plataformas.
+  Puedes intentar <a href="#instalacion--compilar">compilar desde el código</a>, sin soporte.</p></details>
+  <details><summary>¿Dónde están mis modelos si desinstalo la app?</summary><p>En las carpetas de tus workspaces, intactos.
+  Solo se pierde la configuración de <code>scadlab.db</code>; ver <a href="#config-datos">Dónde se guardan tus datos</a>.</p></details>
+  <details><summary>¿Ya puedo descargarlo?</summary><p>Todavía no: la primera versión (0.1.0) está implementada y
+  documentada, pero aún no se ha publicado. Mientras tanto puedes <a href="#instalacion--compilar">compilarla desde el
+  código</a>; ver <a href="#instalacion">Instalación</a>.</p></details>
+
+  <h2 id="faq--licencia">Licencia</h2>
+  <p>ScadLab es software libre bajo la <strong>licencia MIT</strong> (copyright 2026 rafael). Puedes usarlo, copiarlo,
+  modificarlo, distribuirlo y usarlo en el trabajo o con fines comerciales, siempre que conserves el aviso de
+  copyright y el texto de la licencia en las copias que distribuyas. El texto completo es el archivo
+  <a href="https://github.com/rafael180496/ScadLab/blob/main/LICENSE">LICENSE</a> del repositorio, y es el que vale
+  por encima de este resumen.</p>
+  <p>ScadLab <strong>no incluye</strong> OpenSCAD: lo ejecuta como un programa externo que instalas tú (OpenSCAD se
+  distribuye bajo GPL-2.0). Las librerías que agregues en la carpeta <code>lib/</code> de un workspace (BOSL2, MCAD,
+  NopSCADlib…) conservan su propia licencia, igual que los modelos que diseñes: son tuyos.</p>
+  <details><summary>¿Necesito una cuenta o una licencia?</summary><p>No. Es MIT, no hay registro ni servidor de la app. Los agentes de IA (Claude Code, Codex…) usan tu propia cuenta de cada uno.</p></details>
+  <details><summary>¿Cómo puedo apoyar el proyecto?</summary><p>Con un café en <a href="https://buymeacoffee.com/rhidalgo">Buy Me a Coffee</a> o una suscripción en <a href="https://www.patreon.com/16966547/join">Patreon</a>. También desde la app: pie de Configuración. Ver <a href="#introduccion--apoyar">Apoya el proyecto</a>.</p></details>
+</article>
+
+<div id="foot">
+  <div class="pagenav" id="pagenav"></div>
+  <p class="pagefoot"><strong>ScadLab</strong> — Go + Wails&nbsp;v2 + React. Documentación de la
+  <span class="ver">v0.1.0</span> (primera versión, aún sin publicar); esta página no hace ninguna petición externa.
+  <a href="https://github.com/rafael180496/ScadLab">Código</a> ·
+  <a href="https://github.com/rafael180496/ScadLab/releases">Descargas</a></p>
+</div>
+
+</main>
+
+<aside class="onpage" id="onpage" aria-label="En esta página">
+  <h6>En esta página</h6>
+  <ol id="onpage-list"></ol>
+</aside>
+
+</div>
+
+<script>
+window.HELP_TEXT = {
+  none: 'No hay nada que coincida.',
+  trail: 'Migas',
+  home: 'Ayuda de ScadLab',
+  prev: 'Anterior',
+  next: 'Siguiente',
+  copy: 'Copiar',
+  copied: 'Copiado',
+  copyFail: 'No se pudo copiar',
+  dev: 'En desarrollo'
+}
+</script>
+<script>
+(function () {
+  'use strict'
+  var L = window.HELP_TEXT
+
+  /* ---------------------------------------------------------------- Tema --
+     Respeta lo que elige el sistema y recuerda la decisión manual. El acceso a
+     localStorage puede fallar (modo privado, datos bloqueados). */
+  var KEY = 'scadlab-help-theme'
+  var saved = null
+  try { saved = localStorage.getItem(KEY) } catch (e) {}
+  var dark = saved ? saved === 'dark' : !window.matchMedia('(prefers-color-scheme: light)').matches
+  function paint() { document.documentElement.dataset.theme = dark ? 'dark' : 'light' }
+  paint()
+  document.getElementById('tgl').addEventListener('click', function () {
+    dark = !dark
+    try { localStorage.setItem(KEY, dark ? 'dark' : 'light') } catch (e) {}
+    paint()
+  })
+
+  /* ------------------------------------------------------------- Índice --
+     El orden de los temas se lee del propio índice: no hay segunda lista. */
+  var toc = document.getElementById('toc')
+  var links = [].slice.call(toc.querySelectorAll('a[href^="#"]'))
+  var topics = [].slice.call(document.querySelectorAll('article.topic'))
+  var byId = {}
+  topics.forEach(function (t) { byId[t.id] = t })
+
+  var order = links.map(function (a) {
+    var id = a.getAttribute('href').slice(1)
+    var grp = a.parentNode.parentNode.previousElementSibling
+    return {
+      id: id,
+      link: a,
+      title: (byId[id] && byId[id].getAttribute('data-title')) || a.textContent.trim(),
+      group: grp ? (grp.lastChild ? grp.lastChild.textContent : grp.textContent).trim() : ''
+    }
+  }).filter(function (e) { return byId[e.id] })
+
+  var index = {}
+  order.forEach(function (e, i) { index[e.id] = i })
+
+  // Punto «en desarrollo» en el índice, derivado del data-status del tema.
+  order.forEach(function (e) {
+    if (byId[e.id].getAttribute('data-status') === 'dev') {
+      var dot = document.createElement('span')
+      dot.className = 'devdot'
+      dot.title = L.dev
+      e.link.appendChild(dot)
+    }
+  })
+
+  ;[].slice.call(toc.querySelectorAll('.grp')).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btn.setAttribute('aria-expanded', btn.getAttribute('aria-expanded') === 'true' ? 'false' : 'true')
+    })
+  })
+
+  /* El texto de un encabezado sin su insignia («Disponible»). */
+  function headText(h) {
+    var c = h.cloneNode(true)
+    ;[].slice.call(c.querySelectorAll('.badge')).forEach(function (b) { b.parentNode.removeChild(b) })
+    return c.textContent.trim()
+  }
+
+  /* ------------------------------------------------------------ Buscador -- */
+  function fold(s) {
+    return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  }
+
+  var entries = order.map(function (e) {
+    var art = byId[e.id]
+    var heads = [].slice.call(art.querySelectorAll('h2')).map(function (h) {
+      return { id: h.id, text: headText(h), ftext: fold(headText(h)) }
+    })
+    return {
+      id: e.id, title: e.title, group: e.group, heads: heads,
+      ftitle: fold(e.title),
+      fhay: fold(e.title + ' ' + e.group + ' ' + art.textContent)
+    }
+  })
+
+  var q = document.getElementById('q')
+  var results = document.getElementById('results')
+  var sel = -1
+
+  function search(term) {
+    var f = fold(term.trim())
+    if (!f) return []
+    var words = f.split(/\s+/)
+    var out = []
+    entries.forEach(function (e) {
+      var all = words.every(function (w) { return e.fhay.indexOf(w) >= 0 })
+      if (!all) return
+      var titleHit = words.every(function (w) { return e.ftitle.indexOf(w) >= 0 })
+      var head = null
+      for (var i = 0; i < e.heads.length && !head; i++) {
+        var h = e.heads[i]
+        if (words.every(function (w) { return h.ftext.indexOf(w) >= 0 })) head = h
+      }
+      var deep = head && !titleHit
+      out.push({
+        hash: deep ? head.id : e.id,
+        title: deep ? head.text : e.title,
+        sub: deep ? e.group + ' › ' + e.title : e.group,
+        score: titleHit ? 0 : (head ? 1 : 2)
+      })
+    })
+    out.sort(function (a, b) { return a.score - b.score })
+    return out.slice(0, 12)
+  }
+
+  function esc(s) {
+    return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] })
+  }
+
+  function render(list) {
+    sel = -1
+    results.innerHTML = list.length
+      ? list.map(function (r) {
+          return '<button class="r" type="button" data-hash="' + r.hash + '"><b>' +
+            esc(r.title) + '</b><span>' + esc(r.sub) + '</span></button>'
+        }).join('')
+      : '<p class="none">' + esc(L.none) + '</p>'
+    results.classList.add('open')
+  }
+
+  function closeResults() { results.classList.remove('open'); sel = -1 }
+
+  q.addEventListener('input', function () {
+    if (!q.value.trim()) { closeResults(); return }
+    render(search(q.value))
+  })
+  q.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { q.value = ''; closeResults(); q.blur(); return }
+    var items = [].slice.call(results.querySelectorAll('.r'))
+    if (!items.length) return
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      items.forEach(function (el, i) { el.classList.toggle('sel', i === sel) })
+      items[sel].scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      var pick = items[sel >= 0 ? sel : 0]
+      if (pick) { location.hash = pick.getAttribute('data-hash'); closeResults(); q.blur() }
+    }
+  })
+  results.addEventListener('click', function (e) {
+    var btn = e.target.closest('.r')
+    if (!btn) return
+    location.hash = btn.getAttribute('data-hash')
+    closeResults()
+    q.blur()
+  })
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.search')) closeResults()
+  })
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+      e.preventDefault(); q.focus(); q.select()
+    }
+  })
+
+  /* ---------------------------------------------------------- Navegación --
+     Un tema por pantalla. El hash apunta al tema (`#checkpoints`) o a un
+     encabezado suyo (`#checkpoints--formato`): se resuelve cortando por `--`. */
+  var onpage = document.getElementById('onpage')
+  var onpageList = document.getElementById('onpage-list')
+  var pagenav = document.getElementById('pagenav')
+  var foot = document.getElementById('foot')
+  var current = null
+  var heads = []
+
+  function topicOf(hash) {
+    var h = (hash || '').replace(/^#/, '')
+    if (!h) return null
+    if (byId[h]) return { id: h, anchor: null }
+    var cut = h.indexOf('--')
+    if (cut > 0 && byId[h.slice(0, cut)]) return { id: h.slice(0, cut), anchor: h }
+    return null
+  }
+
+  function crumbs(entry) {
+    return '<nav class="crumbs" aria-label="' + L.trail + '"><a href="#introduccion">' + esc(L.home) + '</a>' +
+      '<span class="sep">/</span>' + esc(entry.group) +
+      '<span class="sep">/</span>' + esc(entry.title) + '</nav>'
+  }
+
+  /* ---------------------------------------------------------- Idioma --
+     Las dos páginas (inglés en la raíz, español en es/) tienen EXACTAMENTE los
+     mismos ids: el selector lleva el fragmento actual tal cual y se cambia de
+     idioma sin perder el tema que se estaba leyendo. */
+  var langsw = document.getElementById('langsw')
+  function syncLang() { langsw.href = langsw.getAttribute('data-base') + location.hash }
+
+  function show(hash) {
+    syncLang()
+    var t = topicOf(hash) || { id: order[0].id, anchor: null }
+    var i = index[t.id]
+    var entry = order[i]
+    var art = byId[t.id]
+
+    if (current !== t.id) {
+      topics.forEach(function (a) { a.classList.remove('active') })
+      art.classList.add('active')
+
+      var old = art.querySelector('.crumbs')
+      if (old) old.parentNode.removeChild(old)
+      art.insertAdjacentHTML('afterbegin', crumbs(entry))
+      art.appendChild(foot)
+
+      heads = [].slice.call(art.querySelectorAll('h2'))
+      onpageList.innerHTML = heads.map(function (h) {
+        return '<li><a href="#' + h.id + '">' + esc(headText(h)) + '</a></li>'
+      }).join('')
+      onpage.classList.toggle('empty', heads.length < 2)
+
+      var prev = order[i - 1], next = order[i + 1]
+      pagenav.innerHTML =
+        (prev ? '<a class="p" href="#' + prev.id + '"><small>' + esc(L.prev) + '</small><b>' + esc(prev.title) + '</b></a>' : '') +
+        (next ? '<a class="n" href="#' + next.id + '"><small>' + esc(L.next) + '</small><b>' + esc(next.title) + '</b></a>' : '')
+
+      links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + t.id) })
+      var grp = entry.link.parentNode.parentNode.previousElementSibling
+      if (grp) grp.setAttribute('aria-expanded', 'true')
+      entry.link.scrollIntoView({ block: 'nearest' })
+
+      document.title = entry.title + ' — ' + L.home
+      current = t.id
+    }
+
+    document.body.classList.remove('nav-open')
+    if (t.anchor) {
+      var el = document.getElementById(t.anchor)
+      if (el) { el.scrollIntoView(); spy(); return }
+    }
+    window.scrollTo(0, 0)
+    spy()
+  }
+
+  var bar = 56
+  var ticking = false
+  function spy() {
+    if (!heads.length) return
+    var limit = bar + 30
+    var active = 0
+    for (var i = 0; i < heads.length; i++) {
+      if (heads[i].getBoundingClientRect().top <= limit) active = i
+    }
+    var as = onpageList.querySelectorAll('a')
+    for (var j = 0; j < as.length; j++) as[j].classList.toggle('here', j === active)
+  }
+  window.addEventListener('scroll', function () {
+    if (ticking) return
+    ticking = true
+    requestAnimationFrame(function () { spy(); ticking = false })
+  }, { passive: true })
+
+  window.addEventListener('hashchange', function () { show(location.hash) })
+  show(location.hash)
+
+  /* ------------------------------------------------------- Copiar código -- */
+  ;[].slice.call(document.querySelectorAll('.codewrap')).forEach(function (w) {
+    var b = document.createElement('button')
+    b.className = 'copy'
+    b.type = 'button'
+    b.textContent = L.copy
+    b.addEventListener('click', function () {
+      var code = w.querySelector('code')
+      if (!navigator.clipboard) { b.textContent = L.copyFail; return }
+      navigator.clipboard.writeText(code ? code.innerText : '').then(function () {
+        b.textContent = L.copied
+        setTimeout(function () { b.textContent = L.copy }, 1400)
+      }).catch(function () { b.textContent = L.copyFail })
+    })
+    w.appendChild(b)
+  })
+
+  /* ------------------------------------------------------ Índice en móvil */
+  document.getElementById('menubtn').addEventListener('click', function () {
+    document.body.classList.toggle('nav-open')
+  })
+  document.getElementById('scrim').addEventListener('click', function () {
+    document.body.classList.remove('nav-open')
+  })
+})()
+</script>
+</body>
+</html>

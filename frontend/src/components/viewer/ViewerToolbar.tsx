@@ -43,6 +43,8 @@ export function ViewerToolbar({
     split,
     colors,
     colorIndex,
+    modelColors,
+    onModelColors,
     onView,
     onWireframe,
     onEdges,
@@ -59,6 +61,9 @@ export function ViewerToolbar({
     split: boolean
     colors: string[]
     colorIndex: number
+    /** true = colores del modelo, false = muestra; null = el modelo no define colores (no se ofrece). */
+    modelColors: boolean | null
+    onModelColors: (v: boolean) => void
     onView: (v: ViewName) => void
     onWireframe: () => void
     onEdges: () => void
@@ -113,7 +118,35 @@ export function ViewerToolbar({
                 <Maximize className="icon-ui-14" />
             </Toggle>
             <Sep />
-            <div className="flex shrink-0 items-center gap-1 px-0.5">
+            {modelColors === null ? null : (
+                <div className="flex shrink-0 items-center rounded bg-surface-2 p-px" role="group" aria-label={t.viewer.paintMode}>
+                    <button
+                        type="button"
+                        title={t.viewer.modelColorsHint}
+                        aria-pressed={modelColors}
+                        onClick={() => onModelColors(true)}
+                        className={cn(
+                            'inline-flex h-5 items-center rounded-[5px] px-1.5 font-mono text-ui-10-5 transition-colors duration-100',
+                            modelColors ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg',
+                        )}
+                    >
+                        {t.viewer.modelColors}
+                    </button>
+                    <button
+                        type="button"
+                        title={t.viewer.swatchColorsHint}
+                        aria-pressed={!modelColors}
+                        onClick={() => onModelColors(false)}
+                        className={cn(
+                            'inline-flex h-5 items-center rounded-[5px] px-1.5 font-mono text-ui-10-5 transition-colors duration-100',
+                            !modelColors ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg',
+                        )}
+                    >
+                        {t.viewer.swatchColors}
+                    </button>
+                </div>
+            )}
+            <div className={cn('flex shrink-0 items-center gap-1 px-0.5', modelColors ? 'opacity-50' : '')}>
                 {colors.map((c, i) => (
                     <button
                         key={i}

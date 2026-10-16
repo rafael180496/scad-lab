@@ -3,9 +3,10 @@ import {FolderOpen, FolderPlus, Plus, RefreshCw, Sparkles, Trash2} from 'lucide-
 import type {main, render, store} from '../../../wailsjs/go/models'
 import {IconButton} from '../ui/Button'
 import {CheckpointTree} from './CheckpointTree'
+import {TrashButton} from './TrashButton'
 import {Splitter} from '../layout/Splitter'
 import {LAYOUT_LIMITS} from '../../hooks/useLayout'
-import {useT} from '../../i18n'
+import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 
 // Dos rótulos de sección (32 px cada uno) y el filete que los separa.
@@ -25,6 +26,7 @@ function SectionTitle({children, actions}: {children: React.ReactNode; actions?:
 export function Sidebar({
     workspaces,
     view,
+    openIds,
     selected,
     onOpen,
     onNew,
@@ -35,6 +37,9 @@ export function Sidebar({
     onRemove,
     onSelect,
     onToggle,
+    onView,
+    onCompare,
+    shot,
     renders,
     running,
     width,
@@ -51,6 +56,8 @@ export function Sidebar({
     onWorkspacesReset: () => void
     workspaces: store.Workspace[]
     view: main.WorkspaceView | null
+    /** Workspaces abiertos como pestaña de proyecto. */
+    openIds: number[]
     selected: string | null
     onOpen: (id: number) => void
     onNew: () => void
@@ -61,6 +68,10 @@ export function Sidebar({
     onRemove: (w: store.Workspace) => void
     onSelect: (file: string) => void
     onToggle: (cp: store.Checkpoint) => void
+    onView: (file: string) => void
+    onCompare: (file: string) => void
+    /** Solo el banco de capturas: menú del árbol y papelera abiertos. */
+    shot?: {treeMenu?: string; trash?: boolean}
     renders: Record<string, render.Result>
     running: Record<string, boolean>
 }) {
@@ -109,12 +120,15 @@ export function Sidebar({
                         >
                             <button
                                 type="button"
-                                title={w.path}
+                                title={openIds.includes(w.id) ? fmt(t.projects.goToHint, {name: w.name}) : fmt(t.projects.openHint, {name: w.name, path: w.path})}
                                 onClick={() => onOpen(w.id)}
                                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
                             >
                                 <span
-                                    className={cn('size-1.5 shrink-0 rounded-full', w.id === current ? 'bg-accent' : 'bg-line-strong')}
+                                    className={cn(
+                                        'size-1.5 shrink-0 rounded-full',
+                                        w.id === current ? 'bg-accent' : openIds.includes(w.id) ? 'bg-muted' : 'bg-line-strong',
+                                    )}
                                 />
                                 <span className="truncate text-ui-12-5">{w.name}</span>
                             </button>
@@ -147,6 +161,7 @@ export function Sidebar({
                 actions={
                     view ? (
                         <>
+                            {view.missing ? null : <TrashButton workspaceId={view.workspace.id} checkpoints={view.checkpoints} shotOpen={shot?.trash} />}
                             <IconButton title={t.workspaces.syncSkills} onClick={onSyncSkills}>
                                 <Sparkles className="icon-ui-14" />
                             </IconButton>
@@ -168,12 +183,17 @@ export function Sidebar({
                         <p className="px-3 text-ui-12 text-warn">{t.workspaces.missing}</p>
                     ) : (
                         <CheckpointTree
+                            workspaceId={view.workspace.id}
                             checkpoints={view.checkpoints}
+                            activeParent={view.activeParent}
                             renders={renders}
                             running={running}
                             selected={selected}
                             onSelect={onSelect}
                             onToggle={onToggle}
+                            onView={onView}
+                            onCompare={onCompare}
+                            shotMenu={shot?.treeMenu}
                         />
                     )
                 ) : (

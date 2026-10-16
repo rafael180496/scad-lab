@@ -8,83 +8,110 @@ import {onEvent} from '../lib/events'
 export type RenderResults = Record<string, render.Result>
 export type RenderRunning = Record<string, boolean>
 
-// useRenders lleva el estado de render de los checkpoints del workspace
-// abierto. La fuente es el backend: los eventos render:started/finished
-// llegan también por los renders que dispara el watcher (un agente que creó
-// un .scad), no solo por los que pide la UI.
-export function useRenders(workspaceId: number | null) {
-    const [results, setResults] = useState<RenderResults>({})
-    const [running, setRunning] = useState<RenderRunning>({})
-    // loaded = ya llegó GetRenderState: antes de eso «sin resultado» no
-    // significa nada, y el auto-render volvería a renderizar lo que ya estaba.
-    // Se guarda el id para el que se cargó y no un booleano: en el render en
-    // que cambia el workspace, un `true` del anterior todavía estaría vigente.
-    const [loadedId, setLoadedId] = useState<number | null>(null)
-    const current = useRef(workspaceId)
-    current.current = workspaceId
+/** Estado de render de un proyecto abierto. */
+export type WsRender = {
+    results: RenderResults
+    running: RenderRunning
+    /** Ya llegó GetRenderState: antes de eso «sin resultado» no significa nada. */
+    loaded: boolean
+    /** Llegó al menos un evento de render de este proyecto (su estado local manda sobre la foto del backend). */
+    known: boolean
+}
+
+const EMPTY_RESULTS: RenderResults = {}
+const EMPTY_RUNNING: RenderRunning = {}
+
+// useRenders lleva el estado de render de los checkpoints de TODOS los proyectos
+// abiertos (S8): cambiar de pestaña no pierde nada y las pestañas de fondo
+// pueden mostrar que se está renderizando. La fuente es el backend: los eventos
+// render:started/finished llegan también por los renders que dispara el
+// watcher (un agente que creó un .scad), no solo por los que pide la UI, y
+// llevan el workspaceId.
+export function useRenders(openIds: number[], activeId: number | null) {
+    const [byWs, setByWs] = useState<Record<number, WsRender>>({})
+    // Proyectos para los que ya se pidió GetRenderState.
+    const requested = useRef(new Set<number>())
+    const idKey = openIds.join(',')
+
+    const patch = useCallback((id: number, fn: (cur: WsRender) => Partial<WsRender>) => {
+        setByWs((prev) => {
+            const cur = prev[id] ?? {results: EMPTY_RESULTS, running: EMPTY_RUNNING, loaded: false, known: false}
+            return {...prev, [id]: {...cur, ...fn(cur)}}
+        })
+    }, [])
 
     useEffect(() => {
-        setResults({})
-        setRunning({})
-        setLoadedId(null)
-        if (workspaceId == null) return
-        let alive = true
-        GetRenderState(workspaceId)
-            .then((state) => {
-                if (!alive) return
+        const open = new Set(openIds)
+        for (const id of [...requested.current]) if (!open.has(id)) requested.current.delete(id)
+        // Un proyecto cerrado suelta su estado: al reabrirlo se vuelve a leer.
+        setByWs((prev) => {
+            const gone = Object.keys(prev).filter((k) => !open.has(Number(k)))
+            if (!gone.length) return prev
+            const next = {...prev}
+            for (const k of gone) delete next[Number(k)]
+            return next
+        })
+        for (const id of openIds) {
+            if (requested.current.has(id)) continue
+            requested.current.add(id)
+            GetRenderState(id)
                 // Lo que ya llegó por eventos es más nuevo que la foto inicial.
-                setResults((prev) => ({...(state ?? {}), ...prev}))
-                setLoadedId(workspaceId)
-            })
-            .catch((e) => {
-                if (alive) {
-                    setLoadedId(workspaceId)
+                .then((state) => patch(id, (cur) => ({results: {...(state ?? {}), ...cur.results}, loaded: true})))
+                .catch((e) => {
+                    patch(id, () => ({loaded: true}))
                     toast.error(errorText(e))
-                }
-            })
-        return () => {
-            alive = false
+                })
         }
-    }, [workspaceId])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idKey, patch])
 
     useEffect(() => {
         const offStart = onEvent('render:started', (p) => {
-            if (p.workspaceId !== current.current) return
-            setRunning((prev) => ({...prev, [p.fileName]: true}))
+            patch(p.workspaceId, (cur) => ({running: {...cur.running, [p.fileName]: true}, known: true}))
         })
         const offEnd = onEvent('render:finished', (p) => {
-            if (p.workspaceId !== current.current) return
             const file = p.result.fileName
-            setRunning((prev) => {
-                const next = {...prev}
-                delete next[file]
-                return next
+            patch(p.workspaceId, (cur) => {
+                const running = {...cur.running}
+                delete running[file]
+                // Un cancelado no reemplaza el último resultado bueno: lo
+                // superó otro render, no dice nada nuevo sobre ese checkpoint.
+                return {
+                    running,
+                    known: true,
+                    results: p.result.status === 'cancelled' ? cur.results : {...cur.results, [file]: p.result},
+                }
             })
-            // Un cancelado no reemplaza el último resultado bueno: lo
-            // superó otro render, no dice nada nuevo sobre ese checkpoint.
-            if (p.result.status !== 'cancelled') setResults((prev) => ({...prev, [file]: p.result}))
         })
         return () => {
             offStart()
             offEnd()
         }
-    }, [])
+    }, [patch])
 
     const renderFile = useCallback(
         async (file: string) => {
-            if (workspaceId == null) return
+            if (activeId == null) return
             try {
-                await RenderCheckpoint(workspaceId, file)
+                await RenderCheckpoint(activeId, file)
             } catch (e) {
                 toast.error(errorText(e))
             }
         },
-        [workspaceId],
+        [activeId],
     )
 
     const cancel = useCallback(() => {
-        if (workspaceId != null) CancelRender(workspaceId).catch((e) => toast.error(errorText(e)))
-    }, [workspaceId])
+        if (activeId != null) CancelRender(activeId).catch((e) => toast.error(errorText(e)))
+    }, [activeId])
 
-    return {results, running, loaded: workspaceId != null && loadedId === workspaceId, render: renderFile, cancel}
+    const cur = activeId != null ? byWs[activeId] : undefined
+    return {
+        results: cur?.results ?? EMPTY_RESULTS,
+        running: cur?.running ?? EMPTY_RUNNING,
+        loaded: !!cur?.loaded,
+        render: renderFile,
+        cancel,
+        byWs,
+    }
 }

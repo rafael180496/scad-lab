@@ -150,3 +150,13 @@ Se embebe sola en el binario. Una skill del usuario se crea desde Configuración
   ni warnings (vistas previas revisadas a ojo).
 - Test: `TestRenderWithRealOpenSCAD` (`backend/render/real_test.go`) corre el
   motor contra el binario instalado; se salta si no hay OpenSCAD.
+
+## Renders simultáneos (S8)
+
+Con varios proyectos abiertos cada uno puede lanzar su render (auto-render,
+agentes de fondo). El motor deja correr como mucho **2 OpenSCAD a la vez** en
+todo el proceso (`maxConcurrentRenders`, canal `engine.slots`): Manifold ya usa
+todos los núcleos en un solo render, y más en paralelo solo reparten la CPU. Los
+que esperan turno siguen siendo cancelables y respetan su plazo. Test:
+`TestConcurrentRendersAreCapped`. El servidor MCP (`ScadLab --mcp`) es otro
+proceso con su propio tope.

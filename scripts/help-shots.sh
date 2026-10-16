@@ -32,12 +32,14 @@ new-workspace       newworkspace      1280  800
 settings-general    settings-general  1280  820
 settings-openscad   settings-openscad 1280  820
 settings-ai         settings-ai       1280  900
-settings-printing   settings-printing 1280  860
+settings-printing   settings-printing 1280  920
 settings-skills     settings-skills   1280  860
+settings-mcp        settings-mcp      1280  900
 settings-about      settings-about    1280  700
 app-main-light      main              1440  900
 terminal            terminal          1440  900
 terminal-sessions   terminal-sessions 1440  900
+terminal-mcp        terminal-mcp      1440  900
 chat                chat              1440  900
 chat-empty          chat-empty        1440  900
 chat-new            chat-new          1440  900
@@ -51,7 +53,19 @@ dock-custom         dock-custom       1440  900
 dock-view-menu      dock-view-menu    1440  900
 dock-layouts        dock-layouts      1440  900
 dock-hidden         dock-hidden       1440  900
+dock-minimized      dock-minimized    1440  900
+dock-move-menu      dock-move-menu    1440  900
 dock-150            dock-150          1440  900  150
+viewer-parts        viewer-parts      1440  900
+print-panel         print-panel       1440 1000
+plate-overflow      plate-overflow    1440  900
+tree-menu           tree-menu         1440  900
+tree-active-branch  tree-active-branch 1440 900
+trash               trash             1440  900
+diff-parent         diff-parent       1440  900
+projects-tabs       projects-tabs     1440  900
+projects-plus-menu  projects-plus-menu 1440 900
+projects-narrow     projects-narrow   1024  640
 '
 
 ONLY="${1:-}"

@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"scadlab/backend/i18n"
+	"scadlab/backend/parts"
 	"scadlab/backend/printers"
 	"scadlab/backend/render"
 	"scadlab/backend/threemf"
@@ -57,11 +58,9 @@ type Result struct {
 }
 
 // Renderer es la parte del motor de render que usa la exportación (la cumple
-// *render.Engine; la interfaz permite probar sin OpenSCAD).
-type Renderer interface {
-	Render(ctx context.Context, req render.Request, opts render.Options) (render.Result, error)
-	RenderArtifact(ctx context.Context, req render.Request, opts render.Options, ext, dir string) (render.Result, error)
-}
+// *render.Engine; la interfaz permite probar sin OpenSCAD). Es la misma que usa
+// backend/parts para repartir el modelo por color.
+type Renderer = parts.Renderer
 
 // Job es lo que hace falta para preparar una exportación.
 type Job struct {
@@ -95,24 +94,19 @@ func Prepare(ctx context.Context, job Job, format string) (*Prepared, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := renderFailure(res); err != nil {
+		if err := parts.RenderFailure(res); err != nil {
 			return nil, err
 		}
 		p.meshPath = res.MeshPath
 		return p, nil
 	case Format3MF, FormatSTLPerColor:
-		res, err := job.Engine.RenderArtifact(ctx, job.Req, job.Opts, render.ArtifactExt3MF, job.CacheDir)
+		// El render 3MF y el reparto por color son los mismos que usa el visor
+		// para las partes del modelo (backend/parts).
+		split, _, err := parts.Load3MF(ctx, job.Engine, job.Req, job.Opts, job.CacheDir)
 		if err != nil {
 			return nil, err
 		}
-		if err := renderFailure(res); err != nil {
-			return nil, err
-		}
-		mesh, err := threemf.ReadFile(res.MeshPath)
-		if err != nil {
-			return nil, err
-		}
-		p.parts = threemf.Split(mesh)
+		p.parts = split
 		p.warnings = warnings(p.parts, job.Printer)
 		return p, nil
 	}
@@ -219,41 +213,6 @@ func warnings(parts []threemf.Part, pr printers.Printer) []string {
 		}, pair[0].Hex(), pair[1].Hex()))
 	}
 	return out
-}
-
-// renderFailure convierte un render que no salió bien en un error legible, con
-// el primer ERROR de OpenSCAD y su línea si la tiene.
-func renderFailure(res render.Result) error {
-	switch res.Status {
-	case render.StatusOK:
-		return nil
-	case render.StatusMissing:
-		return i18n.New(i18n.Msg{
-			ES: "OpenSCAD no está instalado o no se encontró: instálalo o indica su ruta en Configuración → OpenSCAD para exportar",
-			EN: "OpenSCAD is not installed or was not found: install it or set its path in Settings → OpenSCAD to export",
-		})
-	case render.StatusCancelled:
-		return i18n.New(i18n.Msg{
-			ES: "la exportación se canceló porque se inició otra",
-			EN: "the export was cancelled because another one started",
-		})
-	}
-	for _, d := range res.Diagnostics {
-		if d.Severity != render.SeverityError {
-			continue
-		}
-		if d.Line > 0 {
-			return i18n.Errorf(i18n.Msg{
-				ES: "el checkpoint no se puede renderizar (línea %d): %s",
-				EN: "the checkpoint cannot be rendered (line %d): %s",
-			}, d.Line, d.Message)
-		}
-		return i18n.Errorf(i18n.Msg{
-			ES: "el checkpoint no se puede renderizar: %s",
-			EN: "the checkpoint cannot be rendered: %s",
-		}, d.Message)
-	}
-	return i18n.New(i18n.Msg{ES: "el checkpoint no se puede renderizar", EN: "the checkpoint cannot be rendered"})
 }
 
 // atomicWrite escribe en un temporal junto a dest y lo renombra: una

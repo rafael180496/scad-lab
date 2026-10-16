@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"scadlab/backend/checkpoint"
 	"scadlab/backend/i18n"
 	"scadlab/backend/osopen"
 	"scadlab/backend/store"
@@ -18,6 +19,10 @@ type WorkspaceView struct {
 	Workspace   store.Workspace    `json:"workspace"`
 	Checkpoints []store.Checkpoint `json:"checkpoints"`
 	Missing     bool               `json:"missing"` // la carpeta ya no existe
+	// ActiveParent es el checkpoint desde el que se crea el próximo (S3):
+	// <ws>/.scadlab/active-parent. "" = no hay uno explícito y rige la rama del
+	// más nuevo.
+	ActiveParent string `json:"activeParent"`
 }
 
 // ListWorkspaces devuelve los workspaces registrados.
@@ -46,6 +51,7 @@ func (a *App) CreateWorkspace(name, printerID string) (store.Workspace, error) {
 	if w.ID, err = a.store.InsertWorkspace(w); err != nil {
 		return store.Workspace{}, err
 	}
+	a.syncWorkspaceMCPQuiet(w)
 	if err := a.syncSkills(dir); err != nil {
 		return w, i18n.Errorf(i18n.Msg{ES: "workspace creado, pero falló la instalación de skills: %v", EN: "workspace created, but installing skills failed: %v"}, err)
 	}
@@ -63,16 +69,17 @@ func (a *App) ImportWorkspace(dir, printerID string) (store.Workspace, error) {
 		return store.Workspace{}, i18n.New(i18n.Msg{ES: "la carpeta no existe", EN: "the folder does not exist"})
 	}
 	name := filepath.Base(dir)
-	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err != nil {
-		if err := workspace.WriteRules(dir, name, printerID); err != nil {
-			return store.Workspace{}, err
-		}
+	// Las reglas van en su bloque marcado: un CLAUDE.md propio de la carpeta se
+	// conserva debajo (ver workspace.mergeRules).
+	if err := workspace.WriteRules(dir, name, printerID); err != nil {
+		return store.Workspace{}, err
 	}
 	w := store.Workspace{Name: name, Path: dir, PrinterID: printerID}
 	if w.ID, err = a.store.InsertWorkspace(w); err != nil {
 		return store.Workspace{}, err
 	}
 	_ = a.syncSkills(dir)
+	a.syncWorkspaceMCPQuiet(w)
 	return a.store.GetWorkspace(w.ID)
 }
 
@@ -100,79 +107,104 @@ func (a *App) UpdateWorkspace(w store.Workspace) error {
 }
 
 // RemoveWorkspace lo quita de la lista. La carpeta y sus .scad quedan en disco.
+// Si estaba abierto como proyecto, se cierra antes: su watcher, su render y sus
+// terminales de agente no pueden quedar vivos sobre un workspace que ya no está.
 func (a *App) RemoveWorkspace(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	a.watchMu.Lock()
-	if a.watchedID == id {
-		a.closeWatcherLocked()
-	}
-	a.watchMu.Unlock()
+	a.projects().forget(id)
 	return a.store.RemoveWorkspace(id)
 }
 
-// OpenWorkspace marca el workspace como abierto, reescanea sus .scad,
-// empieza a vigilar la carpeta (deja de vigilar la anterior) y devuelve el
-// índice.
-func (a *App) OpenWorkspace(id int64) (WorkspaceView, error) {
-	if err := a.ready(); err != nil {
-		return WorkspaceView{}, err
-	}
-	w, err := a.store.GetWorkspace(id)
-	if err != nil {
-		return WorkspaceView{}, err
-	}
-	_ = a.store.TouchWorkspace(id)
+// OpenWorkspace es el nombre de antes de S8: equivale a OpenProject (lo abre
+// como una pestaña más y lo activa). Se conserva por compatibilidad.
+func (a *App) OpenWorkspace(id int64) (WorkspaceView, error) { return a.OpenProject(id) }
+
+// openWorkspaceView hace el trabajo de abrir un workspace: lo marca como abierto,
+// reescanea sus .scad, empieza a vigilar la carpeta (sin soltar la de los otros
+// proyectos abiertos) y devuelve el índice. Lo llama projectService.open, que es
+// quien decide si hay lugar.
+func (a *App) openWorkspaceView(w store.Workspace) (WorkspaceView, error) {
+	_ = a.store.TouchWorkspace(w.ID)
 	v, err := a.rescan(w)
 	if err != nil {
 		return v, err
 	}
 	if v.Missing {
-		a.stopWatcher()
+		a.stopWatcherFor(w.ID)
 	} else {
 		a.watchWorkspace(w)
+		// La ruta del ejecutable puede haber cambiado (app movida o
+		// actualizada): se reescribe solo si difiere.
+		a.syncWorkspaceMCPQuiet(w)
+		// Las reglas de la app pueden haber cambiado desde que se creó el
+		// workspace (MCP, ramas, papelera): se actualiza solo su bloque.
+		if err := workspace.WriteRules(w.Path, w.Name, w.PrinterID); err != nil {
+			log.Printf("scadlab: actualizar reglas de %s: %v", w.Path, err)
+		}
 	}
 	return v, nil
 }
 
-// watchWorkspace reemplaza el watcher vigente por uno sobre w. Un fallo no
-// impide abrir el workspace: queda el botón de volver a leer.
+// watchWorkspace empieza a vigilar w si todavía no se hace. Hay un watcher por
+// proyecto abierto: los de fondo siguen avisando (checkpoints:changed) y
+// renderizando solos. Un fallo no impide abrir el workspace: queda el botón de
+// volver a leer.
 func (a *App) watchWorkspace(w store.Workspace) {
 	a.watchMu.Lock()
 	defer a.watchMu.Unlock()
-	if a.watcher != nil && a.watchedID == w.ID {
+	if a.watchers[w.ID] != nil {
 		return
 	}
-	a.closeWatcherLocked()
 	id := w.ID
 	wt, err := watch.Start(w.Path, func(added []string) { a.onWorkspaceChanged(id, added) })
 	if err != nil {
 		log.Printf("scadlab: vigilar %s: %v", w.Path, err)
 		return
 	}
-	a.watcher, a.watchedID = wt, id
+	if a.watchers == nil {
+		a.watchers = map[int64]*watch.Watcher{}
+	}
+	a.watchers[id] = wt
 }
 
-// stopWatcher deja de vigilar el workspace abierto (al cerrar la app o al
-// abrir uno cuya carpeta ya no existe).
-func (a *App) stopWatcher() {
+// isWatched dice si el workspace tiene un watcher vivo.
+func (a *App) isWatched(id int64) bool {
 	a.watchMu.Lock()
 	defer a.watchMu.Unlock()
-	a.closeWatcherLocked()
+	return a.watchers[id] != nil
 }
 
-func (a *App) closeWatcherLocked() {
-	if a.watcher != nil {
-		_ = a.watcher.Close()
-		a.watcher, a.watchedID = nil, 0
+// stopWatcherFor deja de vigilar un workspace (al cerrar su pestaña, al quitarlo
+// o al abrir uno cuya carpeta ya no existe). Close espera a la goroutine del
+// watcher: nada de esto corre con otros locks de la App tomados.
+func (a *App) stopWatcherFor(id int64) {
+	a.watchMu.Lock()
+	wt := a.watchers[id]
+	delete(a.watchers, id)
+	a.watchMu.Unlock()
+	if wt != nil {
+		_ = wt.Close()
+	}
+}
+
+// stopWatcher deja de vigilar TODOS los workspaces (al cerrar la app).
+func (a *App) stopWatcher() {
+	a.watchMu.Lock()
+	all := a.watchers
+	a.watchers = nil
+	a.watchMu.Unlock()
+	for _, wt := range all {
+		_ = wt.Close()
 	}
 }
 
 // onWorkspaceChanged corre (ya con debounce) cuando cambió algún .scad del
-// workspace vigilado: reescanea, avisa a la UI y, si apareció un checkpoint
-// nuevo y el auto-render está activo, lo renderiza. Así el agente que creó el
-// archivo desde la terminal recibe RENDER_ERRORS.md sin que nadie toque nada.
+// workspace vigilado: reescanea, avanza el padre activo, avisa a la UI y, si
+// apareció un checkpoint nuevo, lo vincula con el agente abierto y —con el
+// auto-render activo— lo renderiza. Así el agente que creó el archivo desde la
+// terminal recibe RENDER_ERRORS.md sin que nadie toque nada.
 func (a *App) onWorkspaceChanged(id int64, added []string) {
 	w, err := a.store.GetWorkspace(id)
 	if err != nil {
@@ -183,10 +215,16 @@ func (a *App) onWorkspaceChanged(id int64, added []string) {
 		log.Printf("scadlab: rescan de %s: %v", w.Path, err)
 		return
 	}
+	// Un checkpoint que acaba de volver de la papelera no es trabajo nuevo.
+	svc := a.checkpoints()
+	added = svc.dropRestored(id, added)
+	svc.advance(w, v.Checkpoints, sortedCopy(added))
+	v.ActiveParent = checkpoint.ActiveParent(w.Path)
 	a.emit(evCheckpointsChanged, v)
 	if len(added) == 0 {
 		return
 	}
+	svc.linkSession(w, added)
 	if s, err := a.store.GetSettings(); err != nil || !s.AutoRender {
 		return
 	}
@@ -233,6 +271,7 @@ func (a *App) rescan(w store.Workspace) (WorkspaceView, error) {
 		return v, err
 	}
 	v.Checkpoints, err = a.store.ListCheckpoints(w.ID)
+	v.ActiveParent = checkpoint.ActiveParent(w.Path)
 	return v, err
 }
 

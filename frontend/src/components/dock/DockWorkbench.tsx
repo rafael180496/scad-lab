@@ -1,22 +1,28 @@
 import {useCallback, useEffect, useMemo} from 'react'
-import {DockviewReact, type DockviewReadyEvent, type DockviewTheme, type GetTabContextMenuItemsParams} from 'dockview-react'
+import {DockviewReact, type DockviewReadyEvent, type DockviewTheme} from 'dockview-react'
 import 'dockview-react/dist/styles/dockview.css'
 import './dock.css'
-import {t as tNow, useT} from '../../i18n'
+import {useT} from '../../i18n'
 import {appearance} from '../../lib/appearance'
 import {isMac, isMod} from '../../lib/platform'
-import {DockTab, EmptyDock, GroupActions, Slot, tabActions} from './DockParts'
-import {attach, dockState, equalizeAtSash, exitZen, rescaleConstraints, shortcutPanel, toggleZen, type SavedLayout} from './dock'
+import {DockTab, EmptyDock, GroupActions, Slot} from './DockParts'
+import {
+    attach,
+    dockShot,
+    dockState,
+    equalizeAtSash,
+    exitZen,
+    rescaleConstraints,
+    restoreGroupAt,
+    shortcutPanel,
+    toggleMinimizeActive,
+    toggleZen,
+    type SavedLayout,
+} from './dock'
 import {PANEL_IDS, PANEL_SHORTCUT} from './panels'
 
 const THEME: DockviewTheme = {name: 'scadlab', className: 'dockview-theme-scadlab'}
 const COMPONENTS = {slot: Slot}
-
-// El menú contextual de la pestaña lo dibuja dockview; sus entradas salen de la
-// misma lista que el botón «…» del grupo.
-function tabMenu({panel}: GetTabContextMenuItemsParams) {
-    return tabActions(tNow(), panel).map((a) => (a.separator ? ('separator' as const) : {label: a.label, action: a.run, disabled: a.disabled}))
-}
 
 // Área de trabajo: el dock con los paneles. Reemplaza a la grilla fija con
 // divisores de S4 (Workbench). Ver claude/04-frontend.md, «Paneles acoplables».
@@ -33,15 +39,24 @@ export function DockWorkbench({initialLayout, savedLayouts}: {initialLayout: str
     const onReady = useCallback(({api}: DockviewReadyEvent) => attach(api, initialLayout, savedLayouts), [initialLayout, savedLayouts])
 
     // Atajos (en captura, antes que Monaco y xterm):
-    //   ⌘/Ctrl+Shift+1…6   mostrar y enfocar un panel (si ya está enfocado, lo oculta)
+    //   ⌘/Ctrl+Shift+1…7   mostrar y enfocar un panel (si ya está enfocado, lo oculta)
     //   ⌘/Ctrl+Shift+0     modo enfoque
-    //   ⌘⌥1…6 (macOS)      lo mismo que ⌘⇧N: ⌘⇧3/4/5 los reserva el sistema para capturas
+    //   ⌘/Ctrl+Shift+M     minimizar o restaurar el grupo con el foco. No choca con Monaco
+    //                      (su ⌃⇧M de macOS lleva Control, no ⌘; en Windows su acorde es Ctrl+M,
+    //                      sin Shift) ni con la terminal (Ctrl+M ya es Enter para el shell).
+    //   ⌘⌥1…7 (macOS)      lo mismo que ⌘⇧N: ⌘⇧3/4/5 los reserva el sistema para capturas
     // Esc sale del modo enfoque, salvo que el foco esté en el editor o la terminal,
     // donde Esc ya significa otra cosa.
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (!isMod(e)) return
-            const digit = /^(?:Digit|Numpad)([0-6])$/.exec(e.code)?.[1]
+            if (e.code === 'KeyM' && e.shiftKey && !e.altKey && !(isMac() && e.ctrlKey)) {
+                e.preventDefault()
+                e.stopPropagation()
+                toggleMinimizeActive()
+                return
+            }
+            const digit = /^(?:Digit|Numpad)([0-7])$/.exec(e.code)?.[1]
             if (!digit) return
             const n = Number(digit)
             const viaShift = e.shiftKey && !e.altKey
@@ -74,15 +89,40 @@ export function DockWorkbench({initialLayout, savedLayouts}: {initialLayout: str
         }
     }, [])
 
+    // Solo el banco de capturas: abre el menú «…» del grupo de un panel y, si se pide,
+    // entra en «Mover a…», con clics de verdad sobre los botones.
+    const ready = dockState.use((s) => s.ready)
+    useEffect(() => {
+        if (!ready || !dockShot.menu) return
+        const {panel, submenu} = dockShot.menu
+        let tries = 0
+        const timer = window.setInterval(() => {
+            tries++
+            const tab = document.querySelector<HTMLElement>(`[data-tab-panel-id="${panel}"]`)
+            const group = tab?.closest('.dv-groupview')
+            const button = group?.querySelector<HTMLElement>('[data-group-menu]')
+            if (button && !document.querySelector('[role="menu"]')) button.click()
+            const item = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]')].find((i) => i.dataset.menuId === submenu)
+            if (item) {
+                item.click()
+                window.clearInterval(timer)
+            } else if (tries > 80) window.clearInterval(timer)
+        }, 100)
+        return () => window.clearInterval(timer)
+    }, [ready])
+
     const components = useMemo(() => COMPONENTS, [])
     return (
         <main
             data-lock
             className="relative flex min-h-0 min-w-0 flex-1 overflow-clip p-2"
-            // Doble clic en un divisor: reparte el espacio entre sus dos lados.
+            // Doble clic en un divisor: reparte el espacio entre sus dos lados. En el
+            // vacío de la barra de un grupo minimizado: lo restaura.
             onDoubleClick={(e) => {
-                const sash = (e.target as Element).closest<HTMLElement>('.dv-sash')
+                const target = e.target as Element
+                const sash = target.closest<HTMLElement>('.dv-sash')
                 if (sash) equalizeAtSash(sash)
+                else if (target.closest('[data-min] .dv-tabs-and-actions-container')) restoreGroupAt(target)
             }}
         >
             <div className="relative min-h-0 min-w-0 flex-1 overflow-clip rounded-[var(--radius-panel)] border border-line bg-surface">
@@ -102,7 +142,6 @@ export function DockWorkbench({initialLayout, savedLayouts}: {initialLayout: str
                     proportionalLayout
                     floatingGroupBounds="boundedWithinViewport"
                     floatingGroupDragHandle="tabbar"
-                    getTabContextMenuItems={tabMenu}
                     onReady={onReady}
                 />
                 {zen ? (

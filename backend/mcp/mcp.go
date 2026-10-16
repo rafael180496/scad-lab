@@ -1,0 +1,98 @@
+// Package mcp es el servidor MCP de ScadLab (S6): `ScadLab --mcp --workspace
+// <dir>` expone a los agentes (Claude Code, opencode, Codex, Antigravity)
+// herramientas para renderizar, validar, medir y VER sus modelos en vez de
+// depender de la auto-iteración o de invocar OpenSCAD a mano.
+//
+// Es un proceso autónomo: no hay puente a la ventana. Lee la configuración de
+// scadlab.db (ruta de OpenSCAD, motor, impresora del workspace, materiales), usa
+// el mismo motor de render y la misma caché de mallas, y trabaja sobre los
+// archivos del workspace. Funciona con la app cerrada (un agente lanzado desde
+// una terminal externa).
+//
+// Spec: .claude/specs/s6-servidor-mcp.md. Notas: claude/13-mcp.md.
+package mcp
+
+import (
+	"context"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+)
+
+// ServerName es el nombre con el que se registra el servidor en la
+// configuración de cada agente (`mcpServers.scadlab`). Las herramientas no
+// llevan prefijo: el cliente ya las muestra como `scadlab/<herramienta>`.
+const ServerName = "scadlab"
+
+// Args son los argumentos con los que se lanza el servidor, tras el ejecutable
+// de ScadLab. workspaceDir tiene que ser absoluto. Lo comparten el modo `--mcp`
+// de main.go y quien escribe la configuración de los agentes (backend/mcpconf):
+// una sola definición de la línea de comandos.
+func Args(workspaceDir string) []string {
+	return []string{"--mcp", "--workspace", workspaceDir}
+}
+
+// Options configura el servidor.
+type Options struct {
+	// WorkspaceDir es la carpeta del proyecto. Vacío = el directorio actual
+	// (un agente lanzado dentro del workspace). Se resuelve a ruta absoluta y se
+	// siguen los enlaces simbólicos: ahí se compara cada ruta que se toca.
+	WorkspaceDir string
+	// Version es la de ScadLab, para serverInfo. Vacío = "dev".
+	Version string
+	// Log recibe los mensajes de diagnóstico. Vacío = stderr. **Nunca stdout**:
+	// ahí solo viaja JSON-RPC.
+	Log io.Writer
+}
+
+// Serve atiende a un cliente MCP: lee peticiones JSON-RPC (una por línea) de in
+// y escribe las respuestas en out hasta que in se cierra o ctx se cancela. out
+// solo recibe JSON-RPC.
+func Serve(ctx context.Context, in io.Reader, out io.Writer, opts Options) error {
+	logw := opts.Log
+	if logw == nil {
+		logw = os.Stderr
+	}
+	lg := log.New(logw, "scadlab-mcp: ", log.LstdFlags)
+
+	e, err := newEnv(opts, lg)
+	if err != nil {
+		return err
+	}
+	defer e.close()
+
+	version := opts.Version
+	if version == "" {
+		version = "dev"
+	}
+	s := newServer(ServerName, version, serverInstructions, e.tools(), lg)
+	return s.serve(ctx, in, out)
+}
+
+// serverInstructions las muestran algunos clientes (Claude Code) junto al
+// servidor: el flujo recomendado en pocas líneas.
+const serverInstructions = "ScadLab OpenSCAD tools for the current workspace. " +
+	"Typical loop: printer_info (volume, AMS slots) -> create_checkpoint (new immutable NNN-slug.scad; never edit an existing one) " +
+	"-> render (errors with line numbers) -> preview (look at the part) -> measure (size, volume, weight, fits the plate?) " +
+	"-> fix in a NEW checkpoint with parent=<previous> (omit parent to continue from the active parent shown by list_checkpoints). Every top-level part needs color(). Use lint/format while writing code."
+
+// resolveWorkspace deja WorkspaceDir como ruta absoluta sin enlaces simbólicos.
+func resolveWorkspace(dir string) (string, error) {
+	if dir == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		dir = wd
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", err
+	}
+	return real, nil
+}

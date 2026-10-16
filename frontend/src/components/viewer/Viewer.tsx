@@ -6,12 +6,17 @@ import {fmt, useT} from '../../i18n'
 import {toastSaved} from '../../lib/saved'
 import {setViewerCapture} from '../../lib/viewerBridge'
 import {errorText} from '../../lib/errors'
-import {cachedMesh, loadMesh, meshKey} from '../../lib/mesh'
+import {cachedMesh, cachedParts, loadMesh, loadParts, meshKey} from '../../lib/mesh'
+import {ensureMaterials} from '../../lib/materials'
+import {printStore, selectPart} from '../../lib/printSession'
+import {partColor} from '../../lib/printTypes'
 import {themeColors, useThemeColors} from '../../hooks/useThemeColors'
 import {toast} from '../ui/Toast'
-import {ViewPane, type BedVolume, type PaneHandle, type PaneKeyCommand} from './ViewPane'
+import {ViewPane, type BedVolume, type PaneHandle, type PaneKeyCommand, type PartsScene} from './ViewPane'
 import {ViewerToolbar} from './ViewerToolbar'
 import {Dimensions} from './Dimensions'
+import {PartCard} from './PartCard'
+import {PlateAlert} from './PlateAlert'
 import type {ViewName} from './camera'
 
 // Estado inicial del visor; en la app real no se pasa (lo usa el banco de
@@ -24,6 +29,10 @@ export type ViewerShot = {
     split?: boolean
     splitView?: ViewName
     color?: number
+    /** Parte seleccionada al abrir (índice). */
+    select?: number
+    /** false = pintar con la muestra aunque el modelo traiga colores. */
+    modelColors?: boolean
 }
 
 type Props = {
@@ -56,6 +65,14 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
     const [active, setActive] = useState<0 | 1>(0)
     const [colorIndex, setColorIndex] = useState(initial?.color ?? 0)
     const [colors, setColors] = useState(swatches)
+    const [modelColors, setModelColors] = useState(initial?.modelColors ?? true)
+    // Modelo por partes (S7): lo pide usePrintSession (PanelHost) y llega por el
+    // store; acá se bajan las mallas de cada parte.
+    const model = printStore.use((s) => s.model)
+    const modelMesh = printStore.use((s) => s.modelMesh)
+    const selected = printStore.use((s) => s.selected)
+    const plate = printStore.use((s) => s.plate)
+    const [partGeoms, setPartGeoms] = useState<{key: string; geoms: BufferGeometry[]} | null>(null)
     const pane0 = useRef<PaneHandle | null>(null)
     const pane1 = useRef<PaneHandle | null>(null)
     const panes = [pane0, pane1]
@@ -89,12 +106,45 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
         }
     }, [meshPath])
 
+    // Las partes de cada color. La malla entera sigue a la vista hasta que llegan.
+    useEffect(() => {
+        if (!model || model.parts.length === 0) return
+        void ensureMaterials()
+        const hit = cachedParts(model.key)
+        if (hit) {
+            setPartGeoms({key: model.key, geoms: hit})
+            return
+        }
+        let alive = true
+        loadParts(
+            model.key,
+            model.parts.map((p) => p.url),
+        )
+            .then((geoms) => alive && setPartGeoms({key: model.key, geoms}))
+            .catch(() => {})
+        return () => {
+            alive = false
+        }
+    }, [model])
+
+    // Banco de capturas: arranca con una parte seleccionada.
+    const shotSelect = initial?.select
+    useEffect(() => {
+        if (shotSelect !== undefined && model) selectPart(shotSelect)
+    }, [shotSelect, model])
+
+    // Solo se dibujan las partes si son las de la malla que está a la vista: tras
+    // cambiar de checkpoint, el modelo viejo no se pinta sobre la pieza nueva.
+    const partsReady =
+        !!model && !!shownPath && model.parts.length > 0 && modelMesh === meshKey(shownPath) && partGeoms?.key === model.key && partGeoms.geoms.length === model.parts.length
+    const hasColors = partsReady && model.parts.some((p) => partColor(p))
     const activePane = split ? active : 0
     const pane = () => panes[activePane].current
 
     const command = useCallback(
         (c: PaneKeyCommand, which: 0 | 1) => {
-            if (c === 'wireframe') setWireframe((v) => !v)
+            if (c === 'deselect') selectPart(null)
+            else if (c === 'wireframe') setWireframe((v) => !v)
             else if (c === 'edges') setEdges((v) => !v)
             else setOrtho((o) => (which === 0 ? [!o[0], o[1]] : [o[0], !o[1]]))
         },
@@ -152,8 +202,20 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
     }
 
     const color = colors[colorIndex] ?? colors[0] ?? theme.accent
+    const parts: PartsScene | undefined = partsReady
+        ? {
+              geoms: partGeoms.geoms,
+              colors: model.parts.map(partColor),
+              modelColors: modelColors && hasColors,
+              selected: selected !== null && model.parts.some((p) => p.index === selected) ? model.parts.findIndex((p) => p.index === selected) : null,
+              onSelect: (i) => selectPart(i === null ? null : (model.parts[i]?.index ?? null)),
+          }
+        : undefined
+    const selectedPart = parts && parts.selected !== null ? model?.parts[parts.selected] : undefined
     const scene = (i: 0 | 1) => ({
         geometry,
+        parts,
+        overflow: plate ? !plate.fits : false,
         bed,
         color,
         wireframe,
@@ -174,12 +236,18 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
                 split={split}
                 colors={colors}
                 colorIndex={colorIndex}
+                modelColors={hasColors ? modelColors : null}
+                onModelColors={setModelColors}
                 onView={(v) => pane()?.setView(v)}
                 onWireframe={() => command('wireframe', activePane)}
                 onEdges={() => command('edges', activePane)}
                 onOrtho={() => command('ortho', activePane)}
                 onFit={() => pane()?.fit()}
-                onColor={setColorIndex}
+                onColor={(i) => {
+                    setColorIndex(i)
+                    // Elegir una muestra es pedir ese color: pasa a pintar con ella.
+                    setModelColors(false)
+                }}
                 onEditColor={editColor}
                 onCapture={() => void captureFromToolbar()}
                 onSplit={() => {
@@ -196,7 +264,17 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
                     onCommand={(c) => command(c, 0)}
                     className="flex-1"
                 >
-                    {overlay ? <div className="absolute top-2 left-2 z-10 max-w-[70%]">{overlay}</div> : null}
+                    {overlay || (plate && !plate.fits) ? (
+                        <div className="absolute top-2 left-2 z-10 flex max-w-[70%] flex-col items-start gap-1.5">
+                            {plate && !plate.fits ? <PlateAlert plate={plate} /> : null}
+                            {overlay}
+                        </div>
+                    ) : null}
+                    {selectedPart ? (
+                        <div className="absolute right-2 bottom-2 z-10 max-h-[calc(100%-1rem)] max-w-[calc(50%-0.75rem)] overflow-auto">
+                            <PartCard index={selectedPart.index} color={partColor(selectedPart)} />
+                        </div>
+                    ) : null}
                     {geometry && shownPath ? (
                         <div className="absolute bottom-2 left-2 z-10 max-h-[calc(100%-1rem)] max-w-[calc(100%-1rem)] overflow-auto">
                             <Dimensions meshPath={shownPath} geometry={geometry} collapsed={dimsCollapsed} onCollapsed={onDimsCollapsed} />

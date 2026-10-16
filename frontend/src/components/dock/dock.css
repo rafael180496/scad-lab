@@ -10,9 +10,11 @@
     --dv-tabs-and-actions-container-font-size: calc(13px * var(--ui-font-scale));
     --dv-tabs-and-actions-container-height: calc(35px * var(--ui-font-scale));
     --dv-tab-font-size: calc(13px * var(--ui-font-scale));
-    --dv-drag-over-background-color: color-mix(in srgb, var(--c-accent) 18%, transparent);
-    --dv-drag-over-border-color: transparent;
-    --dv-drag-over-border: none;
+    /* Indicador de destino al arrastrar una pestaña: relleno de acento y un borde
+       sólido, para que se distinga también sobre el visor (que es naranja). */
+    --dv-drag-over-background-color: color-mix(in srgb, var(--c-accent) 24%, transparent);
+    --dv-drag-over-border-color: var(--c-accent);
+    --dv-drag-over-border: 2px solid var(--c-accent);
     --dv-edge-dock-indicator-color: var(--c-accent);
     --dv-tabs-container-scrollbar-color: var(--c-line-strong);
     --dv-icon-hover-background-color: color-mix(in srgb, var(--c-fg) 12%, transparent);
@@ -204,6 +206,101 @@
 }
 .scadlab-group-action[aria-pressed='true'] {
     color: var(--c-accent);
+}
+
+/* Botón no disponible (p. ej. minimizar un grupo que no tiene vecino que lo reemplace). */
+.scadlab-group-action:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.scadlab-group-action:disabled:hover {
+    background: transparent;
+    color: var(--c-muted);
+}
+
+/* ── Grupos minimizados ─────────────────────────────────────────────────── */
+/* `data-min` lo pone dock.ts en el .dv-groupview: «bar» = apilado, solo queda su
+   barra de pestañas; «strip» = lado a lado, una franja angosta con los íconos de
+   sus pestañas en vertical. El contenido sigue montado (nada se destruye), solo
+   sin espacio: el contenedor se oculta para que no asome un pedazo en la franja. */
+.dockview-theme-scadlab .dv-groupview[data-min] > .dv-content-container {
+    display: none;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] > .dv-tabs-and-actions-container {
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    box-shadow: none;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-pre-actions-container,
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-left-actions-container {
+    display: none;
+}
+/* El hueco arrastrable de la barra (el vacío) se vuelve el resto de la franja. */
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-void-container {
+    flex: 1 1 0;
+    min-height: 0;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-right-actions-container {
+    order: -1;
+    justify-content: center;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-group-actions {
+    height: calc(30px * var(--ui-font-scale));
+    padding: 0;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-scrollable {
+    flex: 0 0 auto;
+    width: 100%;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-scrollable > .dv-tabs-container {
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-tab {
+    width: 100%;
+    max-width: none;
+    height: calc(36px * var(--ui-font-scale));
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab {
+    justify-content: center;
+    padding: 0;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab-title,
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab-badge {
+    display: none;
+}
+/* La pestaña activa de la franja se marca con una línea a un costado, no arriba. */
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .dv-tab.dv-active-tab,
+.dockview-theme-scadlab .dv-groupview[data-min='strip'].dv-active-group .dv-tab.dv-active-tab {
+    box-shadow: inset 2px 0 0 var(--c-line-strong);
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'].dv-active-group .dv-tab.dv-active-tab {
+    box-shadow: inset 2px 0 0 var(--c-accent);
+}
+/* El punto de estado (agente vivo, cambios sin guardar) sigue a la vista como
+   una marca en la esquina del ícono: es justo lo que interesa de un panel
+   minimizado. La × no cabe ni hace falta (un clic restaura el grupo). */
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab {
+    position: relative;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab-end {
+    display: flex;
+    position: absolute;
+    top: calc(6px * var(--ui-font-scale));
+    right: calc(6px * var(--ui-font-scale));
+    width: calc(8px * var(--ui-font-scale));
+    height: calc(8px * var(--ui-font-scale));
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab-close {
+    display: none !important;
+}
+.dockview-theme-scadlab .dv-groupview[data-min='strip'] .scadlab-tab[data-dot]:hover .scadlab-tab-dot {
+    display: block;
 }
 
 /* ── Divisores: línea de 1 px, zona de agarre de 6 px ──────────────────── */

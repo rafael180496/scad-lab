@@ -1,11 +1,12 @@
 import {lazy, Suspense, useEffect, useState} from 'react'
-import {History, Play, Plus, Repeat, Settings, SquareTerminal, X} from 'lucide-react'
+import {History, Play, Plug, Plus, Repeat, Settings, SquareTerminal, X} from 'lucide-react'
 import type {main} from '../../../wailsjs/go/models'
 import type {StartMode, TermSlot} from '../../hooks/useTerminals'
 import {Button, IconButton} from '../ui/Button'
 import {Select} from '../ui/Field'
 import {confirmDialog} from '../ui/Dialog'
 import {useNarrow} from '../../hooks/useNarrow'
+import {mcpHealth} from '../../hooks/useMcpStatus'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {SessionsMenu} from './SessionsMenu'
@@ -13,7 +14,7 @@ import {terminalShot} from './shot'
 
 // Ancho de la barra (a interfaz 100 %) por debajo del cual los botones pasan a
 // solo ícono con su `title` y el interruptor de auto-iteración se abrevia.
-const TOOLBAR_COMPACT_W = 760
+const TOOLBAR_COMPACT_W = 860
 
 // xterm.js (~300 kB) entra con lazy(): la app abre sin cargarlo y solo se baja
 // cuando hay una terminal que mostrar.
@@ -26,23 +27,30 @@ export function AgentTerminalTab({
     visible,
     workspaceId,
     term,
+    allTerms,
     busy,
     agents,
     defaultAgent,
     autoIterate,
     onAutoIterate,
+    mcp,
     onStart,
     onClose,
     onOpenSettings,
 }: {
     visible: boolean
     workspaceId: number | null
+    /** La terminal de este proyecto en esta pestaña «Agente» (la que se ve). */
     term: TermSlot | undefined
+    /** Las de todos los proyectos abiertos en esta pestaña: las de fondo siguen montadas, ocultas. */
+    allTerms: TermSlot[]
     busy: boolean
     agents: main.AgentChoice[]
     defaultAgent: string
     autoIterate: boolean
     onAutoIterate: (v: boolean) => void
+    /** Estado del servidor MCP en este workspace (null = sin workspace o aún sin leer). */
+    mcp: main.MCPStatus | null
     onStart: (agentId: string, mode: StartMode, sessionId?: string) => void
     onClose: (id: string) => void
     onOpenSettings: () => void
@@ -117,6 +125,7 @@ export function AgentTerminalTab({
                     </Button>
                 </span>
                 <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    <McpBadge status={mcp} onClick={onOpenSettings} />
                     <button
                         type="button"
                         role="switch"
@@ -141,11 +150,17 @@ export function AgentTerminalTab({
             </div>
 
             <div className="relative min-h-0 flex-1 bg-surface">
+                {/* Cada proyecto abierto conserva su xterm (pantalla y desplazamiento) mientras
+                    está de fondo: cambiar de pestaña de proyecto solo cambia cuál se ve. */}
+                {allTerms.map((tm) => (
+                    <div key={tm.id} className={cn('absolute inset-0', tm.id !== term?.id && 'hidden')}>
+                        <Suspense fallback={<p className="px-4 py-3 text-ui-12 text-faint">{t.app.loading}</p>}>
+                            <TerminalView termId={tm.id} visible={visible && tm.id === term?.id} />
+                        </Suspense>
+                    </div>
+                ))}
                 {term ? (
                     <>
-                        <Suspense fallback={<p className="px-4 py-3 text-ui-12 text-faint">{t.app.loading}</p>}>
-                            <TerminalView key={term.id} termId={term.id} visible={visible} />
-                        </Suspense>
                         {term.ended != null ? (
                             <p className="selectable absolute inset-x-2 bottom-2 rounded-md border border-line bg-raised px-3 py-1.5 text-ui-12 text-muted shadow">
                                 {fmt(t.terminal.endedBanner, {code: term.ended})}
@@ -166,6 +181,33 @@ export function AgentTerminalTab({
                 ) : null}
             </div>
         </div>
+    )
+}
+
+// «MCP ✓»: el servidor MCP de ScadLab está configurado en este workspace. Un
+// clic lleva a Configuración → IA, donde se ve el detalle de cada archivo.
+function McpBadge({status, onClick}: {status: main.MCPStatus | null; onClick: () => void}) {
+    const t = useT().mcp
+    if (!status) return null
+    const h = mcpHealth(status)
+    const label = h.kind === 'ok' ? t.badgeOn : h.kind === 'warn' ? t.badgeWarn : t.badgeOff
+    const hint = h.kind === 'ok' ? t.badgeOnHint : h.kind === 'warn' ? fmt(t.badgeWarnHint, {n: h.problems}) : t.badgeOffHint
+    return (
+        <button
+            type="button"
+            title={hint}
+            aria-label={hint}
+            onClick={onClick}
+            className={cn(
+                'no-drag inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-ui-11-5 font-medium whitespace-nowrap transition-colors duration-150',
+                h.kind === 'ok' && 'border-ok/40 text-ok hover:bg-surface-2',
+                h.kind === 'warn' && 'border-warn/50 text-warn hover:bg-surface-2',
+                h.kind === 'off' && 'border-line text-faint hover:text-muted',
+            )}
+        >
+            <Plug className="icon-ui-14" />
+            {label}
+        </button>
     )
 }
 

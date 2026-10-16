@@ -31,6 +31,15 @@ disco: NNN-slug.scad  ──Scan()──▶  CheckpointFile{file, parent, desc}
   nodo en la raíz marcado como huérfano, no lo esconde.
 - Perder la base no pierde nada: el rescan reconstruye el índice.
 
+## Varios proyectos abiertos (S8)
+
+Una ventana, hasta 4 workspaces abiertos como pestañas (`app_projects.go`). Lo abierto y
+el activo se persisten en settings; los de fondo siguen vivos (un watcher por proyecto,
+auto-render, terminales de agente y auto-iteración), y el límite de 2 terminales de
+agente es por proyecto. Cada agente lanzado desde ScadLab recibe las carpetas de los
+otros proyectos abiertos (`--add-dir`) para leer y reutilizar piezas; escribir, solo en
+el suyo. Detalle y contrato: [09-agents-ai.md](09-agents-ai.md).
+
 ## Skills
 
 ```

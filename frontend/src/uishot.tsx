@@ -22,11 +22,13 @@ import {createRoot} from 'react-dom/client'
 import './index.css'
 import App, {type ShotOptions} from './App'
 import type {SettingsTab} from './components/settings/SettingsDialog'
-import {loadMesh} from './lib/mesh'
+import {loadMesh, loadParts} from './lib/mesh'
 import {loadCodeEditor} from './components/editor/lazy'
 import {setLanguage} from './i18n'
 import {terminalShot} from './components/terminal/shot'
 import {shotTools} from './components/dock/dock'
+import {printStore, selectPart} from './lib/printSession'
+import {editorCommands, editorSession} from './lib/editorSession'
 import {installScrollGuard} from './lib/scrollGuard'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
@@ -68,6 +70,11 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     // escribiendo un checkpoint, y el menú para retomar una conversación.
     terminal: {scenario: 'ok', shot: {panel: 'agent-1', dock: 'tall'}},
     'terminal-sessions': {scenario: 'ok', shot: {panel: 'agent-1', dock: 'tall'}},
+    // Servidor MCP (S6, bloque 6.B): el agente usando las herramientas de ScadLab
+    // y el indicador «MCP ✓» de la barra; y Configuración → IA con el estado de
+    // los tres archivos del workspace.
+    'terminal-mcp': {scenario: 'ok', shot: {panel: 'agent-1', dock: 'tall'}},
+    'settings-mcp': {scenario: 'ok', shot: {settingsTab: 'ai'}},
     // Chat con modelos (S5, bloque 5.B): una conversación cuya respuesta trae un
     // bloque OpenSCAD con «Guardar como checkpoint», y el aviso sin proveedores.
     chat: {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
@@ -86,7 +93,30 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'dock-view-menu': {scenario: 'ok', shot: {viewMenu: 'menu'}},
     'dock-layouts': {scenario: 'ok', shot: {viewMenu: 'layouts'}},
     'dock-hidden': {scenario: 'ok', shot: {dock: 'hidden'}},
+    // Minimizar y «Mover a…»: el código a una franja a la derecha y los agentes a su
+    // barra abajo; y el menú «…» del código con «Mover a…» abierto.
+    'dock-minimized': {scenario: 'ok', shot: {dock: 'minimized', panel: 'viewport'}},
+    'dock-move-menu': {scenario: 'ok', shot: {dockMenu: {panel: 'source', submenu: 'move'}}},
     'dock-150': {scenario: 'ok', shot: {panel: 'agent-1'}},
+    // Medición e impresión (S7): el visor con las partes de un modelo bicolor y una
+    // seleccionada (con su tarjeta), el panel Impresión con la tabla por parte, y una
+    // pieza que no cabe en la placa de una A1 mini (contorno rojo y aviso).
+    'viewer-parts': {scenario: 'ok', shot: {dock: 'hidden', viewer: {view: 'iso', select: 1}}},
+    'print-panel': {scenario: 'ok', shot: {panel: 'print', dock: 'print', viewer: {view: 'iso', select: 1}}},
+    'plate-overflow': {scenario: 'ok', shot: {viewer: {view: 'iso'}}},
+    // Checkpoints avanzados (S3): el menú contextual de un nodo, la rama activa
+    // marcada en el árbol (con el padre activo en 003 y la selección en 006), la
+    // papelera y la comparación de un checkpoint con su padre.
+    'tree-menu': {scenario: 'ok', shot: {treeMenu: '003-vent-slots.scad'}},
+    'tree-active-branch': {scenario: 'ok'},
+    trash: {scenario: 'ok', shot: {trash: true}},
+    'diff-parent': {scenario: 'ok', shot: {select: '006-two-color-logo.scad', compare: '006-two-color-logo.scad', panel: 'source', dock: 'diff'}},
+    // Pestañas de proyecto (S8): tres proyectos abiertos (uno con un render en curso y
+    // cambios sin guardar, otro con un agente vivo y su último render fallido), el menú «+»
+    // y la barra con poco ancho (se captura a 1024 px).
+    'projects-tabs': {scenario: 'ok', shot: {unsavedTabs: [2]}},
+    'projects-plus-menu': {scenario: 'ok', shot: {projectsMenu: 'plus', unsavedTabs: [2]}},
+    'projects-narrow': {scenario: 'ok', shot: {unsavedTabs: [2]}},
     empty: {scenario: 'empty'},
     newworkspace: {scenario: 'empty', shot: {newWorkspace: true}},
 }
@@ -99,7 +129,7 @@ for (const tab of ['general', 'openscad', 'ai', 'printing', 'skills', 'about'] a
     VIEWS[`settings-${tab}`] = {scenario: 'ok', shot: {settingsTab: tab}}
 }
 const cfg = VIEWS[view] ?? VIEWS.main
-const isTerminalView = view === 'terminal' || view === 'terminal-sessions' || view === 'appearance-150' || view === 'small' || view === 'dock-150'
+const isTerminalView = view === 'terminal' || view === 'terminal-sessions' || view === 'terminal-mcp' || view === 'appearance-150' || view === 'small' || view === 'dock-150'
 if (view === 'terminal-sessions') terminalShot.openSessions = true
 
 // Bus de eventos mínimo en lugar del runtime de Wails.
@@ -117,6 +147,8 @@ document.head.appendChild(noMotion)
 const P = <T,>(v: T) => Promise.resolve(v)
 const home = platform === 'windows' ? 'C:\\Users\\maker\\Documents\\ScadLab' : '/Users/maker/Documents/ScadLab'
 
+// Pestañas de proyecto (S8): tres proyectos abiertos y un cuarto workspace sin abrir.
+const projectsShot = view.startsWith('projects-')
 const workspaces =
     cfg.scenario === 'empty'
         ? []
@@ -124,11 +156,30 @@ const workspaces =
               {id: 1, name: es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/rpi5-case`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
               {id: 2, name: es ? 'Soporte de auriculares' : 'Headphone stand', path: `${home}/headphone-stand`, printerId: 'bambu-a1', description: '', lastOpened: 0, createdAt: 0},
               {id: 3, name: es ? 'Organizador Gridfinity' : 'Gridfinity organizer', path: `${home}/gridfinity`, printerId: 'bambu-p1s', description: '', lastOpened: 0, createdAt: 0},
+              ...(projectsShot
+                  ? [{id: 4, name: es ? 'Llavero personalizable' : 'Custom keychain', path: `${home}/keychain`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0}]
+                  : []),
           ]
 
+// Vínculos y rótulos del árbol (S3): solo en las vistas de checkpoints avanzados,
+// para que el resto de las capturas conserve el árbol de siempre.
+const treeShot = ['tree-menu', 'tree-active-branch', 'trash', 'diff-parent'].includes(view)
+const SESSION = 'b6f1c0de-2d3a-4c55-9e0a-7a1d5c3e8f21'
+const treeExtra: Record<string, {label?: string; agentId?: string; sessionId?: string; chatId?: number}> = treeShot
+    ? {
+          '002-sliding-lid.scad': {label: es ? 'Tapa deslizante' : 'Sliding lid', agentId: 'claude', sessionId: SESSION},
+          '003-vent-slots.scad': {agentId: 'claude', sessionId: SESSION},
+          '004-usb-c-cutout.scad': {agentId: 'claude', sessionId: SESSION},
+          '005-snap-lid.scad': {label: es ? 'Tapa a presión' : 'Snap-fit lid', chatId: 1},
+      }
+    : {}
+// Padre activo explícito: en el árbol de la rama activa, el 003 (se quiere probar
+// otra variante desde ahí); en el resto, ninguno (rige el más nuevo).
+const activeParent = view === 'tree-active-branch' || view === 'trash' ? '003-vent-slots.scad' : ''
 const cp = (n: number, file: string, parent: string, desc: string) => ({
     id: n, workspaceId: 1, fileName: file, parentFile: parent, label: '', description: desc,
-    sessionId: '', collapsed: false, fileMtime: 0, createdAt: 0,
+    sessionId: '', agentId: '', chatId: 0, collapsed: false, fileMtime: treeShot ? 1792080000 + n * 5400 : 0, createdAt: 0,
+    ...treeExtra[file],
 })
 const checkpoints = [
     cp(1, '001-base-box.scad', '', es ? 'Caja base 92×64×32' : 'Base box 92×64×32'),
@@ -138,6 +189,25 @@ const checkpoints = [
     cp(5, '005-snap-lid.scad', '002-sliding-lid.scad', es ? 'Rama: tapa a presión' : 'Branch: snap-fit lid'),
     cp(6, '006-two-color-logo.scad', '005-snap-lid.scad', es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS'),
 ]
+// Los otros proyectos de las vistas `projects-*`: árboles cortos con otros nombres, para que
+// se note a simple vista en qué proyecto se está.
+const otherCheckpoints: Record<number, ReturnType<typeof cp>[]> = {
+    2: [
+        {...cp(21, '001-base-stand.scad', '', es ? 'Base del soporte' : 'Stand base'), workspaceId: 2},
+        {...cp(22, '002-arc-support.scad', '001-base-stand.scad', es ? 'Arco de apoyo' : 'Support arc'), workspaceId: 2},
+        {...cp(23, '003-cable-slot.scad', '002-arc-support.scad', es ? 'Ranura para el cable' : 'Cable slot'), workspaceId: 2},
+    ],
+    3: [
+        {...cp(31, '001-grid-4x2.scad', '', es ? 'Cuadrícula de 4×2' : '4×2 grid'), workspaceId: 3},
+        {...cp(32, '002-dividers.scad', '001-grid-4x2.scad', es ? 'Divisores' : 'Dividers'), workspaceId: 3},
+    ],
+}
+const viewFor = (id: number) => ({
+    workspace: workspaces.find((w) => w.id === id) ?? workspaces[0],
+    checkpoints: id === 1 ? checkpoints : (otherCheckpoints[id] ?? []),
+    missing: false,
+    activeParent: id === 1 ? activeParent : '',
+})
 const selectedFile = cfg.scenario === 'error' ? '004-usb-c-cutout.scad' : '006-two-color-logo.scad'
 
 const source = `// @checkpoint parent=005-snap-lid.scad desc="${es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS'}"
@@ -245,6 +315,29 @@ const renderState: Record<string, unknown> =
               '006-two-color-logo.scad': okResult('006-two-color-logo.scad', 1240, false),
           }
 
+// Resultados de render de los otros proyectos: el 2 está bien y el 3 tiene su último render fallido.
+const failedResult = (file: string) => ({
+    ...errorResult,
+    fileName: file,
+    diagnostics: [{severity: 'error', line: 9, col: 0, file: '', message: 'Parser error: syntax error'}],
+})
+const stateFor = (id: number): Record<string, unknown> =>
+    id === 1
+        ? renderState
+        : Object.fromEntries(
+              (otherCheckpoints[id] ?? []).map((c, i, all) => [
+                  c.fileName,
+                  id === 3 && i === all.length - 1 ? failedResult(c.fileName) : okResult(c.fileName, 480 + i * 90, true),
+              ]),
+          )
+// El código de cada proyecto empieza distinto, para reconocerlo al volver a su pestaña.
+const sourceFor = (id: number, file: string) =>
+    id === 1
+        ? file === '004-usb-c-cutout.scad'
+            ? brokenSource
+            : source
+        : `// ${workspaces.find((w) => w.id === id)?.name ?? ''} · ${file}\nwidth = ${40 + id * 7};   // [20:1:120]\ncube([width, width / 2, 10]);\n`
+
 // Lo que devolvería LintCheckpointSource (backend/scad) sobre cada código:
 // las líneas coinciden con los fuentes de arriba.
 const diag = (severity: string, line: number, col: number, endCol: number, code: string, msg: [string, string]) => ({
@@ -296,6 +389,7 @@ const savedLayouts =
 const settings = {
     language: lang, theme, openscadPath: '', renderBackend: 'manifold', workspacesRoot: '',
     defaultPrinter: 'bambu-a1-mini', defaultMaterial: 'pla', infillPercent: 15, defaultAgent: 'claude',
+    wallLoops: 2, lineWidthMm: 0.42, filamentDiameterMm: 1.75, currency: 'USD',
     autoRender: true, renderTimeoutSec: 300, autoIterate: true, bambuStudioPath: '',
     editorIndent: 4, editorFontSize: 13, editorWordWrap: false, editorMinimap: false,
     uiScale: scale, terminalFontSize: 13, chatFontSize: 13,
@@ -306,18 +400,59 @@ const settings = {
     swatches: ['#ff7a1a', '#e7e9ee', '#2b2f38', '#3ccf7a', '#5aa2ff', '#d32f2f'],
 }
 
-// Malla de ejemplo: frontend/public/uishot/enclosure.stl, generada con
-// OpenSCAD desde la plantilla electronics-enclosure.scad (caja + tapa). Sus
-// medidas, calculadas sobre ese STL, son las que devolvería GetMeshInfo.
-const SAMPLE_STL = '/uishot/enclosure.stl'
+// Mallas de ejemplo (frontend/public/uishot/). La caja es enclosure.stl, de la plantilla
+// electronics-enclosure.scad; sus medidas, calculadas sobre ese STL, son las que
+// devolvería GetMeshInfo. Los modelos BICOLOR de S7 salen de la plantilla real
+// nameplate-two-color.scad, exportada UNA vez con OpenSCAD, una malla por color
+// (PART=all|base|text) y pasada a STL binario; las medidas de cada parte se
+// calcularon sobre esos archivos. Para regenerarlas:
+//   T=assets/skills/openscad-templates/templates/nameplate-two-color.scad
+//   for p in all base text; do openscad -o nameplate-$p.stl --backend=manifold \
+//     -D "PART=\"$p\"" -D '$fs=0.6' -D '$fa=10' $T; done
+//   (y la ancha, que no cabe en una A1 mini: -D 'label="Taller 3D ScadLab"'
+//    -D plate_w=215 -D plate_d=40 -D 'PLATE=[400,400,400]', como nameplate-wide-*)
 const sampleInfo = {
     triangles: 4176, min: [0, 0, 0], max: [78, 124, 27.6], size: [78, 124, 27.6],
     volumeMm3: 30705.3, areaMm2: 35148, watertight: true,
 }
+type ShotPart = {name: string; color: string; uncolored: boolean; file: string; info: typeof sampleInfo}
+type ShotModel = {mesh: string; info: typeof sampleInfo; parts: ShotPart[]}
+const plateModel = (wide: boolean): ShotModel => {
+    const pre = wide ? 'nameplate-wide' : 'nameplate'
+    return {
+        mesh: `/uishot/${pre}-all.stl`,
+        info: wide ? NAMEPLATE_WIDE.all : NAMEPLATE.all,
+        parts: [
+            {name: 'Color 1 (#FFFFFF)', color: '#FFFFFF', uncolored: false, file: `/uishot/${pre}-base.stl`, info: wide ? NAMEPLATE_WIDE.base : NAMEPLATE.base},
+            {name: 'Color 2 (#D32F2F)', color: '#D32F2F', uncolored: false, file: `/uishot/${pre}-text.stl`, info: wide ? NAMEPLATE_WIDE.text : NAMEPLATE.text},
+        ],
+    }
+}
+const NAMEPLATE = {
+    all: {triangles: 3318, min: [-55.0, -16.0, 0.0], max: [55.0, 16.0, 3.6], size: [110.0, 32.0, 3.6], volumeMm3: 10951.56, areaMm2: 8309.7, watertight: true},
+    base: {triangles: 236, min: [-55.0, -16.0, 0.0], max: [55.0, 16.0, 3.0], size: [110.0, 32.0, 3.0], volumeMm3: 10495.94, areaMm2: 7778.2, watertight: true},
+    text: {triangles: 3068, min: [-53.0, -14.0, 3.0], max: [53.0, 14.0, 3.6], size: [106.0, 28.0, 0.6], volumeMm3: 455.62, areaMm2: 2050.2, watertight: true},
+}
+const NAMEPLATE_WIDE = {
+    all: {triangles: 5244, min: [-107.5, -20.0, 0.0], max: [107.5, 20.0, 3.6], size: [215.0, 40.0, 3.6], volumeMm3: 26588.95, areaMm2: 19575.9, watertight: true},
+    base: {triangles: 236, min: [-107.5, -20.0, 0.0], max: [107.5, 20.0, 3.0], size: [215.0, 40.0, 3.0], volumeMm3: 25717.86, areaMm2: 18563.2, watertight: true},
+    text: {triangles: 4972, min: [-105.5, -18.0, 3.0], max: [105.5, 18.0, 3.6], size: [211.0, 36.0, 0.6], volumeMm3: 871.09, areaMm2: 3916.3, watertight: true},
+}
+// Un modelo sin color() es UNA parte amarilla "sin color": el visor la pinta con la muestra.
+const enclosureModel: ShotModel = {
+    mesh: '/uishot/enclosure.stl',
+    info: sampleInfo,
+    parts: [{name: 'Color 1 (#F9D72C)', color: '#F9D72C', uncolored: true, file: '/uishot/enclosure.stl', info: sampleInfo}],
+}
+const shotModel: ShotModel = view === 'plate-overflow' ? plateModel(true) : view === 'viewer-parts' || view === 'print-panel' || view.startsWith('projects-') ? plateModel(false) : enclosureModel
+const partFiles = shotModel.parts.map((p) => p.file)
 const realFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url
-    return realFetch(url.startsWith('/mesh/') ? SAMPLE_STL : input, init)
+    if (url.startsWith('/mesh/')) return realFetch(shotModel.mesh, init)
+    const part = /^\/parts\/[0-9a-f]{64}\/(\d\d)\.stl$/.exec(url)
+    if (part) return realFetch(partFiles[Number(part[1])] ?? shotModel.mesh, init)
+    return realFetch(input, init)
 }
 
 // ── Terminal de agentes (bloque 5.A) ────────────────────────────────────────
@@ -356,6 +491,31 @@ const agentScreen = [
     c('90', '╰' + '─'.repeat(70) + '╯'),
     c('90', es ? '  ? para atajos' : '  ? for shortcuts'),
 ].join('\r\n') + '\r\n' + ESC + '3A' + ESC + '4G' // el cursor queda dentro de la caja de entrada
+// Misma sesión, pero el agente trabaja con las herramientas del servidor MCP de
+// ScadLab (render, medir, ver la pieza) en lugar de invocar OpenSCAD a mano.
+const agentScreenMcp = [
+    c('1;38;5;208', '✻ Claude Code') + c('90', '  ·  Sonnet 5.5  ·  rpi5-case'),
+    '',
+    c('1', '> ') + (es ? 'Revisa que la tapa de tornillos entre en la placa y muéstrame cómo queda.' : 'Check that the screw lid fits the plate and show me how it looks.'),
+    '',
+    c('38;5;250', '● ') + c('1;35', 'scadlab') + c('90', ' - render ') + c('90', '(MCP)') + c('90', '(file: "007-lid-screws.scad")'),
+    c('90', es ? '  ⎿  ok · 0,4 s · 92 × 64 × 36 mm · 41 280 mm³ · estanca' : '  ⎿  ok · 0.4 s · 92 × 64 × 36 mm · 41,280 mm³ · watertight'),
+    '',
+    c('38;5;250', '● ') + c('1;35', 'scadlab') + c('90', ' - measure ') + c('90', '(MCP)') + c('90', '(file: "007-lid-screws.scad")'),
+    c('90', es ? '  ⎿  cabe en la placa de la A1 mini (180 × 180 × 180) · ≈ 51 g en PLA' : '  ⎿  fits the A1 mini plate (180 × 180 × 180) · ≈ 51 g in PLA'),
+    '',
+    c('38;5;250', '● ') + c('1;35', 'scadlab') + c('90', ' - preview ') + c('90', '(MCP)') + c('90', '(file: "007-lid-screws.scad", view: "iso")'),
+    c('90', es ? '  ⎿  [imagen PNG · 800 × 600]' : '  ⎿  [PNG image · 800 × 600]'),
+    '',
+    c('38;5;250', '● ') + (es
+        ? 'La tapa mide 92 × 64 × 36 mm y cabe de sobra. Los cuatro tornillos naranjas quedan a 6 mm de las esquinas, como pediste.'
+        : 'The lid measures 92 × 64 × 36 mm and fits with room to spare. The four orange screws sit 6 mm from the corners, as you asked.'),
+    '',
+    c('90', '╭' + '─'.repeat(70) + '╮'),
+    c('90', '│ ') + c('1', '>') + ' '.repeat(68) + c('90', '│'),
+    c('90', '╰' + '─'.repeat(70) + '╯'),
+    c('90', es ? '  ? para atajos' : '  ? for shortcuts'),
+].join('\r\n') + '\r\n' + ESC + '3A' + ESC + '4G'
 const toB64 = (text: string) => {
     let bin = ''
     for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b)
@@ -453,6 +613,54 @@ const exportWarnings =
         : []
 const bambuApp = platform === 'windows' ? 'C:\\Program Files\\Bambu Studio\\bambu-studio.exe' : '/Applications/BambuStudio.app'
 
+// Estado del servidor MCP: el ejecutable de ScadLab y los archivos del primer
+// workspace, todos al día (lo que ve el usuario en el caso normal).
+const scadlabBin = platform === 'windows' ? 'C:\\Program Files\\ScadLab\\ScadLab.exe' : '/Applications/ScadLab.app/Contents/MacOS/ScadLab'
+const mcpDir = `${home}${platform === 'windows' ? '\\' : '/'}rpi5-case`
+const mcpFiles = [
+    {agent: 'claude', name: '.mcp.json', path: `${mcpDir}/.mcp.json`, status: 'ok'},
+    {agent: 'opencode', name: 'opencode.json', path: `${mcpDir}/opencode.json`, status: 'ok'},
+    {agent: 'gemini', name: '.gemini/settings.json', path: `${mcpDir}/.gemini/settings.json`, status: 'ok'},
+]
+const quoteIfSpaced = (p: string) => (p.includes(' ') ? `"${p}"` : p)
+const mcpStatus = (id: number) => ({
+    enabled: true,
+    binary: scadlabBin,
+    binaryError: '',
+    workspaceDir: id ? mcpDir : '',
+    command: `${quoteIfSpaced(scadlabBin)} --mcp --workspace ${quoteIfSpaced(mcpDir)}`,
+    files: id ? mcpFiles : [],
+    codexFlags: [],
+    openscad: true,
+    openscadPath: '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD',
+})
+
+const materialList = [
+    {id: 'pla', name: 'PLA', densityGCm3: 1.24, costPerKg: 20},
+    {id: 'petg', name: 'PETG', densityGCm3: 1.27, costPerKg: 22},
+    {id: 'abs', name: 'ABS', densityGCm3: 1.04, costPerKg: 22},
+    {id: 'asa', name: 'ASA', densityGCm3: 1.07, costPerKg: 25},
+    {id: 'tpu', name: 'TPU', densityGCm3: 1.21, costPerKg: 35},
+]
+
+// Papelera inventada de la vista `trash`: una rama de variantes descartada.
+const trashItems = [
+    {name: '20261015-101500-008-wall-fillets.scad', original: '008-wall-fillets.scad', parent: '006-two-color-logo.scad', description: es ? 'Filetes en las paredes (se rompió la tapa)' : 'Wall fillets (broke the lid)', trashedAt: 1792059300},
+    {name: '20261015-101500-007-thin-walls.scad', original: '007-thin-walls.scad', parent: '006-two-color-logo.scad', description: es ? 'Paredes de 1.2 mm para ahorrar filamento' : '1.2 mm walls to save filament', trashedAt: 1792059300},
+    {name: '20261014-184000-004-extra-ribs.scad', original: '004-extra-ribs.scad', parent: '003-vent-slots.scad', description: es ? 'Nervaduras extra bajo la tapa' : 'Extra ribs under the lid', trashedAt: 1791999600},
+]
+
+// El padre del checkpoint abierto en la vista `diff-parent`: el mismo código sin
+// el logo y con otra anchura, para que el diff tenga cambios reales.
+const parentSource = () =>
+    source
+        .replace('parent=005-snap-lid.scad', 'parent=002-sliding-lid.scad')
+        .replace(es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS', es ? 'Tapa a presión' : 'Snap-fit lid')
+        .replace('width  = 92;', 'width  = 88;')
+        .replace(/color\("#ff7a1a"\)\n[^\n]*\n[^\n]*\n\n/, '')
+
+const agyStatus = {state: 'missing', agyPath: '/Users/maker/.local/bin/agy', command: `${scadlabBin} --mcp`, current: '', detail: ''}
+
 const App_ = {
     // Bambu Studio detectado; abrir y mostrar no hacen nada (el banco no lanza apps).
     DetectSlicers: () => P([{id: 'bambu-studio', name: 'Bambu Studio', path: bambuApp, found: true}]),
@@ -464,11 +672,33 @@ const App_ = {
     GetSettings: () => P(settings),
     ListPrinters: () => P(printers),
     ListWorkspaces: () => P(workspaces),
-    OpenWorkspace: () => P({workspace: workspaces[0], checkpoints, missing: false}),
-    RescanWorkspace: () => P({workspace: workspaces[0], checkpoints, missing: false}),
-    ReadCheckpoint: (_id: number, file: string) => P(file === '004-usb-c-cutout.scad' ? brokenSource : source),
+    OpenWorkspace: (id: number) => P(viewFor(id)),
+    RescanWorkspace: (id: number) => P(viewFor(id)),
+    ReadCheckpoint: (id: number, file: string) => P(sourceFor(id, file)),
+    // Proyectos abiertos (S8): en las vistas `projects-*` hay tres pestañas (la activa es la
+    // primera); en las demás, una sola, como siempre.
+    ListOpenProjects: () =>
+        P({
+            projects: (cfg.scenario === 'empty' ? [] : projectsShot ? [1, 2, 3] : [1]).map((id) => ({workspace: workspaces.find((w) => w.id === id)!, missing: false})),
+            activeId: cfg.scenario === 'empty' ? 0 : 1,
+        }),
+    OpenProject: (id: number) => P(viewFor(id)),
+    CloseProject: () => P(undefined),
+    SetActiveProject: () => P(undefined),
+    ReorderProjects: () => P(undefined),
+    // Uno con render en curso (2) y otro con su último render fallido y un agente vivo (3).
+    ProjectActivity: () =>
+        P(
+            projectsShot
+                ? [
+                      {id: 1, rendering: false, latestFile: '006-two-color-logo.scad', lastRenderStatus: 'ok', renderFailed: false, agentsAlive: 0},
+                      {id: 2, rendering: true, latestFile: '003-cable-slot.scad', lastRenderStatus: 'ok', renderFailed: false, agentsAlive: 0},
+                      {id: 3, rendering: false, latestFile: '002-dividers.scad', lastRenderStatus: 'error', renderFailed: true, agentsAlive: 1},
+                  ]
+                : [],
+        ),
     EffectiveWorkspacesRoot: () => P(home),
-    GetRenderState: () => P(renderState),
+    GetRenderState: (id: number) => P(stateFor(id)),
     // Igual que el backend: emite render:started / render:finished, que es lo
     // que mira la UI (el valor devuelto solo lo usa quien llama).
     RenderCheckpoint: (id: number, file: string) => {
@@ -478,7 +708,46 @@ const App_ = {
         return P(result)
     },
     CancelRender: () => P(undefined),
-    GetMeshInfo: () => P(sampleInfo),
+    GetMeshInfo: () => P(shotModel.info),
+    // Partes por color de S7 (lo que devolvería backend/parts) y su estimación,
+    // con la misma fórmula que backend/estimate.
+    GetModelParts: (_id: number, file: string) => {
+        const key = fakeKey(file)
+        const plate = view === 'plate-overflow' ? {x: 180, y: 180, z: 180} : {x: 180, y: 180, z: 180}
+        const size = shotModel.info.size
+        const over = (v: number, max: number) => (v > max + 0.05 ? v - max : 0)
+        const overflow = {x: over(size[0], plate.x), y: over(size[1], plate.y), z: over(size[2], plate.z)}
+        return P({
+            key,
+            parts: shotModel.parts.map((p, i) => ({index: i, name: p.name, color: p.color, uncolored: p.uncolored, url: `/parts/${key}/${String(i).padStart(2, '0')}.stl`, info: p.info})),
+            total: shotModel.info,
+            plate,
+            fits: overflow.x + overflow.y + overflow.z === 0,
+            overflow,
+        })
+    },
+    EstimatePrint: (_id: number, _file: string, o: {infillPercent: number; wallLoops: number; lineWidthMm: number; filamentDiameterMm: number; defaultMaterialId: string; partMaterials: Record<number, string>; currency: string}) => {
+        const mats = materialList
+        const wall = o.wallLoops * o.lineWidthMm
+        const area = Math.PI * (o.filamentDiameterMm / 2) ** 2
+        const parts = shotModel.parts.map((p, i) => {
+            const id = o.partMaterials?.[i] ?? o.defaultMaterialId
+            const m = mats.find((x) => x.id === id) ?? mats[0]
+            const shell = Math.min(p.info.volumeMm3, p.info.areaMm2 * wall)
+            const effectiveMm3 = shell + (p.info.volumeMm3 - shell) * (o.infillPercent / 100)
+            const massG = (effectiveMm3 / 1000) * m.densityGCm3
+            return {index: i, materialId: m.id, volumeMm3: p.info.volumeMm3, effectiveMm3, massG, lengthM: effectiveMm3 / area / 1000, cost: (massG / 1000) * m.costPerKg}
+        })
+        const sum = (f: (p: (typeof parts)[number]) => number) => parts.reduce((n, p) => n + f(p), 0)
+        return P({
+            parts,
+            total: {massG: sum((p) => p.massG), lengthM: sum((p) => p.lengthM), cost: sum((p) => p.cost)},
+            currency: o.currency,
+            assumptions: es
+                ? ['Sin soportes, balsa ni borde.', 'Sin la purga del AMS al cambiar de color.', 'El relleno se cuenta como un porcentaje del interior, sin mirar su forma.']
+                : ['No supports, raft or brim.', 'No AMS purge when changing color.', 'Infill is counted as a percentage of the interior, whatever its pattern.'],
+        })
+    },
     SaveSwatches: () => P(undefined),
     SaveScreenshot: () => P(''),
     SaveLayout: (l: unknown) => P(l),
@@ -492,11 +761,31 @@ const App_ = {
     LintCheckpointSource: (_id: number, file: string) => P(lintFor(file)),
     FormatScad: (src: string) => P(src),
     SaveAsCheckpoint: () => P('007-lid-screws.scad'),
+    SaveChatCheckpoint: () => P('007-lid-screws.scad'),
+    // Checkpoints avanzados (S3): la papelera de la vista `trash` tiene tres
+    // checkpoints de una rama que se descartó; en las demás está vacía.
+    ListTrash: () => P(view === 'trash' ? trashItems : []),
+    TrashCheckpoint: () => P(['20261015-120000-001-base-box.scad']),
+    RestoreCheckpoint: (_id: number, name: string) => P(name.replace(/^\d{8}-\d{6}-/, '')),
+    SetActiveParent: () => P(undefined),
+    GetActiveParent: () => P(activeParent),
+    RenameCheckpoint: () => P(undefined),
+    RevealCheckpoint: () => P(undefined),
+    ResumeCheckpointSession: () => P({kind: 'terminal', terminalId: 'term-1', agentId: 'claude', chatId: 0}),
+    ReadCheckpointPair: (_id: number, file: string) => P({file, parent: '005-snap-lid.scad', parentSource: parentSource(), source}),
     ...chatMocks,
     GetScadCatalog: () => P(catalog),
     // Terminal de agentes: en las vistas `terminal*` hay un Claude Code abierto.
-    ListTerminals: () => P(isTerminalView ? [{id: 'term-1', kind: 'agent', agentId: 'claude', workspaceId: 1, cols: 100, rows: 28, startedAt: 1}] : []),
-    ReadTerminalBuffer: () => P({data: toB64(agentScreen), seq: agentScreen.length}),
+    ListTerminals: () =>
+        P([
+            ...(isTerminalView ? [{id: 'term-1', kind: 'agent', agentId: 'claude', workspaceId: 1, cols: 100, rows: 28, startedAt: 1}] : []),
+            // Un agente trabajando en el proyecto 3 (de fondo) en las vistas de pestañas.
+            ...(projectsShot ? [{id: 'term-3', kind: 'agent', agentId: 'claude', workspaceId: 3, cols: 100, rows: 28, startedAt: 2}] : []),
+        ]),
+    ReadTerminalBuffer: () => {
+        const screen = view === 'terminal-mcp' ? agentScreenMcp : agentScreen
+        return P({data: toB64(screen), seq: screen.length})
+    },
     ResizeTerminal: () => P(undefined),
     WriteTerminal: () => P(undefined),
     CloseTerminal: () => P(undefined),
@@ -510,6 +799,14 @@ const App_ = {
             {id: 'antigravity', name: 'Antigravity', found: false, path: '', enabled: true, canList: false},
         ]),
     ListAgentSessions: () => P(claudeSessions),
+    // Servidor MCP (S6): los tres archivos del workspace al día y Codex por flags.
+    GetMCPStatus: (id: number) => P(mcpStatus(id)),
+    SetMCPEnabled: () => P(undefined),
+    SyncWorkspaceMCP: () => P({files: mcpFiles}),
+    // Antigravity (global): agy instalado y sin la entrada, para que se vean los dos botones.
+    AntigravityMCPStatus: () => P(agyStatus),
+    AddAntigravityMCP: () => P(agyStatus),
+    RemoveAntigravityMCP: () => P(agyStatus),
     DetectTools: () =>
         P([
             {id: 'openscad', found: true, path: '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD', version: '2025.06.01'},
@@ -528,14 +825,7 @@ const App_ = {
             {id: 'openai', kind: 'openai', name: 'OpenAI-compatible', command: '', config: {baseUrl: 'http://localhost:1234/v1', model: '', apiKeyEnv: 'OPENAI_API_KEY'}, enabled: false, sortOrder: 6},
             {id: 'anthropic', kind: 'anthropic', name: 'Anthropic API', command: '', config: {model: 'claude-sonnet-5-5', apiKeyEnv: 'ANTHROPIC_API_KEY'}, enabled: false, sortOrder: 7},
         ]),
-    ListMaterials: () =>
-        P([
-            {id: 'pla', name: 'PLA', densityGCm3: 1.24, costPerKg: 20},
-            {id: 'petg', name: 'PETG', densityGCm3: 1.27, costPerKg: 22},
-            {id: 'abs', name: 'ABS', densityGCm3: 1.04, costPerKg: 22},
-            {id: 'asa', name: 'ASA', densityGCm3: 1.07, costPerKg: 25},
-            {id: 'tpu', name: 'TPU', densityGCm3: 1.21, costPerKg: 35},
-        ]),
+    ListMaterials: () => P(materialList),
     ListSkills: () =>
         P([
             {name: 'bambu-lab-printers', source: 'builtin', dir: '', enabled: true, description: es ? 'Perfiles de impresoras Bambu Lab y reglas de diseño FDM.' : 'Bambu Lab printer profiles and FDM design rules.'},
@@ -585,7 +875,7 @@ const syncGL = window.setInterval(() => {
 // El editor (Monaco) también entra con lazy(): mismo motivo. El idioma va
 // antes, porque decide con qué textos carga Monaco sus widgets.
 setLanguage(lang)
-Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath)])
+Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
     .catch(() => {})
     .then(() =>
         createRoot(document.getElementById('root')!).render(
@@ -597,6 +887,10 @@ Promise.all([import('./components/viewer/Viewer'), import('./components/terminal
 
 // Para las pruebas con CDP (scripts de revisión locales): el controlador del dock.
 ;(window as unknown as {__dock: typeof shotTools}).__dock = shotTools
+// Idem para la sesión de impresión (prueba de clic sobre una parte).
+;(window as unknown as {__print: typeof printStore}).__print = printStore
+// Para las pruebas de las pestañas de proyecto con CDP: leer y mover el estado que cada pestaña conserva.
+;(window as unknown as {__proj: unknown}).__proj = {editorSession, editorCommands, selectPart}
 
 // Guard de desplazamiento igual que la app real (main.tsx).
 installScrollGuard()
@@ -606,6 +900,17 @@ installScrollGuard()
 if (view === 'settings-appearance') {
     const find = window.setInterval(() => {
         const el = document.querySelector('[data-testid="appearance"]')
+        if (el) {
+            el.scrollIntoView({block: 'start'})
+            window.clearInterval(find)
+        }
+    }, 100)
+}
+
+// settings-mcp: Configuración → IA desplazada hasta el bloque del servidor MCP.
+if (view === 'settings-mcp') {
+    const find = window.setInterval(() => {
+        const el = document.querySelector('[data-testid="mcp"]')
         if (el) {
             el.scrollIntoView({block: 'start'})
             window.clearInterval(find)
@@ -674,13 +979,17 @@ const report = () => {
         document.querySelector<HTMLElement>('header')?.scrollIntoView()
     }
     const bar = document.querySelector('footer')?.getBoundingClientRect()
-    const head = document.querySelector('header')?.getBoundingClientRect()
+    const headEl = document.querySelector('header')
+    const head = headEl?.getBoundingClientRect()
     d.dataset.docfit = JSON.stringify({
         iw: innerWidth, ih: innerHeight,
         sw: d.scrollWidth, sh: d.scrollHeight,
         sx: d.scrollLeft + document.body.scrollLeft + scrollX, sy: d.scrollTop + document.body.scrollTop + scrollY,
         rootTop: document.getElementById('root')!.scrollTop,
         headerTop: head ? Math.round(head.top) : null, headerLeft: head ? Math.round(head.left) : null,
+        // La cabecera recorta lo que desborda (overflow-clip): si su contenido es más ancho que ella
+        // (pestañas de proyecto que no se acortan), los botones de la derecha quedan fuera de la ventana.
+        headerSw: headEl ? headEl.scrollWidth : null, headerCw: headEl ? headEl.clientWidth : null,
         footerBottom: bar ? Math.round(bar.bottom) : null,
         footerRight: bar ? Math.round(bar.right) : null,
     })

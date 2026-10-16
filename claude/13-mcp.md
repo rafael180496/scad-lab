@@ -1,0 +1,197 @@
+# Servidor MCP de ScadLab (S6)
+
+Spec: [.claude/specs/s6-servidor-mcp.md](../.claude/specs/s6-servidor-mcp.md).
+Código: `backend/mcp` (servidor y herramientas), `main_mcp.go` (el modo `--mcp`),
+`backend/checkpoint` (crear checkpoints, compartido con el editor). La
+configuración de cada agente (`.mcp.json`…) la escribe `backend/mcpconf`
+(bloque 6.B): ver [claude/09](09-agents-ai.md).
+
+## Qué es
+
+`ScadLab --mcp --workspace <dir>` es un servidor MCP **autónomo** por stdio:
+JSON-RPC 2.0, un mensaje por línea, sin abrir la ventana. Lo lanza el agente
+(Claude Code, opencode, Codex, Antigravity), no la app. No hay puente a la
+ventana: ScadLab no tiene secretos que proteger, así que el proceso lee lo que
+necesita de `scadlab.db` (**solo lectura** de settings, materiales y del
+workspace registrado) y trabaja sobre los archivos de la carpeta. Funciona con la
+app cerrada.
+
+```
+main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, stdin, stdout, opts)
+                                   (corre ANTES de NewApp/wails.Run: nada de GUI)
+```
+
+- `mcp.ServerName = "scadlab"` y `mcp.Args(dir) = ["--mcp","--workspace",dir]`: la
+  línea de comandos la define este paquete y la reutiliza `mcpconf`.
+- **stdout solo lleva JSON-RPC.** Los logs van a stderr; OpenSCAD corre siempre
+  con su salida capturada. Un test (`helpers_test.go`) exige que cada línea de
+  stdout sea JSON-RPC 2.0 parseable.
+- Sin SDK de MCP: `rpc.go` es un puerto del de mini-tools. `initialize` negocia
+  versión (cliente ≥ `2025-06-18` → `2025-06-18`; si no `2024-11-05`), más
+  `tools/list`, `tools/call`, `ping`; las notificaciones no llevan respuesta salvo
+  `notifications/cancelled`, que cancela la petición en curso.
+- Las llamadas a herramientas corren en su propia goroutine: un render de minutos
+  no bloquea `ping` ni la cancelación (se mata el OpenSCAD). Al llegar a EOF se
+  **espera** a las que están en curso: `printf '…' | ScadLab --mcp` tiene que
+  poder contestar.
+- Un nombre de herramienta desconocido o `arguments` que no es un objeto son
+  errores de protocolo (-32602). Todo lo que falla **dentro** de una herramienta
+  vuelve como `isError: true` con el mensaje (`i18n.Msg`, español con tú / inglés
+  según `settings.language`, que se relee en cada llamada).
+- Descripciones de herramientas y claves del JSON en inglés (los modelos las leen
+  mejor); los avisos y errores salen en el idioma de la app.
+
+## Herramientas
+
+| Herramienta | Entrada | Salida |
+|---|---|---|
+| `list_checkpoints` | — | árbol: archivo, padre, descripción, hijos, fecha, estado de render conocido; más `activeParent` ([claude/15](15-checkpoints.md)) |
+| `read_checkpoint` | `file` (def.: el más nuevo) | el código |
+| `create_checkpoint` | `label`, `source`, `parent` (def.: el padre activo, o el más nuevo; el primero no tiene), `description` | `{file, parent, activeParent, description}`; nunca pisa; avanza el activo ([claude/15](15-checkpoints.md)) |
+| `render` | `file` | estado, diagnósticos con línea y la línea de código, duración, caché, `mesh`, `fitsBuildVolume`, avisos |
+| `lint` | `file` o `source` | diagnósticos de `scad.Lint` (OpenSCAD + SL001–SL009) y conteos |
+| `format` | `source` | el código formateado (texto) |
+| `measure` | `file` | `mesh`, impresora, `fitsBuildVolume`, `parts` (una por color) y `estimate` (peso, metros y costo con sus supuestos; ver [claude/14](14-medicion.md)) |
+| `preview` | `file`, `view`, `size` | **imagen PNG** (`{type:"image", data:base64, mimeType:"image/png"}`) + una línea de texto |
+| `printer_info` | — | impresora del workspace, reglas FDM, material por defecto, OpenSCAD detectado |
+| `export` | `file`, `format` (`stl`/`3mf`/`stl-per-color`) | ruta en `<ws>/exports/`, partes, avisos |
+| `list_templates` / `get_template` | `name` | plantillas de `openscad-templates` (embebidas) |
+
+Detalles que no son obvios:
+
+- **`render` con modelo roto es `isError: true`**, aunque el JSON es el mismo que
+  el de un render bueno (con `status`, `diagnostics`, `message`): la herramienta
+  no logró su propósito (una malla) y el agente tiene que corregir. `lint`, en
+  cambio, devuelve diagnósticos como resultado normal: encontrarlos es su trabajo.
+- **`RENDER_ERRORS.md`** sigue la regla de `app_render.go`: solo el checkpoint
+  **más nuevo** lo escribe (error) o lo borra (OK); renderizar uno viejo, un
+  cancelado o sin OpenSCAD no lo toca. Lo aplica `env.render`, que usan `render`
+  y `measure`.
+- **Estado de render en `list_checkpoints`**: lo renderizado por este proceso, y
+  si no, lo que diga `RENDER_ERRORS.md`. La app y el servidor no comparten
+  memoria; `unknown` es una respuesta honesta.
+- **Una cola de render por checkpoint** (`mcp:<ws>:<file>`): dos renders de
+  archivos distintos en paralelo no se cancelan entre sí (el motor cancela por
+  clave); repetir el mismo reemplaza al anterior. `export` usa otra clave.
+- **`preview`** corre `openscad -o x.png --render --colorscheme=Tomorrow
+  --imgsize=N,N --viewall --autocenter --camera=0,0,0,rx,ry,rz,500` con
+  `--backend=manifold` salvo que la configuración diga `cgal` (si OpenSCAD no lo
+  conoce, reintenta sin él). `size` se acota a 256–1024 (default 640). Vistas
+  (verificadas con una pieza asimétrica): `iso` y `iso-back` en perspectiva;
+  `front` (desde −Y), `back`, `right` (desde **+X**), `left`, `top`, `bottom`
+  ortogonales. Ojo: «Right» en la GUI de OpenSCAD (`90,0,270`) mira desde −X, la
+  convención contraria; aquí `right` es la de los planos. El PNG va a un temporal
+  en `<ws>/.scadlab/preview/` (ignorado por git, el watcher no es recursivo) y se
+  borra siempre.
+- **`measure`**: la malla, las **partes por color** y una **estimación de
+  impresión** por parte y total (`backend/estimate`: cáscara de perímetros ×
+  ancho de línea + relleno, con la densidad y el costo del material por defecto;
+  `estimatedWeightG` es ese total, ya no la pieza sólida al 100 %). Los
+  `assumptions` van en el resultado. Avisa si la malla no es cerrada (volumen no
+  fiable) o si el modelo no apoya en z=0. «Cabe» es `parts.Fit`, el mismo
+  cálculo de placa que el visor (0,05 mm de tolerancia). Detalle y fórmula en
+  [claude/14](14-medicion.md).
+- **Impresora del workspace**: la del workspace registrado en la app (por ruta);
+  si la carpeta no está registrada, `printer.json`; si no, la de Configuración.
+
+## Seguridad
+
+- **Toda ruta es un nombre de archivo suelto** (`checkpoint.ValidName`: sin
+  carpetas, termina en `.scad`), y si en disco es un enlace simbólico su destino
+  tiene que seguir dentro del workspace (`env.checkpointFile`). Los argumentos
+  `file` de **todas** las herramientas pasan por ahí; un test los prueba con
+  `../`, rutas absolutas, subcarpetas, NUL y un enlace a un archivo externo.
+- `exports/` se comprueba igual: si es un enlace hacia afuera, no se escribe.
+- Los checkpoints son inmutables: `create_checkpoint` usa `O_EXCL` y avanza el
+  número si el nombre se ocupó entre medio; no existe ninguna herramienta que
+  edite o borre un `.scad`.
+- Nada se escribe fuera de `<ws>` salvo la caché de mallas y de exportaciones de
+  `<datos>/cache/` (la misma de la app). `get_template` busca el nombre en la
+  lista embebida, no arma una ruta con lo recibido.
+- La base se abre **solo si ya existe** (`scadlab.db`): lanzar un agente no crea
+  datos de la app. Sin base se trabaja con los defaults.
+- Sin puerto TCP: solo los descriptores del proceso que lo lanzó.
+
+## Windows
+
+El `.exe` de ScadLab es de subsistema gráfico (sin consola), pero un proceso hijo
+**hereda los pipes** que le abre quien lo lanza (Claude Code, opencode… lo hacen
+con `CreateProcess` y handles heredables), así que stdin/stdout funcionan; es lo
+mismo que hace mini-tools con su propio `--mcp`. OpenSCAD (de consola) se lanza
+con `hideWindow` para que no parpadee una consola por cada render. No se probó
+con un agente real en Windows desde macOS: compila (`GOOS=windows go build ./...`)
+y la lógica es la misma; si un cliente no entregara los handles, `runMCP` termina
+con código 1 y el error en stderr.
+
+## Pruebas
+
+- `backend/mcp` — end-to-end por `io.Pipe` con OpenSCAD real (`t.Skip` si no
+  está) y `SCADLAB_DATA_DIR` temporal: `initialize` (versiones), `tools/list`
+  (todas con schema), cada `tools/call` (render OK y con error con línea,
+  `create_checkpoint` nunca pisa, `preview` devuelve PNG válido, `export` escribe
+  en `exports/`, rutas fuera del workspace → `isError`), cancelación y stdout
+  limpio.
+- `main_mcp_test.go` — `runMCP` en proceso (códigos de salida, stderr) y, con
+  `SCADLAB_MCP_SMOKE=1`, el binario real compilado y lanzado con `--mcp`.
+- `backend/checkpoint` — crear, carrera con el agente, raíz, encabezado.
+- **Prueba con un CLI real** (`claude mcp list` en un workspace temporal) la hace
+  el architect; los tests del repo no lanzan agentes ni slicers (regla 9).
+
+## Agregar una herramienta
+
+1. Entrada nueva en `env.tools()` (`tools.go`): `Name`, `Description` en inglés,
+   `InputSchema` con `obj(...)`, `Annotations` (`annReadOnly`/`annWrite`) y el
+   `handler`.
+2. El handler resuelve cualquier archivo con `e.checkpointFile` y devuelve
+   `jsonResult(...)`/`textResult(...)`; un error del dominio es un `error` (sale
+   como `isError`). Mensajes con `i18n.Msg`.
+3. Agregarla a `wantTools` en `mcp_test.go` y probarla (caso feliz, error, ruta
+   inválida), a la tabla de arriba y a la de `assets/workspace/RULES.md.tmpl`.
+
+## Verificado con los CLIs reales (architect, S6)
+
+`mcp list` de cada CLI (no abre sesiones ni gasta cuota), con la app compilada
+y un workspace temporal:
+
+| CLI | Resultado | Nota |
+|---|---|---|
+| Claude Code 2.1 | `scadlab … ⏸ Pending approval` | el `.mcp.json` de proyecto se aprueba en el primer `claude` interactivo; la aprobación vive en `~/.claude.json` (global: no se toca). `.claude/settings{,.local}.json` con `enabledMcpjsonServers`/`enableAllProjectMcpServers` **no** la saltan. Por eso, al lanzar Claude desde la terminal de ScadLab se agrega `--mcp-config '<json>'` (`mcpconf.ClaudeArgs`), que no necesita aprobación. `--mcp-config` es variádico: lo que sigue en el argv tiene que ser un flag. |
+| Codex | `scadlab … enabled` | con los flags `-c` de `mcpconf.CodexArgs`; rutas con espacios OK |
+| opencode 2.0 | `✓ scadlab connected` **solo en un repo git** | fuera de git `opencode mcp list` dice «No MCP servers configured», pero `opencode debug config` muestra la entrada cargada (`opencode.json` del workspace). No se inicializa git en los workspaces por esto (decisión del usuario). |
+| Antigravity 1.3.6 (`agy`) | **`.gemini/settings.json` de proyecto NO se lee** | con ese archivo, `agy mcp list` dice «No MCP servers configured». Era del **Gemini CLI anterior** (rótulo «Gemini CLI (anterior)» en `mcpconf` y la UI; se sigue escribiendo para quien usa `gemini`). `agy` solo tiene configuración **global** y no tiene flags al arrancar para pasarle un servidor. Ver «Antigravity» abajo. |
+
+## Antigravity: configuración global con consentimiento
+
+Código: `backend/mcpconf/antigravity.go` (argv, parseo de `agy mcp list`, estados),
+`app_mcp.go` (`AntigravityMCPStatus`, `AddAntigravityMCP`, `RemoveAntigravityMCP`,
+variables de paquete `agyExec` y `agyPath` inyectables en tests) y
+`AntigravityRow` en `McpSettings.tsx`.
+
+- **Qué hace.** `agy mcp add -- scadlab <ScadLab> --mcp` / `agy mcp remove scadlab` /
+  `agy mcp list`, con argv (sin shell), `hideWindow` en Windows, plazo de 15 s
+  (`agyTimeout`) y `agy` resuelto con `detect.Find("agy")` (no `gemini`). `add` es un
+  upsert: sirve para corregir una ruta vieja. Nunca se edita el archivo de agy a mano.
+- **Consentimiento.** Los botones «Agregar a Antigravity» / «Quitar de Antigravity»
+  piden `confirmDialog` diciendo que se modifica la configuración global (`~/.gemini`),
+  la de todos los proyectos. El interruptor del MCP y «Volver a sincronizar» **no** la
+  tocan.
+- **Entrada sin `--workspace`.** `scadlab` → `<bin> --mcp`: el servidor usa el cwd
+  (`mcp.Options.WorkspaceDir` vacío → `os.Getwd()`, ver `main_mcp.go`), y `agy` lo
+  lanza en la carpeta del proyecto, así que una entrada sirve a todos los workspaces.
+  **Riesgo no verificado con una sesión real** (abrirla gasta cuota): si `agy` no
+  lanzara el MCP con cwd = proyecto, el servidor trabajaría en otra carpeta y la
+  herramienta lo diría al usarla. La ayuda lo documenta.
+- **Estado** (`mcpconf.AgyStateOf` sobre `ParseAgyList`): `not-installed`, `missing`,
+  `ok` (comando == `<bin> --mcp`), `other` (otro comando, p. ej. la app se movió),
+  `disabled`, `error`. Quitar sin entrada no llama a `agy mcp remove` (saldría con
+  error «not found»).
+- **Formato real verificado con `HOME` temporal** (agy 1.3.6 respeta `HOME`):
+  la configuración vive en `~/.gemini/config/mcp_config.json` (no `~/.gemini/mcp_config.json`),
+  `list` imprime `NAME  TYPE  STATUS  COMMAND/URL` (STATUS `enabled|disabled`; la columna
+  de comando es «ejecutable args…» separado por espacios, con la ruta sin comillas),
+  «No MCP servers configured.» si no hay, `remove` de un nombre inexistente sale con
+  código 1 («not found»), y `add` escribe `{"command","args","disabled":false}`.
+  Los flags de `add` van antes del nombre; `--` antes del comando si empieza con `-`.
+- **Pruebas.** `app_mcp_test.go` (`fakeAgy` con la salida real, argv exacto de add,
+  remove y list, ciclo de estados, otros servidores intactos, fallos) y
+  `mcpconf/antigravity_test.go`. Los tests nunca lanzan el `agy` real.

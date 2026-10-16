@@ -33,7 +33,7 @@ Entrada en `CHANGELOG.md` bajo `[Unreleased]` (estilo narrativo en español) y t
 
 ## Verificación
 
-`go build ./...`, `go vet ./...`, `go test ./...`, `cd frontend && pnpm build`, `node frontend/scripts/i18n-check.mjs` y `codegraph sync` si hay índice. Respondé con archivos cambiados, qué corriste y su resultado, y cualquier desvío del contrato.
+`go build ./...`, `go vet ./...`, `go test ./...`, `cd frontend && pnpm build`, `./scripts/i18n-check.sh` (frontend + Go) y `codegraph sync` si hay índice. Respondé con archivos cambiados, qué corriste y su resultado, y cualquier desvío del contrato.
 
 ## Preparar la versión
 

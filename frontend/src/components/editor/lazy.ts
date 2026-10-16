@@ -9,9 +9,20 @@ import {getLanguage} from '../../i18n'
 // los lee al evaluar sus módulos, así que el de español tiene que cargarse
 // ANTES que Monaco: cambiar de idioma con el editor ya cargado los deja en el
 // idioma anterior hasta reiniciar la app (el resto de la interfaz sí cambia).
+function loadNls() {
+    return getLanguage() === 'es' ? import('monaco-editor/esm/vs/nls/lang/es.js') : Promise.resolve()
+}
+
 export function loadCodeEditor() {
-    const nls = getLanguage() === 'es' ? import('monaco-editor/esm/vs/nls/lang/es.js') : Promise.resolve()
-    return nls.then(() => import('./CodeEditor'))
+    return loadNls().then(() => import('./CodeEditor'))
 }
 
 export const CodeEditor = lazy(loadCodeEditor)
+
+// El visor de diferencias (comparar un checkpoint con su padre) comparte el
+// chunk de Monaco con el editor: no suma otro.
+export function loadDiffViewer() {
+    return loadNls().then(() => import('./DiffViewer'))
+}
+
+export const DiffViewer = lazy(loadDiffViewer)

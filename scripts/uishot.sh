@@ -34,25 +34,32 @@ CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 cd "$(dirname "$0")/../frontend"
 
+# Perfil propio y desechable: con el perfil por defecto, si el Chrome del usuario está abierto
+# la llamada se le entrega a él y no se captura nada.
+PROFILE="$(mktemp -d "${TMPDIR:-/tmp}/uishot-chrome.XXXXXX")"
+trap 'rm -rf "$PROFILE"' EXIT
+
 # Servidor propio y efímero en otro puerto: no pisa un `wails dev` abierto.
 # UISHOT_KEEP_SERVER=1 lo reutiliza si ya está levantado (help-shots.sh).
 if ! curl -sf "http://localhost:$PORT/uishot.html" >/dev/null 2>&1; then
     pnpm exec vite --port "$PORT" --strictPort >"${TMPDIR:-/tmp}/uishot-vite.log" 2>&1 &
     VITE_PID=$!
-    trap 'kill $VITE_PID 2>/dev/null || true' EXIT
+    trap 'rm -rf "$PROFILE"; kill $VITE_PID 2>/dev/null || true' EXIT
     for _ in $(seq 1 60); do
         curl -sf "http://localhost:$PORT/uishot.html" >/dev/null && break
         sleep 0.5
     done
 fi
 
+# Perfil propio y desechable: con el perfil por defecto, si el Chrome del usuario está abierto
+# la llamada se le entrega a él y no se captura nada.
 # --virtual-time-budget deja que React monte y que las promesas de los mocks
 # resuelvan antes de disparar: sin eso la foto sale en blanco.
 # WebGL (visor 3D) en headless: sin GPU, por SwiftShader vía ANGLE; si no, el
 # canvas sale negro o vacío.
 "$CHROME" --headless=new --disable-gpu --hide-scrollbars \
     --use-angle=swiftshader --enable-unsafe-swiftshader --use-gl=angle \
-    --run-all-compositor-stages-before-draw \
+    --user-data-dir="$PROFILE" --run-all-compositor-stages-before-draw \
     --window-size="$W,$H" \
     --virtual-time-budget="$BUDGET" \
     --screenshot="$OUT" \

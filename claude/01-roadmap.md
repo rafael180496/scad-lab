@@ -55,14 +55,20 @@ Plan: [.claude/specs/s2-visor-3d.md](../.claude/specs/s2-visor-3d.md).
 | 2.9 | Mirar el visor en la ventana real (WebGL de WKWebView/WebView2) y el diálogo de captura PNG — no se puede automatizar sin permiso de grabación de pantalla | usuario | ⬜ |
 | 2.A | Mallas por HTTP (`backend/meshserve`, middleware) + análisis STL (`backend/mesh`, `GetMeshInfo`) con tests contra OpenSCAD real | OS | ✅ |
 
-## S3 — Checkpoints avanzados ⬜
+## S3 — Checkpoints avanzados ✅ (falta 3.8, prueba del usuario en la ventana real)
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 3.1 | Menú contextual: renombrar (rótulo), plegar, ver código, retomar sesión | FS |
-| 3.2 | «Borrar» = mover a `.scadlab/trash/` (nunca borrar un checkpoint del disco) | FS |
-| 3.3 | Ramificar: fijar el «padre activo» (`.scadlab/active-parent`) que leen las reglas del agente | FS+OS |
-| 3.4 | Vínculo checkpoint ↔ sesión del agente que lo creó | FS |
+Plan: [.claude/specs/s3-checkpoints-avanzados.md](../.claude/specs/s3-checkpoints-avanzados.md). Bloque 3.A (operaciones en Go: papelera, padre activo, MCP y reglas) → [15-checkpoints.md](15-checkpoints.md); 3.B (bindings, vínculo con la sesión y UI) ✅.
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 3.1 | Menú contextual del nodo (clic derecho y «…»): ver código, comparar, ramificar, renombrar (rótulo en línea), retomar sesión, plegar, copiar nombre, mostrar en el Finder, papelera; F2 y Supr con el árbol enfocado | FS | ✅ |
+| 3.2 | «Borrar» = mover a `.scadlab/trash/` (nunca borrar un checkpoint del disco): este solo o con su rama, confirmación con el número de descendientes; diálogo de la papelera con Restaurar (rótulo y vínculo se conservan: tabla `checkpoint_trash`) | OS+FS | ✅ |
+| 3.3 | Ramificar: «padre activo» (`.scadlab/active-parent`) que leen las reglas del agente y el MCP; avanza solo (Create, MCP y watcher); indicador en el árbol | OS+FS | ✅ |
+| 3.4 | Vínculo checkpoint ↔ sesión del agente (watcher + `agentsessions`) o chat (`SaveChatCheckpoint`); migración 3 aditiva (`agent_id`, `chat_id`); «Retomar sesión» | FS | ✅ |
+| 3.5 | Comparar con el padre: `DiffEditor` de Monaco (local) dentro del panel Código | FS | ✅ |
+| 3.6 | Banco y capturas: `tree-menu`, `tree-active-branch`, `trash`, `diff-parent`; ayuda y recetas sin «En desarrollo» | FS | ✅ |
+| 3.7 | Pruebas Go: papelera/restauración con rótulo, padre activo y watcher, vínculo con sesión inyectada, nombres hostiles, migración 3 sobre una base de la 2; clic derecho y teclado por CDP en el banco | FS | ✅ |
+| 3.8 | Probar en la ventana real (WKWebView/WebView2): clic derecho, «Retomar sesión» con un CLI real y el DiffEditor — no se puede automatizar aquí | usuario | ⬜ |
 
 ## S4 — Editor de código ✅ (falta 4.10, prueba del usuario en la ventana real)
 
@@ -97,28 +103,42 @@ Plan: [.claude/specs/s5-agentes-ia.md](../.claude/specs/s5-agentes-ia.md).
 | 5.7 | Español neutro (tú) en toda la interfaz y mensajes; regla en `conventions.md` | architect | ✅ |
 | 5.8 | Probar en la ventana real: terminal (PTY con un CLI real, copiar/pegar) y chat contra un servidor real (Ollama no está instalado en esta Mac) | usuario | ⬜ |
 
-## S6 — Servidor MCP de OpenSCAD ⬜
+## S6 — Servidor MCP de OpenSCAD ✅
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 6.1 | `ScadLab --mcp` (stdio): `render`, `validate`, `export`, `list_checkpoints`, `create_checkpoint`, `measure` | OS |
-| 6.2 | Autoconfiguración por workspace: `.mcp.json` (Claude), `opencode.json`, `.codex/config.toml`, config de Antigravity | FS |
-| 6.3 | Reglas del workspace actualizadas para usar el MCP | OS |
+Plan: [.claude/specs/s6-servidor-mcp.md](../.claude/specs/s6-servidor-mcp.md). Detalle y verificación por CLI: [claude/13-mcp.md](13-mcp.md).
 
-## S7 — Medición e impresión ⬜
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 6.1 | `ScadLab --mcp --workspace <dir>` (stdio, sin SDK) con 12 herramientas: `list_checkpoints`, `read_checkpoint`, `create_checkpoint`, `render`, `lint`, `format`, `measure`, `preview` (PNG), `printer_info`, `export`, `list_templates`/`get_template`; lógica de checkpoints extraída a `backend/checkpoint` | OS | ✅ |
+| 6.2 | Autoconfiguración **solo de proyecto** (`backend/mcpconf`): `.mcp.json` (Claude), `opencode.json`, `.gemini/settings.json` (Gemini CLI anterior); fusiona solo `scadlab`, no toca un JSON roto; sincroniza al crear/abrir/importar | FS | ✅ |
+| 6.3 | Interfaz: Configuración → IA (interruptor, comando, estado por archivo, sincronizar), indicador «MCP ✓», tema `ia-mcp` | FS | ✅ |
+| 6.4 | Reglas del workspace (`RULES.md.tmpl`) y skills usan las herramientas MCP, con respaldo a la CLI | OS | ✅ |
+| 6.5 | Prueba real con los CLIs (`mcp list`, sin sesiones): Codex ✅ habilitado; opencode ✅ conectado (en repo git); Claude ⏸ pendiente de aprobación → se agregó `--mcp-config` al lanzarlo desde ScadLab | architect | ✅ |
+| 6.6 | Antigravity (`agy`): solo config global → botón explícito «Agregar a Antigravity» con confirmación (`agy mcp add -- scadlab <bin> --mcp`), probado con HOME temporal | FS | ✅ |
+| 6.7 | Probar con una sesión real de cada agente que use `render`/`preview` (gasta cuota: lo hace el usuario) | usuario | ⬜ |
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 7.1 | Render por color → piezas seleccionables en el visor | OS |
-| 7.2 | Clic en pieza: dimensiones, volumen, peso (densidad), costo (relleno, material, costo/kg) | OS+FS |
-| 7.3 | Aviso si el modelo no cabe en la placa de la impresora del workspace | OS |
+## S7 — Medición e impresión ✅
 
-## S8 — Varios proyectos ⬜
+Plan: [.claude/specs/s7-medicion-impresion.md](../.claude/specs/s7-medicion-impresion.md). Bloque 7.A (Go) ✅ → [14-medicion.md](14-medicion.md); 7.B (interfaz) ✅.
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 8.1 | Hasta 4 workspaces abiertos (Wails v2 es de una ventana: pestañas de proyecto, o instancias con candado — decide `architect`) | FS |
-| 8.2 | El agente ve todos los workspaces abiertos (`--add-dir` / equivalentes) | FS |
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 7.1 | Render por color → partes seleccionables en el visor (colores del modelo / muestra, clic, selección con el resto atenuado, Esc, vista dividida) | OS+FS | ✅ |
+| 7.2 | Tarjeta de la parte: tamaño, volumen, peso, filamento y costo estimados, material por parte (relleno, perímetros, ancho de línea, diámetro y costo/kg) | OS+FS | ✅ |
+| 7.3 | Aviso si el modelo no cabe en la placa: contorno de la cama en rojo, texto con los mm que sobran por eje y aviso en la barra de estado | OS+FS | ✅ |
+| 7.4 | Panel acoplable «Impresión» (`print`, ⌘⇧7) y settings nuevos (perímetros, ancho de línea, diámetro, moneda) | FS | ✅ |
+
+## S8 — Varios proyectos 🟡 (8.B interfaz ✅; falta la prueba manual en la ventana real de Wails)
+
+Plan: [.claude/specs/s8-pestanas-proyecto.md](../.claude/specs/s8-pestanas-proyecto.md). Decisión: **pestañas de proyecto en una sola ventana** (Wails v2 es de una ventana). Bloque 8.A (backend, `app_projects.go`) → [06-go-react-contract.md](06-go-react-contract.md); 8.B (pestañas y estado por proyecto) → [12-paneles.md](12-paneles.md#pestañas-de-proyecto-s8).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 8.1 | Hasta 4 workspaces abiertos como pestañas de proyecto: barra en la cabecera, indicadores de fondo, reordenar, cerrar con confirmación, atajos ⌃Tab / ⌘1…4 / ⌘W, reapertura al arrancar | FS | ✅ UI |
+| 8.2 | El agente ve todos los workspaces abiertos (`--add-dir` en Claude, Codex y Antigravity, en orden con `--mcp-config`; opencode no tiene) y límite de 2 agentes por proyecto | FS | ✅ |
+| 8.5 | Tope global de 2 OpenSCAD simultáneos (`render.maxConcurrentRenders`) para que 4 proyectos con auto-render no saturen la CPU | architect | ✅ |
+| 8.3 | Estado por proyecto en la UI (checkpoint, código sin guardar, parte, diff, chat) y terminales de fondo vivas | FS | ✅ |
+| 8.4 | Prueba en la ventana real de Wails: Ctrl+Tab en WKWebView/WebView2, arrastre de pestañas | usuario | ⬜ |
 
 ## S9 — Exportación ✅ (falta 9.6, prueba manual del usuario en Bambu Studio)
 
@@ -130,13 +150,19 @@ Plan: [.claude/specs/s9-exportacion.md](../.claude/specs/s9-exportacion.md). Tan
 | 9.2 | 3MF multicolor generado en Go: un objeto con una parte por color y su extrusor, STL por color (.zip) | OS | ✅ |
 | 9.3 | «Abrir en Bambu Studio» (la app, nunca su CLI): `DetectSlicers`, `OpenInSlicer`, `RevealPath`, setting `bambuStudioPath`, aviso con «Mostrar en el Finder» | FS | ✅ |
 | 9.4 | Capturas `export-3mf` y `export-3mf-warning`; ayuda de exportar y multicolor sin «En desarrollo» | FS | ✅ |
-| 9.5 | Panel de costo de impresión | FS | ⬜ |
+| 9.5 | Panel de costo de impresión (hecho en S7: panel «Impresión», `print`) | FS | ✅ |
 | 9.6 | Abrir un 3MF exportado en Bambu Studio y comprobar una parte por color con su extrusor, asignar AMS y laminar (no se automatiza: regla 9 de `technical.md`) | usuario | ⬜ |
 
-## S10 — Pulido y versión ⬜
+## S10 — Pulido ✅ · versión ⬜ (cuando el usuario la pida)
 
-| # | Tarea | Dueño |
-|---|---|---|
-| 10.1 | Chequeo i18n estricto (sin texto suelto en JSX ni en Go) | FS |
-| 10.2 | Ayuda en inglés (`index.html`) + español (`es/index.html`), como mini-tools; capturas | FS |
-| 10.3 | Prueba en Windows real; primera versión con `releases.md` | FS |
+Plan: [.claude/specs/s10-pulido.md](../.claude/specs/s10-pulido.md). **No incluye
+empaquetar**: eso se hace solo cuando el usuario dice «preparar la versión»
+(regla 6 de `CLAUDE.md`).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 10.1 | i18n estricto (Go + frontend, sin línea base, `./scripts/i18n-check.sh`), 19 claves sin uso borradas, voseo → tú, código muerto | FS | ✅ |
+| 10.2 | Ayuda bilingüe como mini-tools: `index.html` (inglés) + `es/index.html` (español), README al día | FS | ✅ |
+| 10.3 | Workflow del tag (`release.yml`): validado (YAML, notas con `changelog-section.sh` sobre una sección simulada) | architect | ✅ |
+| 10.4 | Probar el `.exe` en una Windows real | usuario | ⬜ |
+| 10.5 | Primera versión (v0.1.0) con `releases.md` — **solo cuando el usuario lo pida** | — | ⬜ |

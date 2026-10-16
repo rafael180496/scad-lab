@@ -1,6 +1,6 @@
 import {useEffect, useRef} from 'react'
 import type * as Monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
-import {monaco, THEME} from './monaco'
+import {monaco, monacoFontFamily, THEME} from './monaco'
 import {LANGUAGE_ID} from './scadLanguage'
 import {editorSession, registerEditor} from '../../lib/editorSession'
 import type {Problem} from '../../lib/problems'
@@ -31,11 +31,6 @@ const SEVERITY: Record<Problem['severity'], Monaco.MarkerSeverity> = {
     info: monaco.MarkerSeverity.Info,
 }
 
-function fontFamily(): string {
-    const v = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
-    return v || '"JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, Menlo, monospace'
-}
-
 // CodeEditor es Monaco con OpenSCAD. Entra con React.lazy (chunk propio):
 // Monaco pesa más que el resto de la interfaz junta.
 export default function CodeEditor(props: CodeEditorProps) {
@@ -58,7 +53,7 @@ export default function CodeEditor(props: CodeEditorProps) {
             theme: THEME,
             readOnly: cb.current.readOnly,
             automaticLayout: true,
-            fontFamily: fontFamily(),
+            fontFamily: monacoFontFamily(),
             fontSize: cb.current.fontSize,
             fontLigatures: false,
             lineHeight: Math.round(cb.current.fontSize * 1.55),

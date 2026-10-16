@@ -99,3 +99,19 @@ reescrito (paneles, pestañas, dividir, flotar, ocultar, diseños, atajos, la
 limitación de ventanas nativas); `CHANGELOG.md`; `claude/04-frontend.md`
 (sección «Paneles acoplables»: cómo agregar un panel nuevo); prueba de humo
 abriendo la app real (permitido) — **nunca** disparar «Abrir en Bambu Studio».
+
+## Ampliación: minimizar y «Mover a…»
+
+Pedido posterior del usuario: «coloca el botón ocultar solo para hacer pequeñito el
+panel; poder mover a gusto los tres panes (Source abajo, derecha o centro; igual 3D
+viewer y agents, chat)». Resultado, ya implementado (detalle técnico en
+[claude/12-paneles.md](../../claude/12-paneles.md)):
+
+- **Minimizar** (botón **–** de la barra del grupo, ⌘/Ctrl+Shift+M, Ver → Minimizar
+  panel): achica el grupo sin cerrarlo; apilado → solo su barra de pestañas, lado a
+  lado → franja angosta con íconos; flotante → su barra. Se restaura con un clic en una
+  pestaña, con el **+** o con doble clic en el vacío de la barra. Se guarda con el diseño.
+- **Mover a…** en el menú ⋯ y en el clic derecho de la pestaña: Izquierda, Derecha,
+  Arriba, Abajo (del área completa), Centro, Junto a… y Flotar/Acoplar. Reemplaza a «Mover
+  a la derecha» y «Mover abajo». El menú contextual de la pestaña pasó a ser el propio
+  de ScadLab (con submenús) en lugar del de dockview.

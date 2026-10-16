@@ -58,6 +58,28 @@ Skills: `vercel-react-best-practices`, `react`, `tailwind-design-system`,
   El build borra `dist/uishot/` (plugin en `vite.config.ts`): no va al binario.
   WebGL en Chrome headless corre en SwiftShader (`scripts/uishot.sh`).
 
+### Visor por partes (S7)
+
+El visor carga las **partes por color** (`GetModelParts` → `/parts/<clave>/NN.stl`)
+con su color real, en la misma caché LRU que las mallas (`lib/mesh.ts`
+`loadParts`). Selección con un solo raycast al soltar el botón y solo si el
+ratón casi no se movió (nunca con `onClick` de R3F: hace raycast en cada
+movimiento). Las mallas del **banco** (`frontend/public/uishot/*.stl`) se
+generan una vez con OpenSCAD desde las plantillas (comando en `uishot.tsx`),
+se versionan (excepción en `.gitignore`) y no entran en el build. Detalle:
+[claude/14-medicion.md](14-medicion.md).
+
+### Árbol de checkpoints y diff (S3)
+
+El menú del nodo y sus atajos salen de un solo lugar
+(`components/workspace/checkpointActions.tsx`, `useCheckpointActions`), que usan
+el clic derecho, el «…» y el teclado (F2, Supr/⌫, Shift+F10); los atajos del
+árbol no actúan con el foco en Monaco o xterm. «Retomar sesión» pasa por
+`lib/sessionBridge.ts` (abre la terminal o el chat aunque su panel no esté
+montado). «Comparar con el padre» es `components/editor/DiffViewer.tsx`
+(`DiffEditor` de Monaco, local), dentro del panel Código. Detalle de la lógica:
+[claude/15-checkpoints.md](15-checkpoints.md).
+
 ## Editor y ventana (S4)
 
 - Editor: ver [10-editor.md](10-editor.md#frontend-tanda-4b--componentseditor).
@@ -146,3 +168,11 @@ barras visibles) **y** a `resetLayout` del dock (paneles al predeterminado).
 ## Paneles acoplables
 
 Ver [claude/12-paneles.md](12-paneles.md).
+
+## Pestañas de proyecto (S8)
+
+La cabecera lleva una pestaña por proyecto abierto (hasta 4), a la derecha del logo; el menú Ver y las exportaciones
+quedan a la derecha. `App` guarda el estado **por workspace** (`projects[id]`: árbol, checkpoint, código y lo que el
+editor tenía al irse) y el resto de los hooks por workspace (`useRenders`, `useTerminals`). Reglas y detalle:
+[claude/12-paneles.md](12-paneles.md#pestañas-de-proyecto-s8). Regla de la barra: se acorta con elipsis (`useNarrow`) y
+**nunca** empuja los botones de exportar (`uishot-fit.sh` lo comprueba con `headerSw`/`headerCw`).

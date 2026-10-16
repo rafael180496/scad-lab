@@ -1,14 +1,14 @@
 import {Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {createPortal} from 'react-dom'
 import {useNarrow} from '../../hooks/useNarrow'
-import {Eye, Loader2, Lock, PencilLine, Save, Search, Undo2, WandSparkles} from 'lucide-react'
-import type {render, store} from '../../../wailsjs/go/models'
+import {ArrowLeft, Columns2, Eye, Loader2, Lock, PencilLine, Rows2, Save, Search, Undo2, WandSparkles} from 'lucide-react'
+import type {main, render, store} from '../../../wailsjs/go/models'
 import {LintCheckpointSource, SaveAsCheckpoint} from '../../../wailsjs/go/main/App'
 import {PanelToolbar, Placeholder} from '../layout/Pane'
 import {Button, IconButton} from '../ui/Button'
 import {confirmDialog} from '../ui/Dialog'
 import {toast} from '../ui/Toast'
-import {CodeEditor} from './lazy'
+import {CodeEditor, DiffViewer} from './lazy'
 import {SaveCheckpointDialog} from './SaveCheckpointDialog'
 import {EditorBoundary} from './EditorBoundary'
 import {editorCommands, editorSession} from '../../lib/editorSession'
@@ -20,6 +20,18 @@ import {cn} from '../../lib/cn'
 
 // EditorShot: estado inicial para el banco de capturas (src/uishot.tsx).
 export type EditorShot = {mode: 'edit' | 'search' | 'save'; label?: string; description?: string}
+
+// EditorSnap: lo que el editor tenía cuando el proyecto pasó a segundo plano (S8).
+// Cada proyecto abierto conserva su código sin guardar, si estaba editando y la
+// comparación con el padre; al volver a su pestaña EditorPane lo aplica una vez.
+export type EditorSnap = {
+    file: string
+    /** Código que había en el editor (null = no se pudo leer: vale el guardado). */
+    text: string | null
+    editing: boolean
+    dirty: boolean
+    diff: main.CheckpointPair | null
+}
 
 // Espera desde la última tecla hasta revisar el código con el linter.
 const LINT_DEBOUNCE_MS = 400
@@ -38,6 +50,9 @@ export async function confirmLeave(t: Dict, file: string | null) {
 // código se abre en solo lectura y «Guardar» crea un checkpoint hijo.
 // Ancho del panel de código (a interfaz 100 %) por debajo del cual la barra pasa a solo ícono.
 const EDITOR_COMPACT_W = 400
+// Ancho del panel (a interfaz 100 %) desde el que la comparación con el padre se
+// abre lado a lado; por debajo, en línea. El botón del panel lo cambia a mano.
+const DIFF_SIDE_BY_SIDE_W = 640
 
 export function EditorPane({
     workspaceId,
@@ -46,6 +61,8 @@ export function EditorPane({
     renderDiags,
     settings,
     onSaved,
+    restore,
+    onRestored,
     shot,
 }: {
     workspaceId: number | null
@@ -54,15 +71,29 @@ export function EditorPane({
     renderDiags: render.Diagnostic[] | undefined
     settings: store.Settings
     onSaved: (fileName: string) => void
+    /** Estado que dejó este proyecto al irse a segundo plano (se aplica al volver y se consume). */
+    restore?: EditorSnap | null
+    onRestored?: () => void
     shot?: EditorShot
 }) {
     const t = useT()
     // Panel angosto (o interfaz agrandada): los botones pierden el rótulo y
     // quedan como íconos con su `title`.
     const [compact, paneRef] = useNarrow(EDITOR_COMPACT_W)
+    const [narrowDiff, diffRef] = useNarrow(DIFF_SIDE_BY_SIDE_W)
+    const measure = useCallback(
+        (el: HTMLElement | null) => {
+            paneRef(el)
+            diffRef(el)
+        },
+        [paneRef, diffRef],
+    )
     const editing = editorSession.use((s) => s.editing)
     const dirty = editorSession.use((s) => s.dirty)
     const lint = editorSession.use((s) => s.lint)
+    const diff = editorSession.use((s) => s.diff)
+    // true = lado a lado; null = lo que decida el ancho (angosto: en línea)
+    const [diffSide, setDiffSide] = useState<boolean | null>(null)
     const [reset, setReset] = useState(0)
     const [saveOpen, setSaveOpen] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -72,6 +103,25 @@ export function EditorPane({
     const lintTimer = useRef<number | undefined>(undefined)
 
     const docKey = `${workspaceId ?? ''}:${file ?? ''}:${reset}`
+
+    // El código a cargar al abrir el documento: el borrador que dejó el proyecto,
+    // si lo hay, y si no lo guardado. Se fija por docKey (y no se lee de `restore`
+    // en cada render) porque `restore` se consume apenas se aplica.
+    const restoreRef = useRef(restore)
+    restoreRef.current = restore
+    const onRestoredRef = useRef(onRestored)
+    onRestoredRef.current = onRestored
+    const draft = useRef<{key: string; text: string} | null>(null)
+    if (restore && restore.file === file && restore.text != null && draft.current?.key !== docKey) {
+        draft.current = {key: docKey, text: restore.text}
+    }
+    const value = draft.current?.key === docKey ? draft.current.text : source
+
+    // La comparación es de un checkpoint: al elegir otro (o ninguno) se cierra.
+    const showDiff = diff != null && diff.file === file
+    useEffect(() => {
+        if (diff && diff.file !== file) editorSession.set({diff: null})
+    }, [diff, file])
 
     const runLint = useCallback(
         (text: string) => {
@@ -98,7 +148,15 @@ export function EditorPane({
         if (lastKey.current !== docKey) {
             lastKey.current = docKey
             window.clearTimeout(lintTimer.current)
-            editorSession.set({editing: false, dirty: false, lint: []})
+            const r = restoreRef.current
+            if (r && r.file === file) {
+                // Vuelve a su pestaña un proyecto con borrador, edición o comparación abiertos.
+                editorSession.set({editing: r.editing, dirty: r.dirty, lint: [], diff: r.diff})
+                onRestoredRef.current?.()
+                if (r.editing && file) runLint(r.text ?? source)
+            } else {
+                editorSession.set({editing: false, dirty: false, lint: []})
+            }
         }
         if (!file) {
             lintSeq.current++
@@ -106,6 +164,13 @@ export function EditorPane({
         }
         if (!editorSession.get().editing) runLint(source)
     }, [docKey, source, file, runLint])
+    // Un `restore` que llega sin que cambie el documento (se fue y volvió al proyecto antes
+    // de que el editor viera el otro) no tiene nada que aplicar: el editor ya está así.
+    useEffect(() => {
+        if (!restore || lastKey.current !== docKey) return
+        if (restore.diff) editorSession.set({diff: restore.diff})
+        onRestoredRef.current?.()
+    }, [restore, docKey])
     useEffect(() => () => window.clearTimeout(lintTimer.current), [])
 
     const onChange = useCallback(
@@ -192,6 +257,22 @@ export function EditorPane({
     const markers = useMemo(() => mergeProblems(lint, dirty ? undefined : renderDiags), [lint, dirty, renderDiags])
 
     const small = 'h-6 px-2 text-ui-11-5'
+    const sideBySide = diffSide ?? !narrowDiff
+    const diffActions = diff ? (
+        <>
+            <IconButton
+                title={sideBySide ? t.checkpoints.diff.inlineHint : t.checkpoints.diff.sideBySideHint}
+                className="size-6"
+                onClick={() => setDiffSide(!sideBySide)}
+            >
+                {sideBySide ? <Rows2 className="icon-ui-14" /> : <Columns2 className="icon-ui-14" />}
+            </IconButton>
+            <Button className={small} title={fmt(t.checkpoints.diff.backHint, {file: diff.file})} onClick={() => editorSession.set({diff: null})}>
+                <ArrowLeft className="icon-ui-12" />
+                {compact ? null : t.checkpoints.diff.back}
+            </Button>
+        </>
+    ) : null
     const actions = file ? (
         <>
             <span
@@ -236,10 +317,55 @@ export function EditorPane({
     ) : null
 
     return (
-        <div ref={paneRef} className="flex h-full min-h-0 min-w-0 flex-col bg-surface">
-            {file ? <PanelToolbar label={file} actions={actions} /> : null}
-            <div className="min-h-0 min-w-0 flex-1">
+        <div ref={measure} className="flex h-full min-h-0 min-w-0 flex-col bg-surface">
             {file ? (
+                <PanelToolbar
+                    label={showDiff && diff ? fmt(t.checkpoints.diff.title, {file: diff.file, parent: diff.parent}) : file}
+                    actions={showDiff ? diffActions : actions}
+                />
+            ) : null}
+            {showDiff && diff ? (
+                <div
+                    className={cn(
+                        'shrink-0 border-b border-line bg-surface-2 px-3 py-1 font-mono text-ui-11 text-muted',
+                        sideBySide ? 'grid grid-cols-2 gap-3' : 'flex flex-wrap gap-x-4',
+                    )}
+                >
+                    <span className="truncate" title={diff.parent}>
+                        {fmt(t.checkpoints.diff.parentSide, {parent: diff.parent})}
+                    </span>
+                    <span className="truncate" title={diff.file}>
+                        {fmt(t.checkpoints.diff.thisSide, {file: diff.file})}
+                    </span>
+                </div>
+            ) : null}
+            <div className="min-h-0 min-w-0 flex-1">
+            {showDiff && diff ? (
+                <EditorBoundary
+                    resetKey={`${diff.file}:${diff.parent}`}
+                    fallback={(err) => (
+                        <p className="px-3 py-2 text-ui-12 text-danger">{fmt(t.editor.loadError, {msg: err})}</p>
+                    )}
+                >
+                    <Suspense
+                        fallback={
+                            <div className="flex h-full items-center justify-center gap-2 text-ui-12 text-muted">
+                                <Loader2 className="icon-ui-16 animate-spin text-accent" />
+                                {t.checkpoints.diff.loading}
+                            </div>
+                        }
+                    >
+                        <DiffViewer
+                            docKey={`${workspaceId ?? ''}:${diff.file}:${diff.parent}`}
+                            original={diff.parentSource}
+                            modified={diff.source}
+                            sideBySide={sideBySide}
+                            fontSize={settings.editorFontSize || 13}
+                            tabSize={settings.editorIndent === 2 ? 2 : 4}
+                        />
+                    </Suspense>
+                </EditorBoundary>
+            ) : file ? (
                 <EditorBoundary
                     resetKey={docKey}
                     fallback={(err) => (
@@ -259,7 +385,7 @@ export function EditorPane({
                 >
                     <CodeEditor
                         docKey={docKey}
-                        value={source}
+                        value={value}
                         readOnly={!editing}
                         fontSize={settings.editorFontSize || 13}
                         tabSize={settings.editorIndent === 2 ? 2 : 4}

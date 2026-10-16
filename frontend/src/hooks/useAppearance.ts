@@ -68,6 +68,10 @@ export function useAppearance(initial: store.Settings | undefined) {
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (!isMod(e) || e.altKey) return
+            // La tecla física 0 con Shift es el modo Enfoque (⌘/Ctrl+Shift+0), no
+            // un zoom. Se mira e.code y no e.key porque en un teclado español
+            // Shift+0 escribe «=» y se leía como «agrandar»; en US escribe «)».
+            if (e.code === 'Digit0' && e.shiftKey) return
             let dir: 1 | -1 | 0 | null = null
             if (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') dir = 1
             else if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract') dir = -1

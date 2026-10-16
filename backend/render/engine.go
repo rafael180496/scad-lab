@@ -49,7 +49,17 @@ type engine struct {
 	unsupported map[string]bool   // ruta\x00versión\x00opción → OpenSCAD la rechazó
 
 	pruneMu sync.Mutex
+
+	// slots limita cuántos OpenSCAD corren a la vez en todo el proceso. Con
+	// varios proyectos abiertos (S8) y auto-render, cada uno podía lanzar el
+	// suyo; Manifold ya usa todos los núcleos en un solo render, así que dos o
+	// más en paralelo se reparten la CPU y la máquina entera se arrastra con un
+	// modelo pesado. Los que esperan turno siguen siendo cancelables.
+	slots chan struct{}
 }
+
+// maxConcurrentRenders es el tope de OpenSCAD simultáneos (ver engine.slots).
+const maxConcurrentRenders = 2
 
 func newEngine(cacheDir string) (*engine, error) {
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
@@ -64,6 +74,7 @@ func newEngine(cacheDir string) (*engine, error) {
 		jobs:          map[string]*job{},
 		versions:      map[string]string{},
 		unsupported:   map[string]bool{},
+		slots:         make(chan struct{}, maxConcurrentRenders),
 	}
 	// Una poda al arrancar recoge temporales de una sesión que murió. Es un
 	// ReadDir de una carpeta: barato aunque la caché esté llena.
@@ -315,6 +326,12 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 // run ejecuta OpenSCAD una vez, sin shell intermedia y con los argumentos como
 // lista (un nombre de archivo con espacios o comillas no rompe nada).
 func (e *engine) run(ctx context.Context, bin, dir, file, out string, backend, format bool) (string, error) {
+	select {
+	case e.slots <- struct{}{}:
+		defer func() { <-e.slots }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 	args := []string{"-o", out}
 	if format {
 		args = append(args, "--export-format", "binstl")

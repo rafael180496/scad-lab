@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 	"path/filepath"
 	goruntime "runtime"
 
@@ -14,7 +15,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"scadlab/backend/appdata"
+	"scadlab/backend/i18n"
 	"scadlab/backend/meshserve"
+	"scadlab/backend/store"
 )
 
 //go:embed all:frontend/dist
@@ -25,14 +28,24 @@ var frontendAssets embed.FS
 var appVersion = "dev"
 
 func main() {
+	// Modo servidor MCP (S6): corre antes de crear la App y de wails.Run, sin
+	// ventana. Ver main_mcp.go.
+	if len(os.Args) > 1 && os.Args[1] == "--mcp" {
+		os.Exit(runMCP(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
+
 	app := NewApp()
+	// El «Acerca de» nativo de macOS se arma antes de que la App lea sus
+	// ajustes, así que el idioma guardado se consulta aquí.
+	i18n.SetLang(savedLanguage())
 
 	// Las mallas del render se sirven por HTTP (GET /mesh/<clave>.stl) desde
-	// la misma caché que usa app.go. Sin directorio de datos no hay caché que
+	// la misma caché que usa app.go, y las partes por color del modelo (S7)
+	// en GET /parts/<clave>/NN.stl (app_parts.go). Sin directorio de datos no hay caché que
 	// servir: la app abre igual, sin el middleware.
 	var meshMiddleware assetserver.Middleware
 	if dir, err := appdata.Dir(); err == nil {
-		meshMiddleware = meshserve.Middleware(filepath.Join(dir, "cache", "meshes"))
+		meshMiddleware = meshserve.MiddlewareWithParts(filepath.Join(dir, "cache", "meshes"), partsCacheDir(dir))
 	} else {
 		log.Printf("scadlab: servidor de mallas desactivado: %v", err)
 	}
@@ -59,7 +72,7 @@ func main() {
 			TitleBar: mac.TitleBarHiddenInset(),
 			About: &mac.AboutInfo{
 				Title:   "ScadLab",
-				Message: "Diseño 3D con OpenSCAD e IA",
+				Message: i18n.T(i18n.Msg{ES: "Diseño 3D con OpenSCAD e IA", EN: "3D design with OpenSCAD and AI"}),
 			},
 		},
 		Windows: &windows.Options{
@@ -95,4 +108,27 @@ func appMenu() *menu.Menu {
 		return nil
 	}
 	return menu.NewMenuFromItems(menu.AppMenu(), menu.EditMenu())
+}
+
+// savedLanguage lee settings.language sin dejar la base abierta: el diálogo
+// «Acerca de» de macOS no se puede traducir después de wails.Run. Sin base o
+// sin idioma elegido devuelve "" (inglés, el default).
+func savedLanguage() string {
+	path, err := appdata.DBPath()
+	if err != nil {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	st, err := store.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer st.Close()
+	s, err := st.GetSettings()
+	if err != nil {
+		return ""
+	}
+	return s.Language
 }

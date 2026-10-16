@@ -31,7 +31,7 @@ Lanzá en paralelo hasta un `fullstack-dev` y un `openscad-dev` (o dos `fullstac
 
 ## Integración y verificación
 
-Revisá el diff de cada uno contra su contrato, **mirá las capturas nuevas** (`docs/screenshots/es/`) y corré: `go build ./...`, `go vet ./...`, `go test ./...`, `cd frontend && pnpm build`, `node frontend/scripts/i18n-check.mjs`, y `codegraph sync` si hay índice. Para render real, un `.scad` de `assets/skills/openscad-templates/templates/` con `openscad -o /tmp/x.stl`. Marcá la fase en `claude/01-roadmap.md`. Informá qué quedó hecho, qué se verificó y qué no.
+Revisá el diff de cada uno contra su contrato, **mirá las capturas nuevas** (`docs/screenshots/es/`) y corré: `go build ./...`, `go vet ./...`, `go test ./...`, `cd frontend && pnpm build`, `./scripts/i18n-check.sh` (frontend + Go), y `codegraph sync` si hay índice. Para render real, un `.scad` de `assets/skills/openscad-templates/templates/` con `openscad -o /tmp/x.stl`. Marcá la fase en `claude/01-roadmap.md`. Informá qué quedó hecho, qué se verificó y qué no.
 
 ## Preparar la versión
 

@@ -26,7 +26,7 @@ Todas las skills respetan estas reglas; el detalle está en `openscad-core`:
    `// @checkpoint parent=<archivo-padre.scad> desc="<qué cambia>"`.
 3. **Color obligatorio**: toda pieza de primer nivel dentro de `color(...)`.
 4. **Parámetros arriba**, con comentarios de Customizer.
-5. **Validar** cada checkpoint (MCP de OpenSCAD de la app u `openscad -o`) y
+5. **Validar** cada checkpoint (herramientas MCP `render`/`preview` del servidor `scadlab`, o `openscad -o` si no está) y
    corregir lo que reporte `RENDER_ERRORS.md` en un checkpoint **nuevo**.
 6. **Milímetros** siempre. Respetar `printer.json` si existe.
 

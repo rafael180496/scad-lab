@@ -1,9 +1,10 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Bot, Settings as SettingsIcon, Sparkles} from 'lucide-react'
-import {CancelChat, ChatCheckpointParent, DeleteChat, GetChat, ListChats, NewChat, SaveAsCheckpoint, SendChatMessage} from '../../../wailsjs/go/main/App'
+import {CancelChat, ChatCheckpointParent, DeleteChat, GetChat, ListChats, NewChat, SaveChatCheckpoint, SendChatMessage} from '../../../wailsjs/go/main/App'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
+import {onOpenChat, onProjectClosed, takePendingChat} from '../../lib/sessionBridge'
 import {SaveCheckpointDialog} from '../editor/SaveCheckpointDialog'
 import {Button} from '../ui/Button'
 import {confirmDialog} from '../ui/Dialog'
@@ -30,6 +31,11 @@ export type ChatPanelProps = {
     /** Abre Configuración → IA. */
     onOpenSettings?: () => void
 }
+
+// Chat elegido en cada proyecto abierto (S8): al cambiar de pestaña de proyecto el
+// panel vuelve al chat que tenía ese proyecto, o al «Nuevo chat» si lo había
+// dejado así (null), en vez de saltar al más reciente.
+const chosenChat = new Map<number, number | null>()
 
 function NoProviders({onOpenSettings, onRefresh}: {onOpenSettings?: () => void; onRefresh: () => void}) {
     const t = useT()
@@ -89,7 +95,15 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     const t = useT()
     const {providers, loaded, refresh} = useChatProviders()
     const [chats, setChats] = useState<store.Chat[]>([])
-    const [chatId, setChatId] = useState<number | null>(null)
+    const [chatId, setChatIdRaw] = useState<number | null>(null)
+    // Cualquier elección del usuario se anota para su proyecto; los reinicios por
+    // cambio de proyecto usan setChatIdRaw, que no anota nada.
+    const wsRef = useRef(workspaceId)
+    wsRef.current = workspaceId
+    const setChatId = useCallback((id: number | null) => {
+        setChatIdRaw(id)
+        if (wsRef.current != null) chosenChat.set(wsRef.current, id)
+    }, [])
     const [messages, setMessages] = useState<store.ChatMessage[]>([])
     const [text, setText] = useState('')
     const [saving, setSaving] = useState<{code: string; parent: string; busy: boolean} | null>(null)
@@ -171,20 +185,44 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         }
     }, [])
 
+    // Un chat pedido desde afuera («Abrir el chat» de un checkpoint): mientras
+    // llega, la selección por defecto del workspace no debe pisarlo.
+    const requested = useRef<number | null>(null)
     useEffect(() => {
-        setChatId(null)
+        setChatIdRaw(null)
         setMessages([])
         setChats([])
         if (workspaceId == null) return
         let stale = false
         reloadChats(workspaceId).then((list) => {
-            if (stale || list.length === 0) return
-            setChatId(list[0].id) // sigue donde se quedó: el más reciente
+            if (stale || list.length === 0 || requested.current != null) return
+            // Vuelve al chat que tenía este proyecto; si lo dejó en «Nuevo chat»
+            // (null) se respeta; sin elección previa, el más reciente.
+            const kept = chosenChat.get(workspaceId)
+            if (kept === null) return
+            setChatIdRaw(list.find((c) => c.id === kept)?.id ?? list[0].id)
         })
         return () => {
             stale = true
         }
     }, [workspaceId, reloadChats])
+
+    const openRequested = useCallback(
+        async (id: number) => {
+            if (workspaceId == null) return
+            requested.current = id
+            const list = await reloadChats(workspaceId)
+            requested.current = null
+            if (list.some((c) => c.id === id)) setChatId(id)
+        },
+        [workspaceId, reloadChats],
+    )
+    useEffect(() => onProjectClosed((ws) => void chosenChat.delete(ws)), [])
+    useEffect(() => {
+        const pending = takePendingChat()
+        if (pending != null) void openRequested(pending)
+        return onOpenChat((id) => void openRequested(id))
+    }, [openRequested])
 
     // Un chat que acaba de crear `send` no se carga: su GetChat podría leer antes
     // de que se guarde el primer mensaje y, al llegar tarde, borrarlo de la lista.
@@ -293,7 +331,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         if (!saving || workspaceId == null) return
         setSaving({...saving, busy: true})
         try {
-            const name = await SaveAsCheckpoint(workspaceId, saving.parent, label, description, saving.code)
+            const name = await SaveChatCheckpoint(workspaceId, chatId ?? 0, saving.parent, label, description, saving.code)
             toast.ok(fmt(t.editor.saved, {file: name}))
             setSaving(null)
             onCheckpointCreated(name)

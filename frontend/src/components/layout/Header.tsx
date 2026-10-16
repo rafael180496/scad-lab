@@ -1,7 +1,9 @@
+import type {ComponentProps} from 'react'
 import {Box, Download, Image, Loader2, PanelLeftClose, PanelLeftOpen, Settings} from 'lucide-react'
 import {Button, IconButton} from '../ui/Button'
 import {Logo} from './Logo'
 import {ViewMenu, type ShotView} from '../dock/ViewMenu'
+import {ProjectTabs} from './ProjectTabs'
 import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
@@ -12,7 +14,7 @@ const HEADER_COMPACT_W = 900
 
 export function Header({
     platform,
-    workspaceName,
+    projects,
     sidebarCollapsed,
     onToggleSidebar,
     statusBarHidden,
@@ -26,7 +28,8 @@ export function Header({
     onExportPng,
 }: {
     platform: string
-    workspaceName?: string
+    /** Pestañas de los proyectos abiertos (S8), a la derecha del logo. */
+    projects: ComponentProps<typeof ProjectTabs>
     sidebarCollapsed: boolean
     onToggleSidebar: () => void
     statusBarHidden: boolean
@@ -79,12 +82,8 @@ export function Header({
                 <Logo className="icon-ui-20 text-fg" />
                 <span className="text-ui-13-5 font-semibold tracking-tight">ScadLab</span>
             </div>
-            {workspaceName ? (
-                <>
-                    <span className="text-faint">/</span>
-                    <span className="min-w-0 truncate font-mono text-ui-12 text-muted" title={workspaceName}>{workspaceName}</span>
-                </>
-            ) : null}
+            <ProjectTabs {...projects} />
+            <div className="min-w-0 flex-1" />
             <ViewMenu
                 compact={compact}
                 sidebarHidden={sidebarCollapsed}
@@ -93,7 +92,6 @@ export function Header({
                 onToggleStatusBar={onToggleStatusBar}
                 shot={viewShot}
             />
-            <div className="min-w-0 flex-1" />
             <div className="flex shrink-0 items-center gap-1">
                 <Button variant="ghost" {...exportBtn(t.header.exportStlHint, 'mod+shift+e', onExportStl, exportBusy)}>
                     {exportBusy ? <Loader2 className="icon-ui-14 animate-spin" /> : <Box className="icon-ui-14" />}

@@ -10,6 +10,8 @@ destino: **{{.PrinterName}}** — volumen de impresión {{.BuildX}} × {{.BuildY
    modelo es un *checkpoint* inmutable. Para cambiar algo, crear un archivo
    NUEVO con el siguiente número: `NNN-slug.scad` (tres dígitos, creciente,
    slug en kebab-case que diga qué cambió — p. ej. `004-add-hinge.scad`).
+   «Borrar» un checkpoint no existe para ti: si el usuario quiere descartar uno,
+   lo manda a la papelera desde la app (`.scadlab/trash/`, se puede restaurar).
 2. **Primera línea de cada checkpoint**, exactamente con este formato:
 
    ```
@@ -19,24 +21,81 @@ destino: **{{.PrinterName}}** — volumen de impresión {{.BuildX}} × {{.BuildY
    `parent` es el checkpoint del que parte (vacío en el primero: `parent=`).
    Ramificar = crear un archivo nuevo cuyo `parent` es un checkpoint anterior
    distinto del último. ScadLab arma el árbol con estas líneas.
+
+   **Padre activo.** Si el usuario eligió «Ramificar desde aquí», ScadLab guarda
+   el checkpoint elegido en `.scadlab/active-parent` (una línea con el nombre
+   del archivo; `list_checkpoints` lo informa como `activeParent`). Si ese
+   archivo existe, **el próximo checkpoint va como hijo del activo**, no del
+   último: `create_checkpoint` sin `parent` ya lo hace, y si escribes el archivo
+   a mano, pon ese nombre en `parent=`. Cuando creas un hijo del activo, ScadLab
+   lo mueve solo al checkpoint nuevo, así que seguir iterando continúa la misma
+   rama. Sin `.scadlab/active-parent`, el padre es el checkpoint más nuevo.
+   **No edites ni borres `.scadlab/`**: lo gestiona la app.
 3. **Color en cada pieza de primer nivel**: `color("nombre_o_#hex") …`. ScadLab
    colorea el visor y exporta el 3MF multicolor por color (máximo
    {{.ColorSlots}} colores para esta impresora).
 4. **Parámetros arriba**, con anotaciones del Customizer (`/* [Dimensiones] */`,
    `// [min:step:max]`).
-5. **Validar después de cada checkpoint**: renderizar con la herramienta MCP de
-   OpenSCAD (`openscad` en `.mcp.json`) o, si no está, con
-   `openscad -o exports/check.stl <archivo>.scad` y leer errores y warnings.
+5. **Validar después de cada checkpoint**: con la herramienta MCP `render` de
+   ScadLab (ver «Herramientas MCP de ScadLab» abajo) y leer errores y warnings.
+   Si el servidor MCP `scadlab` no está disponible, renderizar con
+   `openscad -o exports/check.stl <archivo>.scad`.
 6. **Si existe `RENDER_ERRORS.md`**, ScadLab lo escribió porque el último
    render falló: leerlo y corregir en un checkpoint NUEVO, nunca editando el
-   que falló.
+   que falló. (`render` también devuelve esos mismos errores, con la línea.)
 7. **Debe caber en la placa**: el modelo completo dentro de
    {{.BuildX}} × {{.BuildY}} × {{.BuildZ}} mm. Si no cabe, partirlo en piezas y decirlo.
+   `measure` lo comprueba (`fitsBuildVolume`).
 8. **Diseñar para FDM**: voladizos ≤ 45°, pared mínima 0,8 mm (2 perímetros de
    0,4), holgura 0,2 mm a presión y 0,3–0,4 mm deslizante, chaflán de 0,5 mm en
    la base contra la pata de elefante. Detalle en la skill `bambu-lab-printers`.
 9. **No hacer commits.** Nunca `git add`, `commit`, `push` ni tags: el usuario
    revisa y commitea.
+
+## Otros proyectos abiertos
+
+ScadLab puede tener abiertos varios proyectos a la vez. Si te lanzó con las
+carpetas de otros proyectos (el CLI las lista como directorios adicionales),
+**puedes leerlos** para reutilizar piezas, medidas o módulos (copiando el código
+que sirva a un checkpoint NUEVO de este proyecto), pero **solo escribes
+checkpoints en este workspace**: nunca crees, edites ni borres archivos en los
+otros.
+
+## Herramientas MCP de ScadLab
+
+Si el servidor MCP `scadlab` está conectado (en Claude Code, `/mcp`; el archivo
+de configuración del proyecto lo escribe ScadLab), úsalo en vez de lanzar
+OpenSCAD a mano. Trabaja sobre esta carpeta, con la misma configuración y la
+misma caché que la app, y funciona aunque la app esté cerrada.
+
+| Herramienta | Para qué |
+|---|---|
+| `printer_info` | impresora del workspace: volumen, boquilla, slots del AMS, reglas FDM clave, material por defecto y OpenSCAD detectado |
+| `list_checkpoints` | árbol de checkpoints (padre, descripción, hijos), el último estado de render conocido y el padre activo (`activeParent`) |
+| `read_checkpoint` | código de un checkpoint |
+| `create_checkpoint` | crea un checkpoint **nuevo** `NNN-slug.scad` con el encabezado correcto; nunca pisa uno existente. `parent` por defecto: el padre activo si hay, y si no el más nuevo |
+| `render` | renderiza con OpenSCAD: estado, errores con línea, tamaño, volumen, triángulos, si cabe en la placa; mantiene `RENDER_ERRORS.md` |
+| `lint` / `format` | revisa (OpenSCAD + reglas SL001–SL009) y formatea código sin guardarlo |
+| `preview` | **imagen PNG** de la pieza (`view`: `iso`, `front`, `top`, `right`…; con los colores del modelo) para mirarla |
+| `measure` | medidas, volumen, ¿cabe en la placa?, partes por color y **estimación de impresión** (peso, metros de filamento y costo, con el relleno y los perímetros de la configuración; con sus supuestos) |
+| `export` | `stl`, `3mf` (multicolor para Bambu Studio) o `stl-per-color` en `exports/` |
+| `list_templates` / `get_template` | plantillas paramétricas listas (misma colección que la skill `openscad-templates`) |
+
+Flujo recomendado:
+
+1. `printer_info` (volumen y colores disponibles) y `list_checkpoints`.
+2. `create_checkpoint` con el código nuevo (empezando, si encaja, por
+   `get_template`).
+3. `render`. Si falla, corregir en un checkpoint NUEVO con `parent=<el roto>`.
+4. `preview` para mirar la pieza: un modelo puede renderizar sin errores y
+   estar mal (voladizos, piezas flotando, un agujero del lado equivocado).
+5. `measure` para confirmar que cabe en la placa y ver el peso.
+6. Si algo no convence, un checkpoint nuevo y vuelta al paso 3. `export` solo
+   cuando el usuario lo pida o el modelo esté terminado.
+
+Sin el MCP: `openscad -o exports/check.stl <archivo>.scad` para validar y
+`openscad -o exports/preview.png --render --colorscheme=Tomorrow --imgsize=800,800 --viewall --autocenter <archivo>.scad`
+para obtener una imagen.
 
 ## Skills disponibles
 

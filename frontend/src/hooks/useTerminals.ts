@@ -1,7 +1,9 @@
-import {useCallback, useEffect, useRef, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import type {main} from '../../wailsjs/go/models'
 import {CloseTerminal, ListAgentChoices, ListTerminals, SetAutoIterate, StartAgentTerminal} from '../../wailsjs/go/main/App'
 import {onTerminalExit} from '../components/terminal/events'
+import {showPanel} from '../components/dock/dock'
+import {onProjectClosed, onTerminalOpened} from '../lib/sessionBridge'
 import {toast} from '../components/ui/Toast'
 import {errorText} from '../lib/errors'
 
@@ -42,6 +44,8 @@ export function useTerminals(workspaceId: number | null, autoIterateSetting: boo
     const [terms, setTerms] = useState<TermSlot[]>([])
     const [agents, setAgents] = useState<main.AgentChoice[]>([])
     const [busy, setBusy] = useState<SlotIndex | null>(null)
+    // ListTerminals ya respondió: antes de eso «cero agentes» no significa nada.
+    const [loaded, setLoaded] = useState(false)
     const [autoIterate, setAuto] = useState(autoIterateSetting)
     const current = useRef(terms)
     current.current = terms
@@ -51,9 +55,32 @@ export function useTerminals(workspaceId: number | null, autoIterateSetting: boo
         ListTerminals()
             .then((list) => setTerms((prev) => (prev.length ? prev : assign(list))))
             .catch(() => {})
+            .finally(() => setLoaded(true))
     }, [])
 
+    // Una terminal que Go abrió por su cuenta («Retomar sesión» desde el árbol de
+    // checkpoints): se la lleva a la pestaña «Agente» que esté libre y se muestra.
+    useEffect(
+        () =>
+            onTerminalOpened((id) => {
+                ListTerminals()
+                    .then((list) => {
+                        const info = list.find((t) => t.id === id)
+                        if (!info || current.current.some((t) => t.id === id)) return
+                        const used = new Set(current.current.filter((t) => t.workspaceId === info.workspaceId).map((t) => t.slot))
+                        const slot: SlotIndex = used.has(0) ? 1 : 0
+                        setTerms((l) => [...l, {id, agentId: info.agentId, workspaceId: info.workspaceId, slot, ended: null}])
+                        showPanel(slot === 0 ? 'agent-1' : 'agent-2')
+                    })
+                    .catch(() => {})
+            }),
+        [],
+    )
+
     useEffect(() => onTerminalExit((e) => setTerms((prev) => prev.map((t) => (t.id === e.id ? {...t, ended: e.code} : t)))), [])
+
+    // Cerrar la pestaña de un proyecto cierra sus terminales en Go: acá se sueltan.
+    useEffect(() => onProjectClosed((ws) => setTerms((prev) => prev.filter((t) => t.workspaceId !== ws))), [])
 
     // La configuración llega después del primer render.
     useEffect(() => setAuto(autoIterateSetting), [autoIterateSetting])
@@ -112,5 +139,15 @@ export function useTerminals(workspaceId: number | null, autoIterateSetting: boo
         [onAutoIterateChange],
     )
 
-    return {slots: slotsOf(workspaceId), busy, agents, refreshAgents, start, close, autoIterate, setAutoIterate}
+    // Las terminales de TODOS los proyectos abiertos, por pestaña «Agente»: las de
+    // los proyectos de fondo siguen montadas (ocultas) para conservar su pantalla.
+    const all: [TermSlot[], TermSlot[]] = [terms.filter((t) => t.slot === 0), terms.filter((t) => t.slot === 1)]
+    // Agentes vivos por proyecto (indicador de las pestañas de proyecto).
+    const alive = useMemo(() => {
+        const out: Record<number, number> = {}
+        for (const t of terms) if (t.ended == null) out[t.workspaceId] = (out[t.workspaceId] ?? 0) + 1
+        return out
+    }, [terms])
+
+    return {slots: slotsOf(workspaceId), all, alive, loaded, busy, agents, refreshAgents, start, close, autoIterate, setAutoIterate}
 }

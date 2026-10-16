@@ -32,6 +32,56 @@ Fuente: `app*.go`. Tipos TS generados en `frontend/wailsjs/go/models.ts` con
 | `SetCheckpointUI(id, file, label, collapsed)` | — | |
 | `RevealWorkspace(id)` | — | Finder/Explorador |
 
+## Proyectos abiertos — `app_projects.go` (S8)
+
+Hasta 4 workspaces como pestañas de una sola ventana (`store.MaxOpenProjects`); orden y activo en settings
+(`openProjects`, `activeProject`). **Al arrancar el backend no abre nada**: la UI llama `ListOpenProjects` y reabre cada
+pestaña con `OpenProject`. Uso en la UI: [12-paneles.md](12-paneles.md#pestañas-de-proyecto-s8).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `ListOpenProjects()` | `OpenProjectsView{projects: [{workspace, missing}], activeId}` | en el orden de las pestañas; `activeId` 0 = ninguno |
+| `OpenProject(id)` | `WorkspaceView` | lo agrega (si no estaba), lo activa y vigila su carpeta sin soltar la de los demás; error claro con 4 abiertos. Si ya estaba abierto solo lo activa y lo relee |
+| `CloseProject(id)` | — | detiene su watcher, cancela su render y cierra sus terminales; si era el activo pasa al vecino. No es error cerrar uno que no está abierto |
+| `SetActiveProject(id)` | — | solo persiste cuál está al frente |
+| `ReorderProjects(ids)` | — | tolerante: ignora ids no abiertos o repetidos y deja al final los que no nombra |
+| `ProjectActivity()` | `[ProjectActivityEntry{id, rendering, latestFile, lastRenderStatus, renderFailed, agentsAlive}]` | barato; `renderFailed` = falló el último render del checkpoint más nuevo (en esta sesión) |
+
+Evento `projects:changed` (payload `OpenProjectsView`) tras abrir, cerrar, reordenar o activar: también es el **eco** de
+lo que hace la propia UI, que lo ignora mientras tiene una operación en vuelo. `render:*`, `terminal:*`, `chat:*` y
+`checkpoints:changed` llevan `workspaceId` y llegan **también de los proyectos de fondo**. `OpenWorkspace` sigue existiendo
+(compatibilidad); la UI usa `OpenProject`.
+
+## Checkpoints avanzados — `app_checkpoints.go`, `app_chat.go` (S3)
+
+Las operaciones sobre archivos viven en `backend/checkpoint` (ver [claude/15](15-checkpoints.md));
+estos bindings resuelven el workspace, validan el nombre (`checkpoint.ValidName`, un `.scad`
+suelto de la raíz), mantienen el índice de la base y emiten `checkpoints:changed`.
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `TrashCheckpoint(id, file, branch)` | `[]string` (nombres en la papelera) | con `branch` también todos los descendientes (el de `file` primero). Guarda antes rótulo, plegado y vínculo en `checkpoint_trash` |
+| `ListTrash(id)` | `[]checkpoint.TrashedItem{name, original, parent, description, trashedAt (s)}` | lo más reciente primero |
+| `RestoreCheckpoint(id, trashedName)` | `string` (nombre con el que volvió) | su nombre si está libre; si no, el siguiente `NNN` con el mismo slug. Devuelve rótulo, plegado y vínculo |
+| `SetActiveParent(id, file)` / `GetActiveParent(id)` | — / `string` | `""` limpia / «sin padre activo explícito» (rige el más nuevo) |
+| `RenameCheckpoint(id, file, label)` | — | rótulo (`label`): máx. 80 letras, sin saltos; `""` lo quita. El archivo no cambia de nombre |
+| `ReadCheckpointPair(id, file)` | `CheckpointPair{file, parent, parentSource, source}` | para el diff; error claro si es una raíz o el padre ya no está (¿papelera?) |
+| `ResumeCheckpointSession(id, file)` | `CheckpointResume{kind, terminalId, agentId, chatId}` | `kind: "terminal"` → abrió el CLI con `StartAgentTerminal` en modo `resume` (la UI reengancha `terminalId`); `"chat"` → la UI abre `chatId`. Falla sin vínculo, o con un agente sin id de sesión (Antigravity) |
+| `RevealCheckpoint(id, file)` | — | Finder / Explorador, sobre `RevealPath` |
+| `SaveChatCheckpoint(workspaceId, chatId, parent, label, desc, source)` | `string` | como `SaveAsCheckpoint`, y guarda `chat_id` si el chat es del workspace |
+
+`WorkspaceView` ganó `activeParent` (`""` = ninguno explícito): lo llevan `OpenWorkspace`,
+`RescanWorkspace` y el evento `checkpoints:changed`. Cambiar el activo emite ese mismo evento
+(el archivo `.scadlab/active-parent` no es un `.scad` y el watcher no lo ve).
+`store.Checkpoint` ganó `agentId` y `chatId` (`sessionId` ya existía): el vínculo con quien lo creó.
+
+**Vínculo con la sesión.** El watcher, al ver un `.scad` nuevo, avanza el padre activo
+(`checkpoint.Advance`) y, si hay una terminal de agente abierta en el workspace, guarda el agente y la
+sesión más reciente de ese agente para la carpeta (`agentsessions.List`, en otra goroutine). No se
+vincula lo que creó la propia app (`SaveAsCheckpoint`, `SaveChatCheckpoint`) ni lo que acaba de volver
+de la papelera. La migración 3 de `scadlab.db` agrega `checkpoints.agent_id`, `checkpoints.chat_id` y la
+tabla `checkpoint_trash`; `SyncCheckpoints` no toca esas columnas.
+
 ## Render — `app_render.go` (S1)
 
 | Binding | Devuelve | Nota |
@@ -124,33 +174,6 @@ se abrió el diálogo.
 por la variable de paquete `launchApp`, que los tests reemplazan por un
 registrador: ninguna prueba abre una aplicación (regla 9 de `technical.md`).
 
-## Terminal de agentes — `app_terminal.go` (S5)
-
-| Binding | Devuelve | Nota |
-|---|---|---|
-| `ListAgentChoices()` | `[]AgentChoice{id, name, found, path, enabled, canList}` | liviano: solo resuelve el ejecutable (no corre `--version`) |
-| `StartAgentTerminal(workspaceId, agentId, mode, sessionId, cols, rows)` | `string` (termId) | `mode`: `new` \| `resume` \| `continue`; máx. 2 terminales de agente; argv sin shell, `sessionId` validado |
-| `WriteTerminal(termId, data)` / `ResizeTerminal(termId, cols, rows)` / `CloseTerminal(termId)` | — | cerrar mata el grupo de procesos |
-| `ListTerminals()` | `[]TerminalInfo{id, kind, agentId, workspaceId, cols, rows, startedAt}` | para reenganchar al recargar la UI |
-| `ReadTerminalBuffer(termId)` | `TerminalSnapshot{data (base64), seq}` | pantalla reciente para redibujar |
-| `ListAgentSessions(workspaceId, agentId)` | `[]agentsessions.Session{id, title, updatedAt}` | filtradas por la carpeta del workspace |
-| `SetAutoIterate(enabled)` | — | setting `autoIterate` (auto-iteración, ver `onRenderFinished`) |
-
-## Chat con modelos — `app_chat.go` (S5)
-
-| Binding | Devuelve | Nota |
-|---|---|---|
-| `ListChats(workspaceId)` / `GetChat(chatId)` | `[]store.Chat` / `ChatView{chat, messages, running, partial, partialSeq}` | `GetChat` permite retomar un turno en curso |
-| `NewChat(workspaceId, providerId, model)` | `store.Chat` | proveedor y modelo quedan fijos en el chat |
-| `SendChatMessage(chatId, text, currentFile)` | `store.ChatMessage` (el del usuario) | respuesta por eventos `chat:*`; prompt de sistema = `prompts.SystemPrompt` |
-| `CancelChat(chatId)` / `DeleteChat(chatId)` | — | cancelar conserva el parcial |
-| `ListProviderModels(providerId)` | `[]string` | Ollama `/api/tags`, OpenAI `/v1/models`, Anthropic lista fija |
-| `ChatCheckpointParent(workspaceId, currentFile)` | `string` | padre para «Guardar como checkpoint»: el abierto o el último |
-
-Persistencia: migración 2 (`chats`, `chat_messages`). Las API keys se leen de
-la variable que nombra `config.apiKeyEnv` (si no está en el proceso, se pide una
-vez a la shell de login en macOS); nunca se guardan ni viajan al frontend.
-
 ## Eventos (Go → React)
 
 Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
@@ -159,11 +182,12 @@ Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
 |---|---|---|
 | `render:started` | `{workspaceId, fileName}` | `RenderCheckpoint` (también el auto-render del watcher) |
 | `render:finished` | `{workspaceId, result}` | `RenderCheckpoint`, siempre, aunque falle el motor (un cancelado llega con `status: cancelled`) |
-| `checkpoints:changed` | `WorkspaceView` | watcher: algún `.scad` de la raíz cambió (debounce 300 ms) |
+| `checkpoints:changed` | `WorkspaceView` | watcher: algún `.scad` de la raíz cambió (debounce 300 ms); también al cambiar el padre activo, la papelera, un rótulo o un vínculo con la sesión |
 | `terminal:data` | `{id, data (base64), seq}` | PTY de una terminal de agente (S5) |
 | `terminal:exit` | `{id, code}` | el proceso de la terminal terminó |
 | `chat:delta` | `{chatId, text, seq}` | turno de chat en curso (deltas agrupados cada 40 ms) |
 | `chat:done` | `{chatId, messageId, cancelled}` | fin del turno (también al cancelar con texto parcial) |
+| `mcp:changed` | `{enabled}` | se apagó/encendió el servidor MCP o se resincronizó un workspace (`SetMCPEnabled`, `SyncWorkspaceMCP`) |
 | `chat:error` | `{chatId, message, messageId}` | error del proveedor; si había texto, se guardó como respuesta parcial |
 
 Watcher (`backend/watch`): raíz del workspace abierto, no recursivo, solo
@@ -179,3 +203,13 @@ de número más alto.
 | `CreateSkill(name)` | carpeta creada (kebab-case) |
 | `OpenSkillsFolder()` | — |
 | `SyncWorkspaceSkills(id)` | — |
+
+## Bindings documentados en su segmento
+
+Para que este archivo no crezca sin tope, algunas áreas tienen su tabla de
+bindings junto al resto de su documentación:
+
+| Área | Segmento |
+|---|---|
+| Medición e impresión (`app_parts.go`) | [claude/14-medicion.md](14-medicion.md#bindings-contrato-go--react) |
+| Terminal de agentes, chat y servidor MCP (`app_terminal.go`, `app_chat.go`, `app_mcp.go`) | [claude/09-agents-ai.md](09-agents-ai.md#bindings-contrato-go--react) |

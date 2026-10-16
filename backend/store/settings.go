@@ -6,6 +6,8 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+
+	"scadlab/backend/i18n"
 )
 
 // Settings es la configuración de la app. Se guarda campo por campo en la
@@ -21,6 +23,14 @@ type Settings struct {
 	DefaultMaterial string  `json:"defaultMaterial"` // id de materials
 	InfillPercent   float64 `json:"infillPercent"`
 	DefaultAgent    string  `json:"defaultAgent"` // id de ai_providers
+
+	// Parámetros de la estimación de peso y costo (S7, backend/estimate). Son los
+	// valores por defecto: el panel «Impresión» los puede cambiar solo para un
+	// cálculo. Fuera de rango no es un error: Normalize deja el de fábrica.
+	WallLoops          int     `json:"wallLoops"`          // perímetros, 1–10 (default 2)
+	LineWidthMm        float64 `json:"lineWidthMm"`        // ancho de línea, 0,2–1,5 mm (default 0,42)
+	FilamentDiameterMm float64 `json:"filamentDiameterMm"` // 1,0–3,5 mm (default 1,75)
+	Currency           string  `json:"currency"`           // código ISO 4217 de 3 letras (default "USD")
 	// BambuStudioPath es la app de Bambu Studio para «Abrir en Bambu Studio»
 	// (S9): en macOS el .app, en Windows el .exe. Vacío = autodetectar en las
 	// rutas de instalación habituales; si la ruta no existe se ignora.
@@ -36,6 +46,11 @@ type Settings struct {
 	// usuario copie el error. Se enciende y apaga desde la barra de la
 	// terminal (App.SetAutoIterate).
 	AutoIterate bool `json:"autoIterate"`
+	// MCPEnabled deja configurado el servidor MCP de ScadLab en los CLIs de IA
+	// de cada workspace (S6): .mcp.json, opencode.json y .gemini/settings.json,
+	// y los flags -c de Codex. Default true. Solo cambia por App.SetMCPEnabled
+	// (que además sincroniza los workspaces); SaveSettings no lo escribe.
+	MCPEnabled bool `json:"mcpEnabled"`
 	// Swatches son las 6 muestras de color del visor 3D (#rrggbb), pensadas
 	// como los filamentos cargados en el AMS. Se cambian desde el visor
 	// (App.SaveSwatches), no desde el diálogo de Configuración.
@@ -71,6 +86,33 @@ type Settings struct {
 	DockLayout string `json:"dockLayout"`
 	// DockLayouts son los diseños propios con nombre (App.SaveDockLayouts).
 	DockLayouts []DockLayoutEntry `json:"dockLayouts"`
+
+	// Proyectos abiertos (S8): ids de workspace en el orden de las pestañas y
+	// el que está al frente. Solo cambian por los bindings de proyecto
+	// (App.OpenProject, CloseProject, ReorderProjects, SetActiveProject);
+	// SaveSettings no los escribe, igual que el diseño de paneles.
+	OpenProjects  []int64 `json:"openProjects"`
+	ActiveProject int64   `json:"activeProject"`
+}
+
+// MaxOpenProjects es el tope de proyectos abiertos a la vez (pestañas).
+const MaxOpenProjects = 4
+
+// NormalizeOpenProjects deja la lista de proyectos abiertos lista para usar: sin
+// ids no positivos ni repetidos y de hasta MaxOpenProjects. Nunca devuelve nil
+// (el frontend espera una lista, no null). Una base editada a mano no debe
+// romper la barra de pestañas.
+func NormalizeOpenProjects(in []int64) []int64 {
+	out := make([]int64, 0, len(in))
+	seen := map[int64]bool{}
+	for _, id := range in {
+		if id <= 0 || seen[id] || len(out) >= MaxOpenProjects {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 // DockLayoutEntry es un diseño guardado por el usuario: un nombre y el mismo
@@ -198,6 +240,40 @@ func (s *Settings) normalizeEditor() {
 	a := Appearance{UIScale: s.UIScale, EditorFontSize: s.EditorFontSize, TerminalFontSize: s.TerminalFontSize, ChatFontSize: s.ChatFontSize}.Normalize()
 	s.UIScale, s.EditorFontSize, s.TerminalFontSize, s.ChatFontSize = a.UIScale, a.EditorFontSize, a.TerminalFontSize, a.ChatFontSize
 	s.Layout = s.Layout.Normalize()
+	s.normalizePrint()
+}
+
+// Límites y valores de fábrica de la estimación de impresión.
+const (
+	MinWallLoops, MaxWallLoops               = 1, 10
+	DefaultWallLoops                         = 2
+	MinLineWidthMm, MaxLineWidthMm           = 0.2, 1.5
+	DefaultLineWidthMm                       = 0.42
+	MinFilamentDiameter, MaxFilamentDiameter = 1.0, 3.5
+	DefaultFilamentDiameter                  = 1.75
+	DefaultCurrency                          = "USD"
+)
+
+var currencyCode = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// normalizePrint deja los parámetros de la estimación en valores que
+// backend/estimate entiende. Un campo que nunca se guardó llega en cero y toma
+// el de fábrica, igual que el editor: una base editada a mano o de una versión
+// vieja no debe romper el cálculo. La moneda se guarda en mayúsculas.
+func (s *Settings) normalizePrint() {
+	if s.WallLoops < MinWallLoops || s.WallLoops > MaxWallLoops {
+		s.WallLoops = DefaultWallLoops
+	}
+	if !(s.LineWidthMm >= MinLineWidthMm && s.LineWidthMm <= MaxLineWidthMm) { // también atrapa NaN
+		s.LineWidthMm = DefaultLineWidthMm
+	}
+	if !(s.FilamentDiameterMm >= MinFilamentDiameter && s.FilamentDiameterMm <= MaxFilamentDiameter) {
+		s.FilamentDiameterMm = DefaultFilamentDiameter
+	}
+	s.Currency = strings.ToUpper(strings.TrimSpace(s.Currency))
+	if !currencyCode.MatchString(s.Currency) {
+		s.Currency = DefaultCurrency
+	}
 }
 
 // SwatchCount es la cantidad fija de muestras del visor.
@@ -228,23 +304,29 @@ func ValidSwatches(colors []string) bool {
 // defecto, igual que mini-tools: desde Configuración se pasa a español.
 func DefaultSettings() Settings {
 	return Settings{
-		Language:         "en",
-		Theme:            "dark",
-		RenderBackend:    "manifold",
-		DefaultPrinter:   "bambu-a1-mini",
-		DefaultMaterial:  "pla",
-		InfillPercent:    15,
-		DefaultAgent:     "claude",
-		AutoRender:       true,
-		RenderTimeoutSec: 300,
-		AutoIterate:      true,
-		Swatches:         DefaultSwatches(),
-		EditorIndent:     4,
-		EditorFontSize:   DefaultFontSize,
-		UIScale:          DefaultUIScale,
-		TerminalFontSize: DefaultFontSize,
-		ChatFontSize:     DefaultFontSize,
-		Layout:           DefaultLayout(),
+		Language:           "en",
+		Theme:              "dark",
+		RenderBackend:      "manifold",
+		DefaultPrinter:     "bambu-a1-mini",
+		DefaultMaterial:    "pla",
+		InfillPercent:      15,
+		DefaultAgent:       "claude",
+		WallLoops:          DefaultWallLoops,
+		LineWidthMm:        DefaultLineWidthMm,
+		FilamentDiameterMm: DefaultFilamentDiameter,
+		Currency:           DefaultCurrency,
+		AutoRender:         true,
+		RenderTimeoutSec:   300,
+		AutoIterate:        true,
+		MCPEnabled:         true,
+		Swatches:           DefaultSwatches(),
+		EditorIndent:       4,
+		EditorFontSize:     DefaultFontSize,
+		UIScale:            DefaultUIScale,
+		TerminalFontSize:   DefaultFontSize,
+		ChatFontSize:       DefaultFontSize,
+		Layout:             DefaultLayout(),
+		OpenProjects:       []int64{},
 	}
 }
 
@@ -282,6 +364,7 @@ func (s *Store) GetSettings() (Settings, error) {
 		out.Swatches = DefaultSwatches()
 	}
 	out.normalizeEditor()
+	out.OpenProjects = NormalizeOpenProjects(out.OpenProjects)
 	return out, nil
 }
 
@@ -311,6 +394,13 @@ func (s *Store) SaveSettings(in Settings) error {
 	// de Configuración guarda una copia vieja y pisaría el diseño actual.
 	delete(fields, "dockLayout")
 	delete(fields, "dockLayouts")
+	// Los proyectos abiertos solo cambian por los bindings de proyecto: el
+	// diálogo de Configuración guarda una copia vieja y cerraría pestañas.
+	delete(fields, "openProjects")
+	delete(fields, "activeProject")
+	// El interruptor del servidor MCP aplica al instante (reescribe los
+	// archivos de cada workspace): el diálogo guarda una copia vieja.
+	delete(fields, "mcpEnabled")
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -337,8 +427,43 @@ func (s *Store) SetSetting(key string, value any) error {
 	return err
 }
 
+// SetOpenProjects guarda de una vez los proyectos abiertos y el activo (una sola
+// transacción: el orden y el activo no deben quedar a medias). La lista se
+// normaliza; un activo que no está en ella se guarda como 0.
+func (s *Store) SetOpenProjects(ids []int64, active int64) error {
+	ids = NormalizeOpenProjects(ids)
+	in := false
+	for _, id := range ids {
+		in = in || id == active
+	}
+	if !in {
+		active = 0
+	}
+	list, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	act, err := json.Marshal(active)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	ts := now()
+	for k, v := range map[string]string{"openProjects": string(list), "activeProject": string(act)} {
+		if _, err := tx.Exec(`INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, k, v, ts); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // ErrNotFound es la fila pedida que no existe.
-var ErrNotFound = errors.New("not found")
+var ErrNotFound = i18n.New(i18n.Msg{ES: "no se encontró", EN: "not found"})
 
 func notFound(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
@@ -356,7 +481,7 @@ const (
 )
 
 // ErrDockLayout es un diseño de paneles que no se puede guardar.
-var ErrDockLayout = errors.New("invalid dock layout")
+var ErrDockLayout = i18n.New(i18n.Msg{ES: "el diseño de paneles no es válido", EN: "invalid dock layout"})
 
 // ValidDockLayoutJSON dice si s es un objeto JSON dentro del tope de tamaño.
 // No mira qué hay dentro: eso lo valida el frontend, que es quien lo entiende

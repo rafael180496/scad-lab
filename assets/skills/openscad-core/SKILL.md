@@ -165,7 +165,7 @@ Referencia rápida de sintaxis, primitivas y patrones:
 
 ## 7. Validar SIEMPRE cada checkpoint
 
-1. Renderiza con el MCP de OpenSCAD de la app si está disponible.
+1. Renderiza con la herramienta MCP `render` del servidor `scadlab` (y mira el resultado con `preview`); si el MCP no está, usa `openscad -o exports/check.stl <archivo>`.
 2. Si no, por línea de comandos:
 
    ```bash

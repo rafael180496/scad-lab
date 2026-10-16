@@ -2,7 +2,8 @@ package store
 
 import (
 	"database/sql"
-	"fmt"
+
+	"scadlab/backend/i18n"
 )
 
 // migration es un cambio de schema. Reglas duras (ver claude/04-database.md):
@@ -140,6 +141,31 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages (chat_id, id);
 `,
 	},
+	{
+		version: 3,
+		desc:    "checkpoints avanzados (S3): agente y chat que crearon el checkpoint, y lo que se guarda de la papelera",
+		sql: `
+-- Qué agente (ai_providers.id) y qué chat crearon el checkpoint; session_id ya
+-- existía. Son datos de la UI: la fuente de verdad sigue siendo el archivo, y
+-- SyncCheckpoints no los toca.
+ALTER TABLE checkpoints ADD COLUMN agent_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE checkpoints ADD COLUMN chat_id INTEGER NOT NULL DEFAULT 0;
+
+-- Al mandar un checkpoint a la papelera su fila del índice desaparece (el rescan
+-- borra lo que ya no está en el disco). Acá queda lo que solo vive en la base
+-- —rótulo, plegado, agente y sesión— para devolvérselo al restaurarlo.
+CREATE TABLE IF NOT EXISTS checkpoint_trash (
+	workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+	trashed_name TEXT NOT NULL,
+	label        TEXT NOT NULL DEFAULT '',
+	collapsed    INTEGER NOT NULL DEFAULT 0,
+	session_id   TEXT NOT NULL DEFAULT '',
+	agent_id     TEXT NOT NULL DEFAULT '',
+	chat_id      INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (workspace_id, trashed_name)
+);
+`,
+	},
 }
 
 func (s *Store) migrate() error {
@@ -173,7 +199,7 @@ func (s *Store) migrate() error {
 			continue
 		}
 		if err := s.apply(m); err != nil {
-			return fmt.Errorf("migración %d (%s): %w", m.version, m.desc, err)
+			return i18n.Errorf(i18n.Msg{ES: "migración %d (%s): %w", EN: "migration %d (%s): %w"}, m.version, m.desc, err)
 		}
 	}
 	return nil

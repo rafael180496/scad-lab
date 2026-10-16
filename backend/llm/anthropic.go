@@ -122,7 +122,7 @@ func (c *anthropicClient) Chat(ctx context.Context, req ChatRequest, onDelta fun
 	switch msg.StopReason {
 	case anthropic.StopReasonRefusal:
 		return fail(i18n.New(i18n.Msg{
-			ES: "Anthropic rechazó este pedido por sus filtros de seguridad. Reformulá el pedido o prueba con otro modelo.",
+			ES: "Anthropic rechazó esta petición por sus filtros de seguridad. Reformula el mensaje o prueba con otro modelo.",
 			EN: "Anthropic declined this request with its safety filters. Rephrase the request or try another model.",
 		}))
 	case anthropic.StopReasonMaxTokens, anthropic.StopReasonModelContextWindowExceeded:

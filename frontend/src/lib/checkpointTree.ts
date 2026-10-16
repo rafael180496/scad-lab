@@ -30,3 +30,55 @@ export function buildTree(list: store.Checkpoint[]): TreeNode[] {
     sort(roots)
     return roots
 }
+
+// descendants cuenta todos los checkpoints que cuelgan de node (hijos, nietos…),
+// sin incluirlo: es lo que dice la confirmación de «mover la rama a la papelera».
+export function countDescendants(node: TreeNode): number {
+    return node.children.reduce((n, c) => n + 1 + countDescendants(c), 0)
+}
+
+// indexTree da, por archivo, su nodo y su padre en el árbol (ya sin huérfanos
+// colgados de un padre inexistente: esos son raíces).
+export function indexTree(roots: TreeNode[]): Map<string, {node: TreeNode; parent: TreeNode | null}> {
+    const out = new Map<string, {node: TreeNode; parent: TreeNode | null}>()
+    const walk = (nodes: TreeNode[], parent: TreeNode | null) => {
+        for (const n of nodes) {
+            out.set(n.cp.fileName, {node: n, parent})
+            walk(n.children, n)
+        }
+    }
+    walk(roots, null)
+    return out
+}
+
+// latestFile es el checkpoint de número más alto (NNN-slug.scad): el padre del
+// próximo cuando no hay un padre activo explícito, igual que backend/checkpoint.Latest.
+export function latestFile(list: store.Checkpoint[]): string {
+    let best = ''
+    let bestN = -1
+    for (const c of list) {
+        const m = /^(\d+)-/.exec(c.fileName)
+        const n = m ? Number(m[1]) : -1
+        if (n > bestN || (n === bestN && c.fileName > best)) {
+            best = c.fileName
+            bestN = n
+        }
+    }
+    return best
+}
+
+// effectiveActive es el padre activo que ve el árbol: el explícito si existe en
+// el workspace y, si no, el más nuevo.
+export function effectiveActive(list: store.Checkpoint[], explicit: string): string {
+    return explicit && list.some((c) => c.fileName === explicit) ? explicit : latestFile(list)
+}
+
+// activePath es el conjunto de archivos desde la raíz hasta el activo (incluido):
+// la rama que el árbol resalta.
+export function activePath(index: Map<string, {node: TreeNode; parent: TreeNode | null}>, active: string): Set<string> {
+    const out = new Set<string>()
+    for (let cur = index.get(active); cur; cur = cur.parent ? index.get(cur.parent.cp.fileName) : undefined) {
+        out.add(cur.node.cp.fileName)
+    }
+    return out
+}

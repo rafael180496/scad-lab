@@ -1,10 +1,10 @@
-import {Code2, Cuboid, ListTodo, MessageSquare, SquareTerminal, type LucideIcon} from 'lucide-react'
+import {Code2, Cuboid, ListTodo, MessageSquare, SquareTerminal, Weight, type LucideIcon} from 'lucide-react'
 import {fmt, type Dict} from '../../i18n'
 
 // Catálogo de paneles acoplables (S4b). Agregar uno = una entrada acá, su
 // contenido en PanelHost.tsx, sus textos en i18n (dock.*) y, si lleva atajo,
 // su número en PANEL_SHORTCUT. Ver claude/04-frontend.md, «Paneles acoplables».
-export const PANEL_IDS = ['viewport', 'source', 'agent-1', 'agent-2', 'chat', 'problems'] as const
+export const PANEL_IDS = ['viewport', 'source', 'agent-1', 'agent-2', 'chat', 'problems', 'print'] as const
 export type PanelId = (typeof PANEL_IDS)[number]
 
 export function isPanelId(v: unknown): v is PanelId {
@@ -18,6 +18,7 @@ export const PANEL_ICON: Record<PanelId, LucideIcon> = {
     'agent-2': SquareTerminal,
     chat: MessageSquare,
     problems: ListTodo,
+    print: Weight,
 }
 
 // ⌘/Ctrl+Shift+N muestra y enfoca el panel (si ya está enfocado, lo oculta).
@@ -28,6 +29,7 @@ export const PANEL_SHORTCUT: Record<PanelId, number> = {
     'agent-2': 4,
     chat: 5,
     problems: 6,
+    print: 7,
 }
 
 // Tamaño mínimo (px a interfaz 100 %; se multiplica por la escala) para que
@@ -40,6 +42,7 @@ export const PANEL_MIN: Record<PanelId, {w: number; h: number}> = {
     'agent-2': {w: 240, h: 120},
     chat: {w: 240, h: 120},
     problems: {w: 200, h: 90},
+    print: {w: 300, h: 120},
 }
 
 export function panelTitle(t: Dict, id: PanelId): string {
@@ -56,6 +59,8 @@ export function panelTitle(t: Dict, id: PanelId): string {
             return t.terminal.chatTab
         case 'problems':
             return t.problems.title
+        case 'print':
+            return t.print.title
     }
 }
 
@@ -73,5 +78,7 @@ export function panelHint(t: Dict, id: PanelId): string {
             return t.terminal.chatTabHint
         case 'problems':
             return t.layout.problemsTabHint
+        case 'print':
+            return t.print.tabHint
     }
 }

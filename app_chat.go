@@ -156,7 +156,7 @@ func chatClient(p store.AIProvider) (llm.Client, error) {
 			// sí puede (LM Studio y vLLM locales), así que ahí se sigue sin
 			// clave y, si el servidor la exige, contesta 401 con su motivo.
 			return nil, i18n.Errorf(i18n.Msg{
-				ES: "falta la clave de API: definí la variable de entorno %s con tu clave y reiniciá ScadLab",
+				ES: "falta la clave de API: define la variable de entorno %s con tu clave y reinicia ScadLab",
 				EN: "the API key is missing: set the environment variable %s to your key and restart ScadLab",
 			}, env)
 		}
@@ -379,6 +379,24 @@ func (a *App) ListProviderModels(providerID string) ([]string, error) {
 		return nil, err
 	}
 	return client.Models(a.appCtx())
+}
+
+// SaveChatCheckpoint es SaveAsCheckpoint desde un bloque de código del chat: además
+// de crear el checkpoint guarda de qué chat salió (chat_id), para que el árbol
+// pueda ofrecer «Abrir el chat» (S3). Un chat que no es del workspace se ignora
+// —el checkpoint se crea igual—: el vínculo es una ayuda, no un requisito.
+func (a *App) SaveChatCheckpoint(workspaceID, chatID int64, parentFile, label, description, source string) (string, error) {
+	name, err := a.SaveAsCheckpoint(workspaceID, parentFile, label, description, source)
+	if err != nil || chatID <= 0 {
+		return name, err
+	}
+	if c, cerr := a.store.GetChat(chatID); cerr != nil || c.WorkspaceID != workspaceID {
+		return name, nil
+	}
+	if lerr := a.store.SetCheckpointChat(workspaceID, name, chatID); lerr != nil {
+		log.Printf("scadlab: vincular %s con el chat %d: %v", name, chatID, lerr)
+	}
+	return name, nil
 }
 
 // ChatCheckpointParent resuelve el padre con el que se guarda un bloque del

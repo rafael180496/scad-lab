@@ -151,7 +151,7 @@ clave del lexer. Afirmaciones verificadas con 2026.10.11 (`round(-2.5) = -3`,
 `Diagnostic{severity, line, col, endLine, endCol, code, source, message}`;
 `endLine/endCol` 0 = toda la línea; `message` en el idioma activo.
 
-**Guardar nunca sobrescribe.** `SaveAsCheckpoint` valida `parentFile` con
+**Guardar nunca sobrescribe.** La lógica vive en `backend/checkpoint` (`Create`, `CreateRoot`, `ValidName`, `Latest`, `WithHeader`), que comparte con la herramienta `create_checkpoint` del servidor MCP ([claude/13](13-mcp.md)); el binding solo resuelve el workspace. `SaveAsCheckpoint` valida `parentFile` con
 `validCheckpointName` y que exista; calcula `NNN-slug` con
 `workspace.NextFileName(label)` y crea con `O_CREATE|O_EXCL`: si el agente tomó
 ese nombre entre medio, prueba el número siguiente (hasta 50). Reemplaza la

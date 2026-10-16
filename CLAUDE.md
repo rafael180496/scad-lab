@@ -24,10 +24,20 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
    lanzar un dev como agente genérico, pasar `model: sonnet` (si no, hereda el
    modelo de la sesión).
 4. **Verificar antes de cerrar**: `go build ./... && go vet ./... && go test ./...`,
-   `cd frontend && pnpm build`, `node frontend/scripts/i18n-check.mjs`.
+   `cd frontend && pnpm build`, `./scripts/i18n-check.sh` (sin línea base: todo
+   hallazgo se corrige).
 5. **CodeGraph**: si existe `.codegraph/`, consultarlo antes de grep y correr
    `codegraph sync` tras cada bloque de ediciones. Nunca `init`/`index` sin pedido.
-6. **Documentación segmentada**: este archivo es solo un índice. Cada tema vive
+6. **Preparar la versión es un trigger explícito del usuario** («preparar la
+   versión», «empaquetar», «versión oficial»): entonces se sigue
+   [.claude/specs/releases.md](.claude/specs/releases.md) completo —bump,
+   `./scripts/package-all.sh` (`.dmg` + `.exe`), copia a `releases/<so>/`,
+   SHA-256 en cada README, CHANGELOG `[Unreleased]` → versión, `index.html` y
+   `es/index.html` al día—, igual que mini-tools. **Nunca antes de que lo pida.**
+   Publicar = el usuario commitea y empuja el tag `vX.Y.Z`; el workflow
+   `.github/workflows/release.yml` crea el Release con esos artefactos (no
+   compila).
+7. **Documentación segmentada**: este archivo es solo un índice. Cada tema vive
    en `claude/NN-topic.md` (máx. ~200 líneas); un tema nuevo es un segmento nuevo.
 
 ## Índice
@@ -47,6 +57,9 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/10-editor.md](claude/10-editor.md) | Editor OpenSCAD: lexer, linter (SL001–SL009), formateador, catálogo, guardar como checkpoint |
 | [claude/11-exportacion.md](claude/11-exportacion.md) | Exportación: STL, 3MF multicolor para Bambu (una parte por color con extrusor), STL por color; prueba manual en Bambu Studio |
 | [claude/12-paneles.md](claude/12-paneles.md) | Paneles acoplables (dockview): pestañas estilo VS Code, ocultar, dividir, flotar, diseños, cómo agregar un panel |
+| [claude/13-mcp.md](claude/13-mcp.md) | Servidor MCP (`ScadLab --mcp --workspace`): herramientas `render`/`preview`/`measure`…, seguridad de rutas, pruebas, cómo agregar una herramienta |
+| [claude/14-medicion.md](claude/14-medicion.md) | Medición e impresión (S7): partes por color y su caché (`/parts/`), estimación de peso, filamento y costo (fórmula), cálculo de placa, `GetModelParts`/`EstimatePrint` |
+| [claude/15-checkpoints.md](claude/15-checkpoints.md) | Checkpoints (S3): papelera (nunca se borra), restaurar, descendientes, padre activo que avanza solo (`.scadlab/active-parent`), seguridad de rutas |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

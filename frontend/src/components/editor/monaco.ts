@@ -156,4 +156,10 @@ function defineTheme() {
 defineTheme()
 new MutationObserver(defineTheme).observe(document.documentElement, {attributes: true, attributeFilter: ['class']})
 
+// Tipografía del editor: la monoespaciada del tema (variable CSS), con respaldo.
+export function monacoFontFamily(): string {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
+    return v || '"JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, Menlo, monospace'
+}
+
 export {monaco, THEME}

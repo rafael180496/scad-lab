@@ -112,7 +112,7 @@ estable **no** guarda colores en 3MF. Según lo conocido (todo «verificar» con
   triángulo/material**; al importarlo suele ofrecer mapear colores a filamentos
   «verificar comportamiento por versión».
 
-Si la app tiene MCP de OpenSCAD con export 3MF, úsalo: ya sabe la versión
+Usa la herramienta MCP `export` del servidor `scadlab` con `format: "3mf"` (escribe en `exports/`): ya sabe la versión
 instalada.
 
 ### Opción B — robusta: un objeto por color + 3MF multi-objeto

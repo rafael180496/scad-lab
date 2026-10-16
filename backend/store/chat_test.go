@@ -149,7 +149,7 @@ func TestMigration2IsAdditive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if v, _ := s.SchemaVersion(); v != 2 {
+	if v, _ := s.SchemaVersion(); v != migrations[len(migrations)-1].version {
 		t.Errorf("versión: %d", v)
 	}
 	if got, err := s.GetWorkspace(w.ID); err != nil || got.Name != "Caja" {

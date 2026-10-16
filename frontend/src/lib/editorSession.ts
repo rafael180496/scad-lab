@@ -1,4 +1,4 @@
-import type {scad} from '../../wailsjs/go/models'
+import type {main, scad} from '../../wailsjs/go/models'
 import {createStore} from './store'
 
 // Estado del editor de código que leen otros paneles (barra de estado, panel
@@ -10,6 +10,8 @@ export type EditorSession = {
     dirty: boolean
     lint: scad.Diagnostic[]
     linting: boolean
+    /** Comparación abierta de un checkpoint con su padre (S3); null = se ve el código. */
+    diff: main.CheckpointPair | null
 }
 
 export const editorSession = createStore<EditorSession>({
@@ -19,6 +21,7 @@ export const editorSession = createStore<EditorSession>({
     dirty: false,
     lint: [],
     linting: false,
+    diff: null,
 })
 
 // Comandos que expone el editor montado (entra con lazy(): hasta que carga,

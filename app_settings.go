@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -164,7 +163,7 @@ func (a *App) OllamaModels(baseURL string) ([]string, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama: HTTP %d", res.StatusCode)
+		return nil, i18n.Errorf(i18n.Msg{ES: "Ollama respondió HTTP %d", EN: "Ollama answered HTTP %d"}, res.StatusCode)
 	}
 	var body struct {
 		Models []struct {

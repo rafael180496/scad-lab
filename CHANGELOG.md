@@ -9,6 +9,108 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Varios proyectos a la vez: pestañas de proyecto.** La cabecera, a la derecha
+  del logo, tiene ahora una pestaña por cada proyecto abierto (hasta **4**), con
+  su **+** para abrir otro: elige entre tus workspaces o crea uno nuevo, y con 4
+  abiertos el botón se apaga y su aviso te dice por qué. Es una sola ventana.
+  - **Cambiar de pestaña es instantáneo y no pierde nada.** Cada proyecto
+    conserva el checkpoint que tenías elegido, el código sin guardar (y si
+    estabas editando), la comparación con el padre abierta, la parte seleccionada
+    en el visor y el chat que mirabas. La barra lateral, el visor, el código,
+    Problemas, Impresión y el chat siguen al proyecto de la pestaña activa.
+  - **Los de fondo siguen trabajando.** Su carpeta se sigue vigilando, el
+    auto-render responde a lo que escriba un agente y los agentes (y la
+    auto-iteración) siguen corriendo; los paneles **Agente 1** y **Agente 2**
+    muestran las terminales del proyecto activo, con un máximo de **2 por
+    proyecto**, y las de los otros conservan su pantalla. Cada pestaña avisa de lo
+    que pasa en ella aunque no la mires: un render en curso, que el último render
+    **falló**, que hay un **agente** en marcha o que tiene **cambios sin guardar**.
+  - **Reordenar y cerrar.** Arrastra una pestaña, o usa su menú (clic derecho):
+    **Mover a la izquierda / derecha**, **Cerrar**, **Cerrar los demás** y
+    **Mostrar en el Finder** (o el Explorador). Cerrar un proyecto con cambios sin
+    guardar o agentes en marcha pide confirmación y dice qué se pierde; los agentes
+    se detienen.
+  - **Atajos:** ⌃Tab / ⌃⇧Tab (siguiente / anterior), ⌘/Ctrl+1…4 (ir a la pestaña)
+    y ⌘/Ctrl+W (cerrar la activa). En Windows, con el foco en una terminal de
+    agente, **Ctrl+W** es de la shell (borrar palabra): ahí se cierra con
+    **Ctrl+Shift+W**.
+  - **Cada agente ve los otros proyectos abiertos** (solo para leer y reutilizar
+    piezas; escribe únicamente en el suyo). La lista se fija al abrir el agente:
+    abrir otro proyecto después no la cambia, «Nueva» lo relanza. **opencode** no
+    tiene una opción equivalente y solo ve su propio proyecto.
+  - Al abrir ScadLab se **reabren las pestañas** que tenías y la que estaba al
+    frente.
+  - La lista de workspaces de la barra lateral sigue sirviendo para abrir: un clic
+    abre el workspace como pestaña (o te lleva a la suya).
+
+- **Checkpoints avanzados: menú, papelera, rama activa y comparar con el padre.**
+  Haz clic derecho sobre un checkpoint del árbol (o pulsa «…» al pasar el ratón)
+  y tienes **Ver código**, **Comparar con el padre**, **Ramificar desde aquí**,
+  **Renombrar**, **Retomar sesión**, **Plegar o desplegar la rama**, **Copiar el
+  nombre**, **Mostrar en el Finder** (o el Explorador) y **Mover a la papelera**.
+  Con el foco en el árbol, **F2** renombra, **Supr** (⌫ en macOS) manda a la
+  papelera y las flechas recorren y pliegan; esas teclas no hacen nada con el
+  foco en el editor o en la terminal.
+  - **Ramificar desde aquí** marca un **padre activo**: el checkpoint del que
+    cuelga el próximo que cree el agente, el chat o el servidor MCP (y las
+    reglas del workspace se lo dicen a la IA). Se ve en el árbol con un ícono de
+    rama y la rama que lleva a él resaltada, y **avanza solo**: al crearse un
+    hijo suyo pasa a ser el activo, así que sigues en la misma rama sin volver a
+    marcarla. Para abrir una segunda variante, vuelve a ramificar desde el punto
+    de partida.
+  - **Papelera.** ScadLab nunca borra un checkpoint: «Mover a la papelera» lo
+    lleva a `.scadlab/trash/` (solo ese, o con toda su rama; la confirmación dice
+    cuántos descendientes se van) y el ícono de papelera de la cabecera del árbol
+    cuenta lo que hay y lo restaura. Restaurar conserva el rótulo y el vínculo
+    con la sesión, y no pisa nada: si el número está ocupado, toma el siguiente.
+    Vaciarla es borrar esa carpeta a mano.
+  - **Renombrar** cambia el nombre que se ve en el árbol, en la propia fila; el
+    archivo no cambia de nombre porque sus hijos lo nombran.
+  - **Comparar con el padre** convierte el panel Código en un visor de diferencias
+    de solo lectura (lado a lado, o en una columna si el panel es angosto).
+  - **Retomar sesión.** Cuando un agente de la terminal crea un checkpoint, ScadLab
+    guarda qué agente y qué sesión fueron; los que guardas desde el chat recuerdan
+    el chat. «Retomar en Claude Code» (o en el agente que sea) reabre esa
+    conversación en la terminal y «Abrir el chat» abre el chat. Lo que guardas
+    tú desde el editor no se le atribuye al agente.
+  - El tooltip de cada checkpoint suma quién lo creó y cuándo. La base local pasa
+    a la versión 3 (migración aditiva: dos columnas y una tabla; no toca tus
+    checkpoints).
+
+- **El visor ve el modelo por partes, con sus colores.** Un modelo con varios
+  `color()` ya no se pinta entero con una sola muestra: cada parte sale con el
+  color que le dio el modelo. El interruptor **Modelo / Muestra** de la barra del
+  visor elige entre los colores del modelo y la muestra de siempre (elegir una
+  muestra pasa solo a «Muestra»). **Haz clic en una parte** para seleccionarla:
+  se resalta con su contorno y el resto se atenúa, y una tarjeta dice su color,
+  tamaño, volumen, triángulos, si la malla es cerrada y cuánto pesa, cuántos
+  metros de filamento lleva y cuánto cuesta. Con el selector de material de la
+  tarjeta cada parte puede ir en un filamento distinto y la estimación cambia al
+  instante. **Esc** o un clic en el vacío deselecciona; la vista dividida
+  conserva la selección y un arrastre para orbitar nunca selecciona sin querer.
+- **Aviso cuando la pieza no cabe en la placa.** Si el modelo sobrepasa el volumen
+  de la impresora del workspace, el contorno de la cama se pinta en rojo y un
+  aviso dice cuántos milímetros sobran en cada eje y qué probar (rotarla, partirla,
+  otra impresora). El mismo aviso aparece en la barra de estado, y un clic en él
+  abre el panel Impresión.
+- **Panel «Impresión».** Un panel acoplable nuevo (menú Ver, ⌘⇧7 / Ctrl+Shift+7;
+  en los diseños viene como pestaña junto a Problemas) con una tabla por parte
+  —color, material, peso, metros de filamento y costo— y el total. Debajo van el
+  relleno, los perímetros, el ancho de línea, el diámetro del filamento, el
+  material por defecto y la moneda: cambiarlos recalcula en el acto, solo para ese
+  cálculo. Un clic en una fila selecciona la parte en el visor y **Exportar 3MF**
+  abre el mismo diálogo de siempre. Es una estimación (sin soportes ni purga del
+  AMS): el número exacto lo da el laminador.
+- **Configuración → Impresión** gana los datos de la estimación: perímetros, ancho
+  de línea, diámetro del filamento y moneda (un valor fuera de rango vuelve al de
+  fábrica en vez de fallar). Editar la densidad o el costo de un material
+  actualiza la estimación al guardar.
+
+- **Claude Code usa el servidor MCP sin pedir aprobación** cuando lo abres desde
+  la terminal de ScadLab: la app le pasa el servidor con `--mcp-config`. Si lo
+  abres por tu cuenta, Claude pregunta una sola vez si confías en el
+  `.mcp.json` del workspace.
+
 - **Agentes de IA dentro de ScadLab.** Hay ahora dos paneles de terminal de agente
   (Agente 1 y Agente 2) donde corre Claude Code, opencode,
   Codex o Antigravity directamente en la carpeta del workspace: ya no hace falta
@@ -51,7 +153,7 @@ empaquetarla (ver `.claude/specs/releases.md`).
   nada**: el visor conserva su cámara, el editor su texto y su historial de
   deshacer, y el agente sigue corriendo con su pantalla intacta.
 - **Menú Ver, diseños y modo enfoque.** El menú **Ver** de la cabecera tiene una
-  casilla por panel (con su atajo ⌘⇧1…6, Ctrl+Shift+1…6 en Windows; en macOS
+  casilla por panel (con su atajo ⌘⇧1…7, Ctrl+Shift+1…7 en Windows; en macOS
   ⌘⇧3/4/5 los reserva el sistema para capturas, así que también valen ⌘⌥3/4/5),
   la barra lateral y la barra de estado, que ahora se pueden ocultar, y los
   **diseños**: Predeterminado, Modelado, Código e IA y Pantalla dividida, más los
@@ -62,6 +164,25 @@ empaquetarla (ver `.claude/specs/releases.md`).
   **modo enfoque** (⌘⇧0 / Ctrl+Shift+0) deja solo el panel activo sin barras, y
   Esc o el mismo atajo vuelve al diseño anterior. Los paneles flotan dentro de la
   app, no en ventanas del sistema: varias ventanas nativas es otra fase.
+- **Minimizar un panel sin cerrarlo.** Cada grupo de paneles tiene ahora un botón
+  **–** (Minimizar panel) a la izquierda de maximizar, y **⌘⇧M / Ctrl+Shift+M**
+  hace lo mismo con el grupo activo. Si el grupo está apilado arriba o abajo de
+  otro, queda **solo su barra de pestañas**; si está al lado de otro, queda una
+  **franja angosta con los íconos de sus pestañas** en vertical (un punto verde
+  o naranja sigue a la vista si hay un agente en marcha o cambios sin guardar).
+  Los vecinos se reparten el espacio que queda. Un clic en cualquier pestaña, en
+  el **+** (Restaurar panel) o un doble clic en la barra del grupo lo devuelve a
+  su tamaño anterior. Nada se destruye: el visor conserva su cámara, el editor su
+  texto y la terminal su agente. Un grupo flotante minimizado se reduce a su barra.
+  Lo minimizado se guarda con el diseño, también en los diseños con nombre.
+- **«Mover a…» en el menú de cada panel.** El botón **⋯** del grupo y el clic
+  derecho en una pestaña tienen **Mover a…** con destinos que funcionan siempre,
+  sin arrastrar: **Izquierda**, **Derecha**, **Arriba** y **Abajo** (del área de
+  paneles completa: el panel va al grupo que ya ocupe ese borde o a uno nuevo),
+  **Centro** (como pestaña del grupo acoplado más grande), **Junto a…** (como
+  pestaña del grupo de otro panel que elijas) y **Flotar / Acoplar**. Sirve para
+  el visor, el código, los dos agentes, el chat y los problemas; mover no
+  destruye su contenido. El arrastre de pestañas sigue ahí para quien lo prefiera.
 - **Tamaños a tu medida.** Configuración → General tiene ahora un bloque
   **Apariencia**: elige el **tamaño de la interfaz** (Compacto 90 %, Normal,
   Grande 115 %, Más grande 130 % o Máximo 150 %), que agranda o reduce el texto
@@ -99,9 +220,55 @@ empaquetarla (ver `.claude/specs/releases.md`).
   comandos. Si lo tienes en otra carpeta, indica la ruta en Configuración →
   Impresión → Ruta de Bambu Studio (vacío = autodetectar), donde además ves si
   lo encontró.
+- **Servidor MCP de ScadLab, configurado solo en cada agente.** ScadLab puede
+  ahora lanzarse como servidor MCP (`ScadLab --mcp --workspace <carpeta>`), y al
+  crear, importar o abrir un workspace deja la entrada `scadlab` en el archivo de
+  proyecto que lee cada CLI: `.mcp.json` para Claude Code, `opencode.json` para
+  opencode y `.gemini/settings.json` para el Gemini CLI anterior. Codex, que no
+  lee configuración de proyecto, recibe el servidor por flags `-c` cada vez que lo
+  abres en la terminal de ScadLab. Solo se fusiona la clave `scadlab`: tus otros
+  servidores, el orden y la sangría del archivo quedan como estaban, y un JSON
+  roto (o un `opencode.jsonc` con comentarios) no se toca, solo se avisa. Si
+  mueves o actualizas la app, la ruta se corrige al abrir el workspace.
+  **Configuración → IA** tiene un bloque nuevo, «Servidor MCP de ScadLab», con el
+  interruptor (apagarlo quita la entrada de todos los workspaces), el comando que
+  usan los agentes para copiarlo, el estado de cada archivo del workspace abierto
+  y **Volver a sincronizar**. En la barra de cada panel de agente, el indicador
+  **MCP ✓** confirma que está configurado (pasa a **MCP !** si algo no quedó al
+  día).
+- **Antigravity se agrega al servidor MCP con un botón y tu permiso.** El
+  archivo `.gemini/settings.json` es del Gemini CLI anterior: Antigravity
+  (`agy`) no lo lee (comprobado: con ese archivo, `agy mcp list` sigue diciendo
+  «No MCP servers configured»), y su única configuración de servidores es global,
+  en `~/.gemini`. En Configuración → IA → Servidor MCP de ScadLab hay ahora una
+  fila **Antigravity** con su estado (agy no instalado, no configurado,
+  configurado, otra ruta, desactivado) y los botones **Agregar a Antigravity** y
+  **Quitar de Antigravity**. Los dos piden confirmación y dicen con todas las
+  letras que modifican la configuración global de Antigravity, la de todos tus
+  proyectos; se hacen con `agy mcp add|remove`, nunca editando su archivo, y no
+  tocan tus otros servidores. La entrada es una sola, `scadlab` →
+  `<ScadLab> --mcp` sin `--workspace`: el servidor trabaja en la carpeta donde
+  Antigravity lo lanza, así que sirve a todos tus workspaces. En la ayuda, el
+  archivo `.gemini/settings.json` se llama ahora «Gemini CLI (anterior)».
 
 ### Cambiado
 
+- **Como mucho dos renders de OpenSCAD a la vez.** Con varios proyectos abiertos
+  y el auto-render, cada uno podía lanzar el suyo y la máquina entera se
+  arrastraba con un modelo pesado. Ahora los demás esperan su turno (y se pueden
+  cancelar mientras esperan).
+
+- **Las reglas para los agentes se actualizan solas sin pisar lo tuyo.** En
+  `CLAUDE.md` y `AGENTS.md` las reglas de ScadLab van en un bloque marcado que
+  se renueva al abrir el workspace (así los workspaces viejos reciben las
+  reglas nuevas del MCP, las ramas y la papelera); lo que escribas fuera del
+  bloque se conserva. Un archivo creado por una versión anterior se respalda en
+  `.scadlab/backup/` antes de reemplazarlo.
+
+- **El menú de las pestañas de los paneles ahora es el de ScadLab**, el mismo que
+  el botón **⋯** del grupo (con submenús y atajos), en lugar del menú genérico de
+  la librería. «Mover a la derecha» y «Mover abajo» pasaron a **Mover a…**, que
+  ahora cuenta desde el área de paneles completa y no desde el grupo.
 - **«Restablecer el diseño» ahora también devuelve los paneles** al diseño
   predeterminado, y muestra la barra lateral y la de estado si estaban ocultas.
   El alto del panel inferior y el ancho del código que se guardaban antes ya no
@@ -229,6 +396,19 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Corregido
 
+- En un modelo de varios colores, cada pieza ya no se marca como «abierta» ni la
+  estimación avisa que su volumen no es fiable: al separar por color, la cara
+  donde dos colores se tocan queda abierta en cada pieza aunque el modelo entero
+  sea estanco. El aviso solo aparece si el modelo completo está abierto.
+
+- Con teclado en español, ⌘/Ctrl+Shift+0 (modo Enfoque) ya no cambia además el
+  tamaño de la interfaz: Shift+0 escribe «=» en ese teclado y se tomaba también
+  como «agrandar».
+
+- **Los tamaños mínimos de los paneles ahora siguen al tamaño de la interfaz.**
+  Se fijaban al crear el panel y, al cambiar el tamaño de la interfaz con la app
+  abierta, no se recalculaban hasta reabrirla. También **Acoplar** funciona
+  cuando todos los paneles están flotando (antes no hacía nada).
 - Los diálogos «Nuevo workspace» y «Guardar checkpoint» abren con el cursor en
   el campo del nombre: antes el foco quedaba en el diálogo y había que hacer
   clic para empezar a escribir.

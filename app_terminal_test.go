@@ -235,6 +235,11 @@ func termOutput(a *App, id string) string {
 
 func TestStartAgentTerminalLimitsAndLists(t *testing.T) {
 	a, w := openTestApp(t)
+	// Este test mira límites y argv de reanudar: sin los flags del MCP, que
+	// tienen su propio test (TestMCPLaunchArgsForCodexAndClaude).
+	if err := a.store.SetSetting("mcpEnabled", false); err != nil {
+		t.Fatal(err)
+	}
 
 	id1, err := a.StartAgentTerminal(w.ID, "claude", "new", "", 100, 30)
 	if err != nil {

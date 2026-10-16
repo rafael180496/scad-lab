@@ -113,7 +113,7 @@ export function ConfirmHost({title}: {title: string}) {
                 </>
             }
         >
-            <p className="px-4 py-4 text-ui-13 leading-relaxed text-muted">{s?.text}</p>
+            <p className="px-4 py-4 text-ui-13 leading-relaxed whitespace-pre-line text-muted">{s?.text}</p>
         </Dialog>
     )
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"scadlab/backend/checkpoint"
 	"scadlab/backend/scad"
 	"scadlab/backend/workspace"
 )
@@ -88,7 +89,7 @@ func TestSaveAsCheckpointNeverOverwrites(t *testing.T) {
 func TestSaveAsCheckpointRace(t *testing.T) {
 	a, id, dir := editorWorkspace(t)
 	calls := 0
-	beforeCreateCheckpoint = func(path string) {
+	checkpoint.BeforeCreate = func(path string) {
 		calls++
 		if calls == 1 {
 			if err := os.WriteFile(path, []byte("// del agente\n"), 0o644); err != nil {
@@ -96,7 +97,7 @@ func TestSaveAsCheckpointRace(t *testing.T) {
 			}
 		}
 	}
-	defer func() { beforeCreateCheckpoint = nil }()
+	defer func() { checkpoint.BeforeCreate = nil }()
 	name, err := a.SaveAsCheckpoint(id, "001-base.scad", "cambio", "x", "cube(1);")
 	if err != nil {
 		t.Fatal(err)
@@ -119,12 +120,12 @@ func TestSaveAsCheckpointValidatesParent(t *testing.T) {
 }
 
 func TestCheckpointHeaderEscapes(t *testing.T) {
-	got := withCheckpointHeader("// @checkpoint vieja\r\ncube(1);\r\n", "001-a.scad", "a\\b \"c\"\nd")
+	got := checkpoint.WithHeader("// @checkpoint vieja\r\ncube(1);\r\n", "001-a.scad", "a\\b \"c\"\nd")
 	want := "// @checkpoint parent=001-a.scad desc=\"a\\\\b \\\"c\\\" d\"\r\ncube(1);\r\n"
 	if got != want {
 		t.Errorf("%q\nquiero\n%q", got, want)
 	}
-	if got := withCheckpointHeader("// @checkpoint sola", "001-a.scad", "x"); got != "// @checkpoint parent=001-a.scad desc=\"x\"\n" {
+	if got := checkpoint.WithHeader("// @checkpoint sola", "001-a.scad", "x"); got != "// @checkpoint parent=001-a.scad desc=\"x\"\n" {
 		t.Errorf("solo encabezado: %q", got)
 	}
 }

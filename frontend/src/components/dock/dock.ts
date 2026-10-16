@@ -1,4 +1,4 @@
-import type {AddPanelOptions, DockviewApi, IDockviewPanel} from 'dockview-react'
+import type {AddPanelOptions, DockviewApi, DockviewGroupPanel, IDockviewPanel} from 'dockview-react'
 import {store} from '../../../wailsjs/go/models'
 import {SaveDockLayout, SaveDockLayouts} from '../../../wailsjs/go/main/App'
 import {t as tNow} from '../../i18n'
@@ -6,7 +6,7 @@ import {appearance} from '../../lib/appearance'
 import {errorText} from '../../lib/errors'
 import {createStore} from '../../lib/store'
 import {toast} from '../ui/Toast'
-import {buildPreset, minimums, parseEnvelope, toEnvelope, type PresetId} from './layouts'
+import {buildPreset, minimums, parseEnvelope, parseMinimized, toEnvelope, type MinimizedEntry, type PresetId} from './layouts'
 import {PANEL_IDS, isPanelId, type PanelId} from './panels'
 
 // Controlador de los paneles acoplables (S4b). Hay un solo dock en la ventana, así
@@ -18,7 +18,7 @@ import {PANEL_IDS, isPanelId, type PanelId} from './panels'
 export type Flags = Record<PanelId, boolean>
 export type SavedLayout = {name: string; json: string}
 
-const none = (): Flags => ({viewport: false, source: false, 'agent-1': false, 'agent-2': false, chat: false, problems: false})
+const none = (): Flags => ({viewport: false, source: false, 'agent-1': false, 'agent-2': false, chat: false, problems: false, print: false})
 
 export const dockState = createStore({
     ready: false,
@@ -28,7 +28,11 @@ export const dockState = createStore({
     visible: none(),
     floating: none(),
     active: null as PanelId | null,
+    /** Id del grupo con el foco (el que usan «Minimizar» del menú Ver y su atajo). */
+    activeGroup: null as string | null,
     maximized: false,
+    /** Ids de los grupos minimizados (achicados a su barra de pestañas o a una franja). */
+    minimized: [] as string[],
     /** Modo enfoque: solo el panel activo, sin barra lateral ni de estado. */
     zen: false,
     layouts: [] as SavedLayout[],
@@ -70,6 +74,7 @@ function sync() {
         visible: sameFlags(s.visible, visible) ? s.visible : visible,
         floating: sameFlags(s.floating, floating) ? s.floating : floating,
         active,
+        activeGroup: api.activeGroup?.id ?? null,
         maximized: api.hasMaximizedGroup(),
     })
 }
@@ -106,7 +111,7 @@ function persistNow() {
     if (!api || loading || dockState.get().zen) return
     window.clearTimeout(timer)
     timer = undefined
-    SaveDockLayout(toEnvelope(api)).catch((e) => toast.error(errorText(e)))
+    SaveDockLayout(envelope()).catch((e) => toast.error(errorText(e)))
 }
 
 function schedulePersist() {
@@ -117,11 +122,215 @@ function schedulePersist() {
 
 // ── Carga de diseños ────────────────────────────────────────────────────────
 
-function applyConstraints() {
-    if (!api) return
-    for (const p of api.panels) {
-        if (isPanelId(p.id)) p.api.setConstraints(minimums(p.id, scale()))
+// ── Minimizar ───────────────────────────────────────────────────────────────
+//
+// Minimizar achica un grupo a lo mínimo SIN cerrarlo ni desmontar nada: el
+// contenido sigue en su sitio, solo que sin espacio. Según cómo esté dividido:
+//   · apilado arriba/abajo (o flotante): queda solo su barra de pestañas (`bar`);
+//   · lado a lado: queda una franja angosta con los íconos de sus pestañas (`strip`).
+// Se logra con las restricciones del GRUPO (mínimo = máximo en la dimensión que se
+// achica), y los vecinos se reparten el resto. Las restricciones por panel de
+// dockview no sirven: `panel.api.setConstraints` no tiene a nadie escuchando; el
+// grupo lee las suyas explícitas, que mandan sobre las del panel (ver
+// `syncConstraints`). El mínimo especial vale solo mientras dura el estado
+// minimizado: al restaurar el grupo vuelve a los mínimos de su panel activo.
+
+type MinRec = {dim: 'width' | 'height'; prev: number}
+const minimized = new Map<string, MinRec>()
+const BIG = Number.MAX_SAFE_INTEGER
+/** Alto de la barra de pestañas (`--dv-tabs-and-actions-container-height` de dock.css). */
+const barSize = () => Math.round(35 * scale())
+/** Ancho de la franja de un grupo minimizado al lado de otro. */
+const stripSize = () => Math.round(36 * scale())
+
+type GridNode = {type: 'leaf'; data: {id: string}} | {type: 'branch'; data: GridNode[]}
+type GridJSON = {root: Extract<GridNode, {type: 'branch'}>; orientation: 'HORIZONTAL' | 'VERTICAL'}
+type Shape = {dim: 'width' | 'height'; siblings: GridNode[]}
+
+function gridJSON(): GridJSON | null {
+    return api ? (api.toJSON().grid as unknown as GridJSON) : null
+}
+
+// gridShape dice qué dimensión se achica en un grupo y quiénes son sus vecinos.
+// La orientación de cada rama alterna con la profundidad: hijos de una rama
+// HORIZONTAL van lado a lado (se achica el ancho), los de una VERTICAL apilados.
+function gridShape(g: DockviewGroupPanel): Shape | null {
+    if (g.api.location.type === 'floating') return {dim: 'height', siblings: []}
+    const grid = gridJSON()
+    if (!grid) return null
+    const walk = (node: Extract<GridNode, {type: 'branch'}>, o: GridJSON['orientation']): Shape | null => {
+        for (const child of node.data) {
+            if (child.type === 'leaf' && child.data.id === g.id) {
+                return {dim: o === 'HORIZONTAL' ? 'width' : 'height', siblings: node.data.filter((c) => c !== child)}
+            }
+            if (child.type === 'branch') {
+                const r = walk(child, o === 'HORIZONTAL' ? 'VERTICAL' : 'HORIZONTAL')
+                if (r) return r
+            }
+        }
+        return null
     }
+    return walk(grid.root, grid.orientation)
+}
+
+export function isMinimized(g: DockviewGroupPanel | undefined | null): boolean {
+    return !!g && minimized.has(g.id)
+}
+
+// canMinimize: un grupo solo en la grilla no se puede minimizar (no habría quien
+// ocupe su espacio), ni uno cuyos vecinos ya estén todos minimizados del mismo
+// lado: quedaría un hueco. Uno ya minimizado siempre se puede restaurar.
+export function canMinimize(g: DockviewGroupPanel): boolean {
+    if (minimized.has(g.id)) return true
+    const s = gridShape(g)
+    if (!s) return false
+    if (g.api.location.type === 'floating') return true
+    return s.siblings.some((n) => !(n.type === 'leaf' && minimized.get(n.data.id)?.dim === s.dim))
+}
+
+// desiredConstraints: lo que el grupo debe tener ahora. Sin minimizar son los
+// mínimos de su panel activo (× escala de la interfaz) y sin tope; minimizado, el
+// ancho o el alto fijos (mínimo = máximo) de la franja o la barra.
+function desiredConstraints(g: DockviewGroupPanel) {
+    const active = g.activePanel
+    const base = active && isPanelId(active.id) ? minimums(active.id, scale()) : {minimumWidth: 100, minimumHeight: 100}
+    const rec = minimized.get(g.id)
+    const fix = (dim: 'width' | 'height', size: number, min: number) => (rec?.dim === dim ? {min: size, max: size} : {min, max: BIG})
+    const w = fix('width', stripSize(), base.minimumWidth)
+    const h = fix('height', barSize(), base.minimumHeight)
+    return {minimumWidth: w.min, maximumWidth: w.max, minimumHeight: h.min, maximumHeight: h.max}
+}
+
+// syncConstraints aplica a cada grupo sus restricciones (solo si cambiaron: cada
+// cambio provoca una pasada de layout). También reemplaza al antiguo
+// reaplicado de los mínimos al cambiar la escala de la interfaz.
+function syncConstraints() {
+    if (!api) return
+    for (const g of api.groups) {
+        const d = desiredConstraints(g)
+        if (g.minimumWidth === d.minimumWidth && g.maximumWidth === d.maximumWidth && g.minimumHeight === d.minimumHeight && g.maximumHeight === d.maximumHeight) continue
+        g.api.setConstraints(d)
+    }
+}
+
+function markMinimized(g: DockviewGroupPanel) {
+    const rec = minimized.get(g.id)
+    if (rec) g.element.dataset.min = rec.dim === 'width' ? 'strip' : 'bar'
+    else delete g.element.dataset.min
+}
+
+function publishMinimized() {
+    const ids = [...minimized.keys()]
+    const cur = dockState.get().minimized
+    if (ids.length !== cur.length || ids.some((id, i) => id !== cur[i])) dockState.set({minimized: ids})
+}
+
+// reconcileMinimized pone al día lo minimizado tras cualquier cambio de la grilla
+// (también los arrastres): olvida los grupos que ya no existen o que se quedaron
+// solos, sigue al grupo si cambió de orientación, y repasa restricciones y marcas.
+let reconciling = false
+function reconcileMinimized() {
+    if (!api || loading || reconciling) return
+    reconciling = true
+    try {
+        if (minimized.size) {
+            const alive = new Map(api.groups.map((g) => [g.id, g]))
+            for (const id of [...minimized.keys()]) {
+                const g = alive.get(id)
+                const s = g ? gridShape(g) : null
+                if (!g || !s || (g.api.location.type !== 'floating' && s.siblings.length === 0)) {
+                    minimized.delete(id)
+                    continue
+                }
+                const rec = minimized.get(id)!
+                if (rec.dim !== s.dim) {
+                    // Cambió de lado a lado a apilado (o a flotante): el tamaño anterior
+                    // era de la otra dimensión.
+                    rec.dim = s.dim
+                    rec.prev = Math.round((s.dim === 'width' ? 340 : 260) * scale())
+                }
+            }
+        }
+        syncConstraints()
+        for (const g of api.groups) markMinimized(g)
+        publishMinimized()
+    } finally {
+        reconciling = false
+    }
+}
+
+function minimizedEntries(): MinimizedEntry[] {
+    if (!api) return []
+    const out: MinimizedEntry[] = []
+    for (const [id, rec] of minimized) {
+        const g = api.groups.find((x) => x.id === id)
+        const p = g?.panels.find((x) => isPanelId(x.id))
+        if (g && p) out.push({panel: p.id as PanelId, dim: rec.dim, prev: Math.round(rec.prev)})
+    }
+    return out
+}
+
+function envelope(): string {
+    return api ? toEnvelope(api, minimizedEntries()) : ''
+}
+
+// setGroupSize deja el grupo en ese tamaño. Un grupo flotante tiene un borde de
+// 1 px por lado que el tamaño de dockview no cuenta: se mide y se corrige una vez,
+// para que la barra minimizada mida de verdad lo que su barra de pestañas.
+function setGroupSize(g: DockviewGroupPanel, dim: 'width' | 'height', size: number) {
+    g.api.setSize({[dim]: size})
+    if (g.api.location.type !== 'floating') return
+    const r = g.element.getBoundingClientRect()
+    const got = dim === 'width' ? r.width : r.height
+    if (got > 0 && Math.abs(got - size) > 0.5) g.api.setSize({[dim]: Math.round(size + (size - got))})
+}
+
+export function minimizeGroup(g: DockviewGroupPanel): boolean {
+    if (!api || minimized.has(g.id) || !canMinimize(g)) return false
+    const s = gridShape(g)
+    if (!s) return false
+    if (api.hasMaximizedGroup()) api.exitMaximizedGroup()
+    const size = s.dim === 'width' ? stripSize() : barSize()
+    minimized.set(g.id, {dim: s.dim, prev: Math.max(g.api[s.dim], size * 2)})
+    markMinimized(g)
+    syncConstraints()
+    // Las restricciones nuevas se evalúan en la pasada de layout siguiente; el
+    // setSize deja el tamaño final ya mismo.
+    setGroupSize(g, s.dim, size)
+    publishMinimized()
+    return true
+}
+
+export function restoreGroup(g: DockviewGroupPanel): boolean {
+    const rec = minimized.get(g.id)
+    if (!api || !rec) return false
+    minimized.delete(g.id)
+    markMinimized(g)
+    syncConstraints()
+    setGroupSize(g, rec.dim, rec.prev)
+    publishMinimized()
+    return true
+}
+
+export function toggleMinimize(g: DockviewGroupPanel) {
+    if (minimized.has(g.id)) restoreGroup(g)
+    else if (!minimizeGroup(g)) toast.error(tNow().dock.minimizeAlone)
+}
+
+export function toggleMinimizeActive() {
+    const g = api?.activeGroup ?? api?.activePanel?.group
+    if (g) toggleMinimize(g)
+}
+
+// restoreGroupAt restaura el grupo minimizado que contiene ese elemento (doble
+// clic en el vacío de su barra de pestañas).
+export function restoreGroupAt(el: Element): boolean {
+    const g = api?.groups.find((x) => x.element.contains(el))
+    return !!g && restoreGroup(g)
+}
+
+function restoreIfMinimized(g: DockviewGroupPanel | undefined) {
+    if (g) restoreGroup(g)
 }
 
 // loadJSON carga un diseño guardado. false si no se pudo (texto roto, otra
@@ -131,17 +340,25 @@ function loadJSON(json: string | null | undefined): boolean {
     if (!api || !data) return false
     loading++
     try {
+        minimized.clear()
         api.fromJSON(data)
-        if (!api.panels.every((p) => isPanelId(p.id))) throw new Error('panel desconocido')
-        // Los mínimos guardados pueden ser de otra escala de interfaz.
-        applyConstraints()
+        if (!api.panels.every((p) => isPanelId(p.id))) throw new Error('panel desconocido') // i18n-ignore: el catch de abajo solo lo manda a console.warn
+        // Lo minimizado se guarda aparte (`min` del sobre) y se re-anota por un
+        // panel de cada grupo; reconcile descarta lo que ya no tenga sentido.
+        for (const e of parseMinimized(json)) {
+            const g = api.getPanel(e.panel)?.group
+            if (g && !minimized.has(g.id)) minimized.set(g.id, {dim: e.dim, prev: e.prev})
+        }
         return true
     } catch (e) {
         console.warn('diseño de paneles inválido, se usa el predeterminado', e)
+        minimized.clear()
         api.clear()
         return false
     } finally {
         loading--
+        // Los mínimos guardados pueden ser de otra escala de interfaz.
+        reconcileMinimized()
     }
 }
 
@@ -149,10 +366,12 @@ function loadPreset(preset: PresetId) {
     if (!api) return
     loading++
     try {
+        minimized.clear()
         api.clear()
         buildPreset(api, preset, scale())
     } finally {
         loading--
+        reconcileMinimized()
     }
 }
 
@@ -160,7 +379,11 @@ function loadPreset(preset: PresetId) {
 // `attach`, antes del primer dibujo. Hacerlo después, desde un efecto, dejaba una
 // carrera: la captura podía salir con la capa de contenido de un panel todavía
 // con la medida anterior.
-export const dockShot: {mode?: 'custom' | 'hidden' | 'tall'} = {}
+export const dockShot: {
+    mode?: 'custom' | 'hidden' | 'tall' | 'minimized' | 'print' | 'diff'
+    /** Menú «…» del grupo de un panel a abrir; con `submenu`, entra en esa entrada (su `data-menu-id`). */
+    menu?: {panel: PanelId; submenu?: string}
+} = {}
 
 function applyShotMode() {
     switch (dockShot.mode) {
@@ -172,6 +395,21 @@ function applyShotMode() {
             // columna propia) y los problemas en una ventana flotante sobre el visor.
             shotTools.splitOut('chat', 'right')
             shotTools.float('problems')
+            break
+        case 'minimized':
+            // El código a una franja a la derecha y los agentes a su barra, abajo: el
+            // visor se queda con todo lo demás.
+            shotTools.minimize('source')
+            shotTools.minimize('agent-1')
+            break
+        case 'print':
+            // Panel Impresión: la tabla y los parámetros caben sin desplazarse y el visor
+            // conserva alto para mostrar la tarjeta de la parte.
+            shotTools.size('agent-1', {height: 0.46})
+            break
+        case 'diff':
+            // Comparar con el padre: el código ancho para que el diff quede lado a lado.
+            shotTools.size('source', {width: 0.6})
             break
         case 'tall':
             // Terminal y chat: el grupo de abajo más alto, para que se vea la conversación.
@@ -190,11 +428,17 @@ export function attach(a: DockviewApi, saved: string, layouts: SavedLayout[]) {
     applyShotMode()
     disposers = [
         a.onDidLayoutChange(() => {
+            reconcileMinimized()
             sync()
             enforceMinimums()
             schedulePersist()
         }),
-        a.onDidActivePanelChange(sync),
+        // Los mínimos de un grupo son los de su panel activo: al cambiar de pestaña
+        // se repasan.
+        a.onDidActivePanelChange(() => {
+            reconcileMinimized()
+            sync()
+        }),
         a.onDidAddPanel(sync),
         a.onDidRemovePanel(sync),
         a.onDidMovePanel(sync),
@@ -217,21 +461,18 @@ export function detach() {
     disposers.forEach((d) => d())
     disposers = []
     api = null
-    dockState.set({ready: false, present: none(), visible: none(), floating: none(), active: null, maximized: false})
-}
-
-export function setSavedLayouts(layouts: SavedLayout[]) {
-    dockState.set({layouts})
+    minimized.clear()
+    dockState.set({ready: false, present: none(), visible: none(), floating: none(), active: null, activeGroup: null, minimized: [], maximized: false})
 }
 
 // Los mínimos escalan con la interfaz: se reaplican al cambiar de tamaño.
 export function rescaleConstraints() {
-    applyConstraints()
+    reconcileMinimized()
 }
 
 // ── Mostrar, ocultar, enfocar ───────────────────────────────────────────────
 
-const BOTTOM: PanelId[] = ['agent-1', 'agent-2', 'chat', 'problems']
+const BOTTOM: PanelId[] = ['agent-1', 'agent-2', 'chat', 'problems', 'print']
 
 // placement decide dónde reaparece un panel oculto: junto a quien lo acompañaba;
 // si no, según su papel (el código a la derecha del visor, lo demás debajo).
@@ -254,6 +495,7 @@ export function showPanel(id: PanelId) {
     if (!api) return
     const existing = api.getPanel(id)
     if (existing) {
+        restoreIfMinimized(existing.group)
         existing.api.setActive()
         return
     }
@@ -267,6 +509,8 @@ export function showPanel(id: PanelId) {
         ...minimums(id, scale()),
         ...(placement(id) ? {position: placement(id)} : {}),
     } as AddPanelOptions)
+    // Si entró como pestaña de un grupo minimizado no se vería: se restaura.
+    restoreIfMinimized(p.group)
     p.api.setActive()
 }
 
@@ -292,17 +536,15 @@ export function shortcutPanel(id: PanelId) {
     const p = api.getPanel(id)
     if (!p) return showPanel(id)
     if (api.activePanel?.id === id) hidePanel(id)
-    else p.api.setActive()
+    else {
+        restoreIfMinimized(p.group)
+        p.api.setActive()
+    }
 }
 
 export function hideOthers(id: PanelId) {
     if (!api) return
     for (const p of [...api.panels]) if (p.id !== id) hidePanel(p.id as PanelId)
-}
-
-export function hideAll() {
-    if (!api) return
-    for (const p of [...api.panels]) api.removePanel(p)
 }
 
 // ── Grupos: flotar, acoplar, dividir, maximizar ─────────────────────────────
@@ -320,11 +562,11 @@ export function floatPanel(p: IDockviewPanel) {
 // grande, o solo (a la derecha) si no queda ninguno.
 export function dockPanel(p: IDockviewPanel) {
     if (!api) return
-    const target = api.groups
-        .filter((g) => g.api.location.type === 'grid' && g !== p.group)
-        .sort((a, b) => b.api.width * b.api.height - a.api.width * a.api.height)[0]
-    if (target) p.api.moveTo({group: target, position: 'center'})
-    else p.api.moveTo({position: 'right'})
+    const target = largestGridGroup(p.group)
+    if (target) {
+        restoreIfMinimized(target)
+        p.api.moveTo({group: target, position: 'center'})
+    } else movePanelTo(p, 'right')
 }
 
 // splitPanel saca la pestaña a un grupo propio a la derecha o debajo del suyo.
@@ -339,7 +581,93 @@ export function toggleMaximize(panel?: IDockviewPanel) {
         return
     }
     const p = panel ?? api.activePanel
-    if (p) api.maximizeGroup(p)
+    if (!p) return
+    // Un grupo minimizado se restaura antes de maximizarlo: maximizar y minimizar
+    // a la vez no tiene sentido y el tope de tamaño del minimizado lo impediría.
+    restoreIfMinimized(p.group)
+    api.maximizeGroup(p)
+}
+
+// ── Mover a… ────────────────────────────────────────────────────────────────
+//
+// Destinos explícitos que no dependen de arrastrar (el arrastre en la webview no
+// se puede probar de forma automática, así que esta es la vía garantizada).
+// Izquierda/Derecha/Arriba/Abajo son respecto del área de paneles COMPLETA:
+//   · si ya hay un grupo ocupando ese borde entero (hijo directo de la raíz, en el
+//     eje que corresponde) el panel entra a él como pestaña;
+//   · si no, se crea uno nuevo que abarca todo ese borde (`addGroup` sin referencia).
+// Centro = pestaña del grupo acoplado más grande (casi siempre el del visor).
+// «Junto a…» = pestaña del grupo de otro panel. Mover nunca destruye el contenido:
+// el panel solo cambia de grupo (el contenido vive fuera de dockview).
+
+export type MoveTarget = 'left' | 'right' | 'top' | 'bottom' | 'center'
+const DIRECTION = {left: 'left', right: 'right', top: 'above', bottom: 'below'} as const
+
+function largestGridGroup(except?: DockviewGroupPanel): DockviewGroupPanel | undefined {
+    if (!api) return undefined
+    return api.groups
+        .filter((g) => g.api.location.type === 'grid' && g !== except && !minimized.has(g.id))
+        .sort((a, b) => b.api.width * b.api.height - a.api.width * a.api.height)[0]
+}
+
+// edgeGroup: el grupo que ocupa ese borde de toda el área, si lo hay.
+function edgeGroup(target: Exclude<MoveTarget, 'center'>): DockviewGroupPanel | undefined {
+    const grid = gridJSON()
+    if (!api || !grid) return undefined
+    const horizontal = grid.orientation === 'HORIZONTAL'
+    if ((target === 'left' || target === 'right') !== horizontal) return undefined
+    const kids = grid.root.data
+    const node = target === 'left' || target === 'top' ? kids[0] : kids[kids.length - 1]
+    if (node?.type !== 'leaf') return undefined
+    return api.groups.find((g) => g.id === node.data.id)
+}
+
+// moveDisabled: destinos que no cambiarían nada (el panel ya está solo en ese
+// borde, o no hay otro grupo al que sumarse).
+export function moveDisabled(p: IDockviewPanel, target: MoveTarget): boolean {
+    if (!api) return true
+    const alone = p.group.panels.length < 2
+    if (target === 'center') return !largestGridGroup(p.group)
+    if (alone && api.groups.length < 2) return true
+    return alone && edgeGroup(target) === p.group
+}
+
+export function movePanelTo(p: IDockviewPanel, target: MoveTarget) {
+    if (!api || moveDisabled(p, target)) return
+    if (target === 'center') {
+        const dest = largestGridGroup(p.group)
+        if (!dest) return
+        restoreIfMinimized(dest)
+        p.api.moveTo({group: dest, position: 'center'})
+        return
+    }
+    const reuse = edgeGroup(target)
+    if (reuse && reuse !== p.group) {
+        restoreIfMinimized(reuse)
+        p.api.moveTo({group: reuse, position: 'center'})
+        return
+    }
+    const g = api.addGroup({direction: DIRECTION[target]})
+    p.api.moveTo({group: g, position: 'center'})
+    // Un grupo nuevo entra con la mitad del espacio: se deja en un tamaño de borde.
+    if (g.api.location.type === 'grid') {
+        if (target === 'left' || target === 'right') g.api.setSize({width: Math.round(api.width * 0.34)})
+        else g.api.setSize({height: Math.round(api.height * 0.32)})
+    }
+}
+
+// movePanelBeside suma el panel como pestaña del grupo de otro panel.
+export function movePanelBeside(p: IDockviewPanel, mate: PanelId) {
+    if (!api) return
+    const dest = api.getPanel(mate)?.group
+    if (!dest || dest === p.group) return
+    restoreIfMinimized(dest)
+    p.api.moveTo({group: dest, position: 'center'})
+}
+
+// presentPanels: los demás paneles que están en el dock (destinos de «Junto a…»).
+export function otherPanels(p: IDockviewPanel): PanelId[] {
+    return api ? PANEL_IDS.filter((id) => id !== p.id && !!api!.getPanel(id)) : []
 }
 
 // ── Diseños ─────────────────────────────────────────────────────────────────
@@ -357,7 +685,7 @@ export function resetLayout() {
 }
 
 export function currentLayoutJSON(): string | null {
-    return api ? toEnvelope(api) : null
+    return api ? envelope() : null
 }
 
 export function applySaved(name: string) {
@@ -409,9 +737,12 @@ export function enterZen() {
     if (!api || dockState.get().zen) return
     const keep = api.activePanel && isPanelId(api.activePanel.id) ? api.activePanel.id : (api.panels.find((p) => isPanelId(p.id))?.id as PanelId | undefined)
     window.clearTimeout(timer)
-    zenSaved = toEnvelope(api)
+    zenSaved = envelope()
     dockState.set({zen: true})
     if (api.hasMaximizedGroup()) api.exitMaximizedGroup()
+    // Un panel minimizado no sirve de modo enfoque: se restaura (el diseño de antes
+    // ya guardó que lo estaba).
+    restoreIfMinimized(keep ? api.getPanel(keep)?.group : undefined)
     for (const p of [...api.panels]) if (p.id !== keep) api.removePanel(p)
     sync()
 }
@@ -474,6 +805,10 @@ export const shotTools = {
     splitOut: (id: PanelId, position: 'right' | 'bottom') => {
         const p = api?.getPanel(id)
         if (p) splitPanel(p, position)
+    },
+    minimize: (id: PanelId) => {
+        const g = api?.getPanel(id)?.group
+        if (g) minimizeGroup(g)
     },
     keepOnly: (id: PanelId) => {
         if (!api?.getPanel(id)) showPanel(id)

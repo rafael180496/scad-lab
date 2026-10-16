@@ -11,6 +11,9 @@ type EventMap = {
     'render:started': RenderStartedEvent
     'render:finished': RenderFinishedEvent
     'checkpoints:changed': main.WorkspaceView
+    'mcp:changed': {enabled: boolean}
+    // Cambió la lista, el orden o el proyecto activo (S8). El payload no se usa: se vuelve a leer.
+    'projects:changed': unknown
 }
 
 // onEvent se suscribe a un evento tipado y devuelve la función que corta la

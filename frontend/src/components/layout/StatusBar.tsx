@@ -1,4 +1,6 @@
 import {Box, CircleAlert, FolderClosed, Info, Lock, PencilLine, Printer, TriangleAlert} from 'lucide-react'
+import {printStore} from '../../lib/printSession'
+import {overflowAxes, plateSize} from '../viewer/PlateAlert'
 import type {render} from '../../../wailsjs/go/models'
 import {editorSession} from '../../lib/editorSession'
 import {counts} from '../../lib/problems'
@@ -48,6 +50,7 @@ export function StatusBar({
     renderDiags,
     openscad,
     onProblems,
+    onPrint,
 }: {
     workspace?: string
     printer?: string
@@ -55,8 +58,10 @@ export function StatusBar({
     renderDiags: render.Diagnostic[] | undefined
     openscad: {version: string; missing: boolean} | null
     onProblems: () => void
+    onPrint: () => void
 }) {
     const t = useT()
+    const plate = printStore.use((s) => s.plate)
     const problems = useProblems(file ? renderDiags : undefined)
     const c = counts(file ? problems : [])
     return (
@@ -76,6 +81,17 @@ export function StatusBar({
                 </Item>
             ) : null}
             <div className="min-w-0 flex-1" />
+            {file && plate && !plate.fits ? (
+                <button
+                    type="button"
+                    onClick={onPrint}
+                    title={fmt(t.plate.statusHint, {axes: overflowAxes(plate), plate: plateSize(plate)})}
+                    className="flex min-w-0 shrink items-center gap-1 rounded px-1 text-danger transition-colors duration-100 hover:bg-surface-2"
+                >
+                    <TriangleAlert className="icon-ui-12 shrink-0" />
+                    <span className="truncate">{fmt(t.plate.status, {axes: overflowAxes(plate)})}</span>
+                </button>
+            ) : null}
             {file ? (
                 <>
                     <Mode />

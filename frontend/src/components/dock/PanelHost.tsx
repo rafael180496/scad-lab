@@ -5,8 +5,11 @@ import {useT} from '../../i18n'
 import {counts} from '../../lib/problems'
 import {onBeforeGoToLine} from '../../lib/editorSession'
 import {useProblems} from '../../hooks/useProblems'
-import {useTerminals} from '../../hooks/useTerminals'
-import {EditorPane, type EditorShot} from '../editor/EditorPane'
+import type {useTerminals} from '../../hooks/useTerminals'
+import {useMcpStatus} from '../../hooks/useMcpStatus'
+import {usePrintSession, type PrintParams} from '../../lib/printSession'
+import {EditorPane, type EditorShot, type EditorSnap} from '../editor/EditorPane'
+import {PrintPanel} from '../print/PrintPanel'
 import {ProblemsPanel} from '../problems/ProblemsPanel'
 import {RenderPanel} from '../render/RenderPanel'
 import {AgentTerminalTab} from '../terminal/AgentTerminalTab'
@@ -31,6 +34,11 @@ export type PanelHostProps = {
     settings: store.Settings
     dimsCollapsed: boolean
     onDimsCollapsed: (v: boolean) => void
+    /** Las terminales de agente de todos los proyectos abiertos (las lleva App; ver useTerminals). */
+    terms: ReturnType<typeof useTerminals>
+    /** Estado del editor que dejó el proyecto al irse a segundo plano; se aplica una vez al volver. */
+    editorRestore: EditorSnap | null
+    onEditorRestored: () => void
     onSwatchesSaved: (colors: string[]) => void
     viewerShot?: ViewerShot
     editorShot?: EditorShot
@@ -38,8 +46,11 @@ export type PanelHostProps = {
     onCancel: () => void
     onOpenSettings: () => void
     onOpenAISettings: () => void
-    onAutoIterateChange: (v: boolean) => void
+    onOpenPrintSettings: () => void
     onSaved: (fileName: string) => void
+    /** Por qué no se puede exportar ('' = se puede) y cómo abrir el diálogo de 3MF. */
+    exportWhy: string
+    onExport3mf: () => void
 }
 
 // PanelHost dibuja el contenido de cada panel acoplable. Vive FUERA de dockview
@@ -68,11 +79,32 @@ export function PanelHost(p: PanelHostProps) {
         return () => onBeforeGoToLine(null)
     }, [])
 
+    // Modelo por partes y estimación de impresión (S7): se piden mientras se vea
+    // el visor o el panel «Impresión». Los parámetros salen de Configuración.
+    const meshPath = p.result?.status === 'ok' && p.result.meshPath ? p.result.meshPath : ''
+    const base: PrintParams = {
+        infillPercent: p.settings.infillPercent,
+        wallLoops: p.settings.wallLoops,
+        lineWidthMm: p.settings.lineWidthMm,
+        filamentDiameterMm: p.settings.filamentDiameterMm,
+        defaultMaterialId: p.settings.defaultMaterial,
+        currency: p.settings.currency,
+    }
+    usePrintSession({
+        workspaceId: p.workspaceId,
+        file: p.file,
+        meshPath,
+        enabled: visible.viewport || visible.print,
+        base,
+        bed: p.bed,
+    })
+
     const problems = useProblems(p.file ? p.result?.diagnostics : undefined)
     const c = counts(p.file ? problems : [])
     useEffect(() => panelStatus.set({errors: c.error, warnings: c.warning, infos: c.info}), [c.error, c.warning, c.info])
 
-    const terms = useTerminals(p.workspaceId, p.settings.autoIterate, p.onAutoIterateChange)
+    const {status: mcp} = useMcpStatus(p.workspaceId)
+    const terms = p.terms
     const [a1, a2] = terms.slots
     useEffect(() => {
         const dot = (s: typeof a1) => (!s ? 'none' : s.ended == null ? 'running' : 'ended')
@@ -89,11 +121,13 @@ export function PanelHost(p: PanelHostProps) {
             visible={visible[id]}
             workspaceId={p.workspaceId}
             term={terms.slots[slot]}
+            allTerms={terms.all[slot]}
             busy={terms.busy === slot}
             agents={terms.agents}
             defaultAgent={p.settings.defaultAgent}
             autoIterate={terms.autoIterate}
             onAutoIterate={(v) => void terms.setAutoIterate(v)}
+            mcp={mcp}
             onStart={(agentId, mode, sessionId) => void terms.start(slot, agentId, mode, sessionId)}
             onClose={(termId) => void terms.close(termId)}
             onOpenSettings={p.onOpenAISettings}
@@ -128,6 +162,8 @@ export function PanelHost(p: PanelHostProps) {
                         renderDiags={p.result?.diagnostics}
                         settings={p.settings}
                         onSaved={p.onSaved}
+                        restore={p.editorRestore}
+                        onRestored={p.onEditorRestored}
                         shot={p.editorShot}
                     />
                 )
@@ -148,6 +184,18 @@ export function PanelHost(p: PanelHostProps) {
                 )
             case 'problems':
                 return <ProblemsPanel file={p.file} problems={p.file ? problems : []} />
+            case 'print':
+                return (
+                    <PrintPanel
+                        file={p.file}
+                        result={p.result}
+                        running={p.running}
+                        base={base}
+                        exportWhy={p.exportWhy}
+                        onExport3mf={p.onExport3mf}
+                        onOpenSettings={p.onOpenPrintSettings}
+                    />
+                )
         }
     }
 

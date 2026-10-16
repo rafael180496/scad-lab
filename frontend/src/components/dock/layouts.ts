@@ -1,5 +1,5 @@
 import type {AddPanelOptions, DockviewApi, SerializedDockview} from 'dockview-react'
-import {PANEL_IDS, PANEL_MIN, isPanelId, type PanelId} from './panels'
+import {PANEL_MIN, isPanelId, type PanelId} from './panels'
 
 // Diseños de los paneles acoplables: los presets, y el sobre JSON con el que se
 // guarda lo que arma dockview (setting `dockLayout` y `dockLayouts` en Go).
@@ -12,10 +12,31 @@ export type PresetId = (typeof PRESET_IDS)[number]
 export const LAYOUT_VERSION = 1
 export const CONTENT_COMPONENT = 'slot'
 
-export type Envelope = {v: number; dock: SerializedDockview}
+// Un grupo minimizado se anota con un panel suyo (`panel`), no con el id del grupo:
+// el id lo asigna dockview al cargar y el panel es el que se conoce siempre.
+// `dim` es la dimensión que se achicó y `prev` el tamaño al que vuelve al restaurar.
+export type MinimizedEntry = {panel: PanelId; dim: 'width' | 'height'; prev: number}
+// `min` es opcional: un diseño guardado antes de poder minimizar sigue cargando.
+export type Envelope = {v: number; dock: SerializedDockview; min?: MinimizedEntry[]}
 
-export function toEnvelope(api: DockviewApi): string {
-    return JSON.stringify({v: LAYOUT_VERSION, dock: api.toJSON()} satisfies Envelope)
+export function toEnvelope(api: DockviewApi, min: MinimizedEntry[] = []): string {
+    return JSON.stringify({v: LAYOUT_VERSION, dock: api.toJSON(), ...(min.length ? {min} : {})} satisfies Envelope)
+}
+
+// parseMinimized lee los grupos minimizados de un diseño guardado; lo que no
+// tenga la forma esperada se descarta (el diseño carga igual, sin minimizar).
+export function parseMinimized(json: string | undefined | null): MinimizedEntry[] {
+    if (!json) return []
+    try {
+        const list = (JSON.parse(json) as Partial<Envelope>).min
+        if (!Array.isArray(list)) return []
+        return list.filter(
+            (e): e is MinimizedEntry =>
+                !!e && isPanelId(e.panel) && (e.dim === 'width' || e.dim === 'height') && typeof e.prev === 'number' && e.prev > 0 && Number.isFinite(e.prev),
+        )
+    } catch {
+        return []
+    }
 }
 
 // parseEnvelope devuelve lo que dockview puede cargar, o null si el texto está
@@ -76,7 +97,7 @@ export function buildPreset(api: DockviewApi, preset: PresetId, scale: number): 
             add('viewport')
             add('source', {referencePanel: 'viewport', direction: 'right'})
             add('agent-1', {referencePanel: 'viewport', direction: 'below'})
-            tabs('agent-1', ['agent-2', 'chat', 'problems'])
+            tabs('agent-1', ['agent-2', 'chat', 'problems', 'print'])
             size('source', {width: Math.round(W * 0.34)})
             size('agent-1', {height: Math.round(H * 0.3)})
             api.getPanel('agent-1')?.api.setActive()
@@ -85,7 +106,7 @@ export function buildPreset(api: DockviewApi, preset: PresetId, scale: number): 
             // Visor grande; código y agentes como pestañas a la derecha.
             add('viewport')
             add('source', {referencePanel: 'viewport', direction: 'right'})
-            tabs('source', ['agent-1', 'agent-2', 'chat', 'problems'])
+            tabs('source', ['agent-1', 'agent-2', 'chat', 'problems', 'print'])
             size('source', {width: Math.round(W * 0.36)})
             api.getPanel('source')?.api.setActive()
             break
@@ -94,7 +115,7 @@ export function buildPreset(api: DockviewApi, preset: PresetId, scale: number): 
             add('source')
             add('agent-1', {referencePanel: 'source', direction: 'right'})
             add('viewport', {referencePanel: 'agent-1', direction: 'above'})
-            tabs('agent-1', ['agent-2', 'chat', 'problems'])
+            tabs('agent-1', ['agent-2', 'chat', 'problems', 'print'])
             size('agent-1', {width: Math.round(W * 0.46)})
             size('viewport', {height: Math.round(H * 0.36)})
             api.getPanel('agent-1')?.api.setActive()
@@ -104,14 +125,10 @@ export function buildPreset(api: DockviewApi, preset: PresetId, scale: number): 
             add('viewport')
             add('source', {referencePanel: 'viewport', direction: 'right'})
             add('agent-1', {direction: 'below'})
-            tabs('agent-1', ['agent-2', 'chat', 'problems'])
+            tabs('agent-1', ['agent-2', 'chat', 'problems', 'print'])
             size('viewport', {width: Math.round(W * 0.5)})
             size('agent-1', {height: Math.round(H * 0.3)})
             api.getPanel('agent-1')?.api.setActive()
             break
     }
-}
-
-export function isFullLayout(api: DockviewApi): boolean {
-    return PANEL_IDS.every((id) => !!api.getPanel(id))
 }

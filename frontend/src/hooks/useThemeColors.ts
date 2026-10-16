@@ -13,6 +13,7 @@ export type ThemeColors = {
     fg: string
     faint: string
     accent: string
+    danger: string
 }
 
 const tokens: Record<keyof ThemeColors, string> = {
@@ -25,6 +26,7 @@ const tokens: Record<keyof ThemeColors, string> = {
     fg: '--c-fg',
     faint: '--c-faint',
     accent: '--c-accent',
+    danger: '--c-danger',
 }
 
 let snapshot: ThemeColors | null = null

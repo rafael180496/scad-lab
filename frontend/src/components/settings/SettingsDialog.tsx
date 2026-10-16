@@ -27,10 +27,13 @@ import {Field, Input, Select, Toggle} from '../ui/Field'
 import {toast} from '../ui/Toast'
 import {fmt, LANGUAGES, normalizeLang, setLanguage, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
+import {CURRENCIES} from '../../lib/printFormat'
+import {reloadMaterials} from '../../lib/materials'
 import {applyTheme} from '../../lib/theme'
 import {cn} from '../../lib/cn'
 import type {Appearance} from '../../lib/appearance'
 import {AppearanceSettings} from './AppearanceSettings'
+import {McpSettings} from './McpSettings'
 
 export type SettingsTab = 'general' | 'openscad' | 'ai' | 'printing' | 'skills' | 'about'
 type Tab = SettingsTab
@@ -77,11 +80,16 @@ export function SettingsDialog({
     onResetAppearance,
     onResetLayout,
     initialTab = 'general',
+    workspaceId = null,
+    workspaceName,
 }: {
     open: boolean
     // initialTab es la pestaña con la que abre: el aviso «OpenSCAD no
     // encontrado» del visor lleva directo a OpenSCAD.
     initialTab?: Tab
+    // Workspace abierto: Configuración → IA muestra el estado de sus archivos MCP.
+    workspaceId?: number | null
+    workspaceName?: string
     onClose: () => void
     boot: main.Bootstrap
     printerList: printers.Printer[]
@@ -392,6 +400,8 @@ export function SettingsDialog({
                                 </Field>
                             </div>
 
+                            <McpSettings workspaceId={workspaceId} workspaceName={workspaceName} />
+
                             <div className="flex flex-col gap-2">
                                 <h3 className="text-ui-13 font-semibold">{t.settings.modelServers}</h3>
                                 {serverProviders.map((p) => {
@@ -504,6 +514,51 @@ export function SettingsDialog({
                                     />
                                 </Field>
                             </div>
+                            <p className="-mb-1 text-ui-11-5 leading-relaxed text-faint">{t.settings.estimateIntro}</p>
+                            <div className="grid grid-cols-4 gap-3">
+                                <Field label={t.settings.wallLoops}>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={10}
+                                        step={1}
+                                        value={s.wallLoops}
+                                        title={t.settings.wallLoopsHint}
+                                        onChange={(e) => set('wallLoops', Math.round(Number(e.target.value)))}
+                                    />
+                                </Field>
+                                <Field label={t.settings.lineWidth}>
+                                    <Input
+                                        type="number"
+                                        min={0.2}
+                                        max={1.5}
+                                        step={0.01}
+                                        value={s.lineWidthMm}
+                                        title={t.settings.lineWidthHint}
+                                        onChange={(e) => set('lineWidthMm', Number(e.target.value))}
+                                    />
+                                </Field>
+                                <Field label={t.settings.filamentDiameter}>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={3.5}
+                                        step={0.05}
+                                        value={s.filamentDiameterMm}
+                                        title={t.settings.filamentDiameterHint}
+                                        onChange={(e) => set('filamentDiameterMm', Number(e.target.value))}
+                                    />
+                                </Field>
+                                <Field label={t.settings.currency}>
+                                    <Select value={s.currency} title={t.settings.currencyHint} onChange={(e) => set('currency', e.target.value)}>
+                                        {(CURRENCIES.includes(s.currency) ? CURRENCIES : [s.currency, ...CURRENCIES]).map((c) => (
+                                            <option key={c} value={c}>
+                                                {c}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </Field>
+                            </div>
                             <Field label={t.settings.bambuPath} hint={t.settings.bambuPathHint}>
                                 <div className="flex gap-2">
                                     <Input
@@ -553,8 +608,12 @@ export function SettingsDialog({
                                 {materials.map((m) => {
                                     const upd = (patch: Partial<store.Material>) =>
                                         setMaterials((l) => l.map((x) => (x.id === m.id ? store.Material.createFrom({...x, ...patch}) : x)))
+                                    // Tras guardar, la estimación del panel «Impresión» se vuelve a pedir
+                                    // con la densidad y el costo nuevos.
                                     const persist = () =>
-                                        SaveMaterial(materials.find((x) => x.id === m.id) ?? m).catch((e) => toast.error(errorText(e)))
+                                        SaveMaterial(materials.find((x) => x.id === m.id) ?? m)
+                                            .then(() => reloadMaterials())
+                                            .catch((e) => toast.error(errorText(e)))
                                     return (
                                         <div key={m.id} className="grid grid-cols-[1fr_140px_140px] items-center gap-3 px-3 py-1.5">
                                             <span className="text-ui-12-5">{m.name}</span>

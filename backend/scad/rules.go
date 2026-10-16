@@ -324,7 +324,7 @@ func ruleFnTooHigh(a *analysis) {
 			}
 			if v, err := strconv.ParseFloat(t.Text, 64); err == nil && v > 256 {
 				a.addTok(SeverityInfo, CodeFnTooHigh, a.p.sig[s.name], i18n.Msg{
-					ES: "$fn = %s en el nivel superior: cada círculo y esfera del modelo tendrá esa cantidad de lados y el render será lento; preferí $fa/$fs o un $fn alto solo en la pieza que lo necesite",
+					ES: "$fn = %s en el nivel superior: cada círculo y esfera del modelo tendrá esa cantidad de lados y el render será lento; prefiere $fa/$fs o un $fn alto solo en la pieza que lo necesite",
 					EN: "$fn = %s at the top level: every circle and sphere in the model gets that many sides and rendering will be slow; prefer $fa/$fs or a high $fn only on the part that needs it",
 				}, t.Text)
 				break

@@ -3,6 +3,7 @@ package workspace
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -51,5 +52,67 @@ func TestScanAndNext(t *testing.T) {
 	next, err := NextFileName(dir, "Agregar bisagra")
 	if err != nil || next != "004-agregar-bisagra.scad" {
 		t.Errorf("NextFileName = %q, %v", next, err)
+	}
+}
+
+func TestRulesBlockPreservesUserContent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "CLAUDE.md")
+	read := func() string { b, _ := os.ReadFile(path); return string(b) }
+
+	// 1. Archivo nuevo: solo el bloque.
+	if err := WriteRules(dir, "Caja", "bambu-a1-mini"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(read(), rulesBegin) || !strings.Contains(read(), rulesEnd) {
+		t.Fatalf("sin marcas:\n%s", read())
+	}
+	// 2. El usuario agrega notas fuera del bloque; cambiar de impresora
+	// actualiza el bloque y conserva las notas.
+	os.WriteFile(path, []byte(read()+"\n## Mis notas\nusar PETG\n"), 0o644)
+	if err := WriteRules(dir, "Caja", "bambu-a1"); err != nil {
+		t.Fatal(err)
+	}
+	got := read()
+	if !strings.Contains(got, "usar PETG") || !strings.Contains(got, "256") || strings.Count(got, rulesBegin) != 1 {
+		t.Errorf("notas perdidas o bloque duplicado:\n%s", got)
+	}
+	// 3. Idempotente: sin cambios no reescribe.
+	st1, _ := os.Stat(path)
+	if err := WriteRules(dir, "Caja", "bambu-a1"); err != nil {
+		t.Fatal(err)
+	}
+	if st2, _ := os.Stat(path); !st2.ModTime().Equal(st1.ModTime()) {
+		t.Error("reescribió un archivo que no cambió")
+	}
+
+	// 4. Archivo de una versión anterior (sin marcas, con nuestro título):
+	// se respalda y se reemplaza.
+	legacy := "# Caja — workspace de ScadLab\n\nreglas viejas editadas por el usuario\n"
+	os.WriteFile(path, []byte(legacy), 0o644)
+	if err := WriteRules(dir, "Caja", "bambu-a1"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(read(), "reglas viejas") {
+		t.Error("el archivo viejo no se reemplazó")
+	}
+	backups, _ := filepath.Glob(filepath.Join(dir, ".scadlab", "backup", "CLAUDE.md.*"))
+	if len(backups) != 1 {
+		t.Fatalf("respaldo: %v", backups)
+	}
+	if b, _ := os.ReadFile(backups[0]); string(b) != legacy {
+		t.Error("el respaldo no es el archivo original")
+	}
+
+	// 5. CLAUDE.md propio del usuario (carpeta importada): bloque arriba, lo
+	// suyo debajo, intacto.
+	own := "# Mi proyecto\n\nInstrucciones mías.\n"
+	os.WriteFile(path, []byte(own), 0o644)
+	if err := WriteRules(dir, "Caja", "bambu-a1"); err != nil {
+		t.Fatal(err)
+	}
+	got = read()
+	if !strings.HasPrefix(got, rulesBegin) || !strings.HasSuffix(got, own) {
+		t.Errorf("contenido propio no conservado:\n%s", got)
 	}
 }

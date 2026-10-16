@@ -15,13 +15,14 @@ import {
     resetLayout,
     saveCurrentAs,
     toggleMaximize,
+    toggleMinimizeActive,
     togglePanel,
     toggleZen,
 } from './dock'
 import {PRESET_IDS, parseEnvelope} from './layouts'
 import {PANEL_ICON, PANEL_IDS, PANEL_SHORTCUT, panelTitle} from './panels'
 
-// Se muestra en la cabecera, entre el nombre del workspace y las exportaciones.
+// Se muestra en la cabecera, a la derecha de las pestañas de proyecto y junto a las exportaciones.
 export type ShotView = 'menu' | 'layouts'
 
 export function ViewMenu({
@@ -47,6 +48,8 @@ export function ViewMenu({
     const layouts = dockState.use((s) => s.layouts)
     const zen = dockState.use((s) => s.zen)
     const maximized = dockState.use((s) => s.maximized)
+    const activeGroup = dockState.use((s) => s.activeGroup)
+    const activeMinimized = dockState.use((s) => s.activeGroup !== null && s.minimized.includes(s.activeGroup))
     const [saveOpen, setSaveOpen] = useState(false)
     const [manageOpen, setManageOpen] = useState(shot === 'layouts')
 
@@ -97,6 +100,13 @@ export function ViewMenu({
             title: maximized ? t.dock.restorePanelHint : t.dock.maximizePanelHint,
             disabled: !maximized && Object.values(present).every((v) => !v),
             onSelect: () => toggleMaximize(),
+        },
+        {
+            label: activeMinimized ? t.dock.unminimizePanel : t.dock.minimizePanel,
+            title: withKeys(activeMinimized ? t.dock.unminimizePanelHint : t.dock.minimizePanelHint, 'mod+shift+m'),
+            keys: keys('mod+shift+m'),
+            disabled: activeGroup === null,
+            onSelect: toggleMinimizeActive,
         },
         {
             label: zen ? t.dock.zenExit : t.dock.zen,

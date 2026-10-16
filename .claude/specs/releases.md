@@ -156,7 +156,7 @@ ninguna frase exacta, cualquier mención de esas palabras clave alcanza:
    - Dejar `## [Unreleased]` en el archivo (encabezado vacío, sin
      contenido debajo) para que la próxima tanda de cambios post-release
      tenga dónde acumularse hasta el siguiente empaquetado.
-8. **Actualizar `index.html`, la documentación pública.** Es el paso que hace
+8. **Actualizar `index.html` (inglés) y `es/index.html` (español), la documentación pública.** Las dos páginas cambian juntas: mismos temas, misma insignia de versión, capturas de `docs/screenshots/` y `docs/screenshots/es/` regeneradas con `./scripts/help-shots.sh`. Es el paso que hace
    que la versión nueva se pueda *usar*, no solo descargar: el CHANGELOG dice
    qué cambió, y la página dice **cómo se usa**. Uno es para quien ya la tiene;
    la otra, para quien todavía no.
