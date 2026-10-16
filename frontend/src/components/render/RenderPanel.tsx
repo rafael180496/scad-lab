@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import type {render, store} from '../../../wailsjs/go/models'
 import {Button} from '../ui/Button'
+import {DownloadControls} from './DownloadControls'
+import {WasmNotice} from './WasmNotice'
 import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
@@ -213,6 +215,8 @@ export function RenderPanel({
     }
     const diags = result?.diagnostics ?? []
     const showMeta = !narrow && !running && result && (result.status === 'ok' || result.status === 'error')
+    // Renderizado con el motor integrado (sin OpenSCAD instalado): aviso informativo.
+    const showWasm = !running && result?.engine === 'wasm' && (result.status === 'ok' || result.status === 'error')
     // Con la pieza a la vista, las advertencias de un render OK van plegadas encima.
     const showWarnings = !!okMesh && diags.length > 0 && !running
 
@@ -250,6 +254,8 @@ export function RenderPanel({
                 </div>
             </div>
 
+            {showWasm && result ? <WasmNotice version={result.version} /> : null}
+
             {viewerMounted ? (
                 <Suspense
                     fallback={
@@ -281,10 +287,13 @@ export function RenderPanel({
                     {tone === 'missing' ? (
                         <div className="m-4 flex flex-col items-start gap-3 rounded-lg border border-warn/50 bg-surface p-4">
                             <p className="text-ui-12-5 leading-relaxed text-fg">{t.render.missing}</p>
-                            <Button title={t.render.openSettingsHint} onClick={onOpenSettings}>
-                                <Settings className="icon-ui-14" />
-                                {t.render.openSettings}
-                            </Button>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <DownloadControls />
+                                <Button title={t.render.openSettingsHint} onClick={onOpenSettings}>
+                                    <Settings className="icon-ui-14" />
+                                    {t.render.openSettings}
+                                </Button>
+                            </div>
                         </div>
                     ) : null}
 

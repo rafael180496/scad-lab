@@ -51,6 +51,7 @@ export namespace detect {
 	    found: boolean;
 	    path: string;
 	    version: string;
+	    source: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Tool(source);
@@ -62,6 +63,7 @@ export namespace detect {
 	        this.found = source["found"];
 	        this.path = source["path"];
 	        this.version = source["version"];
+	        this.source = source["source"];
 	    }
 	}
 
@@ -533,6 +535,30 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class OpenSCADDownload {
+	    version: string;
+	    sizeBytes: number;
+	    supported: boolean;
+	    installed: boolean;
+	    installedPath: string;
+	    running: boolean;
+	    wasmVersion: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenSCADDownload(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.sizeBytes = source["sizeBytes"];
+	        this.supported = source["supported"];
+	        this.installed = source["installed"];
+	        this.installedPath = source["installedPath"];
+	        this.running = source["running"];
+	        this.wasmVersion = source["wasmVersion"];
+	    }
+	}
 	export class ProjectActivityEntry {
 	    id: number;
 	    rendering: boolean;
@@ -940,6 +966,7 @@ export namespace render {
 	    log: string;
 	    backend: string;
 	    version: string;
+	    engine: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result(source);
@@ -956,6 +983,7 @@ export namespace render {
 	        this.log = source["log"];
 	        this.backend = source["backend"];
 	        this.version = source["version"];
+	        this.engine = source["engine"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

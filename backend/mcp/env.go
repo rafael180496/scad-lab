@@ -18,6 +18,7 @@ import (
 	"scadlab/backend/parts"
 	"scadlab/backend/printers"
 	"scadlab/backend/render"
+	"scadlab/backend/scadwasm"
 	"scadlab/backend/store"
 )
 
@@ -30,8 +31,11 @@ type env struct {
 
 	engine    *render.Engine
 	engineErr error
-	store     *store.Store // nil si scadlab.db no existe o no abrió: se trabaja con los defaults
-	parts     *parts.Store // caché de partes por color (la misma de la app); nil sin directorio de datos
+	// wasm es el motor integrado (OpenSCAD en WebAssembly): el respaldo cuando
+	// no hay un OpenSCAD instalado. Un solo Runner por proceso.
+	wasm  *scadwasm.Runner
+	store *store.Store // nil si scadlab.db no existe o no abrió: se trabaja con los defaults
+	parts *parts.Store // caché de partes por color (la misma de la app); nil sin directorio de datos
 
 	mu      sync.Mutex
 	scad    scadCache
@@ -61,8 +65,12 @@ func newEnv(opts Options, lg *log.Logger) (*env, error) {
 	if derr != nil {
 		lg.Printf("directorio de datos: %v", derr)
 		e.engineErr = derr
+		e.wasm = scadwasm.New("")
 	} else {
 		e.dataDir = dir
+		// La caché de compilación del wasm es la misma que usa la app: el
+		// primer render de un agente no paga los 2-3 s si la app ya compiló.
+		e.wasm = scadwasm.New(filepath.Join(dir, "cache", "wasm"))
 		e.parts = parts.NewStore(filepath.Join(dir, "cache", "parts"))
 		// La caché de mallas es la misma que usa la app: lo que renderiza el
 		// agente queda disponible para el visor y viceversa.
@@ -89,6 +97,9 @@ func newEnv(opts Options, lg *log.Logger) (*env, error) {
 func (e *env) close() {
 	if e.engine != nil {
 		e.engine.Close()
+	}
+	if e.wasm != nil {
+		_ = e.wasm.Close()
 	}
 	if e.store != nil {
 		_ = e.store.Close()
@@ -137,9 +148,23 @@ func (e *env) renderOptions(ctx context.Context, s store.Settings) (render.Optio
 	tool := e.openscad(ctx, s.OpenSCADPath)
 	return render.Options{
 		OpenSCADPath:   tool.Path,
+		WASM:           e.wasm,
 		Backend:        s.RenderBackend,
 		TimeoutSeconds: s.RenderTimeoutSec,
 	}, tool
+}
+
+// usesWASM dice si, sin un OpenSCAD instalado, las herramientas trabajan con el
+// motor integrado.
+func (e *env) usesWASM(tool detect.Tool) bool { return !tool.Found && e.wasm.Available() }
+
+// engineNote es el aviso que acompaña a un resultado hecho con el motor
+// integrado (vacío si se usó el OpenSCAD instalado).
+func engineNote() string {
+	return msgf(i18n.Msg{
+		ES: "Hecho con el motor integrado de ScadLab (OpenSCAD %s compilado a WebAssembly) porque no hay un OpenSCAD instalado. Es más lento que el instalado; el resultado es el mismo.",
+		EN: "Done with ScadLab's built-in engine (OpenSCAD %s compiled to WebAssembly) because no OpenSCAD is installed. It is slower than a native install; the result is the same.",
+	}, scadwasm.Version)
 }
 
 // storedWorkspace busca el workspace registrado en la app que apunta a esta

@@ -20,6 +20,7 @@ import (
 	"scadlab/backend/printers"
 	"scadlab/backend/render"
 	"scadlab/backend/scad"
+	"scadlab/backend/scadwasm"
 	"scadlab/backend/store"
 	"scadlab/backend/workspace"
 )
@@ -73,7 +74,7 @@ func (e *env) tools() []Tool {
 		},
 		{
 			Name: "render",
-			Description: "Render a checkpoint with OpenSCAD (same engine and cache as the ScadLab app). Returns the status, diagnostics with line numbers (and the offending code line), duration, " +
+			Description: "Render a checkpoint with OpenSCAD (same engine and cache as the ScadLab app; if no OpenSCAD is installed it uses the built-in WebAssembly engine, reported in `engine`). Returns the status, diagnostics with line numbers (and the offending code line), duration, " +
 				"mesh size/volume/triangle count/watertightness and whether it fits the printer plate. Updates RENDER_ERRORS.md like the app does (newest checkpoint only). " +
 				"On errors, fix the model in a NEW checkpoint (create_checkpoint with parent=<this file>), never by editing this one.",
 			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
@@ -502,10 +503,14 @@ func (e *env) renderTool(ctx context.Context, args map[string]any) (*toolResult,
 		"cacheHit":        res.CacheHit,
 		"backend":         res.Backend,
 		"openscadVersion": res.Version,
+		"engine":          res.Engine,
 		"diagnostics":     e.diagnosticsOut(name, res.Diagnostics),
 		"mesh":            meshOf(info),
 		"printer":         printerOf(pr),
 		"fitsBuildVolume": ok,
+	}
+	if res.Engine == render.EngineWASM {
+		out["engineNote"] = engineNote()
 	}
 	if !ok {
 		out["overflowMm"] = over
@@ -570,6 +575,7 @@ func (e *env) lintTool(ctx context.Context, args map[string]any) (*toolResult, e
 		WorkspaceDir:  e.ws,
 		FileName:      fileName,
 		OpenSCADPath:  tool.Path,
+		WASM:          e.wasm,
 		ExistingFiles: names,
 	})
 	if ds == nil {
@@ -586,7 +592,10 @@ func (e *env) lintTool(ctx context.Context, args map[string]any) (*toolResult, e
 		"infos":       counts[scad.SeverityInfo],
 		"diagnostics": ds,
 	}
-	if !tool.Found {
+	switch {
+	case e.usesWASM(tool):
+		out["note"] = engineNote()
+	case !tool.Found:
 		out["note"] = msgf(i18n.Msg{
 			ES: "OpenSCAD no está disponible: solo se aplicaron las reglas propias de ScadLab (sin chequeo de sintaxis).",
 			EN: "OpenSCAD is not available: only ScadLab's own rules were applied (no syntax check).",
@@ -785,9 +794,16 @@ func (e *env) printerInfo(ctx context.Context, _ map[string]any) (*toolResult, e
 	mat := e.material(s)
 	tool := e.openscad(ctx, s.OpenSCADPath)
 	scadInfo := map[string]any{"found": tool.Found, "backend": s.RenderBackend}
-	if tool.Found {
+	switch {
+	case tool.Found:
+		scadInfo["engine"] = render.EngineNative
 		scadInfo["path"] = tool.Path
 		scadInfo["version"] = tool.Version
+	case e.wasm.Available():
+		// Sin OpenSCAD instalado, ScadLab renderiza con el motor integrado.
+		scadInfo["engine"] = render.EngineWASM
+		scadInfo["version"] = scadwasm.Version
+		scadInfo["note"] = engineNote()
 	}
 	verify := pr.Verify
 	if verify == nil {

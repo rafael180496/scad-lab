@@ -14,6 +14,10 @@ export function CancelChat(arg1) {
   return window['go']['main']['App']['CancelChat'](arg1);
 }
 
+export function CancelOpenSCADDownload() {
+  return window['go']['main']['App']['CancelOpenSCADDownload']();
+}
+
 export function CancelRender(arg1) {
   return window['go']['main']['App']['CancelRender'](arg1);
 }
@@ -62,6 +66,10 @@ export function DetectTools() {
   return window['go']['main']['App']['DetectTools']();
 }
 
+export function DownloadOpenSCAD() {
+  return window['go']['main']['App']['DownloadOpenSCAD']();
+}
+
 export function EffectiveWorkspacesRoot() {
   return window['go']['main']['App']['EffectiveWorkspacesRoot']();
 }
@@ -100,6 +108,10 @@ export function GetMeshInfo(arg1) {
 
 export function GetModelParts(arg1, arg2) {
   return window['go']['main']['App']['GetModelParts'](arg1, arg2);
+}
+
+export function GetOpenSCADDownload() {
+  return window['go']['main']['App']['GetOpenSCADDownload']();
 }
 
 export function GetRenderState(arg1) {
@@ -220,6 +232,10 @@ export function ReadTerminalBuffer(arg1) {
 
 export function RemoveAntigravityMCP() {
   return window['go']['main']['App']['RemoveAntigravityMCP']();
+}
+
+export function RemoveDownloadedOpenSCAD() {
+  return window['go']['main']['App']['RemoveDownloadedOpenSCAD']();
 }
 
 export function RemoveWorkspace(arg1) {

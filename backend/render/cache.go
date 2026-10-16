@@ -142,6 +142,9 @@ func (e *engine) loadCached(key string) (Result, bool) {
 	if r.Diagnostics == nil {
 		r.Diagnostics = []Diagnostic{}
 	}
+	if r.Engine == "" {
+		r.Engine = EngineNative // un .json anterior al motor integrado
+	}
 	return r, true
 }
 
@@ -189,6 +192,7 @@ func (e *engine) prune() {
 	var total int64
 	for _, de := range entries {
 		if de.IsDir() {
+			removeStaleWASMDir(e.cacheDir, de)
 			continue
 		}
 		info, err := de.Info()
@@ -232,6 +236,18 @@ func (e *engine) prune() {
 		_ = os.Remove(e.metaPath(it.key))
 		_ = os.Remove(e.meshPath(it.key))
 		total -= it.size
+	}
+}
+
+// removeStaleWASMDir borra la carpeta temporal de salida del motor integrado
+// que quedó de un proceso que murió a mitad de un render. Una más joven que
+// staleTempAge puede ser de un render en curso y no se toca.
+func removeStaleWASMDir(parent string, de os.DirEntry) {
+	if !strings.HasPrefix(de.Name(), wasmTempPrefix) {
+		return
+	}
+	if info, err := de.Info(); err == nil && time.Since(info.ModTime()) > staleTempAge {
+		_ = os.RemoveAll(filepath.Join(parent, de.Name()))
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"scadlab/backend/i18n"
+	"scadlab/backend/scadwasm"
 )
 
 // Este archivo agrega una segunda salida al motor sin tocar el contrato de
@@ -48,10 +49,12 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 		}
 		return r, nil
 	}
-	if opts.OpenSCADPath == "" {
+	kind := opts.engineKind()
+	if kind == "" {
 		res.Status = StatusMissing
 		return finish(res)
 	}
+	res.Engine = kind
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return res, i18n.Errorf(i18n.Msg{
 			ES: "no se pudo crear la caché de exportación %s: %w",
@@ -66,13 +69,14 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 	if err != nil {
 		return res, i18n.Errorf(i18n.Msg{ES: "no se pudo leer %s: %w", EN: "could not read %s: %w"}, req.FileName, err)
 	}
-	version := e.version(ctx, opts.OpenSCADPath)
+	bin := opts.binKey()
+	version := e.versionOf(ctx, opts)
 	res.Version = version
-	useBackend := opts.Backend != "cgal" && !e.isUnsupported(opts.OpenSCADPath, version, "--backend")
+	useBackend := opts.Backend != "cgal" && !e.isUnsupported(bin, version, "--backend")
 	// -O export-3mf/color-mode=model es el valor por defecto de OpenSCAD 2025+,
 	// pero se pide explícito: con otro default el 3MF saldría sin colores. Una
 	// versión que no conoce -O (2021.01) lo rechaza y se reintenta sin él.
-	useColorOpt := ext == ArtifactExt3MF && !e.isUnsupported(opts.OpenSCADPath, version, "-O")
+	useColorOpt := ext == ArtifactExt3MF && !e.isUnsupported(bin, version, "-O")
 	backendName := func() string {
 		if useBackend {
 			return "manifold"
@@ -117,17 +121,17 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 	var output string
 	var runErr error
 	for range 3 {
-		output, runErr = e.runArtifact(runCtx, opts.OpenSCADPath, req.WorkspaceDir, req.FileName, tmpPath, useBackend, useColorOpt)
+		output, runErr = e.runArtifact(runCtx, opts, dir, req, ext, tmpPath, useBackend, useColorOpt)
 		if runErr == nil || runCtx.Err() != nil {
 			break
 		}
 		if useBackend && rejectsOption(output, "backend") {
-			e.markUnsupported(opts.OpenSCADPath, version, "--backend")
+			e.markUnsupported(bin, version, "--backend")
 			useBackend = false
 			continue
 		}
 		if useColorOpt && rejectsOption(output, "'-o'") {
-			e.markUnsupported(opts.OpenSCADPath, version, "-O")
+			e.markUnsupported(bin, version, "-O")
 			useColorOpt = false
 			continue
 		}
@@ -193,9 +197,50 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 	return finish(stored)
 }
 
+// runArtifactWASM genera el 3MF con el motor integrado. Su lib3mf no puede
+// escribir 3MF (ver scadwasm/off.go), así que pide un OFF —que sí trae el color
+// de cada cara— y lo convierte a un 3MF del estilo de OpenSCAD.
+func (e *engine) runArtifactWASM(ctx context.Context, w WASMRunner, cacheDir string, req Request, ext, out string, backend bool) (string, error) {
+	if ext != ArtifactExt3MF {
+		return "", i18n.Errorf(i18n.Msg{ES: "formato %s no soportado por el motor integrado", EN: "format %s is not supported by the built-in engine"}, ext)
+	}
+	select {
+	case e.slots <- struct{}{}:
+		defer func() { <-e.slots }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	outDir, err := os.MkdirTemp(cacheDir, wasmTempPrefix)
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(outDir)
+
+	args := []string{"-o", "/out/model.off", "--backend=" + wasmBackend(backend), req.FileName}
+	output, code, err := w.Run(ctx, WASMSpec(req.WorkspaceDir, outDir, args...))
+	if err != nil {
+		return output, err
+	}
+	if code != 0 {
+		return output, &wasmExitError{code: code}
+	}
+	title := strings.TrimSuffix(req.FileName, filepath.Ext(req.FileName))
+	if err := scadwasm.ConvertOFFTo3MF(filepath.Join(outDir, "model.off"), out, title); err != nil {
+		if os.IsNotExist(err) {
+			return output, nil // no escribió nada (modelo 2D o vacío): lo dirá el estado del archivo
+		}
+		return output, err
+	}
+	return output, nil
+}
+
 // runArtifact es run() para formatos sin --export-format: la extensión de out
 // decide el formato.
-func (e *engine) runArtifact(ctx context.Context, bin, dir, file, out string, backend, colorOpt bool) (string, error) {
+func (e *engine) runArtifact(ctx context.Context, opts Options, cacheDir string, req Request, ext, out string, backend, colorOpt bool) (string, error) {
+	if opts.engineKind() == EngineWASM {
+		return e.runArtifactWASM(ctx, opts.WASM, cacheDir, req, ext, out, backend)
+	}
+	bin, dir, file := opts.OpenSCADPath, req.WorkspaceDir, req.FileName
 	args := []string{"-o", out}
 	if colorOpt {
 		args = append(args, "-O", "export-3mf/color-mode=model")
@@ -234,6 +279,9 @@ func loadArtifact(dir, key, ext string) (Result, bool) {
 	r.MeshPath = file
 	if r.Diagnostics == nil {
 		r.Diagnostics = []Diagnostic{}
+	}
+	if r.Engine == "" {
+		r.Engine = EngineNative
 	}
 	return r, true
 }
@@ -279,6 +327,7 @@ func pruneArtifacts(dir string, max int64) {
 	var total int64
 	for _, de := range entries {
 		if de.IsDir() {
+			removeStaleWASMDir(dir, de)
 			continue
 		}
 		info, err := de.Info()

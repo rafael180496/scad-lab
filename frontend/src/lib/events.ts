@@ -6,11 +6,15 @@ import type {main, render} from '../../wailsjs/go/models'
 // como instancias de las clases de models.ts: se leen campos, nada más.
 export type RenderStartedEvent = {workspaceId: number; fileName: string}
 export type RenderFinishedEvent = {workspaceId: number; result: render.Result}
+// Progreso de «Descargar OpenSCAD» (app_openscad.go). message solo viene con phase = error.
+export type OpenSCADDownloadPhase = 'download' | 'verify' | 'extract' | 'done' | 'error' | 'cancelled'
+export type OpenSCADDownloadEvent = {phase: OpenSCADDownloadPhase; received: number; total: number; message: string}
 
 type EventMap = {
     'render:started': RenderStartedEvent
     'render:finished': RenderFinishedEvent
     'checkpoints:changed': main.WorkspaceView
+    'openscad:download': OpenSCADDownloadEvent
     'mcp:changed': {enabled: boolean}
     // Cambió la lista, el orden o el proyecto activo (S8). El payload no se usa: se vuelve a leer.
     'projects:changed': unknown

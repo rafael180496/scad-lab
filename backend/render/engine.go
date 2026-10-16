@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"scadlab/backend/i18n"
+	"scadlab/backend/scadwasm"
 )
 
 const (
@@ -136,12 +137,14 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 		return r, nil
 	}
 
-	// Sin OpenSCAD no se ejecuta nada: la interfaz muestra el aviso con el
-	// enlace a Configuración, no un error de render.
-	if opts.OpenSCADPath == "" {
+	// Sin OpenSCAD (ni nativo ni el integrado) no se ejecuta nada: la interfaz
+	// muestra el aviso con el enlace a Configuración, no un error de render.
+	kind := opts.engineKind()
+	if kind == "" {
 		res.Status = StatusMissing
 		return finish(res)
 	}
+	res.Engine = kind
 
 	ctx, done := e.enqueue(parent, req.WorkspaceKey)
 	defer done()
@@ -154,10 +157,11 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 		}, req.FileName, err)
 	}
 
-	version := e.version(ctx, opts.OpenSCADPath)
+	bin := opts.binKey()
+	version := e.versionOf(ctx, opts)
 	res.Version = version
-	useBackend := opts.Backend != "cgal" && !e.isUnsupported(opts.OpenSCADPath, version, "--backend")
-	useFormat := !e.isUnsupported(opts.OpenSCADPath, version, "--export-format")
+	useBackend := opts.Backend != "cgal" && !e.isUnsupported(bin, version, "--backend")
+	useFormat := !e.isUnsupported(bin, version, "--export-format")
 	backendName := func() string {
 		if useBackend {
 			return "manifold"
@@ -206,17 +210,17 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 	// Cada opción rechazada se recuerda por binario+versión para no pagar el
 	// intento fallido en cada render.
 	for range 3 {
-		output, runErr = e.run(runCtx, opts.OpenSCADPath, req.WorkspaceDir, req.FileName, tmpPath, useBackend, useFormat)
+		output, runErr = e.run(runCtx, opts, req.WorkspaceDir, req.FileName, tmpPath, useBackend, useFormat)
 		if runErr == nil || runCtx.Err() != nil {
 			break
 		}
 		if useBackend && rejectsOption(output, "backend") {
-			e.markUnsupported(opts.OpenSCADPath, version, "--backend")
+			e.markUnsupported(bin, version, "--backend")
 			useBackend = false
 			continue
 		}
 		if useFormat && rejectsOption(output, "export-format") {
-			e.markUnsupported(opts.OpenSCADPath, version, "--export-format")
+			e.markUnsupported(bin, version, "--export-format")
 			useFormat = false
 			continue
 		}
@@ -323,9 +327,40 @@ func (e *engine) render(parent context.Context, req Request, opts Options) (Resu
 	return finish(stored)
 }
 
+// binKey identifica el motor en las tablas de opciones rechazadas: la ruta del
+// binario nativo, o «wasm» para el integrado (que acepta todo, así que nunca
+// se marca nada).
+func (o Options) binKey() string {
+	if o.OpenSCADPath != "" {
+		return o.OpenSCADPath
+	}
+	return "wasm"
+}
+
+// versionOf es la versión del motor con que se renderiza: la del nativo
+// (`--version`, cacheada) o la del wasm integrado. Entra en la clave de la
+// caché, así una malla del integrado y una del nativo no se mezclan.
+func (e *engine) versionOf(ctx context.Context, opts Options) string {
+	if opts.engineKind() == EngineWASM {
+		return scadwasm.Version
+	}
+	return e.version(ctx, opts.OpenSCADPath)
+}
+
 // run ejecuta OpenSCAD una vez, sin shell intermedia y con los argumentos como
 // lista (un nombre de archivo con espacios o comillas no rompe nada).
-func (e *engine) run(ctx context.Context, bin, dir, file, out string, backend, format bool) (string, error) {
+func (e *engine) run(ctx context.Context, opts Options, dir, file, out string, backend, format bool) (string, error) {
+	if opts.engineKind() == EngineWASM {
+		var flags []string
+		if format {
+			flags = append(flags, "--export-format", "binstl")
+		}
+		// El integrado trae Manifold y CGAL, y sin flag usa Manifold: para
+		// respetar «cgal» de Configuración hay que pedirlo.
+		flags = append(flags, "--backend="+wasmBackend(backend))
+		return e.runWASM(ctx, opts.WASM, e.cacheDir, dir, file, out, flags)
+	}
+	bin := opts.OpenSCADPath
 	select {
 	case e.slots <- struct{}{}:
 		defer func() { <-e.slots }()
@@ -403,7 +438,7 @@ func exitDescription(err error) string {
 	if errors.As(err, &ee) {
 		return fmt.Sprintf("exit %d", ee.ExitCode())
 	}
-	return err.Error()
+	return err.Error() // incluye el «exit N» del motor integrado
 }
 
 // truncateLog deja los últimos 64 KB: los errores y el resumen del render están

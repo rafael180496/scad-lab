@@ -48,7 +48,7 @@ const es = lang === 'es'
 // Tamaño de la interfaz en % (UISHOT_SCALE en scripts/uishot.sh).
 const scale = [90, 100, 115, 130, 150].includes(Number(q.get('scale'))) ? Number(q.get('scale')) : 100
 
-type Scenario = 'ok' | 'error' | 'missing' | 'empty'
+type Scenario = 'ok' | 'error' | 'missing' | 'empty' | 'wasm'
 const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     main: {scenario: 'ok'},
     viewer: {scenario: 'ok', shot: {viewer: {view: 'iso', edges: true}}},
@@ -57,6 +57,10 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'viewer-top': {scenario: 'ok', shot: {viewer: {view: 'top', ortho: true, edges: true}}},
     'render-error': {scenario: 'error', shot: {select: '004-usb-c-cutout.scad'}},
     'render-missing': {scenario: 'missing'},
+    // Motor integrado (S11): sin OpenSCAD instalado, el render sale con el WebAssembly; el aviso del panel y la
+    // insignia de la barra de estado. Y Configuración → OpenSCAD con la descarga de OpenSCAD a medias.
+    'render-wasm': {scenario: 'wasm', shot: {viewer: {view: 'iso', edges: true}}},
+    'settings-openscad-download': {scenario: 'wasm', shot: {settingsTab: 'openscad'}},
     editor: {scenario: 'ok'},
     'editor-edit': {scenario: 'ok', shot: {editor: {mode: 'edit'}}},
     'editor-search': {scenario: 'ok', shot: {editor: {mode: 'search'}}},
@@ -325,6 +329,10 @@ color("#2b2f38") difference() {
 const fakeKey = (file: string) => (file.slice(0, 3) + 'e1c9a4b7d2f05a68'.repeat(4)).slice(0, 64)
 const meshDir = platform === 'windows' ? 'C:\\Users\\maker\\AppData\\Roaming\\ScadLab\\cache\\meshes\\' : '/Users/maker/Library/Application Support/ScadLab/cache/meshes/'
 
+// Motor del render: el nativo (OpenSCAD instalado) o, en el escenario `wasm`, el integrado.
+const wasmShot = cfg.scenario === 'wasm'
+const engineFields = wasmShot ? {version: '2025.12.30.wasm30277', engine: 'wasm'} : {version: '2025.06.01', engine: 'native'}
+
 const okResult = (file: string, ms: number, hit: boolean, warnings = 0) => ({
     fileName: file,
     status: 'ok',
@@ -337,7 +345,7 @@ const okResult = (file: string, ms: number, hit: boolean, warnings = 0) => ({
     })),
     log: 'Parsing design (AST generation)...\nCompiling design (CSG Tree generation)...\nRendering Polygon Mesh using Manifold...\nTotal rendering time: 0:00:00.412\n',
     backend: 'manifold',
-    version: '2025.06.01',
+    ...engineFields,
 })
 const errorResult = {
     fileName: '004-usb-c-cutout.scad',
@@ -351,11 +359,11 @@ const errorResult = {
     ],
     log: 'Parsing design (AST generation)...\nWARNING: Ignoring unknown variable "usb_w" in file 004-usb-c-cutout.scad, line 13\nERROR: Parser error: syntax error in file 004-usb-c-cutout.scad, line 23\n',
     backend: 'manifold',
-    version: '2025.06.01',
+    ...engineFields,
 }
 const missingResult = {
     fileName: selectedFile, status: 'missing', meshPath: '', cacheHit: false, durationMs: 0,
-    diagnostics: [], log: '', backend: '', version: '',
+    diagnostics: [], log: '', backend: '', version: '', engine: '',
 }
 const renderState: Record<string, unknown> =
     cfg.scenario === 'missing'
@@ -923,9 +931,19 @@ const App_ = {
     AntigravityMCPStatus: () => P(agyStatus),
     AddAntigravityMCP: () => P(agyStatus),
     RemoveAntigravityMCP: () => P(agyStatus),
+    // «Descargar OpenSCAD» (S11): sin nada descargado, con la descarga en curso en la vista de Configuración.
+    GetOpenSCADDownload: () =>
+        P({
+            version: '2025.12.30', sizeBytes: 62687889, supported: true, installed: false, installedPath: '',
+            running: view === 'settings-openscad-download', wasmVersion: '2025.12.30.wasm30277',
+        }),
+    DownloadOpenSCAD: () => new Promise(() => {}),
+    CancelOpenSCADDownload: () => P(undefined),
     DetectTools: () =>
         P([
-            {id: 'openscad', found: true, path: '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD', version: '2025.06.01'},
+            wasmShot
+                ? {id: 'openscad', found: false, path: '', version: '', source: ''}
+                : {id: 'openscad', found: true, path: '/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD', version: '2025.06.01', source: 'system'},
             {id: 'claude', found: true, path: '', version: '2.1.300'},
             {id: 'opencode', found: true, path: '', version: '1.4.2'},
             {id: 'codex', found: true, path: '', version: '0.98.0'},
@@ -1021,6 +1039,11 @@ if (view === 'settings-appearance') {
             window.clearInterval(find)
         }
     }, 100)
+}
+
+// settings-openscad-download: la descarga va por la mitad (el evento de progreso que mandaría Go).
+if (view === 'settings-openscad-download') {
+    window.setTimeout(() => emit('openscad:download', {phase: 'download', received: 38_400_000, total: 62_687_889, message: ''}), 400)
 }
 
 // settings-mcp: Configuración → IA desplazada hasta el bloque del servidor MCP.

@@ -20,6 +20,8 @@ export function AntigravityMCPStatus():Promise<main.AntigravityMCP>;
 
 export function CancelChat(arg1:number):Promise<void>;
 
+export function CancelOpenSCADDownload():Promise<void>;
+
 export function CancelRender(arg1:number):Promise<void>;
 
 export function ChatCheckpointParent(arg1:number,arg2:string):Promise<string>;
@@ -44,6 +46,8 @@ export function DetectSlicers():Promise<Array<main.Slicer>>;
 
 export function DetectTools():Promise<Array<detect.Tool>>;
 
+export function DownloadOpenSCAD():Promise<main.OpenSCADDownload>;
+
 export function EffectiveWorkspacesRoot():Promise<string>;
 
 export function EstimatePrint(arg1:number,arg2:string,arg3:estimate.Options):Promise<estimate.Result>;
@@ -63,6 +67,8 @@ export function GetMCPStatus(arg1:number):Promise<main.MCPStatus>;
 export function GetMeshInfo(arg1:string):Promise<mesh.Info>;
 
 export function GetModelParts(arg1:number,arg2:string):Promise<parts.Model>;
+
+export function GetOpenSCADDownload():Promise<main.OpenSCADDownload>;
 
 export function GetRenderState(arg1:number):Promise<Record<string, render.Result>>;
 
@@ -123,6 +129,8 @@ export function ReadCheckpointPair(arg1:number,arg2:string):Promise<main.Checkpo
 export function ReadTerminalBuffer(arg1:string):Promise<main.TerminalSnapshot>;
 
 export function RemoveAntigravityMCP():Promise<main.AntigravityMCP>;
+
+export function RemoveDownloadedOpenSCAD():Promise<main.OpenSCADDownload>;
 
 export function RemoveWorkspace(arg1:number):Promise<void>;
 

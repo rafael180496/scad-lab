@@ -19,6 +19,7 @@ app-main            main              1440  900
 app-empty           empty             1280  800
 render-error        render-error      1440  900
 render-missing      render-missing    1280  800
+render-wasm         render-wasm       1440  900
 viewer              viewer            1440  900
 viewer-wireframe    viewer-wireframe  1440  900
 viewer-split        viewer-split      1440  900
@@ -31,6 +32,7 @@ save-checkpoint     save-checkpoint   1440  900
 new-workspace       newworkspace      1280  800
 settings-general    settings-general  1280  820
 settings-openscad   settings-openscad 1280  820
+settings-openscad-download settings-openscad-download 1280 1000
 settings-ai         settings-ai       1280  900
 settings-printing   settings-printing 1280  920
 settings-skills     settings-skills   1280  860

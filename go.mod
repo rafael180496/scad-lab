@@ -6,7 +6,8 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.80.0
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/wailsapp/wails/v2 v2.15.0
+	github.com/tetratelabs/wazero v1.12.0
+	github.com/wailsapp/wails/v2 v2.13.0
 	golang.org/x/text v0.39.0
 	modernc.org/sqlite v1.57.0
 )

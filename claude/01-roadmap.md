@@ -166,3 +166,16 @@ empaquetar**: eso se hace solo cuando el usuario dice «preparar la versión»
 | 10.3 | Workflow del tag (`release.yml`): validado (YAML, notas con `changelog-section.sh` sobre una sección simulada) | architect | ✅ |
 | 10.4 | Probar el `.exe` en una Windows real | usuario | ⬜ |
 | 10.5 | Primera versión (v0.1.0) con `releases.md` — **solo cuando el usuario lo pida** | — | ⬜ |
+
+## S11 — Motor integrado (OpenSCAD WASM) y descarga de OpenSCAD ✅ (falta 11.6, prueba del usuario en Windows)
+
+Plan: [.claude/specs/s11-motor-wasm-descarga.md](../.claude/specs/s11-motor-wasm-descarga.md). Motor → [17-motor-wasm.md](17-motor-wasm.md); descarga → [18-descarga-openscad.md](18-descarga-openscad.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 11.1 | `backend/scadwasm`: OpenSCAD 2025.12.30 oficial en WebAssembly ejecutado en Go (wazero, sin CGO), host emscripten con montajes, fuentes Liberation, `THIRD_PARTY_NOTICES.md` | OS | ✅ |
+| 11.2 | Respaldo WASM en render, exportación STL/3MF, partes/estimación, linter y MCP (preview rasterizado en Go) | OS | ✅ |
+| 11.3 | «Descargar OpenSCAD» a `<datos>/tools/openscad/` con SHA-256 fijado, progreso y cancelación; detección gestionado → PATH | FS | ✅ |
+| 11.4 | UI: aviso del motor integrado en el panel de render y la barra de estado, Configuración → OpenSCAD, ayuda, capturas, CHANGELOG | FS | ✅ |
+| 11.5 | Integración, medidas y prueba de humo con OpenSCAD ausente (`SCADLAB_NO_SYSTEM_OPENSCAD=1`): visor con malla WASM, error con línea, STL cerrado, 3MF con una parte por color y su extrusor (igual que el nativo), estimación, MCP render/export/preview | architect | ✅ |
+| 11.6 | Probar en una Windows real: descarga del zip, `openscad.exe` detectado, render WASM sin OpenSCAD | usuario | ⬜ |

@@ -48,12 +48,12 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 | `list_checkpoints` | — | árbol: archivo, padre, descripción, hijos, fecha, estado de render conocido; más `activeParent` ([claude/15](15-checkpoints.md)) |
 | `read_checkpoint` | `file` (def.: el más nuevo) | el código |
 | `create_checkpoint` | `label`, `source`, `parent` (def.: el padre activo, o el más nuevo; el primero no tiene), `description` | `{file, parent, activeParent, description}`; nunca pisa; avanza el activo ([claude/15](15-checkpoints.md)) |
-| `render` | `file` | estado, diagnósticos con línea y la línea de código, duración, caché, `mesh`, `fitsBuildVolume`, avisos |
+| `render` | `file` | estado, diagnósticos con línea y la línea de código, duración, caché, `engine` (`native`/`wasm`), `mesh`, `fitsBuildVolume`, avisos |
 | `lint` | `file` o `source` | diagnósticos de `scad.Lint` (OpenSCAD + SL001–SL009) y conteos |
 | `format` | `source` | el código formateado (texto) |
 | `measure` | `file` | `mesh`, impresora, `fitsBuildVolume`, `parts` (una por color) y `estimate` (peso, metros y costo con sus supuestos; ver [claude/14](14-medicion.md)) |
-| `preview` | `file`, `view`, `size` | **imagen PNG** (`{type:"image", data:base64, mimeType:"image/png"}`) + una línea de texto |
-| `printer_info` | — | impresora del workspace, reglas FDM, material por defecto, OpenSCAD detectado |
+| `preview` | `file`, `view`, `size` | **imagen PNG** (`{type:"image", data:base64, mimeType:"image/png"}`) + una línea de texto (con el motor integrado, dice que lo dibujó ScadLab) |
+| `printer_info` | — | impresora del workspace, reglas FDM, material por defecto, OpenSCAD detectado (`openscad.engine`: `native` o `wasm` si usa el motor integrado) |
 | `export` | `file`, `format` (`stl`/`3mf`/`stl-per-color`) | ruta en `<ws>/exports/`, partes, avisos |
 | `list_templates` / `get_template` | `name` | plantillas de `openscad-templates` (embebidas) |
 
@@ -91,6 +91,17 @@ Detalles que no son obvios:
   fiable) o si el modelo no apoya en z=0. «Cabe» es `parts.Fit`, el mismo
   cálculo de placa que el visor (0,05 mm de tolerancia). Detalle y fórmula en
   [claude/14](14-medicion.md).
+- **Sin OpenSCAD instalado** las herramientas siguen funcionando con el **motor
+  integrado** (OpenSCAD en WebAssembly, [claude/17](17-motor-wasm.md)): `render`,
+  `measure`, `lint` y `export` lo usan sin cambios para el agente (`render` agrega
+  `engine: "wasm"` y un `engineNote`; `lint`, un `note`; `printer_info`, `openscad.engine`).
+  Un solo `scadwasm.Runner` por proceso (`env.wasm`), con la caché de compilación de
+  `<datos>/cache/wasm` compartida con la app. `preview` no puede pedirle el PNG a
+  OpenSCAD (necesita OpenGL): renderiza con el integrado —misma caché que `render`,
+  incluido `RENDER_ERRORS.md`— y dibuja la malla con `backend/raster` (z-buffer por
+  software, sombreado plano, **un color por parte** salido de la caché de partes,
+  las mismas ocho vistas y el mismo tamaño que el nativo). Un modelo roto da el
+  mismo error con su línea que el preview nativo.
 - **Impresora del workspace**: la del workspace registrado en la app (por ruta);
   si la carpeta no está registrada, `printer.json`; si no, la de Configuración.
 
@@ -131,6 +142,9 @@ con código 1 y el error en stderr.
   `create_checkpoint` nunca pisa, `preview` devuelve PNG válido, `export` escribe
   en `exports/`, rutas fuera del workspace → `isError`), cancelación y stdout
   limpio.
+- `mcp_engine_test.go` — el servidor **sin OpenSCAD** (`SCADLAB_NO_SYSTEM_OPENSCAD=1`):
+  render, measure (partes por color), lint, export (STL, 3MF con 2 partes, STL por
+  color) y `preview` rasterizado, con `-race`.
 - `main_mcp_test.go` — `runMCP` en proceso (códigos de salida, stderr) y, con
   `SCADLAB_MCP_SMOKE=1`, el binario real compilado y lanzado con `--mcp`.
 - `backend/checkpoint` — crear, carrera con el agente, raíz, encabezado.

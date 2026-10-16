@@ -45,12 +45,8 @@ func (a *App) exportJob(id int64, fileName string) (exporter.Job, string, string
 	job := exporter.Job{
 		Engine: a.engine,
 		// Cola propia: exportar no cancela el render del visor ni al revés.
-		Req: render.Request{WorkspaceKey: renderKey(id) + ":export", WorkspaceDir: w.Path, FileName: fileName},
-		Opts: render.Options{
-			OpenSCADPath:   a.openscadPath(s.OpenSCADPath),
-			Backend:        s.RenderBackend,
-			TimeoutSeconds: s.RenderTimeoutSec,
-		},
+		Req:      render.Request{WorkspaceKey: renderKey(id) + ":export", WorkspaceDir: w.Path, FileName: fileName},
+		Opts:     a.renderOptions(s),
 		CacheDir: filepath.Join(a.dataDir, "cache", "exports"),
 		Printer:  pr,
 	}

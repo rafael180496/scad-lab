@@ -43,9 +43,12 @@ type Diagnostic struct {
 
 // LintOptions dice contra qué se revisa el código.
 type LintOptions struct {
-	WorkspaceDir  string   // para resolver include/use y el parent
-	FileName      string   // nombre del checkpoint (SL001/SL002); "" = sin reglas de checkpoint
-	OpenSCADPath  string   // "" = sin chequeo de sintaxis de OpenSCAD (solo reglas propias)
+	WorkspaceDir string // para resolver include/use y el parent
+	FileName     string // nombre del checkpoint (SL001/SL002); "" = sin reglas de checkpoint
+	OpenSCADPath string // "" = sin chequeo de sintaxis de OpenSCAD (solo reglas propias)
+	// WASM es el motor integrado: hace el mismo chequeo cuando no hay
+	// OpenSCAD nativo (OpenSCADPath == ""). Lo cumple *scadwasm.Runner.
+	WASM          render.WASMRunner
 	ExistingFiles []string // .scad del workspace (SL002); nil = mirar el disco
 }
 
@@ -60,8 +63,17 @@ func Lint(ctx context.Context, src string, o LintOptions) []Diagnostic {
 	var scadDiags []scadDiag
 	parseError := false
 	ran := false
-	if o.OpenSCADPath != "" && o.WorkspaceDir != "" {
+	switch {
+	case o.WorkspaceDir == "":
+	case o.OpenSCADPath != "":
 		scadDiags, parseError, ran = runOpenSCAD(ctx, src, o)
+	case o.WASM != nil && o.WASM.Available():
+		scadDiags, parseError, ran = runWASM(ctx, src, o)
+		if ran {
+			// Las reglas propias solo preguntan si OpenSCAD corrió (para que
+			// decida él si un include existe): el integrado cuenta igual.
+			o.OpenSCADPath = engineWASM
+		}
 	}
 	if !ran {
 		o.OpenSCADPath = "" // sin salida de OpenSCAD, SL004 resuelve por su cuenta
@@ -184,26 +196,44 @@ type scadDiag struct {
 	file string
 }
 
-// runOpenSCAD escribe src a <ws>/.scadlab/lint/ (el watcher no es recursivo:
-// no lo ve), corre `openscad -o x.ast x.scad` y traduce la salida. ran = false
-// si OpenSCAD no llegó a correr (no se pudo escribir, plazo vencido…).
-func runOpenSCAD(ctx context.Context, src string, o LintOptions) (diags []scadDiag, parseError, ran bool) {
+// engineWASM marca, en LintOptions.OpenSCADPath de las reglas propias, que el
+// chequeo lo hizo el motor integrado y no un ejecutable.
+const engineWASM = "<wasm>"
+
+// lintTemp escribe src a <ws>/.scadlab/lint/ (el watcher no es recursivo: no lo
+// ve) y devuelve el temporal y la ruta de salida .ast; cleanup los borra.
+func lintTemp(src string, o LintOptions) (tmp, ast string, cleanup func(), ok bool) {
 	dir := filepath.Join(o.WorkspaceDir, ".scadlab", "lint")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, false, false
+		return "", "", nil, false
 	}
 	f, err := os.CreateTemp(dir, "lint-*.scad")
 	if err != nil {
-		return nil, false, false
+		return "", "", nil, false
 	}
-	tmp := f.Name()
-	ast := strings.TrimSuffix(tmp, ".scad") + ".ast"
-	defer os.Remove(tmp)
-	defer os.Remove(ast)
+	tmp = f.Name()
+	ast = strings.TrimSuffix(tmp, ".scad") + ".ast"
+	cleanup = func() {
+		os.Remove(tmp)
+		os.Remove(ast)
+	}
 	_, werr := f.WriteString(src)
 	if cerr := f.Close(); werr != nil || cerr != nil {
+		cleanup()
+		return "", "", nil, false
+	}
+	return tmp, ast, cleanup, true
+}
+
+// runOpenSCAD escribe src a <ws>/.scadlab/lint/, corre `openscad -o x.ast
+// x.scad` y traduce la salida. ran = false si OpenSCAD no llegó a correr (no se
+// pudo escribir, plazo vencido…).
+func runOpenSCAD(ctx context.Context, src string, o LintOptions) (diags []scadDiag, parseError, ran bool) {
+	tmp, ast, cleanup, ok := lintTemp(src, o)
+	if !ok {
 		return nil, false, false
 	}
+	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(ctx, lintTimeout)
 	defer cancel()
@@ -227,7 +257,41 @@ func runOpenSCAD(ctx context.Context, src string, o LintOptions) (diags []scadDi
 	if runErr != nil && !errors.As(runErr, &exitErr) {
 		return nil, false, false // no arrancó
 	}
+	diags, parseError = translateOutput(out.String(), o, tmp)
+	return diags, parseError, true
+}
 
+// runWASM es runOpenSCAD con el motor integrado: el workspace se monta en
+// /work (solo lectura), el temporal se nombra por su ruta virtual y el .ast
+// sale a una carpeta temporal que se descarta.
+func runWASM(ctx context.Context, src string, o LintOptions) (diags []scadDiag, parseError, ran bool) {
+	tmp, _, cleanup, ok := lintTemp(src, o)
+	if !ok {
+		return nil, false, false
+	}
+	defer cleanup()
+	rel, err := filepath.Rel(o.WorkspaceDir, tmp)
+	if err != nil {
+		return nil, false, false
+	}
+	outDir, err := os.MkdirTemp("", "scadlab-lint-")
+	if err != nil {
+		return nil, false, false
+	}
+	defer os.RemoveAll(outDir)
+
+	ctx, cancel := context.WithTimeout(ctx, lintTimeout)
+	defer cancel()
+	out, _, runErr := o.WASM.Run(ctx, render.WASMSpec(o.WorkspaceDir, outDir, "-o", "/out/lint.ast", "/work/"+filepath.ToSlash(rel)))
+	if runErr != nil || ctx.Err() != nil {
+		return nil, false, false
+	}
+	diags, parseError = translateOutput(out, o, tmp)
+	return diags, parseError, true
+}
+
+// translateOutput pasa la salida de OpenSCAD a diagnósticos del editor.
+func translateOutput(output string, o LintOptions, tmp string) (diags []scadDiag, parseError bool) {
 	rel, err := filepath.Rel(o.WorkspaceDir, tmp)
 	if err != nil {
 		rel = tmp
@@ -237,7 +301,7 @@ func runOpenSCAD(ctx context.Context, src string, o LintOptions) (diags []scadDi
 	if shown == "" {
 		shown = "<editor>"
 	}
-	for _, rd := range render.ParseOutput(out.String(), o.WorkspaceDir, rel) {
+	for _, rd := range render.ParseOutput(output, o.WorkspaceDir, rel) {
 		d := Diagnostic{Severity: rd.Severity, Line: rd.Line, Col: rd.Col, Code: CodeSyntax, Source: SourceOpenSCAD, Message: rd.Message}
 		if d.Severity != SeverityError {
 			d.Severity = SeverityWarning
@@ -265,5 +329,5 @@ func runOpenSCAD(ctx context.Context, src string, o LintOptions) (diags []scadDi
 		d.Message = strings.ReplaceAll(d.Message, base, shown)
 		diags = append(diags, scadDiag{Diagnostic: d, file: file})
 	}
-	return diags, parseError, true
+	return diags, parseError
 }

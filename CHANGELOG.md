@@ -9,6 +9,40 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **ScadLab funciona sin OpenSCAD instalado.** Antes, sin OpenSCAD el visor 3D se
+  quedaba vacío y la app solo decía «no encontrado». Ahora trae un **motor
+  integrado**: el OpenSCAD oficial 2025.12.30 compilado a WebAssembly, que corre
+  dentro de ScadLab y toma el relevo solo cuando no hay uno instalado. Con él
+  funcionan igual el **visor 3D**, los **errores con su línea** (marcados en el
+  editor), la **exportación a STL y 3MF** (una parte por color, lista para Bambu
+  Studio) y la **estimación de peso, filamento y costo**; lo único que cambia es la
+  velocidad. El **servidor MCP** también lo usa: los agentes siguen pudiendo
+  renderizar, validar, medir y exportar, y su vista previa PNG se dibuja sin
+  OpenGL. Un OpenSCAD instalado sigue siendo el preferido: el integrado es el
+  respaldo, no un reemplazo.
+  - **Cuándo se nota.** El panel de render muestra una nota informativa (no un
+    error): «Renderizado con el motor integrado (OpenSCAD 2025.12.30,
+    WebAssembly) porque no se encontró OpenSCAD instalado», y la barra de estado
+    una insignia **WASM 2025.12.30** que abre Configuración → OpenSCAD.
+  - **Licencia.** OpenSCAD es GPL: el motor va **sin modificar** y como programa
+    aparte (recibe argumentos y archivos, igual que el ejecutable). Su versión,
+    SHA-256, licencia y código fuente están en `THIRD_PARTY_NOTICES.md`.
+- **Botón «Descargar OpenSCAD».** En esa nota, en el aviso de «no se pudo
+  renderizar» y en **Configuración → OpenSCAD**, un clic baja OpenSCAD 2025.12.30
+  desde openscad.org (unos 60 MB en macOS, 40 MB en Windows) y lo instala en la
+  carpeta de datos de ScadLab: no toca el resto del sistema ni pide permisos de
+  administrador. Ves la fase y el avance con una barra y puedes **Cancelar**; una
+  descarga cancelada, sin red o con el archivo dañado no deja nada a medias.
+  - **Verificada.** El archivo se comprueba contra un SHA-256 fijado en ScadLab y,
+    ya instalado, se corre `--version` antes de darlo por bueno. Antes de empezar se
+    revisa que haya espacio en disco, y los errores (sin conexión, el servidor
+    respondió otra cosa, checksum distinto, disco lleno) dicen qué pasó en tu idioma.
+  - **Al terminar, se vuelve a renderizar** el checkpoint activo, ya con el
+    OpenSCAD real. El descargado gana al que haya en tu `PATH`; la ruta que fijes a
+    mano en Configuración gana a los dos.
+  - **Quitar la descarga** (con confirmación) borra solo lo que bajó ScadLab, nunca
+    un OpenSCAD que instalaste tú. Disponible para macOS (Apple Silicon e Intel) y
+    Windows de 64 bits.
 - **Elige en qué carpeta se crea un workspace.** El diálogo **Nuevo workspace**
   ahora tiene el campo **Ubicación** —la carpeta que contendrá al proyecto— con su
   botón **Elegir…**. Por defecto es la de Configuración → General (o

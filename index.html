@@ -463,6 +463,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <tr><td>Export: STL, multicolor 3MF for Bambu (one part per color with its extruder), one STL per color and open in Bambu Studio</td><td><span class="badge ok">Available</span></td></tr>
     <tr><td>ScadLab MCP server: agents render, validate, measure and see their models, configured automatically in each CLI</td><td><span class="badge ok">Available</span></td></tr>
     <tr><td>Per-part measurement: selection in the viewer, estimated weight, filament and cost, plate warning and the Print panel</td><td><span class="badge ok">Available</span></td></tr>
+    <tr><td>Built-in engine (OpenSCAD on WebAssembly): viewer, STL/3MF export and estimate without OpenSCAD installed, and the <strong>Download OpenSCAD</strong> button</td><td><span class="badge ok">Available</span></td></tr>
     <tr><td>Advanced checkpoints: context menu, rename, trash, active parent, compare with the parent and resume the session that created them</td><td><span class="badge ok">Available</span></td></tr>
   </table></div>
 
@@ -472,6 +473,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li>Running ScadLab on a <strong>real Windows machine</strong>: the <code>.exe</code> is built from macOS and has not been run there yet.</li>
     <li>The 3D viewer, the editor and tab dragging inside the real window (WebGL in WKWebView / WebView2, Monaco's workers, <kbd>Ctrl+Tab</kbd>).</li>
     <li>The terminal with a real agent CLI, the chat against a real server and a session of each agent using the MCP tools.</li>
+    <li>The <strong>Download OpenSCAD</strong> button on a real Windows machine (the macOS download is tested end to end) and the built-in engine on both systems.</li>
     <li>Opening an exported 3MF in Bambu Studio, assigning the AMS and slicing.</li>
   </ul>
 
@@ -545,13 +547,14 @@ cd ScadLab
 wails build            <span class="c"># binary in build/bin/</span></code></pre></div>
 
   <h2 id="instalacion--siguiente">After installing</h2>
-  <p>ScadLab does not include OpenSCAD: you need to install it separately. Continue with <a href="#requisitos">Requirements</a>.</p>
+  <p>ScadLab does not need OpenSCAD to open: without it, it renders with its built-in engine, and you can download
+  OpenSCAD from the app itself. Continue with <a href="#requisitos">Requirements</a>.</p>
 </article>
 
 <article class="topic" id="requisitos" data-title="Requirements: OpenSCAD and agents">
   <h1>Requirements: OpenSCAD and agents</h1>
-  <p class="lead">OpenSCAD is mandatory: it is what turns the code into geometry. The AI agents are
-  optional, but they are half the fun.</p>
+  <p class="lead">OpenSCAD is what turns the code into geometry, and ScadLab brings a built-in copy to fall back on,
+  so the 3D viewer works even if you have not installed it. The AI agents are optional, but they are half the fun.</p>
 
   <figure class="shot"><img src="docs/screenshots/settings-openscad.png" alt="Settings, OpenSCAD tab: an empty path to auto-detect, OpenSCAD found with its version and the render engine selector" loading="lazy"><figcaption>Settings → OpenSCAD: automatic detection, the version found and the render engine.</figcaption></figure>
 
@@ -576,6 +579,34 @@ wails build            <span class="c"># binary in build/bin/</span></code></pre
   <p>At startup, ScadLab looks for OpenSCAD in the usual locations and in the <code>PATH</code>, and shows the version
   it found in <a href="#config-general">Settings</a>. If you installed it somewhere else, enter the path
   by hand right there.</p>
+
+  <h2 id="requisitos--sin-openscad">No OpenSCAD installed: built-in engine and download <span class="badge ok">Available</span></h2>
+  <p>If ScadLab does not find OpenSCAD, <strong>it does not stop working</strong>: it renders with a <strong>built-in
+  engine</strong>, the official OpenSCAD 2025.12.30 compiled to WebAssembly. The 3D viewer, the STL and 3MF export (with
+  one part per color) and the weight and cost estimate work the same; it is only slower. The
+  <a href="#render">render panel</a> says so with an informational notice, and the status bar shows a
+  <strong>WASM 2025.12.30</strong> badge.</p>
+  <figure class="shot"><img src="docs/screenshots/render-wasm.png" alt="Viewer panel with the box rendered by the built-in engine: a blue notice says it was rendered with OpenSCAD 2025.12.30 on WebAssembly because no installed OpenSCAD was found, with the Download OpenSCAD button; the status bar shows the WASM 2025.12.30 badge" loading="lazy"><figcaption>Render with the built-in engine: informational notice with the <strong>Download OpenSCAD</strong> button, and the WASM badge in the status bar.</figcaption></figure>
+  <p>To render faster, click <strong>Download OpenSCAD</strong> (in that notice or in
+  <a href="#config-general">Settings → OpenSCAD</a>). ScadLab downloads OpenSCAD 2025.12.30 from openscad.org (about 60 MB
+  on macOS and 40 MB on Windows), checks its SHA-256, and installs it in its own data folder: it does not touch the
+  rest of your system or ask for administrator permissions. While it runs you see the progress and can
+  <strong>Cancel</strong>; a cancelled or failed download leaves nothing behind. When it finishes, the active checkpoint is
+  rendered again with the real OpenSCAD.</p>
+  <figure class="shot"><img src="docs/screenshots/settings-openscad-download.png" alt="Settings, OpenSCAD tab: the engine in use is the built-in one, and the OpenSCAD download is at 61 percent, with the Cancel button and the license notice for the built-in engine" loading="lazy"><figcaption>Settings → OpenSCAD: which engine is in use, the download in progress with Cancel and, once installed, <strong>Remove download</strong>.</figcaption></figure>
+  <div class="tablewrap"><table>
+    <tr><th>Order of search</th><th>What is used</th></tr>
+    <tr><td>1</td><td>The path you set in Settings → OpenSCAD</td></tr>
+    <tr><td>2</td><td>The OpenSCAD downloaded by ScadLab</td></tr>
+    <tr><td>3</td><td>The one in your <code>PATH</code> and in the usual install locations</td></tr>
+    <tr><td>4</td><td>The built-in engine (OpenSCAD on WebAssembly)</td></tr>
+  </table></div>
+  <p><strong>Remove download</strong> deletes only what ScadLab downloaded, never an OpenSCAD you installed. The download
+  exists for macOS (Apple Silicon and Intel) and Windows (64-bit); on other systems, install OpenSCAD yourself.</p>
+  <p><strong>License.</strong> OpenSCAD is free software under the GPL license. The built-in engine is the official
+  one, <strong>unmodified</strong>, and ScadLab (MIT) includes it as a separate program; the version, the SHA-256, the license
+  and where the source code is are listed in <code>THIRD_PARTY_NOTICES.md</code>. The OpenSCAD you download is not
+  distributed by ScadLab: it comes straight from openscad.org.</p>
 
   <h2 id="requisitos--agentes">AI agents (optional)</h2>
   <p>ScadLab does not ship its own model: it uses the CLIs you already have installed and signed in for the
@@ -913,9 +944,13 @@ color("SteelBlue") difference() {
   <a href="#ia-autoiteracion">Auto-iteration on errors</a>.</p>
 
   <h2 id="render--sin-openscad">If OpenSCAD is missing</h2>
-  <p>The panel says so with a button that opens <a href="#config-general">Settings</a> on the OpenSCAD tab,
-  where you can enter the executable's path. If you install it while the app is open, the next render
-  finds it. See <a href="#requisitos--openscad">Requirements</a>.</p>
+  <p>It does not stop you: ScadLab renders with its <strong>built-in engine</strong> and the panel shows an informational
+  notice (not an error) with the version and the reason, and the <strong>Download OpenSCAD</strong> button with its progress and
+  <strong>Cancel</strong>. The status bar shows <strong>WASM 2025.12.30</strong>. Only if the built-in engine cannot start either does the panel
+  report that nothing can be rendered, with the download button and another that opens
+  <a href="#config-general">Settings</a> on the OpenSCAD tab, where you can enter the executable's path. If you install it
+  while the app is open, the next render finds it. See
+  <a href="#requisitos--sin-openscad">No OpenSCAD installed</a>.</p>
 </article>
 
 <article class="topic" id="visor-navegar" data-title="Navigating the model">
@@ -1321,7 +1356,8 @@ color("SteelBlue") difference() {
     <li>The open <strong>workspace and printer</strong>.</li>
     <li><strong>Editor mode</strong> (read-only / editing, and whether there are unsaved changes) and the cursor position.</li>
     <li><strong>Problems</strong>: errors, warnings and suggestions of the open checkpoint; a click shows the panel.</li>
-    <li><strong>OpenSCAD</strong>: the version ScadLab renders with, or the notice if it cannot find it.</li>
+    <li><strong>OpenSCAD</strong>: the version ScadLab renders with, or the notice if it cannot find it. Without an installed OpenSCAD it shows
+    the <strong>WASM 2025.12.30</strong> badge (the <a href="#requisitos--sin-openscad">built-in engine</a>); a click opens Settings → OpenSCAD.</li>
   </ul>
 </article>
 
@@ -2067,7 +2103,9 @@ color("Black") label();                                    // text that fills th
 
   <h2 id="config-general--openscad">OpenSCAD path</h2>
   <p>It shows the detected path and its version. If it did not find it, or you have several versions, type or choose the
-  executable's path. <strong>Detect</strong> checks that it responds.</p>
+  executable's path. <strong>Detect</strong> checks that it responds. Below, the block <strong>OpenSCAD engine and download</strong> says
+  which engine is in use (and where that OpenSCAD comes from) and offers <strong>Download OpenSCAD</strong>,
+  <strong>Cancel</strong> and <strong>Remove download</strong>; see <a href="#requisitos--sin-openscad">No OpenSCAD installed</a>.</p>
 
   <h2 id="config-general--render">Auto-render and time limit</h2>
   <p>On the OpenSCAD tab: <strong>Automatically render new checkpoints</strong> (on by default;
@@ -2325,8 +2363,9 @@ color("Black") label();                                    // text that fills th
   the license text in the copies you distribute. The full text is the repository's
   <a href="https://github.com/rafael180496/ScadLab/blob/main/LICENSE">LICENSE</a> file, and it is the one that prevails
   over this summary.</p>
-  <p>ScadLab <strong>does not include</strong> OpenSCAD: it runs it as an external program that you install (OpenSCAD is
-  distributed under GPL-2.0). The libraries you add in a workspace's <code>lib/</code> folder (BOSL2, MCAD,
+  <p>OpenSCAD is distributed under the GPL. ScadLab always uses it as a <strong>separate program</strong>: the one you install or
+  download from the app, or the <strong>built-in engine</strong> (the official OpenSCAD compiled to WebAssembly, unmodified; see
+  <code>THIRD_PARTY_NOTICES.md</code>). The libraries you add in a workspace's <code>lib/</code> folder (BOSL2, MCAD,
   NopSCADlib…) keep their own license, just like the models you design: they are yours.</p>
   <details><summary>Do I need an account or a license?</summary><p>No. It is MIT, there is no registration or app server. The AI agents (Claude Code, Codex…) use your own account with each of them.</p></details>
   <details><summary>How can I support the project?</summary><p>With a coffee on <a href="https://buymeacoffee.com/rhidalgo">Buy Me a Coffee</a> or a subscription on <a href="https://www.patreon.com/16966547/join">Patreon</a>. Also from the app: the footer of Settings. See <a href="#introduccion--apoyar">Support the project</a>.</p></details>

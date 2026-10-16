@@ -3,6 +3,7 @@ import type {main, printers, store} from '../wailsjs/go/models'
 import {
     ChooseDirectory,
     DetectTools,
+    GetOpenSCADDownload,
     GetBootstrap,
     ImportWorkspace,
     ListPrinters,
@@ -38,6 +39,7 @@ import {errorText} from './lib/errors'
 import {applyTheme} from './lib/theme'
 import {onEvent} from './lib/events'
 import {useRenders} from './hooks/useRenders'
+import {openscadDownload, useOpenSCADDownloadSync} from './hooks/useOpenSCADDownload'
 import {useTerminals} from './hooks/useTerminals'
 import {useProjectActivity} from './hooks/useProjectActivity'
 import {
@@ -170,7 +172,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
     const [newOpen, setNewOpen] = useState(false)
-    const [detectedOpenSCAD, setDetectedOpenSCAD] = useState<{version: string; missing: boolean} | null>(null)
+    const [detectedOpenSCAD, setDetectedOpenSCAD] = useState<{version: string; missing: boolean; engine?: string} | null>(null)
     const {appearance, change: changeAppearance, reset: resetAppearance} = useAppearance(boot?.settings)
     const winW = useWindowWidth()
     const {layout, preview, commit, toggleSidebar, toggleStatusBar, resetLayout} = useLayout(boot?.settings.layout, (l) =>
@@ -618,6 +620,20 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         void renderFile(selected)
     }, [boot?.settings.autoRender, view, selected, rendersLoaded, renderResults, renderRunning, renderFile])
 
+    // «Descargar OpenSCAD» (S11): al instalar o quitar el OpenSCAD descargado el motor
+    // que corresponde al checkpoint cambia (el nativo gana al integrado), así que se
+    // vuelve a renderizar el activo —la clave de caché lleva motor y versión, no se
+    // mezclan— y se olvida la detección de la barra de estado.
+    useOpenSCADDownloadSync()
+    const dlEpoch = openscadDownload.use((s) => s.epoch)
+    const seenEpoch = useRef(dlEpoch)
+    useEffect(() => {
+        if (dlEpoch === seenEpoch.current) return
+        seenEpoch.current = dlEpoch
+        setDetectedOpenSCAD(null)
+        if (selected) void renderFile(selected)
+    }, [dlEpoch, selected, renderFile])
+
     const exp = useExport({
         workspaceId: view?.workspace.id ?? null,
         file: selected,
@@ -687,15 +703,27 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
 
     // Versión de OpenSCAD para la barra de estado: la del último render; si
     // todavía no hubo ninguno, se detecta una vez (sin apurar el arranque).
-    const renderedWith = Object.values(renderResults).find((r) => r.version)?.version ?? ''
-    const openscadMissing = Object.values(renderResults).some((r) => r.status === 'missing')
+    // La versión sale del resultado del checkpoint elegido (si ya tiene) y, si no, del primero que
+    // la tenga; «no encontrado» solo cuenta el del elegido: tras descargar OpenSCAD los resultados
+    // viejos de otros checkpoints no pueden seguir diciendo que falta.
+    const curResult = selected ? renderResults[selected] : undefined
+    const versioned = curResult?.version ? curResult : Object.values(renderResults).find((r) => r.version)
+    const renderedWith = versioned?.version ?? ''
+    const openscadMissing = curResult ? curResult.status === 'missing' : Object.values(renderResults).some((r) => r.status === 'missing')
     useEffect(() => {
         if (!boot || renderedWith || detectedOpenSCAD) return
         const timer = window.setTimeout(() => {
             DetectTools()
-                .then((tools) => {
+                .then(async (tools) => {
                     const o = tools.find((x) => x.id === 'openscad')
-                    setDetectedOpenSCAD({version: o?.version ?? '', missing: !o?.found})
+                    if (o?.found) {
+                        setDetectedOpenSCAD({version: o.version ?? '', missing: false})
+                        return
+                    }
+                    // Sin OpenSCAD nativo se renderiza con el motor integrado: la barra lo dice
+                    // desde el arranque en vez de un «no encontrado» que parece un error.
+                    const d = await GetOpenSCADDownload().catch(() => null)
+                    setDetectedOpenSCAD(d?.wasmVersion ? {version: d.wasmVersion, missing: false, engine: 'wasm'} : {version: '', missing: true})
                 })
                 .catch(() => {})
         }, 1500)
@@ -704,7 +732,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const openscad = openscadMissing
         ? {version: '', missing: true}
         : renderedWith
-          ? {version: renderedWith, missing: false}
+          ? {version: renderedWith, missing: false, engine: versioned?.engine}
           : detectedOpenSCAD
 
     const toggle = async (cp: store.Checkpoint) => {
@@ -924,6 +952,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     openscad={openscad}
                     onProblems={() => showPanel('problems')}
                     onPrint={() => showPanel('print')}
+                    onOpenSettings={() => openSettings('openscad')}
                 />
             )}
 

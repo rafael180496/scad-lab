@@ -70,6 +70,11 @@ func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult
 
 	s := e.settings()
 	tool := e.openscad(ctx, s.OpenSCADPath)
+	if !tool.Found && e.wasm.Available() {
+		// Sin OpenSCAD instalado no hay OpenGL para su PNG: el motor integrado
+		// renderiza la malla y ScadLab la dibuja por software.
+		return e.previewRaster(ctx, name, viewName, v, size)
+	}
 	if !tool.Found {
 		return nil, i18n.New(i18n.Msg{
 			ES: "OpenSCAD no está instalado o no se encontró. Pídele al usuario que lo instale o indique su ruta en ScadLab → Configuración → OpenSCAD.",

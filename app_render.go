@@ -4,7 +4,9 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -13,6 +15,7 @@ import (
 	"scadlab/backend/detect"
 	"scadlab/backend/i18n"
 	"scadlab/backend/render"
+	"scadlab/backend/scadwasm"
 	"scadlab/backend/store"
 )
 
@@ -71,11 +74,7 @@ func (a *App) RenderCheckpoint(id int64, fileName string) (render.Result, error)
 	if err != nil {
 		return render.Result{}, err
 	}
-	opts := render.Options{
-		OpenSCADPath:   a.openscadPath(s.OpenSCADPath),
-		Backend:        s.RenderBackend,
-		TimeoutSeconds: s.RenderTimeoutSec,
-	}
+	opts := a.renderOptions(s)
 	req := render.Request{WorkspaceKey: renderKey(id), WorkspaceDir: w.Path, FileName: fileName}
 
 	// El render en curso lo ven los indicadores de las pestañas de proyecto
@@ -172,6 +171,9 @@ func (a *App) GetRenderState(id int64) (map[string]render.Result, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
 	}
+	// Es lo primero que pide la interfaz al abrir un proyecto, antes del
+	// primer render: buen momento para precompilar el motor integrado.
+	a.warmWASM()
 	a.renderMu.Lock()
 	defer a.renderMu.Unlock()
 	out := make(map[string]render.Result, len(a.results[id]))
@@ -222,6 +224,79 @@ func (a *App) openscadPath(override string) string {
 	a.scad = openscadCache{override: override, path: tool.Path}
 	a.renderMu.Unlock()
 	return tool.Path
+}
+
+// wasmRunners guarda un scadwasm.Runner por carpeta de datos. Vive a nivel de
+// paquete y no en App (app.go no es de este bloque) y por la misma razón que
+// partsStores: la caché de compilación es por contenido, compartirla entre
+// instancias de App es correcto, y así hay un solo Runner —un solo módulo
+// compilado de 10 MB— por proceso.
+var wasmRunners = struct {
+	sync.Mutex
+	m map[string]*scadwasm.Runner
+}{m: map[string]*scadwasm.Runner{}}
+
+// wasmRunnerFor devuelve el motor integrado de una carpeta de datos, con la
+// caché de compilación de wazero en <datos>/cache/wasm (sin carpeta de datos,
+// solo en memoria).
+func wasmRunnerFor(dataDir string) *scadwasm.Runner {
+	wasmRunners.Lock()
+	defer wasmRunners.Unlock()
+	r := wasmRunners.m[dataDir]
+	if r == nil {
+		cache := ""
+		if dataDir != "" {
+			cache = filepath.Join(dataDir, "cache", "wasm")
+		}
+		r = scadwasm.New(cache)
+		wasmRunners.m[dataDir] = r
+	}
+	return r
+}
+
+// wasm es el motor integrado de esta App.
+func (a *App) wasm() *scadwasm.Runner { return wasmRunnerFor(a.dataDir) }
+
+// renderOptions arma las opciones del motor de render con la configuración
+// vigente: el OpenSCAD nativo si se encuentra y, si no, el motor integrado.
+// Es el único lugar que las arma, así render, exportación, partes y estimación
+// eligen siempre el mismo motor.
+func (a *App) renderOptions(s store.Settings) render.Options {
+	return render.Options{
+		OpenSCADPath:   a.openscadPath(s.OpenSCADPath),
+		WASM:           a.wasm(),
+		Backend:        s.RenderBackend,
+		TimeoutSeconds: s.RenderTimeoutSec,
+	}
+}
+
+var warmOnce sync.Once
+
+// warmWASM compila el motor integrado en segundo plano para que el primer
+// render no pague los 2-3 s de compilación. Solo si no hay un OpenSCAD
+// instalado (con uno nativo el integrado no se usa) y una sola vez por proceso.
+func (a *App) warmWASM() {
+	if a.dataDir == "" || a.store == nil {
+		return
+	}
+	warmOnce.Do(func() {
+		go func() {
+			s, err := a.store.GetSettings()
+			if err != nil || a.openscadPath(s.OpenSCADPath) != "" {
+				return
+			}
+			a.wasm().Warmup()
+		}()
+	})
+}
+
+// resetOpenSCADCache olvida la ruta cacheada de OpenSCAD: tras descargar o
+// quitar el OpenSCAD gestionado (<datos>/tools/openscad) el próximo render
+// vuelve a detectar, y el descargado gana al del PATH.
+func (a *App) resetOpenSCADCache() {
+	a.renderMu.Lock()
+	a.scad = openscadCache{}
+	a.renderMu.Unlock()
 }
 
 // emit manda un evento al frontend. El emisor lo instala startup; en los

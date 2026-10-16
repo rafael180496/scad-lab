@@ -45,6 +45,7 @@ func (a *App) LintCheckpointSource(id int64, fileName, source string) ([]scad.Di
 		WorkspaceDir:  w.Path,
 		FileName:      fileName,
 		OpenSCADPath:  a.openscadPath(s.OpenSCADPath),
+		WASM:          a.wasm(),
 		ExistingFiles: names,
 	}), nil
 }

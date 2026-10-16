@@ -2,8 +2,13 @@
 
 ## OpenSCAD
 
-- Externo, no se empaqueta. `detect.OpenSCAD` lo busca en la ruta configurada,
-  el PATH y las rutas de instalación de cada SO.
+- El nativo es externo. `detect.OpenSCAD` lo busca en la ruta configurada, el
+  OpenSCAD descargado por la app (`<datos>/tools/openscad/`, ver
+  [18-descarga-openscad.md](18-descarga-openscad.md)), el PATH y las rutas de
+  instalación de cada SO.
+- Sin nativo, el render cae al **motor integrado** (OpenSCAD 2025.12.30 en
+  WebAssembly sobre wazero): mismos argumentos, mismo parser, misma caché;
+  `Result.Engine = "wasm"`. Ver [17-motor-wasm.md](17-motor-wasm.md).
 - Render (S1): `openscad -o out.stl [--backend=manifold] archivo.scad`. Manifold
   requiere OpenSCAD 2025+; con 2021.01 usar `cgal` (Configuración → OpenSCAD).
 - Colores: cada pieza de primer nivel con `color()` (regla del workspace); el

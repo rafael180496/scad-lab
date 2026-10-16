@@ -61,6 +61,8 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/14-medicion.md](claude/14-medicion.md) | Medición e impresión (S7): partes por color y su caché (`/parts/`), estimación de peso, filamento y costo (fórmula), cálculo de placa, `GetModelParts`/`EstimatePrint` |
 | [claude/15-checkpoints.md](claude/15-checkpoints.md) | Checkpoints (S3): papelera (nunca se borra), restaurar, descendientes, padre activo que avanza solo (`.scadlab/active-parent`), seguridad de rutas |
 | [claude/16-persistencia.md](claude/16-persistencia.md) | Qué recuerda la app al cerrar (checkpoint elegido, visor, paneles, barras; el modo enfoque no), bindings livianos, dónde se crea un workspace (`CreateWorkspaceIn`), prueba `uishot-persist.sh` |
+| [claude/17-motor-wasm.md](claude/17-motor-wasm.md) | Motor integrado (S11): OpenSCAD oficial en WebAssembly ejecutado en Go con wazero cuando no hay OpenSCAD nativo; host emscripten, montajes, fuentes, licencia, medidas |
+| [claude/18-descarga-openscad.md](claude/18-descarga-openscad.md) | «Descargar OpenSCAD» (S11): snapshot fijado con SHA-256 en `<datos>/tools/openscad/`, cuarentena de macOS, orden de detección, `SCADLAB_NO_SYSTEM_OPENSCAD` para pruebas |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

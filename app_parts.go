@@ -94,12 +94,8 @@ func (a *App) partsFor(id int64, fileName string) (partsContext, error) {
 			Engine: a.engine,
 			// Cola propia: preparar las partes no cancela el render del visor
 			// ni la exportación, ni al revés.
-			Req: render.Request{WorkspaceKey: renderKey(id) + ":parts", WorkspaceDir: w.Path, FileName: fileName},
-			Opts: render.Options{
-				OpenSCADPath:   a.openscadPath(s.OpenSCADPath),
-				Backend:        s.RenderBackend,
-				TimeoutSeconds: s.RenderTimeoutSec,
-			},
+			Req:         render.Request{WorkspaceKey: renderKey(id) + ":parts", WorkspaceDir: w.Path, FileName: fileName},
+			Opts:        a.renderOptions(s),
 			ArtifactDir: filepath.Join(a.dataDir, "cache", "exports"),
 			MeshPath:    res.MeshPath,
 		},

@@ -6,7 +6,11 @@
 // este archivo los consume app_render.go; cambiarlos es cambiar el spec.
 package render
 
-import "context"
+import (
+	"context"
+
+	"scadlab/backend/scadwasm"
+)
 
 // Severity de un diagnóstico.
 const (
@@ -20,6 +24,15 @@ const (
 	StatusError     = "error"     // OpenSCAD falló o el modelo quedó vacío
 	StatusCancelled = "cancelled" // lo reemplazó un render más nuevo o se canceló
 	StatusMissing   = "missing"   // OpenSCAD no está instalado / no se encontró
+)
+
+// Engine de un render: el OpenSCAD nativo (instalado, descargado o con ruta
+// fijada) o el motor integrado (OpenSCAD oficial compilado a WebAssembly,
+// backend/scadwasm), que solo se usa cuando no se encontró el nativo. Ver
+// .claude/specs/s11-motor-wasm-descarga.md.
+const (
+	EngineNative = "native"
+	EngineWASM   = "wasm"
 )
 
 // Diagnostic es un ERROR o WARNING de OpenSCAD con su ubicación. Line y Col
@@ -40,9 +53,24 @@ type Request struct {
 	FileName     string // NNN-slug.scad, relativo a WorkspaceDir
 }
 
+// WASMRunner es el motor integrado (OpenSCAD en WebAssembly): lo cumple
+// *scadwasm.Runner. Es una interfaz para que los tests del motor de render no
+// tengan que compilar el módulo de 10 MB.
+type WASMRunner interface {
+	// Available dice si el wasm embebido está y verifica su SHA-256.
+	Available() bool
+	// Run ejecuta OpenSCAD; el error es solo de fallo del motor, un exit ≠ 0 no.
+	Run(ctx context.Context, spec scadwasm.RunSpec) (output string, exitCode int, err error)
+}
+
 // Options es la configuración vigente al momento de renderizar.
 type Options struct {
-	OpenSCADPath   string // ruta resuelta (detect.OpenSCAD); "" = StatusMissing
+	// OpenSCADPath es la ruta resuelta (detect.OpenSCAD). Con "" y sin WASM, el
+	// resultado es StatusMissing.
+	OpenSCADPath string
+	// WASM es el motor integrado. Se usa solo si OpenSCADPath == "" y está
+	// disponible: el OpenSCAD nativo, si existe, gana siempre (más rápido).
+	WASM           WASMRunner
 	Backend        string // "manifold" | "cgal"
 	TimeoutSeconds int    // 0 = 300
 }
@@ -58,6 +86,7 @@ type Result struct {
 	Log         string       `json:"log"`     // salida de OpenSCAD (stderr+stdout), recortada a 64 KB
 	Backend     string       `json:"backend"` // el que se usó de verdad (manifold puede caer a cgal)
 	Version     string       `json:"version"` // versión de OpenSCAD
+	Engine      string       `json:"engine"`  // EngineNative | EngineWASM; "" si no corrió nada (missing)
 }
 
 // Engine ejecuta renders con caché en disco y una cola por workspace.

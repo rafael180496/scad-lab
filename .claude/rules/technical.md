@@ -10,8 +10,13 @@
    entorno.
 6. **Sin dependencias de red en runtime para la UI**: nada de CDN (Monaco,
    fuentes, iconos van empaquetados). La app tiene que abrir sin internet.
-7. **OpenSCAD es externo**: nunca se asume una versión; se detecta y se degrada
-   (Manifold → CGAL, 3MF con color → 3MF por objetos).
+7. **OpenSCAD nativo es externo y preferido**: nunca se asume una versión; se
+   detecta y se degrada (Manifold → CGAL, 3MF con color → 3MF por objetos).
+   Desde S11 hay **un** respaldo integrado: el OpenSCAD oficial compilado a
+   WebAssembly (versión fijada, sin modificar, GPL, ver
+   `THIRD_PARTY_NOTICES.md`), que solo corre si no se encontró el nativo. El
+   OpenSCAD descargado desde la app va a `<datos>/tools/openscad/` con SHA-256
+   fijado en el código.
 8. **Binario < 100 MB.**
 9. **Ningún test ni script del repo abre slicers ni otras aplicaciones del
    usuario** (Bambu Studio, OrcaSlicer, navegadores visibles). **ScadLab sí se

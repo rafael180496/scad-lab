@@ -34,6 +34,7 @@ import {cn} from '../../lib/cn'
 import type {Appearance} from '../../lib/appearance'
 import {AppearanceSettings} from './AppearanceSettings'
 import {McpSettings} from './McpSettings'
+import {OpenSCADSettings} from './OpenSCADSettings'
 
 export type SettingsTab = 'general' | 'openscad' | 'ai' | 'printing' | 'skills' | 'about'
 type Tab = SettingsTab
@@ -59,6 +60,7 @@ function ToolStatus({tool}: {tool?: detect.Tool}) {
             <span className="truncate">
                 {t.settings.found}
                 {tool.version ? ` · ${fmt(t.settings.version, {v: tool.version})}` : ''}
+                {tool.source ? ` · ${tool.source === 'custom' ? t.openscadDl.sourceCustom : tool.source === 'managed' ? t.openscadDl.sourceManaged : t.openscadDl.sourceSystem}` : ''}
             </span>
         </span>
     ) : (
@@ -328,6 +330,7 @@ export function SettingsDialog({
                             {tools.length > 0 && !tool('openscad')?.found ? (
                                 <p className="text-ui-12 leading-relaxed text-warn">{t.settings.openscadMissing}</p>
                             ) : null}
+                            <OpenSCADSettings tool={tool('openscad')} detected={tools.length > 0} onChanged={detectAll} />
                             <Field label={t.settings.renderBackend}>
                                 <Select value={s.renderBackend} onChange={(e) => set('renderBackend', e.target.value)}>
                                     <option value="manifold">{t.settings.renderBackends.manifold}</option>

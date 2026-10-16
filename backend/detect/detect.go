@@ -17,6 +17,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"scadlab/backend/appdata"
+	"scadlab/backend/scaddownload"
 )
 
 // Tool es el resultado de buscar una herramienta.
@@ -25,7 +28,24 @@ type Tool struct {
 	Found   bool   `json:"found"`
 	Path    string `json:"path"`
 	Version string `json:"version"`
+	// Source dice de dónde salió (solo OpenSCAD): SourceCustom (la ruta que fijó
+	// el usuario), SourceManaged (el que descargó la app) o SourceSystem (PATH o
+	// rutas de instalación). "" = no encontrado, o un CLI agéntico.
+	Source string `json:"source"`
 }
+
+// Orígenes posibles de Tool.Source.
+const (
+	SourceCustom  = "custom"
+	SourceManaged = "managed"
+	SourceSystem  = "system"
+)
+
+// NoSystemOpenSCADEnv es una variable SOLO para pruebas: con valor "1", OpenSCAD
+// ignora el PATH y las rutas de instalación del sistema. Sirve para simular
+// «sin OpenSCAD» (y ejercitar el motor integrado y la descarga) sin desinstalar
+// el del usuario. La ruta fijada y el OpenSCAD descargado siguen valiendo.
+const NoSystemOpenSCADEnv = "SCADLAB_NO_SYSTEM_OPENSCAD"
 
 // extraDirs son directorios de instalación habituales que no están en el PATH
 // de una app gráfica.
@@ -115,29 +135,54 @@ func openscadCandidates() []string {
 	return nil
 }
 
-// OpenSCAD busca el ejecutable de OpenSCAD. `override` es la ruta que eligió
-// el usuario en Configuración; si existe, gana.
+// dataDir es el directorio de datos de ScadLab SIN crearlo (appdata.Dir lo
+// crea, y detectar herramientas no debe dejar carpetas, menos aún en los tests
+// de un usuario real). Misma regla que appdata.Dir, incluida SCADLAB_DATA_DIR.
+func dataDir() string {
+	if base := os.Getenv(appdata.OverrideEnv); base != "" {
+		return base
+	}
+	cfg, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cfg, "ScadLab")
+}
+
+// OpenSCAD busca el ejecutable de OpenSCAD. Orden: la ruta que eligió el usuario
+// en Configuración (`override`, si existe) → el OpenSCAD que descargó la app
+// (<datos>/tools/openscad) → el PATH → las rutas de instalación de cada SO. El
+// descargado va antes que el del sistema porque es la versión que ScadLab
+// verificó (SHA-256); quien quiera otro lo fija en Configuración.
 func OpenSCAD(ctx context.Context, override string) Tool {
 	t := Tool{ID: "openscad"}
-	path := ""
+	path, source := "", ""
 	if override != "" && isFile(override) {
-		path = override
+		path, source = override, SourceCustom
 	}
 	if path == "" {
+		if p := scaddownload.InstalledBinary(dataDir()); p != "" {
+			path, source = p, SourceManaged
+		}
+	}
+	if path == "" && os.Getenv(NoSystemOpenSCADEnv) != "1" {
 		path = Find("openscad")
-	}
-	if path == "" {
-		for _, c := range openscadCandidates() {
-			if isFile(c) {
-				path = c
-				break
+		if path == "" {
+			for _, c := range openscadCandidates() {
+				if isFile(c) {
+					path = c
+					break
+				}
 			}
+		}
+		if path != "" {
+			source = SourceSystem
 		}
 	}
 	if path == "" {
 		return t
 	}
-	t.Found, t.Path = true, path
+	t.Found, t.Path, t.Source = true, path, source
 	t.Version = version(ctx, path, "--version")
 	return t
 }

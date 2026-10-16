@@ -1,4 +1,4 @@
-import {Box, CircleAlert, FolderClosed, Info, Lock, PencilLine, Printer, TriangleAlert} from 'lucide-react'
+import {Box, Cpu, CircleAlert, FolderClosed, Info, Lock, PencilLine, Printer, TriangleAlert} from 'lucide-react'
 import {printStore} from '../../lib/printSession'
 import {overflowAxes, plateSize} from '../viewer/PlateAlert'
 import type {render} from '../../../wailsjs/go/models'
@@ -7,6 +7,7 @@ import {counts} from '../../lib/problems'
 import {useProblems} from '../../hooks/useProblems'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
+import {wasmShortVersion} from '../../lib/engine'
 
 function Item({title, children, className}: {title: string; children: React.ReactNode; className?: string}) {
     return (
@@ -51,14 +52,17 @@ export function StatusBar({
     openscad,
     onProblems,
     onPrint,
+    onOpenSettings,
 }: {
     workspace?: string
     printer?: string
     file: string | null
     renderDiags: render.Diagnostic[] | undefined
-    openscad: {version: string; missing: boolean} | null
+    openscad: {version: string; missing: boolean; engine?: string} | null
     onProblems: () => void
     onPrint: () => void
+    /** Abre Configuración → OpenSCAD (la insignia del motor integrado lleva ahí). */
+    onOpenSettings: () => void
 }) {
     const t = useT()
     const plate = printStore.use((s) => s.plate)
@@ -117,7 +121,17 @@ export function StatusBar({
                     {c.info}
                 </span>
             </button>
-            {openscad ? (
+            {openscad && !openscad.missing && openscad.engine === 'wasm' ? (
+                <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    title={fmt(t.status.wasmHint, {v: openscad.version})}
+                    className="flex shrink-0 items-center gap-1 rounded px-1 text-info transition-colors duration-100 hover:bg-surface-2"
+                >
+                    <Cpu className="icon-ui-12 shrink-0" />
+                    {fmt(t.status.wasm, {v: wasmShortVersion(openscad.version)})}
+                </button>
+            ) : openscad ? (
                 <Item title={openscad.missing ? t.status.openscadMissingHint : t.status.openscadHint} className={openscad.missing ? 'text-warn' : undefined}>
                     <Box className="icon-ui-12 shrink-0" />
                     {openscad.missing ? t.status.openscadMissing : fmt(t.status.openscad, {v: openscad.version})}

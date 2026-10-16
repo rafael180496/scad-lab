@@ -12,7 +12,7 @@ Fuente: `app*.go`. Tipos TS generados en `frontend/wailsjs/go/models.ts` con
 | `GetSettings()` / `SaveSettings(s)` | `store.Settings` | relleno 0–100; `renderTimeoutSec` 10–3600; `autoRender` default `true`; `swatches` (6 `#rrggbb`) solo se escribe si es válido, si no se conserva el guardado |
 | `EffectiveWorkspacesRoot()` | `string` | configurada o `~/Documents/ScadLab` |
 | `ChooseDirectory(title, start)` / `ChooseFile(title)` | `string` | `""` si se cancela |
-| `DetectTools()` | `[]detect.Tool{id, found, path, version}` | openscad + cada CLI; en paralelo |
+| `DetectTools()` | `[]detect.Tool{id, found, path, version, source}` | openscad + cada CLI; en paralelo. `source` (solo OpenSCAD): `custom` (ruta fijada), `managed` (descargado por la app) o `system`; `""` si no se encontró |
 | `ListPrinters()` | `[]printers.Printer` | de `printers.json` |
 | `ListMaterials()` / `SaveMaterial(m)` | `store.Material` | |
 | `ListProviders()` / `SaveProvider(p)` | `store.AIProvider{id, kind, name, command, config, enabled}` | `kind`: cli, ollama, openai, anthropic |
@@ -87,9 +87,12 @@ tabla `checkpoint_trash`; `SyncCheckpoints` no toca esas columnas.
 
 | Binding | Devuelve | Nota |
 |---|---|---|
-| `RenderCheckpoint(id, fileName)` | `render.Result{fileName, status, meshPath, cacheHit, durationMs, diagnostics, log, backend, version}` | `status`: ok, error, cancelled, missing. `error` escribe `RENDER_ERRORS.md`, `ok` lo borra. Un fallo de OpenSCAD no es error del binding |
+| `RenderCheckpoint(id, fileName)` | `render.Result{fileName, status, meshPath, cacheHit, durationMs, diagnostics, log, backend, version, engine}` | `status`: ok, error, cancelled, missing. `error` escribe `RENDER_ERRORS.md`, `ok` lo borra. Un fallo de OpenSCAD no es error del binding |
 | `CancelRender(id)` | — | cancela el render en curso del workspace |
 | `GetRenderState(id)` | `map[fileName]render.Result` | últimos resultados en memoria (pinta el árbol al reabrir) |
+
+`engine` (S11): `native` (OpenSCAD instalado, descargado o de ruta fijada), `wasm` (motor integrado, ver
+[17-motor-wasm.md](17-motor-wasm.md)) o `""` si no corrió nada (`missing`). Un `.json` de caché sin `engine` se lee como `native`.
 
 `render.Diagnostic{severity, line, col, file, message}`: `severity` error |
 warning, `line`/`col` 1-based (0 = sin ubicación). La ruta de OpenSCAD se
@@ -175,6 +178,17 @@ se abrió el diálogo.
 por la variable de paquete `launchApp`, que los tests reemplazan por un
 registrador: ninguna prueba abre una aplicación (regla 9 de `technical.md`).
 
+## Descarga de OpenSCAD — `app_openscad.go` (S11)
+
+Detalle y decisiones: [claude/18](18-descarga-openscad.md).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `GetOpenSCADDownload()` | `OpenSCADDownload{version, sizeBytes, supported, installed, installedPath, running, wasmVersion}` | `supported` = hay descarga para este SO/arquitectura (darwin arm64/amd64, windows amd64); `wasmVersion` = versión del motor integrado |
+| `DownloadOpenSCAD()` | `OpenSCADDownload` | **bloquea** hasta terminar y emite `openscad:download`; una sola a la vez (si hay otra, error). Cancelada: error con código `download-cancelled` (la UI no lo muestra como fallo). Al terminar bien olvida la ruta de OpenSCAD cacheada |
+| `CancelOpenSCADDownload()` | — | corta la descarga en curso; sin descarga no hace nada |
+| `RemoveDownloadedOpenSCAD()` | `OpenSCADDownload` | borra `<datos>/tools/openscad/`; rechazado con una descarga en curso; no toca el OpenSCAD del usuario |
+
 ## Eventos (Go → React)
 
 Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
@@ -183,6 +197,7 @@ Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
 |---|---|---|
 | `render:started` | `{workspaceId, fileName}` | `RenderCheckpoint` (también el auto-render del watcher) |
 | `render:finished` | `{workspaceId, result}` | `RenderCheckpoint`, siempre, aunque falle el motor (un cancelado llega con `status: cancelled`) |
+| `openscad:download` | `{phase, received, total, message}` | `DownloadOpenSCAD`: `phase` = `download` \| `verify` \| `extract` \| `done` \| `error` \| `cancelled`; el progreso va acotado a ~10 por segundo; `message` solo con `error`; en `extract` de un dmg `total` es 0 (no hay avance) |
 | `checkpoints:changed` | `WorkspaceView` | watcher: algún `.scad` de la raíz cambió (debounce 300 ms); también al cambiar el padre activo, la papelera, un rótulo o un vínculo con la sesión |
 | `terminal:data` | `{id, data (base64), seq}` | PTY de una terminal de agente (S5) |
 | `terminal:exit` | `{id, code}` | el proceso de la terminal terminó |
