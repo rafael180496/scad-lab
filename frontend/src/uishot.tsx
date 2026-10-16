@@ -15,6 +15,10 @@
 //   dockraw  texto crudo del diseño de paneles guardado (prueba de diseño roto o ajeno)
 //   poke   1 = intenta desplazar el documento (scrollTo, focus, scrollIntoView)
 //          para comprobar que no se mueve; el resultado queda en data-docfit
+//   persist  reset | 1 = «cerrar y abrir»: los bindings de guardado escriben en localStorage
+//          (uishot.persist.v1) y GetBootstrap / ListOpenProjects / OpenProject leen de ahí.
+//          `reset` parte de cero; recargar con `1` es abrir la app otra vez con lo guardado
+//          (scripts/uishot-persist.sh lo maneja por CDP)
 //
 // Una vista nueva = una entrada en VIEWS + su fila en scripts/help-shots.sh.
 import {StrictMode} from 'react'
@@ -30,6 +34,7 @@ import {shotTools} from './components/dock/dock'
 import {printStore, selectPart} from './lib/printSession'
 import {editorCommands, editorSession} from './lib/editorSession'
 import {installScrollGuard} from './lib/scrollGuard'
+import {slugify} from './lib/slug'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
 import catalog from '../../assets/scad/catalog.json'
@@ -118,7 +123,13 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'projects-plus-menu': {scenario: 'ok', shot: {projectsMenu: 'plus', unsavedTabs: [2]}},
     'projects-narrow': {scenario: 'ok', shot: {unsavedTabs: [2]}},
     empty: {scenario: 'empty'},
-    newworkspace: {scenario: 'empty', shot: {newWorkspace: true}},
+    // «Nuevo workspace» con la ubicación elegida y la vista previa de la ruta final.
+    newworkspace: {scenario: 'empty', shot: {newWorkspace: {name: es ? 'Soporte de auriculares' : 'Headphone stand', parent: '/Users/maker/Documents/Modelos 3D/Impresiones'}}},
+    // Barra lateral con nombres larguísimos (workspace y cadena de checkpoints): ver uishot-fit.sh.
+    'sidebar-long': {scenario: 'ok'},
+    // «Cerrar y abrir» (scripts/uishot-persist.sh): el modelo bicolor, con todos los paneles, y
+    // los bindings de guardado escribiendo en localStorage (parámetro persist).
+    persist: {scenario: 'ok'},
 }
 // Apariencia (S10): la pantalla de Configuración → General con su bloque de
 // tamaños, y la ventana principal con la interfaz agrandada (scale en la URL).
@@ -147,19 +158,45 @@ document.head.appendChild(noMotion)
 const P = <T,>(v: T) => Promise.resolve(v)
 const home = platform === 'windows' ? 'C:\\Users\\maker\\Documents\\ScadLab' : '/Users/maker/Documents/ScadLab'
 
+// ── «Cerrar y abrir» (persist=reset|1) ─────────────────────────────────────
+// Lo que Go guardaría en scadlab.db, en localStorage: settings por clave (igual que la tabla
+// key/value), proyectos abiertos + activo, y el último checkpoint de cada workspace.
+type Persisted = {settings: Record<string, unknown>; open: number[] | null; active: number; last: Record<number, string>}
+const PERSIST_KEY = 'uishot.persist.v1'
+const persistMode = q.get('persist')
+if (persistMode === 'reset') localStorage.removeItem(PERSIST_KEY)
+const persisted: Persisted | null = persistMode
+    ? (() => {
+          try {
+              return JSON.parse(localStorage.getItem(PERSIST_KEY) ?? '') as Persisted
+          } catch {
+              return {settings: {}, open: null, active: 0, last: {}}
+          }
+      })()
+    : null
+function persist(change: (p: Persisted) => void) {
+    if (!persisted) return
+    change(persisted)
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(persisted))
+}
+const saveSetting = (key: string, value: unknown) => persist((p) => (p.settings[key] = value))
+
 // Pestañas de proyecto (S8): tres proyectos abiertos y un cuarto workspace sin abrir.
 const projectsShot = view.startsWith('projects-')
-const workspaces =
+const sidebarLong = view === 'sidebar-long'
+const withLast = <T extends {id: number}>(w: T) => ({...w, lastCheckpoint: persisted?.last[w.id] ?? ''})
+const workspaces = (
     cfg.scenario === 'empty'
         ? []
         : [
-              {id: 1, name: es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/rpi5-case`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
+              {id: 1, name: sidebarLong ? (es ? 'Caja de la Raspberry Pi 5 con un nombre de workspace realmente largo para probar el recorte' : 'Raspberry Pi 5 case with a really long workspace name to test the clipping') : es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/rpi5-case`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
               {id: 2, name: es ? 'Soporte de auriculares' : 'Headphone stand', path: `${home}/headphone-stand`, printerId: 'bambu-a1', description: '', lastOpened: 0, createdAt: 0},
               {id: 3, name: es ? 'Organizador Gridfinity' : 'Gridfinity organizer', path: `${home}/gridfinity`, printerId: 'bambu-p1s', description: '', lastOpened: 0, createdAt: 0},
               ...(projectsShot
                   ? [{id: 4, name: es ? 'Llavero personalizable' : 'Custom keychain', path: `${home}/keychain`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0}]
                   : []),
           ]
+).map(withLast)
 
 // Vínculos y rótulos del árbol (S3): solo en las vistas de checkpoints avanzados,
 // para que el resto de las capturas conserve el árbol de siempre.
@@ -181,7 +218,24 @@ const cp = (n: number, file: string, parent: string, desc: string) => ({
     sessionId: '', agentId: '', chatId: 0, collapsed: false, fileMtime: treeShot ? 1792080000 + n * 5400 : 0, createdAt: 0,
     ...treeExtra[file],
 })
-const checkpoints = [
+// sidebar-long: una cadena de diez checkpoints con nombres de 60 caracteres, como los que deja
+// un agente que itera; es lo más ancho que puede llegar a ser el árbol.
+const longNames = [
+    'caja-base-con-un-nombre-extremadamente-largo-de-checkpoint',
+    'tapa-deslizante-con-guias-y-ranuras-de-ventilacion-laterales',
+    'recorte-usb-c-y-hdmi-con-holgura-extra-para-los-cables',
+    'soporte-interno-de-la-placa-con-cuatro-postes-roscados',
+    'tapa-a-presion-con-lengueta-y-refuerzo-de-esquinas',
+    'logo-bicolor-para-el-ams-con-texto-en-relieve-de-un-mm',
+    'agujeros-de-montaje-m2-5-con-insertos-roscados-de-laton',
+    'nervaduras-bajo-la-tapa-para-evitar-el-alabeo-al-imprimir',
+    'filetes-de-r3-en-todas-las-aristas-exteriores-de-la-caja',
+    'variante-final-lista-para-imprimir-en-la-a1-mini-de-bambu',
+]
+const longCheckpoints = longNames.map((n, i) =>
+    cp(i + 1, `${String(i + 1).padStart(3, '0')}-${n}.scad`, i === 0 ? '' : `${String(i).padStart(3, '0')}-${longNames[i - 1]}.scad`, `${es ? 'Paso' : 'Step'} ${i + 1}: ${n.replaceAll('-', ' ')}`),
+)
+const checkpoints = sidebarLong ? longCheckpoints : [
     cp(1, '001-base-box.scad', '', es ? 'Caja base 92×64×32' : 'Base box 92×64×32'),
     cp(2, '002-sliding-lid.scad', '001-base-box.scad', es ? 'Tapa deslizante' : 'Sliding lid'),
     cp(3, '003-vent-slots.scad', '002-sliding-lid.scad', es ? 'Ranuras de ventilación' : 'Vent slots'),
@@ -208,7 +262,7 @@ const viewFor = (id: number) => ({
     missing: false,
     activeParent: id === 1 ? activeParent : '',
 })
-const selectedFile = cfg.scenario === 'error' ? '004-usb-c-cutout.scad' : '006-two-color-logo.scad'
+const selectedFile = sidebarLong ? checkpoints.at(-1)!.fileName : cfg.scenario === 'error' ? '004-usb-c-cutout.scad' : '006-two-color-logo.scad'
 
 const source = `// @checkpoint parent=005-snap-lid.scad desc="${es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS'}"
 /* [${es ? 'Dimensiones' : 'Dimensions'}] */
@@ -306,7 +360,9 @@ const missingResult = {
 const renderState: Record<string, unknown> =
     cfg.scenario === 'missing'
         ? {}
-        : {
+        : sidebarLong
+          ? Object.fromEntries(longCheckpoints.map((c) => [c.fileName, okResult(c.fileName, 400, true)]))
+          : {
               '001-base-box.scad': okResult('001-base-box.scad', 380, true),
               '002-sliding-lid.scad': okResult('002-sliding-lid.scad', 512, true),
               '003-vent-slots.scad': okResult('003-vent-slots.scad', 690, true, 1),
@@ -398,7 +454,10 @@ const settings = {
     dockLayout: q.get('dockraw') ?? '',
     dockLayouts: savedLayouts,
     swatches: ['#ff7a1a', '#e7e9ee', '#2b2f38', '#3ccf7a', '#5aa2ff', '#d32f2f'],
+    viewer: {wireframe: false, edges: false, ortho: [false, false], split: false, colorIndex: 0, modelColors: true},
 }
+// «Abrir otra vez»: lo que se guardó en la sesión anterior pisa los valores de fábrica del banco.
+if (persisted) Object.assign(settings, persisted.settings)
 
 // Mallas de ejemplo (frontend/public/uishot/). La caja es enclosure.stl, de la plantilla
 // electronics-enclosure.scad; sus medidas, calculadas sobre ese STL, son las que
@@ -444,7 +503,7 @@ const enclosureModel: ShotModel = {
     info: sampleInfo,
     parts: [{name: 'Color 1 (#F9D72C)', color: '#F9D72C', uncolored: true, file: '/uishot/enclosure.stl', info: sampleInfo}],
 }
-const shotModel: ShotModel = view === 'plate-overflow' ? plateModel(true) : view === 'viewer-parts' || view === 'print-panel' || view.startsWith('projects-') ? plateModel(false) : enclosureModel
+const shotModel: ShotModel = view === 'plate-overflow' ? plateModel(true) : view === 'viewer-parts' || view === 'print-panel' || view === 'persist' || view.startsWith('projects-') ? plateModel(false) : enclosureModel
 const partFiles = shotModel.parts.map((p) => p.file)
 const realFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
@@ -677,15 +736,62 @@ const App_ = {
     ReadCheckpoint: (id: number, file: string) => P(sourceFor(id, file)),
     // Proyectos abiertos (S8): en las vistas `projects-*` hay tres pestañas (la activa es la
     // primera); en las demás, una sola, como siempre.
-    ListOpenProjects: () =>
-        P({
-            projects: (cfg.scenario === 'empty' ? [] : projectsShot ? [1, 2, 3] : [1]).map((id) => ({workspace: workspaces.find((w) => w.id === id)!, missing: false})),
-            activeId: cfg.scenario === 'empty' ? 0 : 1,
-        }),
-    OpenProject: (id: number) => P(viewFor(id)),
-    CloseProject: () => P(undefined),
-    SetActiveProject: () => P(undefined),
-    ReorderProjects: () => P(undefined),
+    ListOpenProjects: () => {
+        const ids = persisted?.open ?? (cfg.scenario === 'empty' ? [] : projectsShot ? [1, 2, 3] : [1])
+        return P({
+            projects: ids.map((id) => ({workspace: workspaces.find((w) => w.id === id)!, missing: false})),
+            activeId: persisted?.open ? persisted.active : cfg.scenario === 'empty' ? 0 : 1,
+        })
+    },
+    OpenProject: (id: number) => {
+        persist((p) => {
+            const open = p.open ?? (projectsShot ? [1, 2, 3] : [1])
+            p.open = open.includes(id) ? open : [...open, id]
+            p.active = id
+        })
+        return P(viewFor(id))
+    },
+    CloseProject: (id: number) => {
+        persist((p) => {
+            p.open = (p.open ?? []).filter((x) => x !== id)
+            if (p.active === id) p.active = p.open[0] ?? 0
+        })
+        return P(undefined)
+    },
+    SetActiveProject: (id: number) => {
+        persist((p) => (p.active = id))
+        return P(undefined)
+    },
+    ReorderProjects: (ids: number[]) => {
+        persist((p) => (p.open = ids))
+        return P(undefined)
+    },
+    // Binding nuevo (migración 4): el checkpoint elegido de cada proyecto.
+    SetLastCheckpoint: (id: number, file: string) => {
+        persist((p) => (p.last[id] = file))
+        return P(undefined)
+    },
+    SaveViewer: (v: unknown) => {
+        saveSetting('viewer', v)
+        return P(v)
+    },
+    // «Nuevo workspace»: Go calcula la ruta con workspace.Slug; aquí la misma cuenta (lib/slug.ts
+    // inventa 'model' para un nombre vacío, y Go devuelve ""), y la misma regla de ruta absoluta.
+    PreviewWorkspacePath: (name: string, parent: string) => {
+        const base = parent.trim() || home
+        const sep = platform === 'windows' ? '\\' : '/'
+        const abs = /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(base)
+        if (!abs || !/[a-z0-9]/i.test(name.normalize('NFD'))) return P('')
+        return P(base.replace(/[\\/]+$/, '') + sep + slugify(name))
+    },
+    CreateWorkspaceIn: (name: string, _printer: string, parent: string) => {
+        const base = parent.trim() || home
+        return P({...workspaces[0], id: 99, name, path: `${base}/${slugify(name)}`, lastCheckpoint: ''})
+    },
+    SetWorkspacesRoot: (dir: string) => {
+        saveSetting('workspacesRoot', dir)
+        return P(undefined)
+    },
     // Uno con render en curso (2) y otro con su último render fallido y un agente vivo (3).
     ProjectActivity: () =>
         P(
@@ -750,14 +856,24 @@ const App_ = {
     },
     SaveSwatches: () => P(undefined),
     SaveScreenshot: () => P(''),
-    SaveLayout: (l: unknown) => P(l),
+    SaveLayout: (l: unknown) => {
+        saveSetting('layout', l)
+        return P(l)
+    },
     // Lo último que se guardó, para que las pruebas con CDP lo lean.
     SaveDockLayout: (j: string) => {
         ;(window as unknown as {__dockSaved?: string}).__dockSaved = j
+        saveSetting('dockLayout', j)
         return P(undefined)
     },
-    SaveDockLayouts: (list: unknown) => P(list),
-    SaveAppearance: (a: unknown) => P(a),
+    SaveDockLayouts: (list: unknown) => {
+        saveSetting('dockLayouts', list)
+        return P(list)
+    },
+    SaveAppearance: (a: unknown) => {
+        for (const [k, v] of Object.entries(a as Record<string, unknown>)) saveSetting(k, v)
+        return P(a)
+    },
     LintCheckpointSource: (_id: number, file: string) => P(lintFor(file)),
     FormatScad: (src: string) => P(src),
     SaveAsCheckpoint: () => P('007-lid-screws.scad'),
@@ -958,6 +1074,10 @@ if (q.get('keytest') === '1') {
 // El documento no puede medir más que la ventana ni estar desplazado; con
 // poke=1 antes se le provoca el desplazamiento que lo rompía.
 const poke = q.get('poke') === '1'
+// Los contenedores con desplazamiento vertical de la barra lateral (las dos listas), elegidos por su
+// estilo y no por data-lock: el chequeo no puede depender de la marca que debe comprobar.
+const sideLists = () =>
+    [...(document.querySelector('aside')?.children ?? [])].filter((c): c is HTMLElement => c instanceof HTMLElement && ['auto', 'scroll', 'hidden'].includes(getComputedStyle(c).overflowY) && c.tagName === 'DIV' && c.scrollHeight > 0 && !c.className.includes('h-px'))
 let pokes = 0
 const report = () => {
     const d = document.documentElement
@@ -977,6 +1097,22 @@ const report = () => {
         document.getElementById('root')!.scrollTop = 23
         document.querySelector<HTMLElement>('.xterm-helper-textarea')?.focus()
         document.querySelector<HTMLElement>('header')?.scrollIntoView()
+        // La barra lateral: sus listas solo se desplazan en vertical. Se las empuja de lado, se
+        // enfocan los nodos del árbol, se abre el renombrado en línea con un texto larguísimo y se
+        // pide scrollIntoView horizontal: nada de eso puede dejar un scrollLeft distinto de 0.
+        sideLists().forEach((el, i) => (el.scrollLeft = 25 + i))
+        const rows = [...document.querySelectorAll<HTMLElement>('[role="treeitem"]')]
+        rows.forEach((r) => r.focus())
+        rows.at(-1)?.scrollIntoView({inline: 'center', block: 'nearest'})
+        if (pokes === 3) rows.at(-1)?.dispatchEvent(new KeyboardEvent('keydown', {key: 'F2', bubbles: true, cancelable: true}))
+        if (pokes >= 5) {
+            const inp = document.querySelector<HTMLInputElement>('[role="tree"] input')
+            if (inp) {
+                inp.value = 'un nombre de renombrado larguísimo que no cabe en la barra lateral de ninguna manera posible ni imaginable'
+                inp.focus()
+                inp.setSelectionRange(inp.value.length, inp.value.length)
+            }
+        }
     }
     const bar = document.querySelector('footer')?.getBoundingClientRect()
     const headEl = document.querySelector('header')
@@ -990,6 +1126,23 @@ const report = () => {
         // La cabecera recorta lo que desborda (overflow-clip): si su contenido es más ancho que ella
         // (pestañas de proyecto que no se acortan), los botones de la derecha quedan fuera de la ventana.
         headerSw: headEl ? headEl.scrollWidth : null, headerCw: headEl ? headEl.clientWidth : null,
+        // Barra lateral: ningún contenedor marcado puede quedar desplazado, y las listas no pueden
+        // tener contenido más ancho que su caja (scrollWidth > clientWidth = nombres cortados sin
+        // forma de verlos). `toggleLeft` es el botón de la barra lateral: en macOS los semáforos
+        // ocupan hasta ~72 px y no deben tapárselo.
+        lockMoved: [...document.querySelectorAll<HTMLElement>('[data-lock]')]
+            .filter((el) => el.scrollLeft !== 0 || (el.dataset.lock !== 'x' && el.scrollTop !== 0))
+            .map((el) => el.tagName.toLowerCase() + (el.dataset.lock ? `[${el.dataset.lock}]` : '')),
+        sideBoxes: sideLists().map((el) => ({sw: el.scrollWidth, cw: el.clientWidth, sl: el.scrollLeft})),
+        sideTitleLeft: (() => {
+            const r = document.querySelector('aside span')?.getBoundingClientRect()
+            return r ? Math.round(r.left) : null
+        })(),
+        toggleLeft: (() => {
+            const r = document.querySelector('header button')?.getBoundingClientRect()
+            return r ? Math.round(r.left) : null
+        })(),
+        platform,
         footerBottom: bar ? Math.round(bar.bottom) : null,
         footerRight: bar ? Math.round(bar.right) : null,
     })

@@ -23,7 +23,8 @@ Fuente: `app*.go`. Tipos TS generados en `frontend/wailsjs/go/models.ts` con
 | Binding | Devuelve | Nota |
 |---|---|---|
 | `ListWorkspaces()` | `[]store.Workspace` | recientes primero |
-| `CreateWorkspace(name, printerId)` | `store.Workspace` | carpeta + reglas + skills |
+| `CreateWorkspace(name, printerId)` | `store.Workspace` | alias de `CreateWorkspaceIn(…, "")` |
+| `CreateWorkspaceIn(name, printerId, parentDir)` / `PreviewWorkspacePath(name, parentDir)` | `store.Workspace` / `string` | ubicación elegible, ruta final exacta; ver [16](16-persistencia.md). También `SetLastCheckpoint`, `SaveViewer`, `SetWorkspacesRoot` |
 | `ImportWorkspace(dir, printerId)` | `store.Workspace` | reglas solo si faltan |
 | `UpdateWorkspace(w)` | — | si cambia la impresora reescribe reglas |
 | `RemoveWorkspace(id)` | — | no borra la carpeta |

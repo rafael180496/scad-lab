@@ -1,7 +1,8 @@
 import {useCallback, useEffect, useRef, useState, type ReactNode} from 'react'
 import type {BufferGeometry} from 'three'
 import {CircleAlert, Loader2, X} from 'lucide-react'
-import {SaveScreenshot, SaveSwatches} from '../../../wailsjs/go/main/App'
+import {SaveScreenshot, SaveSwatches, SaveViewer} from '../../../wailsjs/go/main/App'
+import {store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {toastSaved} from '../../lib/saved'
 import {setViewerCapture} from '../../lib/viewerBridge'
@@ -47,25 +48,34 @@ type Props = {
     initial?: ViewerShot
     dimsCollapsed: boolean
     onDimsCollapsed: (collapsed: boolean) => void
+    /** Lo que el visor recordó de la sesión anterior (settings.viewer); se lee una vez, al montar. */
+    saved?: store.ViewerState
+    /** Se guardó el estado del visor: la configuración en memoria tiene que verlo. */
+    onViewerSaved?: (v: store.ViewerState) => void
 }
+
+// Espera antes de guardar el estado del visor: alternar alambre y aristas varias veces
+// seguidas no debe escribir en la base a cada clic.
+const VIEWER_SAVE_DELAY_MS = 600
 
 // Viewer es el visor 3D (S2). Entra con React.lazy: three y R3F pesan más que
 // todo el resto de la interfaz y no hacen falta para abrir la app.
-export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSaved, overlay, initial, dimsCollapsed, onDimsCollapsed}: Props) {
+export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSaved, overlay, initial, dimsCollapsed, onDimsCollapsed, saved, onViewerSaved}: Props) {
     const t = useT()
     const theme = useThemeColors()
     const [geometry, setGeometry] = useState<BufferGeometry | null>(() => (meshPath ? (cachedMesh(meshKey(meshPath)) ?? null) : null))
     const [shownPath, setShownPath] = useState<string | null>(geometry ? meshPath : null)
     const [loading, setLoading] = useState(false)
     const [loadError, setLoadError] = useState('')
-    const [wireframe, setWireframe] = useState(initial?.wireframe ?? false)
-    const [edges, setEdges] = useState(initial?.edges ?? false)
-    const [ortho, setOrtho] = useState<[boolean, boolean]>([initial?.ortho ?? false, initial?.ortho ?? false])
-    const [split, setSplit] = useState(initial?.split ?? false)
+    // Cada modo arranca como lo dejó el usuario (saved); el banco de capturas (initial) manda sobre eso.
+    const [wireframe, setWireframe] = useState(initial?.wireframe ?? saved?.wireframe ?? false)
+    const [edges, setEdges] = useState(initial?.edges ?? saved?.edges ?? false)
+    const [ortho, setOrtho] = useState<[boolean, boolean]>([initial?.ortho ?? saved?.ortho?.[0] ?? false, initial?.ortho ?? saved?.ortho?.[1] ?? false])
+    const [split, setSplit] = useState(initial?.split ?? saved?.split ?? false)
     const [active, setActive] = useState<0 | 1>(0)
-    const [colorIndex, setColorIndex] = useState(initial?.color ?? 0)
+    const [colorIndex, setColorIndex] = useState(initial?.color ?? saved?.colorIndex ?? 0)
     const [colors, setColors] = useState(swatches)
-    const [modelColors, setModelColors] = useState(initial?.modelColors ?? true)
+    const [modelColors, setModelColors] = useState(initial?.modelColors ?? saved?.modelColors ?? true)
     // Modelo por partes (S7): lo pide usePrintSession (PanelHost) y llega por el
     // store; acá se bajan las mallas de cada parte.
     const model = printStore.use((s) => s.model)
@@ -78,6 +88,42 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
     const panes = [pane0, pane1]
 
     useEffect(() => setColors(swatches), [swatches])
+
+    // Persistencia del estado del visor (settings.viewer): se guarda con espera al cambiar, y lo
+    // pendiente se vuelca al salir. La base de comparación es lo que se montó, así abrir el visor
+    // no escribe nada.
+    const viewerNow = JSON.stringify({wireframe, edges, ortho, split, colorIndex, modelColors})
+    const viewerSaved = useRef(viewerNow)
+    const viewerPending = useRef<string | null>(null)
+    const viewerTimer = useRef<number | undefined>(undefined)
+    const onViewerSavedRef = useRef(onViewerSaved)
+    onViewerSavedRef.current = onViewerSaved
+    const flushViewer = useCallback(() => {
+        window.clearTimeout(viewerTimer.current)
+        const json = viewerPending.current
+        viewerPending.current = null
+        if (json === null || json === viewerSaved.current) return
+        viewerSaved.current = json
+        SaveViewer(store.ViewerState.createFrom(JSON.parse(json)))
+            .then((v) => onViewerSavedRef.current?.(v))
+            .catch((e) => toast.error(errorText(e)))
+    }, [])
+    useEffect(() => {
+        if (viewerNow === viewerSaved.current) {
+            viewerPending.current = null
+            return
+        }
+        viewerPending.current = viewerNow
+        window.clearTimeout(viewerTimer.current)
+        viewerTimer.current = window.setTimeout(flushViewer, VIEWER_SAVE_DELAY_MS)
+    }, [viewerNow, flushViewer])
+    useEffect(() => {
+        window.addEventListener('pagehide', flushViewer)
+        return () => {
+            window.removeEventListener('pagehide', flushViewer)
+            flushViewer()
+        }
+    }, [flushViewer])
 
     // Carga: la malla anterior sigue a la vista mientras llega la nueva, así
     // cambiar de checkpoint no parpadea. Una ya vista sale de la caché.

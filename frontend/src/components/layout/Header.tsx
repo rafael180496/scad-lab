@@ -64,6 +64,7 @@ export function Header({
     return (
         <header
             ref={ref}
+            data-lock
             className={cn(
                 'drag flex h-11 min-w-0 shrink-0 items-center gap-3 overflow-clip border-b border-line bg-surface pr-2',
                 // Semáforos de macOS (TitleBarHiddenInset) a la izquierda.

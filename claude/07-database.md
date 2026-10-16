@@ -7,7 +7,7 @@ conexión de escritura). Código en `backend/store/`.
 |---|---|
 | `schema_migrations` | versión aplicada |
 | `settings` | clave/valor JSON; cada campo de `store.Settings` es una clave (campo nuevo = sin migración) |
-| `workspaces` | carpetas registradas, impresora, último abierto |
+| `workspaces` | carpetas registradas, impresora, último abierto, `last_checkpoint` (migración 4: el checkpoint elegido al cerrar) |
 | `checkpoints` | índice de los `.scad` (se reconstruye del disco) + rótulo/plegado/sesión |
 | `skills` | registro incluidas/propias y habilitado |
 | `ai_providers` | claude, opencode, codex, antigravity (`agy`), ollama, openai-compatible, anthropic |
@@ -21,4 +21,4 @@ conexión de escritura). Código en `backend/store/`.
   final de `migrations`. (La versión 1 se puede ajustar solo mientras no haya
   salido la primera versión publicada.)
 - Cada una corre una vez en su propia transacción.
-- Test: `TestMigrationsAreIdempotent` (abre dos veces la misma base).
+- Test: `TestMigrationsAreIdempotent` (abre dos veces la misma base); la migración 4 se prueba sobre una base de la v3 con filas (`migration4_test.go`).

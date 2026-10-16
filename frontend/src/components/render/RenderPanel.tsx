@@ -14,7 +14,7 @@ import {
     Square,
     TriangleAlert,
 } from 'lucide-react'
-import type {render} from '../../../wailsjs/go/models'
+import type {render, store} from '../../../wailsjs/go/models'
 import {Button} from '../ui/Button'
 import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
@@ -153,6 +153,8 @@ export function RenderPanel({
     viewerShot,
     dimsCollapsed,
     onDimsCollapsed,
+    viewerSaved,
+    onViewerSaved,
     onRender,
     onCancel,
     onOpenSettings,
@@ -166,6 +168,9 @@ export function RenderPanel({
     viewerShot?: ViewerShot
     dimsCollapsed: boolean
     onDimsCollapsed: (collapsed: boolean) => void
+    /** Estado del visor guardado (settings.viewer) y aviso de que se guardó uno nuevo. */
+    viewerSaved?: store.ViewerState
+    onViewerSaved?: (v: store.ViewerState) => void
     onRender: () => void
     onCancel: () => void
     onOpenSettings: () => void
@@ -263,6 +268,8 @@ export function RenderPanel({
                             initial={viewerShot}
                             dimsCollapsed={dimsCollapsed}
                             onDimsCollapsed={onDimsCollapsed}
+                            saved={viewerSaved}
+                            onViewerSaved={onViewerSaved}
                             overlay={showWarnings ? <WarningsOverlay diags={diags} /> : null}
                         />
                     </div>

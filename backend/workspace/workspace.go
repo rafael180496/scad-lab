@@ -35,8 +35,30 @@ import (
 
 var (
 	errNameRequired = i18n.New(i18n.Msg{ES: "el nombre del workspace es obligatorio", EN: "the workspace name is required"})
-	errDirNotEmpty  = i18n.New(i18n.Msg{ES: "la carpeta ya existe y no está vacía", EN: "the folder already exists and is not empty"})
+	// ErrParentNotAbs: la ubicación de un workspace nuevo tiene que ser una ruta
+	// absoluta. Una relativa se resolvería contra el directorio de trabajo del
+	// proceso (en una app gráfica, algo impredecible) y «~» no lo expande nadie.
+	ErrParentNotAbs = i18n.New(i18n.Msg{
+		ES: "la ubicación debe ser una ruta absoluta (no relativa ni con «~»)",
+		EN: "the location must be an absolute path (not relative, no \"~\")",
+	})
 )
+
+// errDirNotEmpty nombra la carpeta: «ya existe» sin decir cuál obliga a adivinar
+// qué nombre y qué ubicación produjeron el choque.
+func errDirNotEmpty(dir string) error {
+	return i18n.Errorf(i18n.Msg{
+		ES: "la carpeta %q ya existe y no está vacía: elige otro nombre u otra ubicación",
+		EN: "the folder %q already exists and is not empty: pick another name or location",
+	}, dir)
+}
+
+func errParentNotDir(parent string) error {
+	return i18n.Errorf(i18n.Msg{
+		ES: "la ubicación %q existe pero no es una carpeta",
+		EN: "the location %q exists but is not a folder",
+	}, parent)
+}
 
 // Slug convierte un nombre en un nombre de carpeta seguro en Windows y macOS:
 // sin acentos, minúsculas, guiones. Windows prohíbe <>:"/\|?* y nombres como
@@ -65,15 +87,40 @@ func Slug(name string) string {
 	return s
 }
 
-// Create arma la carpeta del workspace bajo root y escribe sus archivos base.
+// TargetDir es la carpeta final de un workspace: <parent>/<slug del nombre>. Es la
+// misma cuenta que hace Create, así la vista previa del diálogo «Nuevo
+// workspace» nunca difiere de lo que se crea. Devuelve "" si el nombre no
+// produce un slug o si parent no es una ruta absoluta.
+func TargetDir(parent, name string) string {
+	slug := Slug(name)
+	if slug == "" || !filepath.IsAbs(parent) {
+		return ""
+	}
+	return filepath.Join(parent, slug)
+}
+
+// Create arma la carpeta del workspace bajo root (que se crea si no existe) y
+// escribe sus archivos base. root tiene que ser absoluta; el destino
+// <root>/<slug> puede existir solo si está vacío.
 func Create(root, name, printerID string) (string, error) {
 	slug := Slug(name)
 	if slug == "" {
 		return "", errNameRequired
 	}
+	if !filepath.IsAbs(root) {
+		return "", ErrParentNotAbs
+	}
+	if st, err := os.Stat(root); err == nil && !st.IsDir() {
+		return "", errParentNotDir(root)
+	}
 	dir := filepath.Join(root, slug)
-	if ents, err := os.ReadDir(dir); err == nil && len(ents) > 0 {
-		return "", errDirNotEmpty
+	if st, err := os.Stat(dir); err == nil {
+		if !st.IsDir() {
+			return "", errDirNotEmpty(dir)
+		}
+		if ents, err := os.ReadDir(dir); err == nil && len(ents) > 0 {
+			return "", errDirNotEmpty(dir)
+		}
 	}
 	for _, sub := range []string{"lib", "exports"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {

@@ -33,17 +33,40 @@ func (a *App) ListWorkspaces() ([]store.Workspace, error) {
 	return a.store.ListWorkspaces()
 }
 
-// CreateWorkspace crea la carpeta, escribe reglas e instala las skills.
+// CreateWorkspace crea el workspace en la carpeta predeterminada. Es el alias de
+// CreateWorkspaceIn con la ubicación vacía.
 func (a *App) CreateWorkspace(name, printerID string) (store.Workspace, error) {
+	return a.CreateWorkspaceIn(name, printerID, "")
+}
+
+// workspaceParent resuelve la carpeta padre pedida: vacía = la predeterminada de
+// Configuración (o ~/Documents/ScadLab).
+func (a *App) workspaceParent(parentDir string) string {
+	if p := strings.TrimSpace(parentDir); p != "" {
+		return p
+	}
+	return a.EffectiveWorkspacesRoot()
+}
+
+// PreviewWorkspacePath devuelve la ruta exacta que crearía CreateWorkspaceIn:
+// <padre>/<slug del nombre>, con el mismo workspace.Slug. "" si el nombre no da
+// ningún carácter válido o si el padre no es una ruta absoluta. Es liviano (sin
+// tocar el disco ni la base más que para leer la carpeta predeterminada): el
+// diálogo «Nuevo workspace» lo llama al escribir.
+func (a *App) PreviewWorkspacePath(name, parentDir string) string {
+	return workspace.TargetDir(a.workspaceParent(parentDir), name)
+}
+
+// CreateWorkspaceIn crea la carpeta del workspace dentro de parentDir (vacío = la
+// predeterminada), escribe las reglas e instala las skills. parentDir debe ser
+// absoluta y se crea si no existe; si el destino <padre>/<slug> ya existe y no
+// está vacío devuelve un error que nombra la carpeta, sin tocar nada.
+func (a *App) CreateWorkspaceIn(name, printerID, parentDir string) (store.Workspace, error) {
 	if err := a.ready(); err != nil {
 		return store.Workspace{}, err
 	}
 	name = strings.TrimSpace(name)
-	root := a.EffectiveWorkspacesRoot()
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return store.Workspace{}, err
-	}
-	dir, err := workspace.Create(root, name, printerID)
+	dir, err := workspace.Create(a.workspaceParent(parentDir), name, printerID)
 	if err != nil {
 		return store.Workspace{}, err
 	}

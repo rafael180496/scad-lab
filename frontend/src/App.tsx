@@ -13,6 +13,7 @@ import {
     RescanWorkspace,
     RevealWorkspace,
     SetCheckpointUI,
+    SetLastCheckpoint,
     SyncWorkspaceSkills,
 } from '../wailsjs/go/main/App'
 import {Header} from './components/layout/Header'
@@ -28,7 +29,7 @@ import type {ProjectTab, ProjectTabsShot} from './components/layout/ProjectTabs'
 import {Logo} from './components/layout/Logo'
 import {Sidebar} from './components/workspace/Sidebar'
 import {ExportDialog} from './components/export/ExportDialog'
-import {NewWorkspaceDialog} from './components/workspace/NewWorkspaceDialog'
+import {NewWorkspaceDialog, type NewWorkspaceShot} from './components/workspace/NewWorkspaceDialog'
 import {SettingsDialog, type SettingsTab} from './components/settings/SettingsDialog'
 import {ConfirmHost, confirmDialog} from './components/ui/Dialog'
 import {Toaster, toast} from './components/ui/Toast'
@@ -64,7 +65,8 @@ const DockWorkbench = lazy(() => import('./components/dock/DockWorkbench').then(
 // un diálogo sin simular clics. En la app real no se pasan.
 export type ShotOptions = {
     settingsTab?: SettingsTab
-    newWorkspace?: boolean
+    /** Abre «Nuevo workspace»; con un objeto, ya con ese nombre y esa ubicación escritos. */
+    newWorkspace?: boolean | NewWorkspaceShot
     select?: string
     viewer?: ViewerShot
     /** Panel que queda activo al abrir (agent-1, chat, problems…). */
@@ -132,6 +134,9 @@ const writeSeen = () => {
     }
 }
 
+// Espera antes de guardar el checkpoint elegido de un proyecto.
+const LAST_CHECKPOINT_DELAY_MS = 400
+
 // Volumen por defecto si la impresora del workspace no está en el catálogo
 // (A1/P1S/X1C: 256 mm de lado).
 const FALLBACK_BED = {x: 256, y: 256, z: 256}
@@ -151,6 +156,10 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     activeRef.current = activeId
     const projectsRef = useRef(projects)
     projectsRef.current = projects
+    // Último checkpoint elegido de cada proyecto, tal como está guardado en la base
+    // (savedLast) y lo que espera su guardado con espera (pendingLast).
+    const savedLast = useRef<Record<number, string>>({})
+    const pendingLast = useRef<Record<number, string>>({})
     // Operaciones propias en vuelo (abrir, cerrar, reordenar): mientras duran se ignora
     // projects:changed, que es el eco de lo mismo que la interfaz ya está haciendo.
     const opsInFlight = useRef(0)
@@ -214,6 +223,38 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             return Object.keys(d).length ? {...prev, [id]: {...p, ...d}} : prev
         })
     }, [])
+
+    // Recordar el checkpoint elegido de cada proyecto (migración 4, workspaces.last_checkpoint):
+    // al reabrir la app vuelve a ese y no al más nuevo. Con espera, porque recorrer el árbol con
+    // las flechas elige uno por pulsación; y al salir se vuelca lo pendiente.
+    const lastTimer = useRef<number | undefined>(undefined)
+    const flushLast = useCallback(() => {
+        window.clearTimeout(lastTimer.current)
+        lastTimer.current = undefined
+        for (const [key, file] of Object.entries(pendingLast.current)) {
+            const id = Number(key)
+            delete pendingLast.current[id]
+            if (savedLast.current[id] === file) continue
+            savedLast.current[id] = file
+            SetLastCheckpoint(id, file).catch(() => {
+                // Un fallo aquí no vale una notificación: lo peor es abrir en el más nuevo.
+                delete savedLast.current[id]
+            })
+        }
+    }, [])
+    useEffect(() => {
+        for (const id of order) {
+            const sel = projects[id]?.selected
+            if (!sel || savedLast.current[id] === sel) continue
+            pendingLast.current[id] = sel
+            window.clearTimeout(lastTimer.current)
+            lastTimer.current = window.setTimeout(flushLast, LAST_CHECKPOINT_DELAY_MS)
+        }
+    }, [order, projects, flushLast])
+    useEffect(() => {
+        window.addEventListener('pagehide', flushLast)
+        return () => window.removeEventListener('pagehide', flushLast)
+    }, [flushLast])
 
     // Terminales de agente de todos los proyectos abiertos. Viven acá y no en el
     // panel porque la cabecera también las necesita (indicador y confirmación al cerrar).
@@ -283,7 +324,12 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 return {view: {workspace: info.workspace, checkpoints: [], missing: true, activeParent: ''} as unknown as main.WorkspaceView, selected: null, source: '', editor: null}
             }
             const v = info.view ?? (await openProject(info.id))
-            const last = (shot?.select && v.checkpoints.some((c) => c.fileName === shot.select) ? shot.select : null) ?? v.checkpoints.at(-1)?.fileName ?? null
+            // Al reabrir vuelve el checkpoint que estaba elegido; si ya no existe (o nunca se
+            // eligió uno), el más nuevo, que es el estado más reciente del modelo.
+            const has = (f?: string | null) => !!f && v.checkpoints.some((c) => c.fileName === f)
+            const remembered = v.workspace.lastCheckpoint
+            const last = (has(shot?.select) ? shot?.select : null) ?? (has(remembered) ? remembered : null) ?? v.checkpoints.at(-1)?.fileName ?? null
+            if (last) savedLast.current[info.id] = last
             const src = last ? await ReadCheckpoint(info.id, last).catch(() => '') : ''
             return {view: v, selected: last, source: src, editor: null}
         },
@@ -744,7 +790,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     {t.app.initError}: {boot.initError}
                 </div>
             ) : null}
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-clip">
+            <div data-lock className="flex min-h-0 min-w-0 flex-1 overflow-clip">
                 {sidebarHidden ? null : (
                 <>
                 <Sidebar
@@ -857,6 +903,11 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                         // entera: tiene que ver las muestras nuevas para no pisarlas.
                         setBoot((b) => (b ? ({...b, settings: {...b.settings, swatches}} as main.Bootstrap) : b))
                     }
+                    onViewerSaved={(viewer) =>
+                        // Configuración guarda la configuración entera; SaveSettings no escribe `viewer`,
+                        // pero un visor que se vuelva a montar lee de aquí.
+                        setBoot((b) => (b ? ({...b, settings: {...b.settings, viewer}} as main.Bootstrap) : b))
+                    }
                     viewerShot={shot?.viewer}
                     editorShot={shot?.editor}
                     onRender={() => selected && void renderFile(selected)}
@@ -881,6 +932,9 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 onClose={() => setNewOpen(false)}
                 printerList={printerList}
                 defaultPrinter={boot.settings.defaultPrinter}
+                shot={typeof shot?.newWorkspace === 'object' ? shot.newWorkspace : undefined}
+                // Configuración guarda la configuración entera: tiene que ver la carpeta nueva para no pisarla.
+                onDefaultRootChanged={(root) => setBoot((b) => (b ? ({...b, settings: {...b.settings, workspacesRoot: root}} as main.Bootstrap) : b))}
                 onCreated={async (id) => {
                     await reloadWorkspaces()
                     await openTab(id)

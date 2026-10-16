@@ -60,6 +60,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/13-mcp.md](claude/13-mcp.md) | Servidor MCP (`ScadLab --mcp --workspace`): herramientas `render`/`preview`/`measure`…, seguridad de rutas, pruebas, cómo agregar una herramienta |
 | [claude/14-medicion.md](claude/14-medicion.md) | Medición e impresión (S7): partes por color y su caché (`/parts/`), estimación de peso, filamento y costo (fórmula), cálculo de placa, `GetModelParts`/`EstimatePrint` |
 | [claude/15-checkpoints.md](claude/15-checkpoints.md) | Checkpoints (S3): papelera (nunca se borra), restaurar, descendientes, padre activo que avanza solo (`.scadlab/active-parent`), seguridad de rutas |
+| [claude/16-persistencia.md](claude/16-persistencia.md) | Qué recuerda la app al cerrar (checkpoint elegido, visor, paneles, barras; el modo enfoque no), bindings livianos, dónde se crea un workspace (`CreateWorkspaceIn`), prueba `uishot-persist.sh` |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

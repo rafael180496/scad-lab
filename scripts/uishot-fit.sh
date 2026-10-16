@@ -13,6 +13,14 @@
 # en su sitio (cabecera en 0,0; barra de estado pegada al borde inferior) o si el
 # contenido de la cabecera es más ancho que ella (las pestañas de proyecto tienen que
 # acortarse en vez de empujar los botones de exportar fuera de la ventana).
+#
+# Barra lateral (vista sidebar-long: workspace y cadena de checkpoints con nombres de 60
+# caracteres): tras empujar de lado sus listas, enfocar todos los nodos del árbol, abrir el
+# renombrado en línea con un texto larguísimo y pedir scrollIntoView horizontal, falla si algún
+# contenedor marcado con data-lock quedó con scrollLeft != 0, si una lista de la barra tiene
+# contenido más ancho que su caja (scrollWidth > clientWidth: nombres cortados sin forma de
+# verlos), si el primer rótulo de la barra no está en su sitio (x = 12) o si, en macOS, el botón de
+# la barra lateral queda debajo de los semáforos (x < 76).
 set -euo pipefail
 cd "$(dirname "$0")/../frontend"
 
@@ -38,7 +46,7 @@ if [ $# -ge 3 ]; then
     COMBOS="$1 $2 $3"
 else
     COMBOS=""
-    for v in main projects-tabs projects-plus-menu terminal chat problems settings-general empty dock-custom dock-hidden dock-view-menu dock-minimized dock-move-menu viewer-parts print-panel plate-overflow tree-menu tree-active-branch trash diff-parent; do
+    for v in main sidebar-long projects-tabs projects-plus-menu terminal chat problems settings-general empty dock-custom dock-hidden dock-view-menu dock-minimized dock-move-menu viewer-parts print-panel plate-overflow tree-menu tree-active-branch trash diff-parent; do
         for s in "1920 1000" "1440 900" "1280 720" "1024 640"; do
             COMBOS="$COMBOS$v $s
 "
@@ -70,6 +78,12 @@ if d["sh"]>d["ih"]: bad.append("scrollHeight %d > alto %d"%(d["sh"],d["ih"]))
 if d["sx"] or d["sy"] or d["rootTop"]: bad.append("desplazado (%d,%d,root %d)"%(d["sx"],d["sy"],d["rootTop"]))
 if d["headerTop"] not in (0,None) or d["headerLeft"] not in (0,None): bad.append("cabecera en (%s,%s)"%(d["headerLeft"],d["headerTop"]))
 if d.get("headerSw") and d["headerSw"]>d["headerCw"]: bad.append("la cabecera desborda: contenido %d > ancho %d"%(d["headerSw"],d["headerCw"]))
+if d.get("lockMoved"): bad.append("contenedores desplazados: "+", ".join(d["lockMoved"]))
+for i,b in enumerate(d.get("sideBoxes") or []):
+    if b["sw"]>b["cw"]: bad.append("lista %d de la barra lateral con contenido más ancho que su caja (%d > %d)"%(i,b["sw"],b["cw"]))
+    if b["sl"]: bad.append("lista %d de la barra lateral desplazada en horizontal (%d)"%(i,b["sl"]))
+if d.get("sideTitleLeft") not in (None,12): bad.append("el rótulo de la barra lateral está en x=%s (esperaba 12)"%d["sideTitleLeft"])
+if d.get("platform")=="darwin" and d.get("toggleLeft") is not None and d["toggleLeft"]<76: bad.append("el botón de la barra lateral (x=%d) queda bajo los semáforos"%d["toggleLeft"])
 if d["footerBottom"] not in (d["ih"],None): bad.append("barra de estado termina en %s (alto %d)"%(d["footerBottom"],d["ih"]))
 if d["footerRight"] not in (d["iw"],None): bad.append("barra de estado termina a la derecha en %s (ancho %d)"%(d["footerRight"],d["iw"]))
 print("OK     " if not bad else "FALLA  ", "; ".join(bad))

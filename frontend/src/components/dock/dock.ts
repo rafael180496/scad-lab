@@ -738,6 +738,10 @@ export function enterZen() {
     const keep = api.activePanel && isPanelId(api.activePanel.id) ? api.activePanel.id : (api.panels.find((p) => isPanelId(p.id))?.id as PanelId | undefined)
     window.clearTimeout(timer)
     zenSaved = envelope()
+    // El modo enfoque NO se guarda (persistNow no corre mientras dura), y el guardado con espera
+    // que estaba pendiente se acaba de cancelar: se guarda ahora el diseño de antes, para que
+    // cerrar la app en modo enfoque reabra con los paneles y no con uno solo.
+    SaveDockLayout(zenSaved).catch((e) => toast.error(errorText(e)))
     dockState.set({zen: true})
     if (api.hasMaximizedGroup()) api.exitMaximizedGroup()
     // Un panel minimizado no sirve de modo enfoque: se restaura (el diseño de antes

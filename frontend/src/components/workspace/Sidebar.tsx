@@ -91,7 +91,7 @@ export function Sidebar({
     const wsMax = Math.max(LAYOUT_LIMITS.workspaces[0], Math.min(LAYOUT_LIMITS.workspaces[1], boxH - SIDEBAR_CHROME - CHECKPOINTS_MIN_H))
     const wsHeight = Math.max(LAYOUT_LIMITS.workspaces[0], Math.min(workspacesHeight, wsMax))
     return (
-        <aside ref={box} style={{width}} className="flex min-w-0 shrink-0 flex-col overflow-clip border-r border-line bg-surface">
+        <aside ref={box} data-lock style={{width}} className="flex min-w-0 shrink-0 flex-col overflow-clip border-r border-line bg-surface">
             <SectionTitle
                 actions={
                     <>
@@ -106,7 +106,8 @@ export function Sidebar({
             >
                 {t.workspaces.title}
             </SectionTitle>
-            <div style={{height: wsHeight}} className="shrink-0 overflow-auto px-1.5 pb-2">
+            {/* Las dos listas solo se desplazan en vertical (data-lock="x": scrollGuard devuelve su scrollLeft a 0). */}
+            <div data-lock="x" style={{height: wsHeight}} className="shrink-0 overflow-x-clip overflow-y-auto px-1.5 pb-2">
                 {workspaces.length === 0 ? (
                     <p className="px-1.5 py-1 text-ui-12 leading-relaxed text-faint">{t.workspaces.empty}</p>
                 ) : (
@@ -177,7 +178,7 @@ export function Sidebar({
             >
                 {t.checkpoints.title}
             </SectionTitle>
-            <div className="min-h-0 flex-1 overflow-auto pb-3">
+            <div data-lock="x" className="min-h-0 flex-1 overflow-x-clip overflow-y-auto pb-3">
                 {view ? (
                     view.missing ? (
                         <p className="px-3 text-ui-12 text-warn">{t.workspaces.missing}</p>

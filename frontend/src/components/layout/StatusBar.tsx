@@ -65,7 +65,7 @@ export function StatusBar({
     const problems = useProblems(file ? renderDiags : undefined)
     const c = counts(file ? problems : [])
     return (
-        <footer className="flex h-6 min-w-0 shrink-0 items-center gap-4 overflow-clip border-t border-line bg-surface px-3 font-mono text-ui-10-5 whitespace-nowrap text-muted">
+        <footer data-lock className="flex h-6 min-w-0 shrink-0 items-center gap-4 overflow-clip border-t border-line bg-surface px-3 font-mono text-ui-10-5 whitespace-nowrap text-muted">
             {workspace ? (
                 <Item title={t.status.workspaceHint} className="min-w-0 shrink">
                     <FolderClosed className="icon-ui-12 shrink-0 text-faint" />

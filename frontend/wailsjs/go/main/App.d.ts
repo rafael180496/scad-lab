@@ -36,6 +36,8 @@ export function CreateSkill(arg1:string):Promise<string>;
 
 export function CreateWorkspace(arg1:string,arg2:string):Promise<store.Workspace>;
 
+export function CreateWorkspaceIn(arg1:string,arg2:string,arg3:string):Promise<store.Workspace>;
+
 export function DeleteChat(arg1:number):Promise<void>;
 
 export function DetectSlicers():Promise<Array<main.Slicer>>;
@@ -110,6 +112,8 @@ export function OpenWorkspace(arg1:number):Promise<main.WorkspaceView>;
 
 export function PreviewExportParts(arg1:number,arg2:string):Promise<exporter.Preview>;
 
+export function PreviewWorkspacePath(arg1:string,arg2:string):Promise<string>;
+
 export function ProjectActivity():Promise<Array<main.ProjectActivityEntry>>;
 
 export function ReadCheckpoint(arg1:number,arg2:string):Promise<string>;
@@ -164,6 +168,8 @@ export function SaveSettings(arg1:store.Settings):Promise<void>;
 
 export function SaveSwatches(arg1:Array<string>):Promise<void>;
 
+export function SaveViewer(arg1:store.ViewerState):Promise<store.ViewerState>;
+
 export function SendChatMessage(arg1:number,arg2:string,arg3:string):Promise<store.ChatMessage>;
 
 export function SetActiveParent(arg1:number,arg2:string):Promise<void>;
@@ -176,9 +182,13 @@ export function SetCheckpointUI(arg1:number,arg2:string,arg3:string,arg4:boolean
 
 export function SetLanguage(arg1:string):Promise<void>;
 
+export function SetLastCheckpoint(arg1:number,arg2:string):Promise<void>;
+
 export function SetMCPEnabled(arg1:boolean):Promise<void>;
 
 export function SetSkillEnabled(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetWorkspacesRoot(arg1:string):Promise<void>;
 
 export function StartAgentTerminal(arg1:number,arg2:string,arg3:string,arg4:string,arg5:number,arg6:number):Promise<string>;
 

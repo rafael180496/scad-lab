@@ -85,6 +85,18 @@ function RenameInput({initial, label, hint, placeholder, onDone}: {initial: stri
     )
 }
 
+// Niveles de sangría (de 3 caracteres) que se dibujan. Los checkpoints suelen formar una
+// cadena larga (001 → 002 → …) y cada nivel suma 3 caracteres de conector: a los diez
+// niveles el nombre ya no cabía en la barra lateral, que no se desplaza en horizontal. Más
+// allá del tope se omiten los niveles lejanos (con «…»); la rama activa y el nombre quedan
+// a la vista, y el `title` de cada nodo dice de quién cuelga.
+const MAX_INDENT_LEVELS = 2
+
+function clipPrefix(prefix: string): string {
+    const keep = MAX_INDENT_LEVELS * 3
+    return prefix.length > keep ? '…' + prefix.slice(prefix.length - keep + 1) : prefix
+}
+
 type MenuState = {file: string; anchor: HTMLElement; point?: {x: number; y: number}}
 
 // Árbol de checkpoints con conectores de caja (├─ └─ │). Cada nodo tiene menú
@@ -236,7 +248,7 @@ export function CheckpointTree({
                     )}
                 >
                     <span className="font-mono whitespace-pre text-faint">
-                        {prefix}
+                        {clipPrefix(prefix)}
                         {/* El tramo que baja hasta el padre activo va en acento. */}
                         <span className={hot && branch ? 'text-accent' : undefined}>{branch}</span>
                     </span>

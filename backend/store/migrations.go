@@ -166,6 +166,16 @@ CREATE TABLE IF NOT EXISTS checkpoint_trash (
 );
 `,
 	},
+	{
+		version: 4,
+		desc:    "último checkpoint elegido de cada workspace (para volver a él al reabrir)",
+		sql: `
+-- Nombre del .scad que el usuario tenía elegido al cerrar. Es dato de la UI, no
+-- del modelo: si el archivo ya no existe la interfaz lo ignora y abre el más
+-- nuevo, así que no necesita FK ni limpieza al borrar o mandar a la papelera.
+ALTER TABLE workspaces ADD COLUMN last_checkpoint TEXT NOT NULL DEFAULT '';
+`,
+	},
 }
 
 func (s *Store) migrate() error {

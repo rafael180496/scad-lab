@@ -93,6 +93,40 @@ type Settings struct {
 	// SaveSettings no los escribe, igual que el diseño de paneles.
 	OpenProjects  []int64 `json:"openProjects"`
 	ActiveProject int64   `json:"activeProject"`
+
+	// Viewer es el estado del visor 3D (alambre, aristas, proyección, vista
+	// dividida, muestra y colores del modelo). Se guarda desde el propio visor
+	// (App.SaveViewer); SaveSettings no lo escribe.
+	Viewer ViewerState `json:"viewer"`
+}
+
+// ViewerState es lo que el visor 3D recuerda entre sesiones. La cámara no: cada
+// modelo se encuadra solo al abrirlo, y una cámara vieja sobre otra pieza
+// dejaría el modelo fuera de cuadro.
+type ViewerState struct {
+	Wireframe bool `json:"wireframe"`
+	Edges     bool `json:"edges"`
+	// Ortho es la proyección de cada vista: [principal, segunda de la vista
+	// dividida]. true = ortográfica, false = perspectiva.
+	Ortho [2]bool `json:"ortho"`
+	// Split: la vista dividida está abierta.
+	Split bool `json:"split"`
+	// ColorIndex es la muestra elegida (0–5) y ModelColors si el modelo se pinta
+	// con sus propios colores (true) o con la muestra (false).
+	ColorIndex  int  `json:"colorIndex"`
+	ModelColors bool `json:"modelColors"`
+}
+
+// DefaultViewer es el visor de una instalación nueva: sólido, sin aristas, en
+// perspectiva, una sola vista y con los colores del propio modelo.
+func DefaultViewer() ViewerState { return ViewerState{ModelColors: true} }
+
+// Normalize acota la muestra elegida a las seis que existen.
+func (v ViewerState) Normalize() ViewerState {
+	if v.ColorIndex < 0 || v.ColorIndex >= SwatchCount {
+		v.ColorIndex = 0
+	}
+	return v
 }
 
 // MaxOpenProjects es el tope de proyectos abiertos a la vez (pestañas).
@@ -327,6 +361,7 @@ func DefaultSettings() Settings {
 		ChatFontSize:       DefaultFontSize,
 		Layout:             DefaultLayout(),
 		OpenProjects:       []int64{},
+		Viewer:             DefaultViewer(),
 	}
 }
 
@@ -365,6 +400,7 @@ func (s *Store) GetSettings() (Settings, error) {
 	}
 	out.normalizeEditor()
 	out.OpenProjects = NormalizeOpenProjects(out.OpenProjects)
+	out.Viewer = out.Viewer.Normalize()
 	return out, nil
 }
 
@@ -398,6 +434,9 @@ func (s *Store) SaveSettings(in Settings) error {
 	// diálogo de Configuración guarda una copia vieja y cerraría pestañas.
 	delete(fields, "openProjects")
 	delete(fields, "activeProject")
+	// El visor se guarda solo, desde el visor (SaveViewer): la copia que tiene el
+	// diálogo de Configuración vuelve el alambre y las aristas a como estaban al abrirlo.
+	delete(fields, "viewer")
 	// El interruptor del servidor MCP aplica al instante (reescribe los
 	// archivos de cada workspace): el diálogo guarda una copia vieja.
 	delete(fields, "mcpEnabled")

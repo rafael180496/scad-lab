@@ -40,6 +40,7 @@ export type PanelHostProps = {
     editorRestore: EditorSnap | null
     onEditorRestored: () => void
     onSwatchesSaved: (colors: string[]) => void
+    onViewerSaved: (v: store.ViewerState) => void
     viewerShot?: ViewerShot
     editorShot?: EditorShot
     onRender: () => void
@@ -148,6 +149,8 @@ export function PanelHost(p: PanelHostProps) {
                         viewerShot={p.viewerShot}
                         dimsCollapsed={p.dimsCollapsed}
                         onDimsCollapsed={p.onDimsCollapsed}
+                        viewerSaved={p.settings.viewer}
+                        onViewerSaved={p.onViewerSaved}
                         onRender={p.onRender}
                         onCancel={p.onCancel}
                         onOpenSettings={p.onOpenSettings}

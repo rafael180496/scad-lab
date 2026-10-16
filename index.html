@@ -599,12 +599,16 @@ wails build            <span class="c"># binary in build/bin/</span></code></pre
   <p class="lead">From an empty folder to a part you can print: create a workspace, ask the agent for
   something and look at the result.</p>
 
-  <figure class="shot"><img src="docs/screenshots/new-workspace.png" alt="New workspace dialog with the name, the folder where it is created and the Bambu Lab printer selector" loading="lazy"><figcaption>New workspace dialog: name, folder where it is created and printer.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/new-workspace.png" alt="New workspace dialog with the name, the printer selector, the location with its Choose button, the exact final path that will be created and the checkbox to use that folder as the default" loading="lazy"><figcaption>New workspace: name, printer and location. “Will be created in” shows the exact path; the checkbox below makes it the default folder.</figcaption></figure>
 
   <h2 id="primer-proyecto--crear">1. Create the workspace <span class="badge ok">Available</span></h2>
   <ol class="steps">
     <li>Click <strong>New workspace</strong>.</li>
-    <li>Give it a name (for example <em>Sensor box</em>) and choose an empty folder.</li>
+    <li>Give it a name (for example <em>Sensor box</em>) and pick the printer.</li>
+    <li>Under <strong>Location</strong> choose the folder it is created in (<strong>Choose…</strong>): by default it is the one from
+    Settings → General, and it is created if it does not exist. Below, <strong>Will be created in</strong> shows the exact final path
+    (<code>&lt;location&gt;/sensor-box</code>) as you type the name; if that folder already exists and is not empty, ScadLab leaves it
+    alone and tells you which one it is.</li>
     <li>ScadLab creates the structure and copies the <a href="#ia-skills">skills</a> for every CLI.</li>
   </ol>
 
@@ -662,7 +666,9 @@ color("SteelBlue") difference() {
 
   <h2 id="workspaces--abrir">Create, open and recents <span class="badge ok">Available</span></h2>
   <ul>
-    <li><strong>New workspace</strong>: name + folder. If the folder already has <code>.scad</code> files, they are respected.</li>
+    <li><strong>New workspace</strong>: name, printer and <strong>location</strong> (the folder that will hold it; the workspace ends up in
+    <code>&lt;location&gt;/&lt;lowercase-hyphenated-name&gt;</code>). <strong>Use this folder as the default</strong> makes the next ones
+    start there. A destination folder that already exists and has files in it is refused without touching it.</li>
     <li><strong>Open</strong>: choose an existing folder; ScadLab fills in whatever is missing (skills, rules) without touching your <code>.scad</code> files.</li>
     <li>The recents list is stored in the <a href="#config-datos">local database</a>.</li>
   </ul>
@@ -702,6 +708,19 @@ color("SteelBlue") difference() {
   <ul>
     <li><strong>opencode</strong> has no equivalent option: it only sees its own project's folder.</li>
     <li>The folders are fixed <strong>when the agent is opened</strong>: if you open another project afterwards, an agent that was already open does not find out. Click <em>New</em> in its terminal to relaunch it with the current list.</li>
+  </ul>
+
+  <h2 id="workspaces--recuerda">What ScadLab remembers when you quit <span class="badge ok">Available</span></h2>
+  <p>When you open the app again everything is as you left it, with nothing to save by hand:</p>
+  <ul>
+    <li><strong>Projects and checkpoint:</strong> the open tabs, which one was in front and, in each project, <strong>the checkpoint you had
+    selected</strong> (not the newest one; if that file no longer exists, the latest one is opened).</li>
+    <li><strong>Panels:</strong> the layout (splits, floating or hidden panels), which tab was active in each group, the maximized panel and
+    the minimized groups. <strong>Focus mode is not remembered</strong>: ScadLab always opens with your panels.</li>
+    <li><strong>Window:</strong> the sidebar width, whether it was hidden, and the status bar.</li>
+    <li><strong>3D viewer:</strong> wireframe, edges, orthographic or perspective projection, split view, the chosen color swatch and whether
+    the part is painted with the model's own colors, and the collapsed measurements. Not the camera: each part is framed on its own.</li>
+    <li><strong>Appearance:</strong> theme, interface size and the editor, terminal and chat fonts.</li>
   </ul>
 
   <h2 id="workspaces--skills">Skills sync <span class="badge ok">Available</span></h2>

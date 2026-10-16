@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,5 +115,50 @@ func TestRulesBlockPreservesUserContent(t *testing.T) {
 	got = read()
 	if !strings.HasPrefix(got, rulesBegin) || !strings.HasSuffix(got, own) {
 		t.Errorf("contenido propio no conservado:\n%s", got)
+	}
+}
+
+func TestTargetDir(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct{ parent, name, want string }{
+		{root, "Caja de Electrónica", filepath.Join(root, "caja-de-electronica")},
+		{root + "/a/../b", "  Soporte / Pared: v2 ", filepath.Join(root, "b", "soporte-pared-v2")},
+		{root, "???", ""},           // sin slug
+		{"relativa", "Caja", ""},    // padre no absoluto
+		{"", "Caja", ""},            // sin padre
+		{"~/Documents", "Caja", ""}, // «~» no se expande
+	}
+	for _, c := range cases {
+		if got := TargetDir(c.parent, c.name); got != c.want {
+			t.Errorf("TargetDir(%q, %q) = %q, esperaba %q", c.parent, c.name, got, c.want)
+		}
+	}
+}
+
+func TestCreateValidatesLocation(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Create("relativa", "Caja", "bambu-a1"); !errors.Is(err, ErrParentNotAbs) {
+		t.Errorf("padre relativo: %v", err)
+	}
+	// Padre nuevo, varios niveles: se crea entero.
+	parent := filepath.Join(root, "a", "b", "c")
+	dir, err := Create(parent, "Ñu Único", "bambu-a1")
+	if err != nil || dir != filepath.Join(parent, "nu-unico") {
+		t.Fatalf("padre nuevo: %q, %v", dir, err)
+	}
+	// El mismo destino, ya con contenido: el error nombra la carpeta.
+	if _, err := Create(parent, "Ñu Único", "bambu-a1"); err == nil || !strings.Contains(err.Error(), dir) {
+		t.Errorf("destino no vacío: %v", err)
+	}
+	// Destino que es un archivo.
+	if err := os.WriteFile(filepath.Join(parent, "archivo"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(parent, "archivo", "bambu-a1"); err == nil || !strings.Contains(err.Error(), "archivo") {
+		t.Errorf("destino que es un archivo: %v", err)
+	}
+	// Padre que es un archivo.
+	if _, err := Create(filepath.Join(parent, "archivo"), "x", "bambu-a1"); err == nil {
+		t.Error("padre que es un archivo")
 	}
 }

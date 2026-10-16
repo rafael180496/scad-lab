@@ -600,12 +600,16 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
   <p class="lead">De una carpeta vacía a una pieza que puedes imprimir: crea un workspace, pídele algo al
   agente y mira el resultado.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/new-workspace.png" alt="Diálogo Nuevo workspace con el nombre, la carpeta donde se crea y el selector de impresora Bambu Lab" loading="lazy"><figcaption>Diálogo de nuevo workspace: nombre, carpeta donde se crea e impresora.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/new-workspace.png" alt="Diálogo Nuevo workspace con el nombre, el selector de impresora, la ubicación con el botón Elegir, la ruta final exacta que se creará y la casilla para usar esa carpeta como predeterminada" loading="lazy"><figcaption>Nuevo workspace: nombre, impresora y ubicación. «Se creará en» muestra la ruta exacta; la casilla de abajo la deja como carpeta predeterminada.</figcaption></figure>
 
   <h2 id="primer-proyecto--crear">1. Crea el workspace <span class="badge ok">Disponible</span></h2>
   <ol class="steps">
     <li>Pulsa <strong>Nuevo workspace</strong>.</li>
-    <li>Ponle nombre (por ejemplo <em>Caja sensores</em>) y elige una carpeta vacía.</li>
+    <li>Ponle nombre (por ejemplo <em>Caja sensores</em>) y elige la impresora.</li>
+    <li>En <strong>Ubicación</strong> elige la carpeta donde se crea (<strong>Elegir…</strong>): de forma predeterminada es la de
+    Configuración → General, y se crea si no existe. Debajo, <strong>Se creará en</strong> te muestra la ruta final exacta
+    (<code>&lt;ubicación&gt;/caja-sensores</code>) mientras escribes el nombre; si esa carpeta ya existe y no está vacía,
+    ScadLab no la toca y te dice cuál es.</li>
     <li>ScadLab crea la estructura y copia las <a href="#ia-skills">skills</a> para todos los CLIs.</li>
   </ol>
 
@@ -663,7 +667,9 @@ color("SteelBlue") difference() {
 
   <h2 id="workspaces--abrir">Crear, abrir y recientes <span class="badge ok">Disponible</span></h2>
   <ul>
-    <li><strong>Nuevo workspace</strong>: nombre + carpeta. Si la carpeta ya tiene <code>.scad</code>, se respetan.</li>
+    <li><strong>Nuevo workspace</strong>: nombre, impresora y <strong>ubicación</strong> (la carpeta que lo contendrá; el workspace queda en
+    <code>&lt;ubicación&gt;/&lt;nombre-en-minúsculas-y-guiones&gt;</code>). Con <strong>Usar esta carpeta como predeterminada</strong>
+    los próximos se crean ahí. Una carpeta de destino que ya existe y tiene archivos se rechaza sin tocarla.</li>
     <li><strong>Abrir</strong>: elige una carpeta existente; ScadLab completa lo que falte (skills, reglas) sin tocar tus archivos <code>.scad</code>.</li>
     <li>La lista de recientes se guarda en la <a href="#config-datos">base local</a>.</li>
   </ul>
@@ -703,6 +709,19 @@ color("SteelBlue") difference() {
   <ul>
     <li><strong>opencode</strong> no tiene una opción equivalente: solo ve la carpeta de su propio proyecto.</li>
     <li>Las carpetas se fijan <strong>al abrir el agente</strong>: si abres otro proyecto después, un agente que ya estaba abierto no se entera. Pulsa <em>Nueva</em> en su terminal para relanzarlo con la lista actual.</li>
+  </ul>
+
+  <h2 id="workspaces--recuerda">Lo que ScadLab recuerda al cerrar <span class="badge ok">Disponible</span></h2>
+  <p>Al volver a abrir la aplicación todo queda como lo dejaste, sin guardar nada a mano:</p>
+  <ul>
+    <li><strong>Proyectos y checkpoint:</strong> las pestañas abiertas, cuál estaba al frente y, en cada proyecto, <strong>el checkpoint que tenías
+    elegido</strong> (no el más nuevo; si ese archivo ya no existe, se abre el más reciente).</li>
+    <li><strong>Paneles:</strong> el diseño (divisiones, paneles flotantes u ocultos), qué pestaña estaba activa en cada grupo, el panel
+    maximizado y los grupos minimizados. El <strong>modo enfoque no se recuerda</strong>: ScadLab siempre abre con tus paneles.</li>
+    <li><strong>Ventana:</strong> el ancho de la barra lateral, si estaba oculta, y la barra de estado.</li>
+    <li><strong>Visor 3D:</strong> alambre, aristas, proyección ortográfica o en perspectiva, vista dividida, la muestra de color elegida y si
+    la pieza se pinta con los colores del modelo, y las medidas plegadas. La cámara no: cada pieza se encuadra sola.</li>
+    <li><strong>Apariencia:</strong> tema, tamaño de la interfaz y letras del editor, la terminal y el chat.</li>
   </ul>
 
   <h2 id="workspaces--skills">Sincronización de skills <span class="badge ok">Disponible</span></h2>

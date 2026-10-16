@@ -142,11 +142,21 @@ respaldo). `hidden` bloquea la rueda pero no el desplazamiento programático
 ninguno. Los contenedores de la estructura usan `overflow-clip`, no
 `overflow-hidden`, y todo hijo flex/grid que pueda empujar el tamaño lleva
 `min-h-0`/`min-w-0`. `lib/scrollGuard.ts` (instalado en `main.tsx`) devuelve el
-documento a 0,0 si algo lo mueve y reajusta los elementos marcados `data-lock`.
+documento a 0,0 si algo lo mueve y reajusta los elementos marcados `data-lock`
+(al desplazarse, al enfocar y al redimensionar): `data-lock` = no se desplaza nunca;
+`data-lock="x"` = solo en vertical (las listas de la barra lateral). Ojo: junto a
+`overflow-y: auto`, un `overflow-x: clip` se convierte en `hidden`, que **sí** se puede
+desplazar por código, y por eso las listas llevan `overflow-x-clip` **y** `data-lock="x"`.
+El árbol de checkpoints recorta la sangría a 2 niveles (`MAX_INDENT_LEVELS`, con «…»): una
+cadena larga era más ancha que la barra y ya no hay desplazamiento horizontal.
 Verificación: `./scripts/uishot-fit.sh [vista ancho alto]` (con
 `UISHOT_SCALE=150` para otra escala) abre el banco con `poke=1`, que intenta
 desplazar la página, y falla si `scrollWidth/Height` superan la ventana o la
-cabecera / barra de estado no quedan en su sitio.
+cabecera / barra de estado no quedan en su sitio. La vista `sidebar-long` (nombres de 60
+caracteres) además empuja las listas de la barra lateral, enfoca los nodos y abre el renombrado
+en línea, y falla si algún `data-lock` queda con `scrollLeft ≠ 0`, si una lista tiene contenido
+más ancho que su caja o si, en macOS, el botón de la barra lateral cae bajo los semáforos
+(x < 76).
 
 **Degradar sin cortar controles.** Toda barra con rótulos usa `hooks/useNarrow.ts`
 (`const [compact, ref] = useNarrow(limit)`): mide **su propio elemento** (no la

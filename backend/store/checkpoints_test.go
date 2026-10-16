@@ -57,7 +57,8 @@ func TestMigration3IsAdditive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("apertura %d: %v", i, err)
 		}
-		if v, _ := s.SchemaVersion(); v != 3 {
+		// MAX(version): la 3 se reaplicó, y la base ya traía las siguientes.
+		if v, _ := s.SchemaVersion(); v != migrations[len(migrations)-1].version {
 			t.Errorf("versión: %d", v)
 		}
 		c, err := s.GetCheckpoint(ws, "001-a.scad")

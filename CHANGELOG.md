@@ -9,6 +9,27 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Elige en qué carpeta se crea un workspace.** El diálogo **Nuevo workspace**
+  ahora tiene el campo **Ubicación** —la carpeta que contendrá al proyecto— con su
+  botón **Elegir…**. Por defecto es la de Configuración → General (o
+  `~/Documents/ScadLab`), y si no existe se crea. Debajo, **Se creará en** muestra
+  la **ruta final exacta** (`<ubicación>/<nombre-en-minúsculas-y-guiones>`) y se
+  actualiza mientras escribes: el mismo cálculo que hace ScadLab al crear, así lo
+  que ves es lo que se crea, con acentos, espacios y símbolos incluidos. La casilla
+  **Usar esta carpeta como predeterminada** deja esa ubicación para los próximos.
+  - Una ubicación que no sea una ruta absoluta (relativa o con `~`) se rechaza con
+    un aviso claro, y si el destino ya existe y tiene archivos, ScadLab no lo toca y
+    te dice qué carpeta es, en español o en inglés.
+- **ScadLab recuerda cómo lo dejaste.** Al cerrar y volver a abrir, cada proyecto
+  reabre en **el checkpoint que tenías elegido** (antes saltaba siempre al más
+  nuevo; si ese archivo ya no existe, se abre el más reciente), y el **visor 3D**
+  conserva el alambre, las aristas, la proyección ortográfica o en perspectiva, la
+  vista dividida, la muestra de color elegida y si la pieza se pinta con los colores
+  del modelo. Se suma a lo que ya se guardaba (pestañas, diseño de paneles,
+  tamaños, tema y letras), y el panel maximizado, los grupos minimizados y la
+  pestaña activa de cada grupo también vuelven como estaban. El **modo enfoque no
+  se recuerda**, a propósito: ScadLab siempre abre con tus paneles.
+
 - **Varios proyectos a la vez: pestañas de proyecto.** La cabecera, a la derecha
   del logo, tiene ahora una pestaña por cada proyecto abierto (hasta **4**), con
   su **+** para abrir otro: elige entre tus workspaces o crea uno nuevo, y con 4
@@ -395,6 +416,20 @@ empaquetarla (ver `.claude/specs/releases.md`).
   Windows) al pasar el ratón.
 
 ### Corregido
+
+- **Cerrar ScadLab en modo enfoque ya no pierde el diseño de paneles.** Al entrar
+  en modo enfoque se cancelaba el guardado pendiente del diseño; si cambiabas de
+  pestaña o de división y cerrabas la aplicación antes de salir del modo, al
+  reabrir faltaba ese último cambio. Ahora el diseño de antes se guarda en el
+  momento de entrar.
+- **La barra lateral ya no se corre ni queda con los rótulos cortados**
+  («ORKSPACES», «HECKPOINTS»). Las listas de la barra solo se desplazan en
+  vertical: con una cadena larga de checkpoints el árbol era más ancho que la
+  barra y la lista podía moverse de lado, dejando el contenido corrido unos
+  píxeles. Ahora el desplazamiento horizontal está bloqueado también por código
+  (al desplazarse, al enfocar un nodo y al cambiar de tamaño), y el árbol recorta
+  la sangría de los niveles lejanos (con «…») para que el nombre del checkpoint
+  siga a la vista.
 
 - En un modelo de varios colores, cada pieza ya no se marca como «abierta» ni la
   estimación avisa que su volumen no es fiable: al separar por color, la cara

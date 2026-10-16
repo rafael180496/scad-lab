@@ -9,13 +9,17 @@ type Workspace struct {
 	Description string `json:"description"`
 	LastOpened  int64  `json:"lastOpened"`
 	CreatedAt   int64  `json:"createdAt"`
+	// LastCheckpoint es el .scad que estaba elegido al cerrar o cambiar de
+	// proyecto ("" = ninguno guardado aún). Al reabrir, la interfaz vuelve a él
+	// si todavía existe.
+	LastCheckpoint string `json:"lastCheckpoint"`
 }
 
-const workspaceCols = `id, name, path, printer_id, description, last_opened, created_at`
+const workspaceCols = `id, name, path, printer_id, description, last_opened, created_at, last_checkpoint`
 
 func scanWorkspace(sc interface{ Scan(...any) error }) (Workspace, error) {
 	var w Workspace
-	err := sc.Scan(&w.ID, &w.Name, &w.Path, &w.PrinterID, &w.Description, &w.LastOpened, &w.CreatedAt)
+	err := sc.Scan(&w.ID, &w.Name, &w.Path, &w.PrinterID, &w.Description, &w.LastOpened, &w.CreatedAt, &w.LastCheckpoint)
 	return w, err
 }
 
@@ -72,4 +76,17 @@ func (s *Store) TouchWorkspace(id int64) error {
 func (s *Store) RemoveWorkspace(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM workspaces WHERE id = ?`, id)
 	return err
+}
+
+// SetLastCheckpoint anota el checkpoint elegido de un workspace. No toca
+// updated_at: elegir un archivo en el árbol no es editar el workspace.
+func (s *Store) SetLastCheckpoint(id int64, fileName string) error {
+	res, err := s.db.Exec(`UPDATE workspaces SET last_checkpoint = ? WHERE id = ?`, fileName, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

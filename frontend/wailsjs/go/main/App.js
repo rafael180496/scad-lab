@@ -46,6 +46,10 @@ export function CreateWorkspace(arg1, arg2) {
   return window['go']['main']['App']['CreateWorkspace'](arg1, arg2);
 }
 
+export function CreateWorkspaceIn(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateWorkspaceIn'](arg1, arg2, arg3);
+}
+
 export function DeleteChat(arg1) {
   return window['go']['main']['App']['DeleteChat'](arg1);
 }
@@ -194,6 +198,10 @@ export function PreviewExportParts(arg1, arg2) {
   return window['go']['main']['App']['PreviewExportParts'](arg1, arg2);
 }
 
+export function PreviewWorkspacePath(arg1, arg2) {
+  return window['go']['main']['App']['PreviewWorkspacePath'](arg1, arg2);
+}
+
 export function ProjectActivity() {
   return window['go']['main']['App']['ProjectActivity']();
 }
@@ -302,6 +310,10 @@ export function SaveSwatches(arg1) {
   return window['go']['main']['App']['SaveSwatches'](arg1);
 }
 
+export function SaveViewer(arg1) {
+  return window['go']['main']['App']['SaveViewer'](arg1);
+}
+
 export function SendChatMessage(arg1, arg2, arg3) {
   return window['go']['main']['App']['SendChatMessage'](arg1, arg2, arg3);
 }
@@ -326,12 +338,20 @@ export function SetLanguage(arg1) {
   return window['go']['main']['App']['SetLanguage'](arg1);
 }
 
+export function SetLastCheckpoint(arg1, arg2) {
+  return window['go']['main']['App']['SetLastCheckpoint'](arg1, arg2);
+}
+
 export function SetMCPEnabled(arg1) {
   return window['go']['main']['App']['SetMCPEnabled'](arg1);
 }
 
 export function SetSkillEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetSkillEnabled'](arg1, arg2);
+}
+
+export function SetWorkspacesRoot(arg1) {
+  return window['go']['main']['App']['SetWorkspacesRoot'](arg1);
 }
 
 export function StartAgentTerminal(arg1, arg2, arg3, arg4, arg5, arg6) {

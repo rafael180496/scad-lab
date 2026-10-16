@@ -1308,6 +1308,28 @@ export namespace store {
 	        this.costPerKg = source["costPerKg"];
 	    }
 	}
+	export class ViewerState {
+	    wireframe: boolean;
+	    edges: boolean;
+	    ortho: boolean[];
+	    split: boolean;
+	    colorIndex: number;
+	    modelColors: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ViewerState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.wireframe = source["wireframe"];
+	        this.edges = source["edges"];
+	        this.ortho = source["ortho"];
+	        this.split = source["split"];
+	        this.colorIndex = source["colorIndex"];
+	        this.modelColors = source["modelColors"];
+	    }
+	}
 	export class Settings {
 	    language: string;
 	    theme: string;
@@ -1340,6 +1362,7 @@ export namespace store {
 	    dockLayouts: DockLayoutEntry[];
 	    openProjects: number[];
 	    activeProject: number;
+	    viewer: ViewerState;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -1378,6 +1401,7 @@ export namespace store {
 	        this.dockLayouts = this.convertValues(source["dockLayouts"], DockLayoutEntry);
 	        this.openProjects = source["openProjects"];
 	        this.activeProject = source["activeProject"];
+	        this.viewer = this.convertValues(source["viewer"], ViewerState);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1398,6 +1422,7 @@ export namespace store {
 		    return a;
 		}
 	}
+	
 	export class Workspace {
 	    id: number;
 	    name: string;
@@ -1406,6 +1431,7 @@ export namespace store {
 	    description: string;
 	    lastOpened: number;
 	    createdAt: number;
+	    lastCheckpoint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Workspace(source);
@@ -1420,6 +1446,7 @@ export namespace store {
 	        this.description = source["description"];
 	        this.lastOpened = source["lastOpened"];
 	        this.createdAt = source["createdAt"];
+	        this.lastCheckpoint = source["lastCheckpoint"];
 	    }
 	}
 
