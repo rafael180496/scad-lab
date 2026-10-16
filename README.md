@@ -48,19 +48,16 @@ Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
 ## Descargas
 
-> **Todavía no hay una versión publicada.** La primera (0.1.0) está implementada y
-> documentada, pero aún no se ha empaquetado ni subido a Releases.
+Versión **0.1.0** (la primera), en los assets del
+[Release v0.1.0](https://github.com/rafael180496/ScadLab/releases/tag/v0.1.0):
 
-Cuando exista, los archivos estarán en los assets del Release
-(`https://github.com/rafael180496/ScadLab/releases/download/vX.Y.Z/…`):
-
-| Sistema | Archivo |
-|---|---|
-| macOS (Apple Silicon) | `ScadLab-vX.Y.Z.dmg` |
-| Windows (x64) | `ScadLab-vX.Y.Z-windows-amd64.exe` (portable) |
+| Sistema | Archivo | Tamaño |
+|---|---|---|
+| macOS (Apple Silicon, 11+) | [`ScadLab-v0.1.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0.dmg) | 17,4 MB |
+| Windows (x64) | [`ScadLab-v0.1.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0-windows-amd64.exe) (portable) | 46,5 MB |
 
 Los binarios no van firmados: macOS pide «clic derecho → Abrir» la primera vez y
-Windows muestra el aviso de SmartScreen. Mientras tanto puedes compilarla desde el código
+Windows muestra el aviso de SmartScreen. También puedes compilarla desde el código
 (`wails build`, ver «Desarrollo»). Más en la ayuda:
 [Instalación](https://rafael180496.github.io/ScadLab/es/#instalacion).
 
@@ -77,11 +74,19 @@ Arquitectura, reglas y agentes de desarrollo: [CLAUDE.md](CLAUDE.md).
 
 ## Distribución / Empaquetado macOS
 
-_Todavía no hay una versión publicada._ Ver [releases/macos](releases/macos/README.md).
+**v0.1.0** — [`ScadLab-v0.1.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0.dmg), 17,4 MB, SHA-256
+`fa509e2ef6fc20c876ff4484163ff5074e185495152cafecb2bdfd6aa5e91cde`. Solo Apple Silicon
+(arm64), macOS 11 o superior (el `Info.plist` que genera Wails declara 10.13, pero el
+binario es arm64 y exige 11+). Sin firma ni notarización: clic derecho → Abrir.
+Detalle en [releases/macos](releases/macos/README.md).
 
 ## Distribución / Empaquetado Windows
 
-_Todavía no hay una versión publicada._ Ver [releases/windows](releases/windows/README.md).
+**v0.1.0** — [`ScadLab-v0.1.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0-windows-amd64.exe), 46,5 MB,
+SHA-256 `0216d858ef5aacb20124fe2add54def5cf27f08b4f5a0da18a0ba7f7671fa87a`. Portable (x86-64),
+sin instalador ni firma Authenticode (SmartScreen avisa). **No verificado en una Windows
+real**: se cross-compila desde macOS y todavía nadie lo ha ejecutado allí. Detalle en
+[releases/windows](releases/windows/README.md).
 
 ## Apoya el proyecto
 

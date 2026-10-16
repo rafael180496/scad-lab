@@ -7,17 +7,69 @@ comprueba que su SHA-256 aparezca en este README.
 
 ## Versión actual
 
-_Todavía no hay una versión publicada._ Al preparar la primera, seguir
-[.claude/specs/releases.md](../../.claude/specs/releases.md) y completar aquí:
-versión, archivo, tamaño, SHA-256, arquitectura verificada con `file`,
-compatibilidad real del sistema operativo, estado de firma
-(sin Developer ID: Gatekeeper → clic derecho → Abrir, o `xattr -cr /Applications/ScadLab.app`),
-pasos de instalación y la sección «Regenerar este artefacto».
+| Campo | Valor |
+|---|---|
+| Versión | **0.1.0** (la primera) |
+| Archivo | `ScadLab-v0.1.0.dmg` |
+| Tamaño | 18 272 653 bytes (17,4 MB) |
+| SHA-256 | `fa509e2ef6fc20c876ff4484163ff5074e185495152cafecb2bdfd6aa5e91cde` |
+| Arquitectura | arm64 (Apple Silicon) |
+| Descarga | https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0.dmg |
+
+### Compatibilidad verificada
+
+`file` sobre el binario de la `.app` (extraída del `.dmg`):
+
+```
+ScadLab.app/Contents/MacOS/ScadLab: Mach-O 64-bit executable arm64
+```
+
+- **Solo Apple Silicon (M1 y posteriores).** No hay build para Intel.
+- **macOS 11 (Big Sur) o superior.** El binario es arm64 y su `LC_BUILD_VERSION`
+  declara `minos 11.0`: Apple Silicon no existe antes de macOS 11.
+- **Discrepancia con el `Info.plist`:** el que genera Wails declara
+  `LSMinimumSystemVersion = 10.13.0`. Es una plantilla genérica heredada de cuando
+  Wails también apuntaba a Intel; **no es la compatibilidad real**. En un Mac
+  con macOS 10.13–10.15 el sistema dejaría abrir la app según el plist, pero no
+  hay ningún procesador compatible con el binario.
+- El binario se compiló y empaquetó en macOS (Apple Silicon); la versión de `minos` y la
+  arquitectura se leyeron del propio ejecutable, no del `Info.plist`.
+
+### Firma
+
+**No está firmado ni notarizado** (sin Apple Developer ID; solo la firma ad-hoc
+que hace Wails). Gatekeeper avisa «desarrollador no identificado» o que la app
+«está dañada». Elige uno:
+
+- clic derecho sobre la app → **Abrir** → confirma;
+- `xattr -cr /Applications/ScadLab.app` (o `xattr -dr com.apple.quarantine …`);
+- Ajustes del Sistema → Privacidad y Seguridad → **Abrir de todas formas**.
+
+## Instalación
+
+1. Descarga `ScadLab-v0.1.0.dmg` desde el Release.
+2. Ábrelo y arrastra `ScadLab.app` a **Aplicaciones**.
+3. La primera vez, **clic derecho → Abrir** (no doble clic) y confirma.
+4. Si macOS dice que está dañada: `xattr -cr /Applications/ScadLab.app`.
 
 ## Requisitos de ejecución
 
-- OpenSCAD instalado (2021.01 o superior; se recomienda un snapshot 2025 para
-  exportar 3MF con colores y el backend Manifold). ScadLab lo detecta en
-  Configuración → OpenSCAD, o se le indica la ruta a mano.
+- **OpenSCAD es opcional.** Sin él, ScadLab renderiza con su **motor integrado**
+  (OpenSCAD 2025.12.30 en WebAssembly, más lento) y ofrece **Descargar OpenSCAD**
+  (60 MB, verificado con SHA-256) en Configuración → OpenSCAD. Un OpenSCAD instalado
+  (2021.01 o superior; se recomienda un snapshot 2025 para 3MF con colores y el
+  backend Manifold) se usa con preferencia.
 - Opcional: Claude Code, opencode, Codex, Antigravity u Ollama para el diseño
   asistido por IA.
+
+## Regenerar este artefacto
+
+```bash
+cat VERSION                          # 0.1.0
+./scripts/package-all.sh             # .dmg + .exe en build/bin/
+cp build/bin/ScadLab-v0.1.0.dmg releases/macos/
+shasum -a 256 releases/macos/ScadLab-v0.1.0.dmg
+```
+
+`package-macos.sh` solo corre en macOS (usa `hdiutil`). Una recompilación no da un
+binario idéntico bit a bit: si se regenera, hay que actualizar el SHA-256 de arriba.

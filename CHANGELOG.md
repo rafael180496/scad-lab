@@ -7,6 +7,8 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-16
+
 ### Agregado
 
 - **ScadLab funciona sin OpenSCAD instalado.** Antes, sin OpenSCAD el visor 3D se

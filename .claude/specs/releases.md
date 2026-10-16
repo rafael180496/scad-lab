@@ -156,34 +156,16 @@ ninguna frase exacta, cualquier mención de esas palabras clave alcanza:
    - Dejar `## [Unreleased]` en el archivo (encabezado vacío, sin
      contenido debajo) para que la próxima tanda de cambios post-release
      tenga dónde acumularse hasta el siguiente empaquetado.
-8. **Actualizar `index.html` (inglés) y `es/index.html` (español), la documentación pública.** Las dos páginas cambian juntas: mismos temas, misma insignia de versión, capturas de `docs/screenshots/` y `docs/screenshots/es/` regeneradas con `./scripts/help-shots.sh`. Es el paso que hace
-   que la versión nueva se pueda *usar*, no solo descargar: el CHANGELOG dice
-   qué cambió, y la página dice **cómo se usa**. Uno es para quien ya la tiene;
-   la otra, para quien todavía no.
-   - Por cada entrada de la versión que se acaba de volcar en el CHANGELOG,
-     preguntarse: **¿esto cambia lo que el usuario puede hacer?** Si sí, tiene
-     que estar en la página. Si es interno (un refactor, una optimización, un
-     bug que nadie llegó a notar), no va.
-   - **Módulo nuevo** → **grupo nuevo** en el índice, con un tema por asunto,
-     su captura y al menos un ejemplo de uso concreto.
-   - **Funcionalidad que es un asunto en sí mismo** → **tema nuevo**
-     (`<article class="topic">`) en el grupo que le corresponde, más su entrada
-     en el índice. Un detalle de algo ya documentado → un `<h2>` dentro del tema
-     que ya existe. No alcanza con nombrarla: la ayuda existe para que alguien
-     la use sin preguntar.
-   - **Algo que cambia el flujo de trabajo de punta a punta** → un tema más en
-     el grupo «Recetas».
-   - Actualizar la **insignia de versión** de la barra (`<span class="ver">`) y
-     la línea del pie, que nombran la versión que documenta la página.
-   - Las capturas salen de `./scripts/help-shots.sh` (banco
-     `frontend/src/uishot.tsx`, datos inventados), **nunca de una instalación
-     real**. Antes de empaquetar se regeneran todas y se revisan: toda pantalla
-     que cambió en la versión tiene que verse como en el binario que se publica.
-     Ver «Capturas de la ayuda» en `conventions.md`.
-   - Revisar además el bloque **«En desarrollo — todavía sin publicar»** del
-     `README.md`: lo que acaba de salir ya no va ahí.
-   - Ver la regla completa —incluida la anatomía de un tema— en
-     [conventions.md](../rules/conventions.md#indexhtml--la-ayuda-se-actualiza-con-el-mismo-cambio).
+8. **Solo la versión en `index.html` y `es/index.html`**: la insignia
+   (`<span class="ver">`) y la línea del pie. **Nada más.** Las capturas
+   (`./scripts/help-shots.sh`), los temas de la ayuda y el `README.md` se
+   actualizan **antes**, en el mismo cambio que agrega la funcionalidad (ver
+   [conventions.md](../rules/conventions.md#indexhtml--la-ayuda-se-actualiza-con-el-mismo-cambio)),
+   no al preparar la versión. Pedido explícito del usuario: preparar la versión
+   es CHANGELOG + bump de versión (`VERSION`, `wails.json`, insignia del
+   `index.html`) + generar `.exe` y `.dmg`, igual que mini-tools. Si al
+   preparar se detecta una pantalla o un tema desactualizado, se avisa al
+   usuario en vez de rehacer la ayuda en ese momento.
 9. **Los artefactos de `releases/<os>/` se commitean junto con el resto**: son
    exactamente lo que va a publicar el workflow, así que un tag sin ellos falla.
    Publicar es entonces **empujar el tag `vX.Y.Z`** — el release se crea solo,
