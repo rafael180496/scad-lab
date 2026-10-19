@@ -23,6 +23,11 @@ type Settings struct {
 	DefaultMaterial string  `json:"defaultMaterial"` // id de materials
 	InfillPercent   float64 `json:"infillPercent"`
 	DefaultAgent    string  `json:"defaultAgent"` // id de ai_providers
+	// SkillsDir es la carpeta de las skills propias; vacío = <datos>/skills.
+	// Solo cambia por App.ChangeSkillsFolder (que además puede mover las skills
+	// que ya hay): SaveSettings no la escribe. Es un campo más de la tabla
+	// key/value, así que no necesita migración.
+	SkillsDir string `json:"skillsDir"`
 
 	// Parámetros de la estimación de peso y costo (S7, backend/estimate). Son los
 	// valores por defecto: el panel «Impresión» los puede cambiar solo para un
@@ -437,6 +442,9 @@ func (s *Store) SaveSettings(in Settings) error {
 	// El visor se guarda solo, desde el visor (SaveViewer): la copia que tiene el
 	// diálogo de Configuración vuelve el alambre y las aristas a como estaban al abrirlo.
 	delete(fields, "viewer")
+	// La carpeta de skills propias solo cambia por su binding (puede mover las
+	// skills): el diálogo guarda una copia vieja y la devolvería a la anterior.
+	delete(fields, "skillsDir")
 	// El interruptor del servidor MCP aplica al instante (reescribe los
 	// archivos de cada workspace): el diálogo guarda una copia vieja.
 	delete(fields, "mcpEnabled")

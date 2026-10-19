@@ -1,0 +1,51 @@
+// @checkpoint parent= desc="{{.Desc}}"
+// Punto de partida de ScadLab: una base con chaflán y un pomo encima.
+// Cambia las medidas en el Customizer (panel de parámetros) o escribe tu propio
+// modelo: cada versión que guardes será un checkpoint nuevo, este no se edita.
+
+/* [Base] */
+base_width = 50;    // [20:1:150]
+base_depth = 50;    // [20:1:150]
+base_height = 6;    // [2:0.5:20]
+corner_radius = 6;  // [2:0.5:25]
+// Chaflán del borde inferior: evita la pata de elefante en la primera capa
+bottom_chamfer = 1; // [0:0.25:3]
+
+/* [Pomo] */
+knob_diameter = 22; // [8:1:60]
+knob_height = 14;   // [6:1:40]
+
+/* [Colores] */
+base_color = "#2F6FDE";
+knob_color = "#F2B134";
+
+/* [Hidden] */
+eps = 0.01;
+$fn = $preview ? 32 : 72;
+
+assert(corner_radius > bottom_chamfer, "corner_radius debe ser mayor que bottom_chamfer");
+assert(corner_radius * 2 <= min(base_width, base_depth), "corner_radius es demasiado grande para la base");
+assert(knob_diameter <= min(base_width, base_depth) - 2, "el pomo no cabe sobre la base");
+
+// ---------- Ensamblado ----------
+color(base_color) base(base_width, base_depth, base_height, corner_radius, bottom_chamfer);
+color(knob_color) translate([0, 0, base_height]) knob(knob_diameter, knob_height);
+
+// ---------- Módulos ----------
+// Base de esquinas redondeadas con chaflán en el borde inferior.
+module base(w, d, h, r, c) {
+    hull()
+        for (sx = [-1, 1], sy = [-1, 1])
+            translate([sx * (w / 2 - r), sy * (d / 2 - r), 0]) {
+                cylinder(r1 = r - c, r2 = r, h = c + eps);
+                translate([0, 0, c]) cylinder(r = r, h = h - c);
+            }
+}
+
+// Pomo: columna recta con una cúpula achatada arriba.
+module knob(d, h) {
+    dome = d / 4;
+    body = max(h - dome, dome);
+    cylinder(d = d, h = body);
+    translate([0, 0, body]) scale([1, 1, 0.5]) sphere(d = d);
+}

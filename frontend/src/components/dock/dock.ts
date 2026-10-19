@@ -380,7 +380,7 @@ function loadPreset(preset: PresetId) {
 // carrera: la captura podía salir con la capa de contenido de un panel todavía
 // con la medida anterior.
 export const dockShot: {
-    mode?: 'custom' | 'hidden' | 'tall' | 'minimized' | 'print' | 'diff'
+    mode?: 'custom' | 'hidden' | 'tall' | 'chat' | 'minimized' | 'print' | 'diff'
     /** Menú «…» del grupo de un panel a abrir; con `submenu`, entra en esa entrada (su `data-menu-id`). */
     menu?: {panel: PanelId; submenu?: string}
 } = {}
@@ -414,6 +414,10 @@ function applyShotMode() {
         case 'tall':
             // Terminal y chat: el grupo de abajo más alto, para que se vea la conversación.
             shotTools.size('agent-1', {height: 0.56})
+            break
+        case 'chat':
+            // Hermes: una conversación con pasos de herramienta e imágenes necesita casi todo el alto.
+            shotTools.size('agent-1', {height: 0.8})
             break
     }
 }

@@ -1,13 +1,103 @@
 import {useEffect, useRef, useState} from 'react'
-import {ChevronDown, MessageSquarePlus, MessagesSquare, RefreshCw, Trash2} from 'lucide-react'
-import type {store} from '../../../wailsjs/go/models'
-import {fmt, locale, useT} from '../../i18n'
+import {Check, ChevronDown, MessageSquarePlus, MessagesSquare, Pencil, Trash2, X} from 'lucide-react'
+import type {main, store} from '../../../wailsjs/go/models'
+import {locale, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
+import {MAX_CHAT_TITLE, cleanChatTitle} from '../../lib/chatRename'
 import {IconButton} from '../ui/Button'
 import {Input, Select} from '../ui/Field'
+import {ModelCombobox} from './ModelCombobox'
 
 const when = (unix: number) =>
     new Intl.DateTimeFormat(locale(), {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}).format(new Date(unix * 1000))
+
+// Una fila de la lista: abrir la conversación, o renombrarla en línea. Los
+// botones de renombrar y borrar aparecen con el cursor encima o con el foco
+// dentro (y siempre en la conversación abierta): una lista de diez conversaciones
+// con veinte botones fijos sería ruido.
+function ChatRow({
+    chat,
+    active,
+    providerName,
+    onSelect,
+    onRename,
+    onDelete,
+}: {
+    chat: store.Chat
+    active: boolean
+    providerName: string
+    onSelect: () => void
+    onRename: (title: string) => void
+    onDelete: () => void
+}) {
+    const t = useT()
+    const [editing, setEditing] = useState(false)
+    const [draft, setDraft] = useState('')
+    const name = chat.title || t.chat.untitled
+
+    const start = () => {
+        setDraft(chat.title)
+        setEditing(true)
+    }
+    // Un nombre vacío no renombra: se conserva el anterior (el backend lo rechazaría).
+    const commit = () => {
+        const clean = cleanChatTitle(draft)
+        setEditing(false)
+        if (clean && clean !== chat.title) onRename(clean)
+    }
+
+    if (editing) {
+        return (
+            <div className="flex items-center gap-1 px-2 py-1.5">
+                <Input
+                    data-autofocus
+                    autoFocus
+                    value={draft}
+                    maxLength={MAX_CHAT_TITLE * 2}
+                    title={t.chat.renameHint}
+                    placeholder={t.chat.renamePlaceholder}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                            e.preventDefault()
+                            commit()
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setEditing(false)
+                        }
+                    }}
+                    className="h-7 min-w-0 flex-1"
+                />
+                <IconButton title={t.chat.renameSave} className="size-6" onClick={commit}>
+                    <Check className="icon-ui-14" />
+                </IconButton>
+                <IconButton title={t.chat.renameCancel} className="size-6" onClick={() => setEditing(false)}>
+                    <X className="icon-ui-14" />
+                </IconButton>
+            </div>
+        )
+    }
+    return (
+        <div role="option" aria-selected={active} className={cn('group flex items-center gap-1 pr-1.5 transition-colors hover:bg-surface-2', active && 'bg-surface-2')}>
+            <button type="button" title={name} onClick={onSelect} className="no-drag flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-1.5 text-left">
+                <span className="truncate text-ui-12-5 text-fg">{name}</span>
+                <span className="truncate font-mono text-ui-10-5 text-faint">
+                    {providerName} · {chat.model} · {when(chat.updatedAt)}
+                </span>
+            </button>
+            <span className={cn('flex shrink-0 items-center opacity-0 group-focus-within:opacity-100 group-hover:opacity-100', active && 'opacity-100')}>
+                <IconButton data-testid="chat-rename" title={t.chat.renameThis} className="size-6" onClick={start}>
+                    <Pencil className="icon-ui-12" />
+                </IconButton>
+                <IconButton title={t.chat.deleteThis} className="size-6 hover:text-danger" onClick={onDelete}>
+                    <Trash2 className="icon-ui-12" />
+                </IconButton>
+            </span>
+        </div>
+    )
+}
 
 // Lista de chats del workspace, en un menú que se abre desde la cabecera: el
 // panel inferior es chico y una columna fija le quitaría ancho justo al texto.
@@ -16,11 +106,15 @@ function ChatSwitcher({
     current,
     providers,
     onSelect,
+    onRename,
+    onDelete,
 }: {
     chats: store.Chat[]
     current: store.Chat | null
-    providers: store.AIProvider[]
+    providers: store.ModelServer[]
     onSelect: (id: number) => void
+    onRename: (id: number, title: string) => void
+    onDelete: (id: number) => void
 }) {
     const t = useT()
     const [open, setOpen] = useState(false)
@@ -44,6 +138,7 @@ function ChatSwitcher({
         <div ref={root} className="relative min-w-0">
             <button
                 type="button"
+                data-testid="chat-switcher"
                 title={t.chat.chatsHint}
                 aria-haspopup="listbox"
                 aria-expanded={open}
@@ -58,32 +153,27 @@ function ChatSwitcher({
             {open ? (
                 <div
                     role="listbox"
-                    className="absolute top-8 left-0 z-20 max-h-64 w-[340px] max-w-[80vw] overflow-y-auto rounded-lg border border-line-strong bg-raised py-1 shadow-xl"
+                    className="absolute top-8 left-0 z-20 max-h-72 w-[380px] max-w-[84vw] overflow-y-auto rounded-lg border border-line-strong bg-raised py-1 shadow-xl"
                 >
                     {chats.length === 0 ? (
                         <p className="px-3 py-2 text-ui-12 text-faint">{t.chat.noChats}</p>
                     ) : (
                         chats.map((c) => (
-                            <button
+                            <ChatRow
                                 key={c.id}
-                                type="button"
-                                role="option"
-                                aria-selected={c.id === current?.id}
-                                title={name(c)}
-                                onClick={() => {
+                                chat={c}
+                                active={c.id === current?.id}
+                                providerName={providerName(c.providerId)}
+                                onSelect={() => {
                                     setOpen(false)
                                     onSelect(c.id)
                                 }}
-                                className={cn(
-                                    'flex w-full flex-col gap-0.5 px-3 py-1.5 text-left transition-colors hover:bg-surface-2',
-                                    c.id === current?.id && 'bg-surface-2',
-                                )}
-                            >
-                                <span className="truncate text-ui-12-5 text-fg">{name(c)}</span>
-                                <span className="truncate font-mono text-ui-10-5 text-faint">
-                                    {providerName(c.providerId)} · {c.model} · {when(c.updatedAt)}
-                                </span>
-                            </button>
+                                onRename={(title) => onRename(c.id, title)}
+                                onDelete={() => {
+                                    setOpen(false)
+                                    onDelete(c.id)
+                                }}
+                            />
                         ))
                     )}
                 </div>
@@ -95,7 +185,7 @@ function ChatSwitcher({
 export type ModelPicker = {
     providerId: string
     model: string
-    models: string[]
+    models: main.ModelInfo[]
     loading: boolean
     error: string
     onProvider: (id: string) => void
@@ -103,11 +193,11 @@ export type ModelPicker = {
     onReload: () => void
 }
 
-// Cabecera del chat: cambiar de conversación, abrir una nueva y elegir con qué
-// modelo. El proveedor y el modelo se eligen UNA vez, al empezar el chat: un
-// chat es una conversación con un modelo, y cambiarlo a mitad mezclaría dos
-// estilos de respuesta en el mismo historial (por eso en un chat abierto se
-// muestran fijos).
+// Cabecera del chat: cambiar de conversación (con renombrar y borrar), abrir una
+// nueva y elegir con qué modelo. El servidor y el modelo se eligen con un select
+// y un combobox de modelos con búsqueda e insignias de visión y herramientas;
+// en un chat abierto también se pueden cambiar a mitad de camino (el historial se
+// conserva y el próximo mensaje ya usa el nuevo).
 export function ChatHeader({
     chats,
     current,
@@ -115,83 +205,57 @@ export function ChatHeader({
     picker,
     onSelect,
     onNew,
+    onRename,
     onDelete,
     running,
 }: {
     chats: store.Chat[]
     current: store.Chat | null
-    providers: store.AIProvider[]
+    providers: store.ModelServer[]
     picker: ModelPicker
     onSelect: (id: number) => void
     onNew: () => void
-    onDelete: () => void
+    onRename: (id: number, title: string) => void
+    onDelete: (id: number) => void
     running: boolean
 }) {
     const t = useT()
-    const providerName = (id: string) => providers.find((p) => p.id === id)?.name ?? id
     return (
         // Envuelve a una segunda fila si no cabe: nunca corta un control.
         <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-line py-1 pr-1.5 pl-1.5">
-            <ChatSwitcher chats={chats} current={current} providers={providers} onSelect={onSelect} />
+            <ChatSwitcher chats={chats} current={current} providers={providers} onSelect={onSelect} onRename={onRename} onDelete={onDelete} />
             <IconButton title={t.chat.newChatHint} onClick={onNew} disabled={!current}>
                 <MessageSquarePlus className="icon-ui-14" />
             </IconButton>
 
             <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.5">
-                {current ? (
-                    <>
-                        <span
-                            className="selectable min-w-0 truncate rounded border border-line px-1.5 py-0.5 font-mono text-ui-10-5 text-muted"
-                            title={t.chat.fixedModelHint}
-                        >
-                            {providerName(current.providerId)} · {current.model}
-                        </span>
-                        <IconButton title={running ? t.chat.deleteBusyHint : t.chat.deleteHint} onClick={onDelete}>
-                            <Trash2 className="icon-ui-14" />
-                        </IconButton>
-                    </>
-                ) : (
-                    <>
-                        <Select
-                            value={picker.providerId}
-                            title={t.chat.providerHint}
-                            onChange={(e) => picker.onProvider(e.target.value)}
-                            className="h-7 w-[12.5em] max-w-full text-ui-12"
-                        >
-                            {providers.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.name}
-                                </option>
-                            ))}
-                        </Select>
-                        {picker.models.length > 0 ? (
-                            <Select
-                                value={picker.model}
-                                title={t.chat.modelHint}
-                                onChange={(e) => picker.onModel(e.target.value)}
-                                className="h-7 w-[16em] max-w-full text-ui-12"
-                            >
-                                {!picker.models.includes(picker.model) ? <option value={picker.model}>{picker.model || t.chat.pickModel}</option> : null}
-                                {picker.models.map((m) => (
-                                    <option key={m} value={m}>
-                                        {m}
-                                    </option>
-                                ))}
-                            </Select>
-                        ) : (
-                            <Input
-                                value={picker.model}
-                                title={picker.error ? fmt(t.chat.modelsError, {msg: picker.error}) : t.chat.modelTypeHint}
-                                placeholder={t.chat.modelPlaceholder}
-                                onChange={(e) => picker.onModel(e.target.value)}
-                                className={cn('h-7 w-[16em] max-w-full text-ui-12', picker.error && 'border-warn')}
-                            />
-                        )}
-                        <IconButton title={picker.error ? fmt(t.chat.modelsError, {msg: picker.error}) : t.chat.reloadModels} onClick={picker.onReload}>
-                            <RefreshCw className={cn('icon-ui-14', picker.loading && 'animate-spin', picker.error && 'text-warn')} />
-                        </IconButton>
-                    </>
-                )}
+                <Select
+                    value={picker.providerId}
+                    title={running ? t.chat.modelBusyHint : current ? t.chat.providerSwitchHint : t.chat.providerHint}
+                    disabled={running}
+                    onChange={(e) => picker.onProvider(e.target.value)}
+                    className="h-7 w-[12.5em] max-w-full text-ui-12"
+                >
+                    {providers.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.name}
+                        </option>
+                    ))}
+                    {/* El servidor de un chat viejo puede estar borrado o apagado: sigue visible, y se puede cambiar. */}
+                    {picker.providerId && !providers.some((p) => p.id === picker.providerId) ? (
+                        <option value={picker.providerId}>{picker.providerId}</option>
+                    ) : null}
+                </Select>
+                <ModelCombobox
+                    models={picker.models}
+                    value={picker.model}
+                    onChange={picker.onModel}
+                    loading={picker.loading}
+                    error={picker.error}
+                    onReload={picker.onReload}
+                    disabled={running}
+                    className="w-[22em] max-w-full"
+                />
             </div>
         </div>
     )

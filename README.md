@@ -23,7 +23,8 @@ pendiente es la verificación manual en ventanas reales (ver abajo).
 
 | | Estado |
 |---|---|
-| Workspaces con reglas para la IA y skills de modelado para todos los agentes; detección de OpenSCAD y de los CLIs; configuración de Ollama / OpenAI / Anthropic | ✅ |
+| Workspaces con reglas para la IA y skills de modelado para todos los agentes; detección de OpenSCAD y de los CLIs; primer `.scad` de entrada en cada workspace nuevo | ✅ |
+| Proveedores de IA (Ollama local o remoto, OpenAI-compatible, OpenRouter, Gemini, Anthropic…) con claves cifradas con tu contraseña maestra (que puedes recordar en el llavero del sistema) y «Probar conexión» | ✅ |
 | Árbol de checkpoints inmutables con ramas, padre activo, papelera, renombrar, comparar con el padre y retomar la sesión que los creó | ✅ |
 | Render con OpenSCAD (Manifold/CGAL), caché de mallas, diagnósticos con línea y `RENDER_ERRORS.md` | ✅ |
 | Visor 3D PBR: siete vistas, wireframe, aristas, ortográfica/perspectiva, vista dividida, captura PNG | ✅ |
@@ -31,7 +32,8 @@ pendiente es la verificación manual en ventanas reales (ver abajo).
 | Editor Monaco con resaltado OpenSCAD, linter (SL001–SL009), formateo, autocompletado y guardar como checkpoint | ✅ |
 | Paneles acoplables (mover, dividir, flotar, minimizar, ocultar), diseños guardados y modo enfoque | ✅ |
 | Varios proyectos a la vez: pestañas de proyecto (hasta 4) con indicadores de fondo | ✅ |
-| Terminal integrada con el agente (PTY), sesiones, auto-iteración de errores y chat con modelos | ✅ |
+| Terminal integrada con el agente (PTY), sesiones y auto-iteración de errores | ✅ |
+| Hermes: chat que usa las herramientas de ScadLab (crea, renderiza, mira, mide y corrige checkpoints), con adjuntos (imágenes y modelos STL/3MF/OBJ), conversaciones, tokens y costo | ✅ |
 | Servidor MCP de OpenSCAD (`render`, `measure`, `preview`, `export`…) configurado solo en cada CLI | ✅ |
 | Exportación STL / 3MF multicolor para Bambu (una parte por color con su extrusor) / STL por color / PNG, y abrir en Bambu Studio | ✅ |
 | Interfaz y ayuda en inglés y español | ✅ |

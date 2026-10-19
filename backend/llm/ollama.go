@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -20,25 +21,28 @@ type ollamaClient struct {
 	numCtx int
 }
 
+func (c *ollamaClient) Version(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, controlTimeout)
+	defer cancel()
+	var out struct {
+		Version string `json:"version"`
+	}
+	if err := c.getJSON(ctx, "/api/version", &out); err != nil {
+		return "", err
+	}
+	return out.Version, nil
+}
+
 func (c *ollamaClient) Models(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, controlTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/api/tags", nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := c.do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 	var out struct {
 		Models []struct {
 			Name string `json:"name"`
 		} `json:"models"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&out); err != nil {
-		return nil, i18n.Errorf(i18n.Msg{ES: "la respuesta de %s no es la de un servidor Ollama: %w", EN: "the response from %s is not from an Ollama server: %w"}, c.base, err)
+	if err := c.getJSON(ctx, "/api/tags", &out); err != nil {
+		return nil, err
 	}
 	names := make([]string, 0, len(out.Models))
 	for _, m := range out.Models {
@@ -49,70 +53,132 @@ func (c *ollamaClient) Models(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+func (c *ollamaClient) getJSON(ctx context.Context, path string, into any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(into); err != nil {
+		return i18n.Errorf(i18n.Msg{ES: "la respuesta de %s no es la de un servidor Ollama: %w", EN: "the response from %s is not from an Ollama server: %w"}, c.base, err)
+	}
+	return nil
+}
+
+// --- /api/chat ------------------------------------------------------------
+
 type ollamaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string           `json:"role"`
+	Content   string           `json:"content"`
+	Thinking  string           `json:"thinking,omitempty"`
+	Images    []string         `json:"images,omitempty"`
+	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
+	ToolName  string           `json:"tool_name,omitempty"`
+}
+
+type ollamaToolCall struct {
+	Function struct {
+		Name      string         `json:"name"`
+		Arguments map[string]any `json:"arguments"`
+	} `json:"function"`
+}
+
+type ollamaTool struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		Parameters  map[string]any `json:"parameters,omitempty"`
+	} `json:"function"`
 }
 
 type ollamaChatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
+	Tools    []ollamaTool    `json:"tools,omitempty"`
 	Stream   bool            `json:"stream"`
 	Options  *ollamaOptions  `json:"options,omitempty"`
 }
 
-// ollamaOptions: hoy solo la ventana de contexto. Ollama arranca con 2k-4k
-// tokens y recorta el prompt SIN avisar, así que un prompt de sistema largo
-// más el código del checkpoint se comería el mensaje del usuario.
+// ollamaOptions son los parámetros del modelo que acepta /api/chat. Hoy solo
+// la ventana de contexto: Ollama arranca con 2k-4k tokens y recorta el prompt
+// sin avisar, así que sin esto un system prompt largo se come el mensaje.
 type ollamaOptions struct {
 	NumCtx int `json:"num_ctx,omitempty"`
 }
 
 type ollamaChunk struct {
-	Model   string `json:"model"`
-	Message struct {
-		Content string `json:"content"`
-	} `json:"message"`
-	Done  bool   `json:"done"`
-	Error string `json:"error"`
+	Model           string        `json:"model"`
+	Message         ollamaMessage `json:"message"`
+	Done            bool          `json:"done"`
+	PromptEvalCount int64         `json:"prompt_eval_count"`
+	EvalCount       int64         `json:"eval_count"`
+	Error           string        `json:"error"`
 }
 
-func (c *ollamaClient) Chat(ctx context.Context, req ChatRequest, onDelta func(string)) (Result, error) {
+func (c *ollamaClient) Chat(ctx context.Context, req ChatRequest, onDelta func(Delta)) (ChatResult, error) {
 	if strings.TrimSpace(req.Model) == "" {
-		return Result{}, i18n.New(i18n.Msg{ES: "falta elegir el modelo", EN: "the model is missing"})
+		return ChatResult{}, i18n.Errorf(i18n.Msg{ES: "llm: falta el modelo", EN: "llm: the model is missing"})
 	}
 	body := ollamaChatRequest{Model: req.Model, Stream: true}
 	if c.numCtx > 0 {
 		body.Options = &ollamaOptions{NumCtx: c.numCtx}
 	}
-	if req.System != "" {
-		body.Messages = append(body.Messages, ollamaMessage{Role: "system", Content: req.System})
-	}
 	for _, m := range req.Messages {
-		body.Messages = append(body.Messages, ollamaMessage{Role: m.Role, Content: m.Content})
+		om := ollamaMessage{Role: m.Role, Content: m.Content}
+		for _, img := range m.Images {
+			b64, _, err := readImage(img)
+			if err != nil {
+				return ChatResult{}, err
+			}
+			om.Images = append(om.Images, b64)
+		}
+		for _, tc := range m.ToolCalls {
+			var call ollamaToolCall
+			call.Function.Name = tc.Name
+			call.Function.Arguments = tc.Arguments
+			if call.Function.Arguments == nil {
+				call.Function.Arguments = map[string]any{}
+			}
+			om.ToolCalls = append(om.ToolCalls, call)
+		}
+		if m.Role == RoleTool {
+			om.ToolName = m.Name
+		}
+		body.Messages = append(body.Messages, om)
 	}
+	for _, t := range req.Tools {
+		var ot ollamaTool
+		ot.Type = "function"
+		ot.Function.Name = t.Name
+		ot.Function.Description = t.Description
+		ot.Function.Parameters = t.Parameters
+		body.Tools = append(body.Tools, ot)
+	}
+
 	raw, err := json.Marshal(body)
 	if err != nil {
-		return Result{}, err
+		return ChatResult{}, err
 	}
 	hr, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"/api/chat", bytes.NewReader(raw))
 	if err != nil {
-		return Result{}, err
+		return ChatResult{}, err
 	}
 	hr.Header.Set("Content-Type", "application/json")
 	resp, err := c.do(hr)
 	if err != nil {
-		return Result{}, err
+		return ChatResult{}, err
 	}
 	defer resp.Body.Close()
 
-	var text strings.Builder
-	res := Result{Model: req.Model}
+	var text, thinking strings.Builder
+	res := ChatResult{Model: req.Model}
+	var calls []ToolCall
 	finished := false
-	fail := func(err error) (Result, error) {
-		res.Text = text.String()
-		return res, err
-	}
 
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 0, 64*1024), maxLine)
@@ -128,34 +194,49 @@ func (c *ollamaClient) Chat(ctx context.Context, req ChatRequest, onDelta func(s
 			continue
 		}
 		if ch.Error != "" {
-			return fail(i18n.Errorf(i18n.Msg{ES: "el servidor %s respondió con un error: %s", EN: "the server %s answered with an error: %s"}, c.base, trimSnippet(ch.Error, nil)))
+			return ChatResult{}, i18n.Errorf(i18n.Msg{ES: "el servidor %s respondió con un error: %s", EN: "the server %s answered with an error: %s"}, c.base, trimSnippet(ch.Error, nil))
 		}
 		if ch.Model != "" {
 			res.Model = ch.Model
 		}
+		if t := ch.Message.Thinking; t != "" {
+			thinking.WriteString(t)
+			if onDelta != nil {
+				onDelta(Delta{Thinking: t})
+			}
+		}
 		if t := ch.Message.Content; t != "" {
 			text.WriteString(t)
 			if onDelta != nil {
-				onDelta(t)
+				onDelta(Delta{Text: t})
 			}
+		}
+		for _, tc := range ch.Message.ToolCalls {
+			calls = append(calls, ToolCall{
+				// Ollama no manda id: se inventa uno estable dentro del turno.
+				ID:        fmt.Sprintf("call_%d", len(calls)),
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			})
 		}
 		if ch.Done {
 			finished = true
+			res.Usage = Usage{Input: ch.PromptEvalCount, Output: ch.EvalCount}
 		}
 	}
 	if err := sc.Err(); err != nil {
 		if ctx.Err() != nil {
-			return fail(ctx.Err())
+			return ChatResult{}, ctx.Err()
 		}
-		return fail(interruptedError(c.base, err))
+		return ChatResult{}, interruptedError(c.base, err)
 	}
 	if ctx.Err() != nil {
-		return fail(ctx.Err())
+		return ChatResult{}, ctx.Err()
 	}
 	if !finished {
-		return fail(endedError(c.base))
+		return ChatResult{}, endedError(c.base)
 	}
-	res.Text = text.String()
+	res.Message = Message{Role: RoleAssistant, Content: text.String(), ToolCalls: calls}
 	return res, nil
 }
 

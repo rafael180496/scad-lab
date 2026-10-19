@@ -30,6 +30,10 @@ func newTestApp(t *testing.T) *App {
 	if err := st.SaveSettings(s); err != nil {
 		t.Fatal(err)
 	}
+	// Las fixtures arman su propio árbol de checkpoints: sin el .scad por defecto.
+	prev := skipStarter
+	skipStarter = true
+	t.Cleanup(func() { skipStarter = prev })
 	return &App{ctx: context.Background(), store: st, dataDir: dir, engine: eng}
 }
 

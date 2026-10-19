@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -20,20 +21,26 @@ type fakeClient struct {
 	hold   bool
 }
 
+func (f *fakeClient) Version(context.Context) (string, error) { return "", nil }
+
 func (f *fakeClient) Models(context.Context) ([]string, error) { return nil, nil }
 
-func (f *fakeClient) Chat(ctx context.Context, _ llm.ChatRequest, onDelta func(string)) (llm.Result, error) {
-	var text strings.Builder
+// Chat imita a los clientes reales: ante un error o una cancelación devuelve el
+// resultado vacío (lo escrito hasta ahí solo está en los deltas).
+func (f *fakeClient) Chat(ctx context.Context, _ llm.ChatRequest, onDelta func(llm.Delta)) (llm.ChatResult, error) {
 	for _, c := range f.chunks {
-		text.WriteString(c)
-		onDelta(c)
+		onDelta(llm.Delta{Thinking: "pienso"}) // el pensamiento nunca entra en el texto
+		onDelta(llm.Delta{Text: c})
 		time.Sleep(f.pause)
 	}
 	if f.hold {
 		<-ctx.Done()
-		return llm.Result{Text: text.String()}, ctx.Err()
+		return llm.ChatResult{}, ctx.Err()
 	}
-	return llm.Result{Text: text.String()}, f.err
+	if f.err != nil {
+		return llm.ChatResult{}, f.err
+	}
+	return llm.ChatResult{Message: llm.Message{Role: llm.RoleAssistant, Content: strings.Join(f.chunks, "")}, Usage: llm.Usage{Input: 12, Output: 3}, Model: "m-real"}, nil
 }
 
 type sink struct {
@@ -268,5 +275,71 @@ func TestMergeRoles(t *testing.T) {
 	}
 	if in[0].Content != "uno" {
 		t.Error("no debe mutar la entrada")
+	}
+}
+
+// CleanTitle valida el nombre que la persona escribió para una conversación.
+func TestCleanTitle(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                       "",
+		" \n\t ":                 "",
+		"  Mi   caja \n de Pi  ": "Mi caja de Pi",
+		"ñandú":                  "ñandú",
+		strings.Repeat("ñ", 300): strings.Repeat("ñ", MaxTitleRunes),
+	} {
+		if got := CleanTitle(in); got != want {
+			t.Errorf("CleanTitle(%q)=%q, esperaba %q", in, got, want)
+		}
+	}
+	// Un corte a media palabra no deja un espacio al final.
+	long := strings.Repeat("a ", 100)
+	if got := CleanTitle(long); got != strings.TrimSpace(got) || len([]rune(got)) > MaxTitleRunes {
+		t.Errorf("título largo: %q", got)
+	}
+}
+
+// Stream.Flush manda ya lo pendiente: el texto que precede a un paso de
+// herramienta no puede llegar después de él. Close lo manda y no acepta más, y
+// Snapshot ve el mismo orden que la pantalla.
+func TestStreamFlushAndSnapshot(t *testing.T) {
+	m := NewManager()
+	turn, err := m.Begin(context.Background(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer turn.End()
+	var mu sync.Mutex
+	var got []string
+	s := turn.Stream(func(seq int, text string) {
+		mu.Lock()
+		got = append(got, fmt.Sprintf("%d:%s", seq, text))
+		mu.Unlock()
+	})
+	s.Add("uno ")
+	s.Add("dos") // dentro del intervalo: se agrupa con lo anterior si no hubo flush
+	s.Flush()
+	mu.Lock()
+	n := len(got)
+	joined := strings.Join(got, "|")
+	mu.Unlock()
+	if n == 0 || !strings.Contains(joined, "uno ") || !strings.Contains(joined, "dos") {
+		t.Fatalf("Flush debía mandar todo lo pendiente: %v", got)
+	}
+	running, partial, seq := m.Snapshot(7)
+	if !running || partial != "uno dos" || seq != n {
+		t.Errorf("snapshot: %v %q %d (eventos %d)", running, partial, seq, n)
+	}
+	s.Add("tres")
+	s.Close()
+	s.Add("cuatro") // tras Close se ignora
+	if _, partial, _ := m.Snapshot(7); partial != "uno dostres" {
+		t.Errorf("tras Close: %q", partial)
+	}
+	if turn.WasCancelled() {
+		t.Error("no se canceló")
+	}
+	m.Cancel(7)
+	if !turn.WasCancelled() {
+		t.Error("tras Cancel debía figurar cancelado")
 	}
 }

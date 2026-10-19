@@ -267,6 +267,87 @@ export namespace exporter {
 
 }
 
+export namespace hermes {
+	
+	export class Attachment {
+	    id: string;
+	    kind: string;
+	    name: string;
+	    mime: string;
+	    size: number;
+	    thumbDataUrl: string;
+	    refPath: string;
+	    summary: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Attachment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.mime = source["mime"];
+	        this.size = source["size"];
+	        this.thumbDataUrl = source["thumbDataUrl"];
+	        this.refPath = source["refPath"];
+	        this.summary = source["summary"];
+	    }
+	}
+	export class Step {
+	    id: string;
+	    index: number;
+	    tool: string;
+	    args: Record<string, any>;
+	    status: string;
+	    text: string;
+	    images: string[];
+	    durationMs: number;
+	    textAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Step(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.index = source["index"];
+	        this.tool = source["tool"];
+	        this.args = source["args"];
+	        this.status = source["status"];
+	        this.text = source["text"];
+	        this.images = source["images"];
+	        this.durationMs = source["durationMs"];
+	        this.textAt = source["textAt"];
+	    }
+	}
+	export class Usage {
+	    inputTokens: number;
+	    outputTokens: number;
+	    cacheRead: number;
+	    cacheWrite: number;
+	    thinking: number;
+	    costUsd: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Usage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.cacheRead = source["cacheRead"];
+	        this.cacheWrite = source["cacheWrite"];
+	        this.thinking = source["thinking"];
+	        this.costUsd = source["costUsd"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class AgentChoice {
@@ -357,6 +438,8 @@ export namespace main {
 	    running: boolean;
 	    partial: string;
 	    partialSeq: number;
+	    steps: hermes.Step[];
+	    usage: hermes.Usage;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatView(source);
@@ -369,6 +452,8 @@ export namespace main {
 	        this.running = source["running"];
 	        this.partial = source["partial"];
 	        this.partialSeq = source["partialSeq"];
+	        this.steps = this.convertValues(source["steps"], hermes.Step);
+	        this.usage = this.convertValues(source["usage"], hermes.Usage);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -425,6 +510,38 @@ export namespace main {
 	        this.chatId = source["chatId"];
 	    }
 	}
+	export class DeleteSkillResult {
+	    trash: string;
+	    removed: number;
+	    kept: string[];
+	    syncError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeleteSkillResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.trash = source["trash"];
+	        this.removed = source["removed"];
+	        this.kept = source["kept"];
+	        this.syncError = source["syncError"];
+	    }
+	}
+	export class LastModel {
+	    serverId: string;
+	    model: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LastModel(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.serverId = source["serverId"];
+	        this.model = source["model"];
+	    }
+	}
 	export class MCPStatus {
 	    enabled: boolean;
 	    binary: string;
@@ -470,6 +587,32 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class ModelInfo {
+	    id: string;
+	    vision: boolean;
+	    visionKnown: boolean;
+	    tools: boolean;
+	    toolsKnown: boolean;
+	    contextTokens: number;
+	    promptPricePerM: number;
+	    completionPricePerM: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.vision = source["vision"];
+	        this.visionKnown = source["visionKnown"];
+	        this.tools = source["tools"];
+	        this.toolsKnown = source["toolsKnown"];
+	        this.contextTokens = source["contextTokens"];
+	        this.promptPricePerM = source["promptPricePerM"];
+	        this.completionPricePerM = source["completionPricePerM"];
+	    }
 	}
 	export class OpenProjectEntry {
 	    workspace: store.Workspace;
@@ -581,6 +724,94 @@ export namespace main {
 	        this.agentsAlive = source["agentsAlive"];
 	    }
 	}
+	export class RenameSkillResult {
+	    name: string;
+	    removed: number;
+	    kept: string[];
+	    syncError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RenameSkillResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.removed = source["removed"];
+	        this.kept = source["kept"];
+	        this.syncError = source["syncError"];
+	    }
+	}
+	export class SaveSkillFileResult {
+	    saved: boolean;
+	    diagnostics: skills.Diagnostic[];
+	    syncError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveSkillFileResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.saved = source["saved"];
+	        this.diagnostics = this.convertValues(source["diagnostics"], skills.Diagnostic);
+	        this.syncError = source["syncError"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SendOptions {
+	    agent: boolean;
+	    maxSteps: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.agent = source["agent"];
+	        this.maxSteps = source["maxSteps"];
+	    }
+	}
+	export class ServerProbe {
+	    ok: boolean;
+	    status: number;
+	    message: string;
+	    models: number;
+	    modelIds: string[];
+	    latencyMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ServerProbe(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	        this.models = source["models"];
+	        this.modelIds = source["modelIds"];
+	        this.latencyMs = source["latencyMs"];
+	    }
+	}
 	export class SkillView {
 	    name: string;
 	    description: string;
@@ -599,6 +830,44 @@ export namespace main {
 	        this.source = source["source"];
 	        this.dir = source["dir"];
 	        this.enabled = source["enabled"];
+	    }
+	}
+	export class SkillsFolder {
+	    path: string;
+	    default: string;
+	    custom: boolean;
+	    exists: boolean;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillsFolder(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.default = source["default"];
+	        this.custom = source["custom"];
+	        this.exists = source["exists"];
+	        this.count = source["count"];
+	    }
+	}
+	export class SkillsFolderChange {
+	    path: string;
+	    moved: string[];
+	    skipped: string[];
+	    syncError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SkillsFolderChange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.moved = source["moved"];
+	        this.skipped = source["skipped"];
+	        this.syncError = source["syncError"];
 	    }
 	}
 	export class Slicer {
@@ -655,6 +924,42 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.data = source["data"];
 	        this.seq = source["seq"];
+	    }
+	}
+	export class VaultResult {
+	    rememberFailed: boolean;
+	    detail: string;
+	    lostKeys: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VaultResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rememberFailed = source["rememberFailed"];
+	        this.detail = source["detail"];
+	        this.lostKeys = source["lostKeys"];
+	    }
+	}
+	export class VaultStatus {
+	    initialized: boolean;
+	    unlocked: boolean;
+	    remembered: boolean;
+	    keyringAvailable: boolean;
+	    keyringDetail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new VaultStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.initialized = source["initialized"];
+	        this.unlocked = source["unlocked"];
+	        this.remembered = source["remembered"];
+	        this.keyringAvailable = source["keyringAvailable"];
+	        this.keyringDetail = source["keyringDetail"];
 	    }
 	}
 	export class WorkspaceView {
@@ -1158,6 +1463,45 @@ export namespace scad {
 
 }
 
+export namespace skills {
+	
+	export class Diagnostic {
+	    line: number;
+	    severity: string;
+	    code: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Diagnostic(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.line = source["line"];
+	        this.severity = source["severity"];
+	        this.code = source["code"];
+	        this.message = source["message"];
+	    }
+	}
+	export class File {
+	    path: string;
+	    size: number;
+	    text: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new File(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.text = source["text"];
+	    }
+	}
+
+}
+
 export namespace store {
 	
 	export class AIProvider {
@@ -1232,6 +1576,10 @@ export namespace store {
 	    role: string;
 	    content: string;
 	    createdAt: number;
+	    parts: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    costUsd: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatMessage(source);
@@ -1244,6 +1592,10 @@ export namespace store {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.createdAt = source["createdAt"];
+	        this.parts = source["parts"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.costUsd = source["costUsd"];
 	    }
 	}
 	export class Checkpoint {
@@ -1336,6 +1688,40 @@ export namespace store {
 	        this.costPerKg = source["costPerKg"];
 	    }
 	}
+	export class ModelServer {
+	    id: string;
+	    kind: string;
+	    preset: string;
+	    name: string;
+	    baseUrl: string;
+	    apiKeyEnv: string;
+	    hasToken: boolean;
+	    defaultModel: string;
+	    contextTokens: number;
+	    enabled: boolean;
+	    sortOrder: number;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelServer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.preset = source["preset"];
+	        this.name = source["name"];
+	        this.baseUrl = source["baseUrl"];
+	        this.apiKeyEnv = source["apiKeyEnv"];
+	        this.hasToken = source["hasToken"];
+	        this.defaultModel = source["defaultModel"];
+	        this.contextTokens = source["contextTokens"];
+	        this.enabled = source["enabled"];
+	        this.sortOrder = source["sortOrder"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class ViewerState {
 	    wireframe: boolean;
 	    edges: boolean;
@@ -1368,6 +1754,7 @@ export namespace store {
 	    defaultMaterial: string;
 	    infillPercent: number;
 	    defaultAgent: string;
+	    skillsDir: string;
 	    wallLoops: number;
 	    lineWidthMm: number;
 	    filamentDiameterMm: number;
@@ -1407,6 +1794,7 @@ export namespace store {
 	        this.defaultMaterial = source["defaultMaterial"];
 	        this.infillPercent = source["infillPercent"];
 	        this.defaultAgent = source["defaultAgent"];
+	        this.skillsDir = source["skillsDir"];
 	        this.wallLoops = source["wallLoops"];
 	        this.lineWidthMm = source["lineWidthMm"];
 	        this.filamentDiameterMm = source["filamentDiameterMm"];

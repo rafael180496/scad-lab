@@ -20,7 +20,7 @@ func TestIntegrationOllamaShortTurn(t *testing.T) {
 	if url == "" {
 		url = "http://localhost:11434"
 	}
-	c, err := New(KindOllama, url, Options{NumCtx: 4096})
+	c, err := New(KindOllama, url, Options{ContextTokens: 4096})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,15 +39,17 @@ func TestIntegrationOllamaShortTurn(t *testing.T) {
 	}
 	var deltas int
 	res, err := c.Chat(ctx, ChatRequest{
-		Model:    model,
-		System:   "Respondé en una sola palabra.",
-		Messages: []Message{{Role: RoleUser, Content: "Decí OK."}},
-	}, func(string) { deltas++ })
+		Model: model,
+		Messages: []Message{
+			{Role: RoleSystem, Content: "Responde en una sola palabra."},
+			{Role: RoleUser, Content: "Di OK."},
+		},
+	}, func(Delta) { deltas++ })
 	if err != nil {
 		t.Fatalf("turno con %s: %v", model, err)
 	}
-	if strings.TrimSpace(res.Text) == "" || deltas == 0 {
+	if strings.TrimSpace(res.Message.Content) == "" || deltas == 0 {
 		t.Fatalf("respuesta vacía (%d deltas): %+v", deltas, res)
 	}
-	t.Logf("%s respondió %q en %d trozos", model, res.Text, deltas)
+	t.Logf("%s respondió %q en %d trozos (%d tokens)", model, res.Message.Content, deltas, res.Usage.Output)
 }

@@ -11,6 +11,7 @@ import {appearance} from '../../lib/appearance'
 import {isMac} from '../../lib/platform'
 import {t as tNow} from '../../i18n'
 import {base64ToBytes, onTerminalData, onTerminalExit, type TerminalDataEvent} from './events'
+import {stripQueryReplies} from './queryReplies'
 import {monoFont, terminalTheme} from './termTheme'
 
 // Una terminal xterm.js enganchada a un PTY del backend.
@@ -97,24 +98,46 @@ export function TerminalView({
             return true
         })
 
+        // Cuántas escrituras de REPRODUCCIÓN siguen sin procesar. Mientras haya
+        // alguna, xterm puede estar contestando consultas que el agente hizo hace
+        // rato (DA, posición del cursor, colores…) y esas respuestas no se mandan al
+        // PTY: llegarían cuando el agente ya arrancó y se leerían como texto
+        // tecleado (`^[[?1;2c` en su primera línea). Se baja en el callback de
+        // `write`, que corre cuando xterm terminó de procesar los datos —y con
+        // ellos sus respuestas—. Lo que la persona teclee en esos milisegundos
+        // pasa, menos esas secuencias.
+        let replaying = 0
+        const replay = (bytes: Uint8Array) => {
+            if (bytes.length === 0) return
+            replaying++
+            x.write(bytes, () => {
+                replaying--
+            })
+        }
         const input = x.onData((data) => {
-            void WriteTerminal(termId, data).catch(() => {})
+            const out = replaying > 0 ? stripQueryReplies(data) : data
+            if (out !== '') void WriteTerminal(termId, out).catch(() => {})
         })
 
         // ── Reenganche: captura + eventos en vivo, unidos por seq ──────────
         let live = false
         let next = 0 // desplazamiento esperado del próximo byte
         const pending: TerminalDataEvent[] = []
-        const apply = (ev: TerminalDataEvent) => {
+        // replayed = ya pasó mientras esta vista no estaba enganchada (los eventos que
+        // llegaron antes de terminar de pedir la captura): se reproducen como la
+        // captura, sin contestar. Lo posterior, en vivo, sí se contesta.
+        const apply = (ev: TerminalDataEvent, replayed: boolean) => {
             const bytes = base64ToBytes(ev.data)
             const end = ev.seq + bytes.length
             if (end <= next) return // ya estaba en la captura
-            x.write(ev.seq < next ? bytes.subarray(next - ev.seq) : bytes)
+            const fresh = ev.seq < next ? bytes.subarray(next - ev.seq) : bytes
+            if (replayed) replay(fresh)
+            else x.write(fresh)
             next = end
         }
         const offData = onTerminalData((ev) => {
             if (ev.id !== termId) return
-            if (live) apply(ev)
+            if (live) apply(ev, false)
             else pending.push(ev)
         })
         const offExit = onTerminalExit((ev) => {
@@ -124,12 +147,12 @@ export function TerminalView({
         })
         const goLive = () => {
             live = true
-            for (const ev of pending.splice(0)) apply(ev)
+            for (const ev of pending.splice(0)) apply(ev, true)
             refit.current()
         }
         ReadTerminalBuffer(termId)
             .then((snap) => {
-                x.write(base64ToBytes(snap.data))
+                replay(base64ToBytes(snap.data))
                 next = snap.seq
             })
             // El proceso ya no existe (terminó antes de reenganchar): no hay

@@ -34,8 +34,17 @@ settings-general    settings-general  1280  820
 settings-openscad   settings-openscad 1280  820
 settings-openscad-download settings-openscad-download 1280 1000
 settings-ai         settings-ai       1280  900
+settings-providers  settings-providers 1280 940
+settings-providers-add settings-providers-add 1280 1500
+vault-create        vault-create      1280  940
+vault-unlock        vault-unlock      1280  820
 settings-printing   settings-printing 1280  920
-settings-skills     settings-skills   1280  860
+settings-skills     settings-skills   1280 1000
+skills-editor       skills-editor     1440  900
+skills-editor-errors skills-editor-errors 1440 900
+skills-view         skills-view       1440  900
+skills-delete       skills-delete     1280  860
+skills-folder       skills-folder     1280  860
 settings-mcp        settings-mcp      1280  900
 settings-about      settings-about    1280  700
 app-main-light      main              1440  900
@@ -45,6 +54,10 @@ terminal-mcp        terminal-mcp      1440  900
 chat                chat              1440  900
 chat-empty          chat-empty        1440  900
 chat-new            chat-new          1440  900
+chat-models         chat-models       1440  900
+chat-agent-steps    chat-agent-steps  1440 1160
+chat-attachments    chat-attachments  1440  900
+chat-conversations  chat-conversations 1440 900
 settings-appearance settings-appearance 1280 980
 appearance-150      appearance-150    1440  900  150
 small-1024          small             1024  640

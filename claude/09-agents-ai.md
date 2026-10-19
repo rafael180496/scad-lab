@@ -8,11 +8,15 @@ Mismo catálogo que mini-tools.
 | `opencode` | CLI | `opencode` | lee `AGENTS.md`, `.opencode/skills` (y `.claude/skills`) |
 | `codex` | CLI | `codex` | lee `AGENTS.md`, `.agents/skills` |
 | `antigravity` | CLI | `agy` | antes Gemini CLI: se detecta también `gemini`; `.agent/skills` |
-| `ollama` | servidor | — | `baseUrl`, `model`; `OllamaModels` prueba y lista |
-| `openai` | servidor | — | cualquier API compatible (LM Studio, vLLM, OpenRouter); `apiKeyEnv` |
-| `anthropic` | servidor | — | API de Anthropic; `apiKeyEnv` |
+| `ollama` | servidor | — | Ollama local o remoto (varios); desde S12 vive en `model_servers` |
+| `openai` | servidor | — | cualquier API compatible: OpenAI, OpenRouter, Google Gemini (su endpoint compatible), LM Studio, llama.cpp, vLLM, Groq, DeepSeek, Mistral, Together, xAI. OpenRouter y Gemini son **atajos** del tipo `openai` |
+| `anthropic` | servidor | — | API de Anthropic (SDK oficial) |
 
-- Las API keys **no** se guardan: `config.apiKeyEnv` nombra la variable.
+- Las API keys de los servidores (S12) van **cifradas** (AES-256-GCM) con una llave derivada
+  (argon2id) de la contraseña maestra, que se recuerda en el llavero del SO solo si el usuario lo
+  elige (`backend/vaultgate`, [21-llavero.md](21-llavero.md)), o se leen de la variable de entorno que
+  nombra `apiKeyEnv`. Nunca viajan al frontend ni se escriben en un log o error. Ver
+  [19-hermes.md](19-hermes.md) y [06-go-react-contract.md](06-go-react-contract.md#servidores-de-modelos--app_serversgo-s12-121).
 - Cada workspace lleva `CLAUDE.md` y `AGENTS.md` con las mismas reglas
   (generadas de `assets/workspace/RULES.md.tmpl`), entre ellas: nunca
   sobrescribir checkpoints, color obligatorio, validar, respetar la placa y
@@ -38,9 +42,13 @@ Mismo catálogo que mini-tools.
   solo el checkpoint más nuevo con error; `prompts.Nudge` + Enter aparte (los
   CLIs con Ink/Bubble Tea toman un `\r` pegado como salto de línea); una vez por
   fallo, tope de 5 seguidos.
-- **Chat** (`backend/llm`, `backend/chat`, `app_chat.go`): Ollama (NDJSON,
-  `num_ctx` 16384), OpenAI-compatible (SSE) y Anthropic (SDK oficial). Prompt
-  de sistema de `backend/prompts` (`assets/prompts/system.{es,en}.md`).
+- **Chat** (`backend/llm`, `backend/chat`, `backend/hermes`, `app_chat.go`): Ollama
+  (NDJSON, `num_ctx` 16384), OpenAI-compatible (SSE) y Anthropic (SDK oficial), sobre los
+  servidores de «Configuración → Proveedores de IA». Sin «Agente» es el chat de texto de S5
+  (prompt de `assets/prompts/system.{es,en}.md`, bloques de código con «Guardar como
+  checkpoint»); con «Agente» es **Hermes**: el modelo usa las herramientas de ScadLab en
+  proceso (`mcp.Toolbox`) con el prompt de `assets/prompts/agent.{es,en}.md`. Detalle,
+  adjuntos, conversaciones y la terminal: [19-hermes.md](19-hermes.md).
 - **Servidor MCP** (S6): `ScadLab --mcp --workspace <dir>` (bloque 6.A,
   `backend/mcp`) le da al agente herramientas para renderizar, validar, medir y
   ver sus modelos. ScadLab lo deja configurado solo (bloque 6.B,
@@ -82,20 +90,23 @@ Mismo catálogo que mini-tools.
 | `ListAgentSessions(workspaceId, agentId)` | `[]agentsessions.Session{id, title, updatedAt}` | filtradas por la carpeta del workspace |
 | `SetAutoIterate(enabled)` | — | setting `autoIterate` (auto-iteración, ver `onRenderFinished`) |
 
-### Chat con modelos — `app_chat.go` (S5)
+### Chat con modelos — `app_chat.go` (S5, S12)
 
 | Binding | Devuelve | Nota |
 |---|---|---|
-| `ListChats(workspaceId)` / `GetChat(chatId)` | `[]store.Chat` / `ChatView{chat, messages, running, partial, partialSeq}` | `GetChat` permite retomar un turno en curso |
-| `NewChat(workspaceId, providerId, model)` | `store.Chat` | proveedor y modelo quedan fijos en el chat |
-| `SendChatMessage(chatId, text, currentFile)` | `store.ChatMessage` (el del usuario) | respuesta por eventos `chat:*`; prompt de sistema = `prompts.SystemPrompt` |
-| `CancelChat(chatId)` / `DeleteChat(chatId)` | — | cancelar conserva el parcial |
-| `ListProviderModels(providerId)` | `[]string` | Ollama `/api/tags`, OpenAI `/v1/models`, Anthropic lista fija |
+| `ListChats(workspaceId)` / `GetChat(chatId)` | `[]store.Chat` / `ChatView{chat, messages, running, partial, partialSeq, steps, usage}` | `GetChat` permite retomar un turno en curso (texto, pasos y uso hasta ahí) |
+| `NewChat(workspaceId, providerId, model)` | `store.Chat` | `providerId` es un id de `model_servers`; modelo vacío = el del servidor |
+| `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent, maxSteps}`; respuesta por eventos `chat:delta/step/usage/done/error`. `agent=false`: prompt de `prompts.SystemPrompt` (S5); `agent=true`: `prompts.AgentSystemPrompt` + `mcp.Toolbox` |
+| `CancelChat(chatId)` / `DeleteChat(chatId)` | — | cancelar conserva el texto y los pasos; borrar también quita las imágenes del chat |
+| `RenameChat(chatId, title)` / `SetChatModel(chatId, serverId, model)` | — | renombrar (≤ 120 letras) y cambiar de servidor/modelo a mitad |
+| `AddChatAttachment` / `AddChatAttachmentData` / `ChooseChatAttachment` / `RemoveChatAttachment` | ver [06](06-go-react-contract.md#chat-con-hermes--app_chatgo-app_chat_attachgo-s12-124126) | adjuntos: imágenes y modelos STL/3MF/OBJ |
+| `ListProviderModels(providerId)` | `[]string` | alias de `ListServerModels` (los ids) |
 | `ChatCheckpointParent(workspaceId, currentFile)` | `string` | padre para «Guardar como checkpoint»: el abierto o el último |
 
-Persistencia: migración 2 (`chats`, `chat_messages`). Las API keys se leen de
-la variable que nombra `config.apiKeyEnv` (si no está en el proceso, se pide una
-vez a la shell de login en macOS); nunca se guardan ni viajan al frontend.
+Persistencia: migración 2 (`chats`, `chat_messages`) y 6 (`parts`, tokens y costo). Las
+API keys de los servidores van cifradas con la llave de la contraseña maestra o se leen de
+`apiKeyEnv` (si no está en el proceso, se pide una vez a la shell de login en macOS);
+nunca viajan al frontend.
 
 ### Servidor MCP — `app_mcp.go` (S6, bloque 6.B)
 

@@ -10,8 +10,6 @@
 package skills
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"io/fs"
 	"os"
@@ -49,6 +47,18 @@ type Skill struct {
 
 var nameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
+// winReserved son los nombres que Windows no deja usar como carpeta.
+var winReserved = map[string]bool{"con": true, "prn": true, "aux": true, "nul": true, "com1": true, "com2": true, "com3": true, "com4": true, "lpt1": true, "lpt2": true, "lpt3": true}
+
+// CheckName valida el nombre de una skill propia: kebab-case, sin nombres
+// reservados de Windows ni el de la plantilla.
+func CheckName(name string) error {
+	if !nameRe.MatchString(name) || winReserved[name] {
+		return errBadName
+	}
+	return nil
+}
+
 var (
 	errBadName = i18n.New(i18n.Msg{
 		ES: "nombre de skill inválido: usa minúsculas, números y guiones (kebab-case)",
@@ -57,11 +67,14 @@ var (
 	errExists = i18n.New(i18n.Msg{ES: "ya existe una skill con ese nombre", EN: "a skill with that name already exists"})
 )
 
-// UserDir es <datos>/skills.
+// UserDir es la carpeta de skills propias por defecto: <datos>/skills. El
+// usuario puede apuntar a otra (settings.skillsDir); quien llama a Discover o a
+// CreateFromTemplate pasa la vigente.
 func UserDir(dataDir string) string { return filepath.Join(dataDir, "skills") }
 
 // Discover lista las skills incluidas y las del usuario (sin la plantilla).
-func Discover(dataDir string) ([]Skill, error) {
+// userDir es la carpeta de skills propias; si no existe, solo hay incluidas.
+func Discover(userDir string) ([]Skill, error) {
 	byName := map[string]Skill{}
 	entries, err := fs.ReadDir(assets.FS, "skills")
 	if err != nil {
@@ -79,7 +92,7 @@ func Discover(dataDir string) ([]Skill, error) {
 		byName[e.Name()] = Skill{Name: e.Name(), Description: desc, Source: "builtin", Dir: path.Join("skills", e.Name())}
 	}
 
-	udir := UserDir(dataDir)
+	udir := userDir
 	if ents, err := os.ReadDir(udir); err == nil {
 		for _, e := range ents {
 			if !e.IsDir() || e.Name() == TemplateName {
@@ -103,14 +116,15 @@ func Discover(dataDir string) ([]Skill, error) {
 	return out, nil
 }
 
-// CreateFromTemplate copia _skill-template a <datos>/skills/<name> y ajusta
-// el `name:` del frontmatter. Devuelve la carpeta creada.
-func CreateFromTemplate(dataDir, name string) (string, error) {
-	if !nameRe.MatchString(name) {
-		return "", errBadName
+// CreateFromTemplate copia _skill-template a <userDir>/<name>, ajusta el
+// `name:` del frontmatter y deja la descripción como pendiente (la de la
+// plantilla decía «no es una skill operativa»). Devuelve la carpeta creada.
+func CreateFromTemplate(userDir, name string) (string, error) {
+	if err := CheckName(name); err != nil {
+		return "", err
 	}
-	dst := filepath.Join(UserDir(dataDir), name)
-	if _, err := os.Stat(dst); err == nil {
+	dst := filepath.Join(userDir, name)
+	if _, err := os.Lstat(dst); err == nil {
 		return "", errExists
 	}
 	src := path.Join("skills", TemplateName)
@@ -129,6 +143,7 @@ func CreateFromTemplate(dataDir, name string) (string, error) {
 		}
 		if rel == "SKILL.md" {
 			raw = setFrontmatterName(raw, name)
+			raw = setFrontmatterField(raw, "description", DescriptionPlaceholder)
 		}
 		return os.WriteFile(target, raw, 0o644)
 	})
@@ -167,18 +182,46 @@ func Sync(workspaceDir string, list []Skill, enabled func(name string) bool) err
 				errs = append(errs, err)
 				continue
 			}
-			_ = os.WriteFile(filepath.Join(target, managedMarker), []byte(s.Source+"\n"), 0o644)
+			writeMarker(target, s.Source)
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// managedMarker marca una carpeta de skill como instalada por ScadLab.
+// managedMarker marca una carpeta de skill como instalada por ScadLab. Guarda
+// el origen (builtin | user) y, desde que se puede borrar una skill propia, el
+// hash del contenido tal como se instaló: con él se sabe si alguien editó la
+// copia a mano.
 const managedMarker = ".scadlab-managed"
 
 func isManaged(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, managedMarker))
 	return err == nil
+}
+
+func writeMarker(dir, source string) {
+	body := source + "\n"
+	if h, err := treeHash(dir); err == nil {
+		body += "sha256:" + h + "\n"
+	}
+	_ = os.WriteFile(filepath.Join(dir, managedMarker), []byte(body), 0o644)
+}
+
+// readMarker devuelve el origen y el hash de instalación de una copia
+// gestionada ("" si no hay marca o es de una versión anterior, sin hash).
+func readMarker(dir string) (source, hash string) {
+	raw, err := os.ReadFile(filepath.Join(dir, managedMarker))
+	if err != nil {
+		return "", ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	source = strings.TrimSpace(lines[0])
+	for _, l := range lines[1:] {
+		if h, ok := strings.CutPrefix(strings.TrimSpace(l), "sha256:"); ok {
+			hash = h
+		}
+	}
+	return source, hash
 }
 
 func copySkill(s Skill, target string) error {
@@ -217,52 +260,4 @@ func copySkill(s Skill, target string) error {
 		}
 		return os.WriteFile(dst, raw, 0o644)
 	})
-}
-
-// frontmatter extrae name y description del bloque YAML inicial. Basta con un
-// lector de líneas `clave: valor`: el formato de SKILL.md no usa YAML anidado
-// en esas dos claves.
-func frontmatter(raw []byte) (name, desc string) {
-	sc := bufio.NewScanner(bytes.NewReader(raw))
-	sc.Buffer(make([]byte, 64*1024), 1024*1024)
-	inside := false
-	for sc.Scan() {
-		line := strings.TrimRight(sc.Text(), "\r")
-		if strings.TrimSpace(line) == "---" {
-			if inside {
-				break
-			}
-			inside = true
-			continue
-		}
-		if !inside {
-			continue
-		}
-		k, v, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		v = strings.Trim(strings.TrimSpace(v), `"'`)
-		switch strings.TrimSpace(k) {
-		case "name":
-			name = v
-		case "description":
-			desc = v
-		}
-	}
-	return name, desc
-}
-
-var nameLineRe = regexp.MustCompile(`(?m)^name:.*$`)
-
-func setFrontmatterName(raw []byte, name string) []byte {
-	// Solo la primera: una línea "name:" en el cuerpo de la skill no es la del
-	// frontmatter.
-	loc := nameLineRe.FindIndex(raw)
-	if loc == nil {
-		return raw
-	}
-	out := append([]byte{}, raw[:loc[0]]...)
-	out = append(out, "name: "+name...)
-	return append(out, raw[loc[1]:]...)
 }

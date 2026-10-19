@@ -44,13 +44,15 @@ el suyo. Detalle y contrato: [09-agents-ai.md](09-agents-ai.md).
 
 ```
 assets/skills/ (embed) ─┐
-<datos>/skills/ (user) ─┴─ Discover() ─ registro `skills` (enabled) ─ Sync() ─▶
+<userDir> (user) ─────┴─ Discover() ─ registro `skills` (enabled) ─ Sync() ─▶
      <ws>/.claude/skills  <ws>/.agents/skills  <ws>/.opencode/skills  <ws>/.agent/skills
 ```
 
+`<userDir>` es `<datos>/skills` o la carpeta que el usuario eligió (`settings.skillsDir`).
 Una skill de usuario con el mismo nombre que una incluida la reemplaza. `Sync`
-marca cada copia con `.scadlab-managed` y solo toca esas: una skill que el
-usuario dejó a mano en el workspace no se pisa.
+marca cada copia con `.scadlab-managed` (origen + hash del contenido instalado) y solo
+retira/ajusta esas: una skill que el usuario dejó a mano en el workspace no se borra.
+Editar, renombrar, eliminar y mover la carpeta: [20-skills-propias.md](20-skills-propias.md).
 
 ## Datos por SO
 

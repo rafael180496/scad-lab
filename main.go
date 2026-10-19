@@ -13,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/zalando/go-keyring"
 
 	"scadlab/backend/appdata"
 	"scadlab/backend/i18n"
@@ -32,6 +33,14 @@ func main() {
 	// ventana. Ver main_mcp.go.
 	if len(os.Args) > 1 && os.Args[1] == "--mcp" {
 		os.Exit(runMCP(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
+
+	// Pruebas de humo: con SCADLAB_FAKE_KEYRING=1 el llavero del sistema se
+	// reemplaza por uno en memoria, para probar el llavero propio (S12) sin leer
+	// ni escribir el Keychain / Administrador de credenciales real. Se usa junto
+	// con SCADLAB_DATA_DIR temporal; nunca en uso normal.
+	if os.Getenv("SCADLAB_FAKE_KEYRING") == "1" {
+		keyring.MockInit()
 	}
 
 	app := NewApp()

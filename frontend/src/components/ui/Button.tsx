@@ -1,13 +1,15 @@
 import type {ButtonHTMLAttributes} from 'react'
 import {cn} from '../../lib/cn'
 
-type Variant = 'primary' | 'ghost' | 'outline' | 'danger'
+type Variant = 'primary' | 'ghost' | 'outline' | 'danger' | 'destructive'
 
 const styles: Record<Variant, string> = {
     primary: 'bg-accent text-accent-fg hover:brightness-110 border border-transparent',
     ghost: 'text-muted hover:text-fg hover:bg-surface-2 border border-transparent',
     outline: 'border border-line-strong text-fg hover:bg-surface-2',
     danger: 'border border-transparent text-danger hover:bg-surface-2',
+    // Confirmar algo que no se deshace: relleno rojo, como primary pero con danger.
+    destructive: 'bg-danger text-accent-fg hover:brightness-110 border border-transparent',
 }
 
 // Todo control interactivo lleva `title` que explique qué hace (regla de

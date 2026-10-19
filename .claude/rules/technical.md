@@ -6,8 +6,9 @@
 3. **Checkpoints inmutables.** Ningún código de ScadLab sobrescribe ni borra un
    `.scad` de un workspace. «Borrar» mueve a `.scadlab/trash/`.
 4. **Migraciones aditivas** de `scadlab.db` (ver `claude/07-database.md`).
-5. **Sin secretos en disco** gestionado por ScadLab: API keys por variable de
-   entorno.
+5. **Sin secretos en texto plano**: las claves de API se cifran con AES-256-GCM con
+   una llave derivada (argon2id) de la contraseña maestra; la llave solo se recuerda
+   en el llavero del SO si el usuario lo elige; o por variable de entorno.
 6. **Sin dependencias de red en runtime para la UI**: nada de CDN (Monaco,
    fuentes, iconos van empaquetados). La app tiene que abrir sin internet.
 7. **OpenSCAD nativo es externo y preferido**: nunca se asume una versión; se

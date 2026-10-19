@@ -14,7 +14,8 @@ Skills: `vercel-react-best-practices`, `react`, `tailwind-design-system`,
   (`font-mono uppercase tracking`), radios de 6–10 px, transiciones ≤150 ms y
   respeto a `prefers-reduced-motion`.
 - **Todo control interactivo lleva `title`** (el `Button` lo exige por tipo).
-- Nunca `confirm()`/`alert()`: `confirmDialog()` y `toast` de `components/ui`.
+- Nunca `confirm()`/`alert()`: `confirmDialog()` y `toast` de `components/ui`. Lo que borra o
+  descarta lleva `{danger: true}` (botón de confirmar rojo, `Button` `variant="destructive"`).
 - Errores del backend con `errorText(e)` (quita el código invisible).
 - Sin fetch: todo pasa por los bindings de `wailsjs/`. Única excepción: la
   malla del visor (`GET /mesh/<clave>.stl`, ver abajo).
@@ -186,3 +187,15 @@ quedan a la derecha. `App` guarda el estado **por workspace** (`projects[id]`: �
 editor tenía al irse) y el resto de los hooks por workspace (`useRenders`, `useTerminals`). Reglas y detalle:
 [claude/12-paneles.md](12-paneles.md#pestañas-de-proyecto-s8). Regla de la barra: se acorta con elipsis (`useNarrow`) y
 **nunca** empuja los botones de exportar (`uishot-fit.sh` lo comprueba con `headerSw`/`headerCw`).
+
+## Chat de Hermes (S12) — `components/chat/`
+
+El panel Chat con pasos de herramienta, adjuntos y conversaciones está en [19-hermes.md](19-hermes.md). Tres reglas del frontend:
+
+- **Los eventos del turno viven en un store de módulo** (`chatStreams.ts`: texto por `seq`, pasos por `id`, uso), no en el estado de
+  `ChatPanel`: cada trozo llegaría ~25 veces por segundo y redibujaría la conversación entera. Los tipos de `chat:step` y `chat:usage`
+  están escritos a mano en `lib/chatTypes.ts` (viajan por evento, no por el valor de retorno de un binding).
+- **Un paso se pinta donde ocurrió**: `interleave(text, steps)` parte el texto en `Step.textAt` (unidades UTF-16); un paso ya terminado nunca
+  vuelve a «en curso».
+- **La terminal no contesta lo que ya contestó**: `components/terminal/queryReplies.ts` es una función pura probada con
+  `cd frontend && pnpm test` (no hay runner de tests: es un script de Node que importa el `.ts`). Entra en la verificación junto con `pnpm build`.

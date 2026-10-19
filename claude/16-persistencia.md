@@ -16,6 +16,7 @@ claves (`delete(fields, …)`).
 | **Estado del visor 3D** | settings `viewer` (`store.ViewerState`) | `SaveViewer` — 600 ms y al salir |
 | Muestras de color | settings `swatches` | `SaveSwatches` |
 | Carpeta predeterminada de workspaces | settings `workspacesRoot` | `SetWorkspacesRoot(dir)` (absoluta; `""` = `~/Documents/ScadLab`) |
+| Carpeta de skills propias | settings `skillsDir` | `ChangeSkillsFolder(dir, move)` (absoluta; `""` = `<datos>/skills`) — [19](20-skills-propias.md) |
 
 `ViewerState` = `{wireframe, edges, ortho[2], split, colorIndex, modelColors}`; la cámara
 **no** se guarda (cada pieza se encuadra sola). `modelColors` arranca en `true`: un JSON

@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"scadlab/backend/i18n"
+	"scadlab/backend/render"
 	"scadlab/backend/store"
 )
 
@@ -258,4 +262,161 @@ func TestSaveViewerNormalizesAndPersists(t *testing.T) {
 
 func storeViewer(wire bool, color int) store.ViewerState {
 	return store.ViewerState{Wireframe: wire, ColorIndex: color, ModelColors: true}
+}
+
+// --- .scad por defecto (S12, 12.3) -------------------------------------------
+
+// withStarter reactiva el checkpoint por defecto, que newTestApp apaga.
+func withStarter(t *testing.T) {
+	t.Helper()
+	prev := skipStarter
+	skipStarter = false
+	t.Cleanup(func() { skipStarter = prev })
+}
+
+// Un workspace nuevo nace con 001-<slug>.scad: el árbol lo trae, es el más
+// nuevo (el que la interfaz selecciona al abrir) y su descripción es el nombre.
+func TestCreateWorkspaceWritesStarterCheckpoint(t *testing.T) {
+	for lang, word := range map[string]string{"es": "pomo", "en": "knob"} {
+		a := newTestApp(t)
+		withStarter(t)
+		i18n.SetLang(lang)
+		t.Cleanup(func() { i18n.SetLang("en") })
+
+		w, err := a.CreateWorkspaceIn("Soporte de Auriculares", "bambu-a1-mini", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		const file = "001-soporte-de-auriculares.scad"
+		raw, err := os.ReadFile(filepath.Join(w.Path, file))
+		if err != nil {
+			t.Fatalf("%s: falta el starter: %v", lang, err)
+		}
+		if first, _, _ := strings.Cut(string(raw), "\n"); first != `// @checkpoint parent= desc="Soporte de Auriculares"` {
+			t.Errorf("%s: primera línea %q", lang, first)
+		}
+		if !strings.Contains(strings.ToLower(string(raw)), word) {
+			t.Errorf("%s: el starter no está en el idioma de la app", lang)
+		}
+		if got, _ := filepath.Glob(filepath.Join(w.Path, "*.scad")); len(got) != 1 {
+			t.Errorf("%s: .scad en la raíz: %v", lang, got)
+		}
+
+		// Abrir el proyecto (rescan) lo indexa, sin padre y con su descripción.
+		v, err := a.OpenProject(w.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(a.stopWatcher)
+		if len(v.Checkpoints) != 1 || v.Checkpoints[0].FileName != file || v.Checkpoints[0].ParentFile != "" ||
+			v.Checkpoints[0].Description != "Soporte de Auriculares" {
+			t.Errorf("%s: árbol al abrir: %+v", lang, v.Checkpoints)
+		}
+		// La interfaz selecciona el último del árbol (o el recordado, que aquí no hay).
+		if v.Workspace.LastCheckpoint != "" {
+			t.Errorf("%s: no debería haber un checkpoint recordado: %q", lang, v.Workspace.LastCheckpoint)
+		}
+	}
+}
+
+// El starter renderiza de verdad con el OpenSCAD instalado, por el mismo camino
+// que el auto-render de la interfaz.
+func TestCreateWorkspaceStarterRenders(t *testing.T) {
+	if _, err := exec.LookPath("openscad"); err != nil {
+		t.Skip("OpenSCAD no instalado")
+	}
+	a := newTestApp(t)
+	withStarter(t)
+	w, err := a.CreateWorkspace("Prueba starter", "bambu-a1-mini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := a.RenderCheckpoint(w.ID, "001-prueba-starter.scad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != render.StatusOK || len(res.Diagnostics) != 0 {
+		t.Errorf("render del starter: %s %+v\n%s", res.Status, res.Diagnostics, res.Log)
+	}
+	if exists(filepath.Join(w.Path, "RENDER_ERRORS.md")) {
+		t.Error("el starter no debería dejar RENDER_ERRORS.md")
+	}
+}
+
+// Importar una carpeta sin ningún .scad le deja el starter, con el nombre de la
+// carpeta; con un .scad propio no se toca nada.
+func TestImportWorkspaceWritesStarterOnlyIntoEmptyFolders(t *testing.T) {
+	a := newTestApp(t)
+	withStarter(t)
+	i18n.SetLang("es")
+	t.Cleanup(func() { i18n.SetLang("en") })
+
+	empty := filepath.Join(t.TempDir(), "Mis Piezas")
+	if err := os.MkdirAll(empty, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Archivos que no son .scad no impiden el starter ni se tocan.
+	if err := os.WriteFile(filepath.Join(empty, "foto.stl"), []byte("solid x\nendsolid x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w, err := a.ImportWorkspace(empty, "bambu-a1-mini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := filepath.Glob(filepath.Join(empty, "*.scad"))
+	if len(got) != 1 || filepath.Base(got[0]) != "001-mis-piezas.scad" {
+		t.Fatalf("carpeta vacía: .scad = %v", got)
+	}
+	if raw, _ := os.ReadFile(got[0]); !strings.HasPrefix(string(raw), `// @checkpoint parent= desc="Mis Piezas"`) || !strings.Contains(string(raw), "pomo") {
+		t.Errorf("starter importado:\n%s", raw)
+	}
+	if v, err := a.RescanWorkspace(w.ID); err != nil || len(v.Checkpoints) != 1 {
+		t.Errorf("rescan: %+v %v", v.Checkpoints, err)
+	}
+	if !exists(filepath.Join(empty, "foto.stl")) || !exists(filepath.Join(empty, "CLAUDE.md")) {
+		t.Error("faltan los archivos de la carpeta o las reglas")
+	}
+
+	// Con modelos propios: intactos, y ningún .scad nuevo.
+	dir := t.TempDir()
+	const mine = "// mi pieza\ncube(5);\n"
+	if err := os.WriteFile(filepath.Join(dir, "pieza.scad"), []byte(mine), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := os.Stat(filepath.Join(dir, "pieza.scad"))
+	if _, err := a.ImportWorkspace(dir, "bambu-a1-mini"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = filepath.Glob(filepath.Join(dir, "*.scad"))
+	raw, _ := os.ReadFile(filepath.Join(dir, "pieza.scad"))
+	st2, _ := os.Stat(filepath.Join(dir, "pieza.scad"))
+	if len(got) != 1 || string(raw) != mine || !st2.ModTime().Equal(st.ModTime()) {
+		t.Errorf("carpeta con .scad: %v, contenido %q", got, raw)
+	}
+}
+
+// Si el starter no se puede escribir, el alta no falla: solo queda en el log.
+func TestStarterFailureDoesNotFailImport(t *testing.T) {
+	a := newTestApp(t)
+	withStarter(t)
+	dir := filepath.Join(t.TempDir(), "caja")
+	// Una carpeta ocupa el nombre del starter (001-caja.scad): Scan no la cuenta
+	// como .scad y O_EXCL se niega a pisarla.
+	if err := os.MkdirAll(filepath.Join(dir, "001-caja.scad"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	w, err := a.ImportWorkspace(dir, "bambu-a1-mini")
+	if err != nil {
+		t.Fatalf("el starter no puede hacer fallar el alta: %v", err)
+	}
+	if w.ID == 0 || !strings.Contains(logs.String(), ".scad inicial") {
+		t.Errorf("workspace %+v, log: %q", w, logs.String())
+	}
+	if !exists(filepath.Join(dir, "001-caja.scad")) {
+		t.Error("se perdió lo que había")
+	}
 }

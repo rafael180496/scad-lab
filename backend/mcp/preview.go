@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"scadlab/backend/i18n"
+	"scadlab/backend/refmodel"
 	"scadlab/backend/render"
 )
 
@@ -25,30 +26,24 @@ const (
 )
 
 // view es una cámara: rotación (rx, ry, rz) del `--camera` de OpenSCAD y si la
-// proyección es ortogonal. Las vistas por eje son ortogonales (se pueden medir a
-// ojo); iso es en perspectiva, como la vista por defecto de OpenSCAD.
-//
-// Los ángulos se comprobaron renderizando una pieza asimétrica. Ojo con
-// right/left: en la GUI de OpenSCAD «Right» es 90,0,270, que mira desde −X (la
-// convención contraria a la de los planos). Aquí `right` se ve desde +X.
+// proyección es ortogonal. La tabla es la de backend/refmodel (los ángulos y su
+// justificación están allí): la vista previa de una referencia y la del modelo
+// se miran desde los mismos lados.
 type view struct {
 	rot   [3]int
 	ortho bool
 }
 
-var views = map[string]view{
-	"iso":      {rot: [3]int{55, 0, 25}},
-	"iso-back": {rot: [3]int{55, 0, 205}},
-	"front":    {rot: [3]int{90, 0, 0}, ortho: true},   // desde −Y
-	"back":     {rot: [3]int{90, 0, 180}, ortho: true}, // desde +Y
-	"right":    {rot: [3]int{90, 0, 90}, ortho: true},  // desde +X
-	"left":     {rot: [3]int{90, 0, 270}, ortho: true}, // desde −X
-	"top":      {rot: [3]int{0, 0, 0}, ortho: true},    // desde +Z
-	"bottom":   {rot: [3]int{180, 0, 0}, ortho: true},  // desde −Z
-}
+var views = func() map[string]view {
+	m := make(map[string]view, len(refmodel.Views))
+	for name, v := range refmodel.Views {
+		m[name] = view{rot: v.Rot, ortho: v.Ortho}
+	}
+	return m
+}()
 
 // viewNames es el orden en que se ofrecen las vistas.
-var viewNames = []string{"iso", "iso-back", "front", "back", "right", "left", "top", "bottom"}
+var viewNames = refmodel.ViewNames
 
 var pngMagic = []byte("\x89PNG\r\n\x1a\n")
 

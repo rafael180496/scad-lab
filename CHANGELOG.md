@@ -9,15 +9,133 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Hermes: un chat que diseña por ti.** Con el interruptor **Agente** encendido, el
+  modelo del chat deja de solo conversar: usa las herramientas de ScadLab para crear
+  un checkpoint, renderizarlo, mirarlo, medirlo y, si el render falla, leer la línea
+  del error y corregirlo en un checkpoint nuevo, hasta que la pieza queda como la
+  pediste. Cada paso aparece como una tarjeta plegable, con la herramienta, sus
+  argumentos y su resultado; si el render falla, la tarjeta se abre sola con la línea y
+  el código que dio el error, y la imagen que el modelo mira con `preview` se ve en la
+  conversación y se amplía con un clic. Tú pones el tope de pasos (de 1 a 30, 12 por
+  defecto): al llegar, el modelo resume lo que logró y se detiene en vez de seguir sin
+  fin. **Detener** muestra un reloj y corta incluso a mitad de una herramienta, sin
+  perder lo que ya hizo. Apagado, el chat es el de siempre: texto y bloques de
+  OpenSCAD con **Guardar como checkpoint**. Si el modelo no sabe usar herramientas,
+  el chat sigue en texto y te lo dice, sin errores.
+  - **El modelo ve lo que dibuja.** La imagen del `preview` vuelve al modelo como
+    imagen, solo si el modelo ve; si no, recibe las medidas y se avisa.
+  - **Cada respuesta dice cuánto costó.** Al pie quedan los tokens de entrada y salida
+    y, con los proveedores que publican precios (OpenRouter), el costo en dólares; si
+    el proveedor no lo informa, no se inventa un «$0».
+- **Una contraseña maestra para tus claves de API, que se pide una sola vez.** La
+  primera vez que guardas una clave de API, ScadLab te pide **crear una contraseña
+  maestra** (la escribes dos veces y una barra te dice qué tan fuerte es). Con esa
+  contraseña se cifran tus claves en este equipo; la contraseña en sí no se guarda en
+  ningún lado. La casilla **Recordar en este equipo** viene marcada: ScadLab guarda la
+  llave derivada —no la contraseña— en el llavero del sistema (Keychain en macOS,
+  Administrador de credenciales en Windows) y desde entonces guardar otra clave, usar el
+  chat o abrir la app **no vuelve a pedirte nada**. La llave se lee del llavero una sola
+  vez por sesión, la primera vez que hace falta, y nunca en cada mensaje.
+  - **Si no la recuerdas, o el llavero niega el acceso**, ScadLab te pide la contraseña
+    **una vez por sesión** y solo cuando algo necesita una clave —enviar un mensaje a un
+    servidor que la tiene, listar sus modelos o probar la conexión—; al escribirla, lo que
+    ibas a hacer sigue solo. Si el llavero falla no se rompe nada ni se te pregunta en
+    bucle, y las variables de entorno siguen sirviendo sin contraseña.
+  - **Desde Configuración → Proveedores de IA → Llavero de claves** puedes cambiar la
+    contraseña (todas las claves se vuelven a cifrar, todas o ninguna), **olvidar este
+    equipo** o **restablecer** todo. Una contraseña olvidada **no se puede recuperar**: lo
+    único que queda es restablecer, que borra las claves guardadas (los servidores quedan,
+    sin clave), y la interfaz lo dice antes de que importe.
+  - Las claves que guardaste con la versión anterior se re-cifran solas al crear la
+    contraseña.
+- **Adjuntos en el chat: imágenes y modelos 3D.** Con el clip, pegando o arrastrando
+  sobre el panel puedes adjuntar fotos y capturas (PNG, JPG, GIF, WebP de hasta 5 MB) y
+  modelos de referencia **STL, 3MF y OBJ** (hasta 64 MB), hasta 10 por mensaje. Un modelo
+  se copia a la carpeta `refs/` del proyecto, ScadLab lo mide (tamaño, volumen,
+  triángulos, si la malla es cerrada, las partes por color de un 3MF) y le da al modelo
+  ese informe y una vista previa dibujada para que pueda copiarlo o encajar una pieza
+  con él. Cada adjunto es un chip con su miniatura y un botón para quitarlo; si el
+  modelo no ve imágenes, el chip lo avisa y **Enviar** espera a que lo cambies, pero un
+  servidor que no informa si ve imágenes nunca te lo impide.
+- **Conversaciones: renombrar, borrar y cambiar de modelo.** La lista de
+  conversaciones del proyecto deja **renombrar en línea** (Enter guarda, Escape
+  cancela) y **borrar** con confirmación. Al abrir la app retomas la última
+  conversación, y puedes cambiar de servidor y de modelo a mitad de una
+  conversación sin perder el historial.
+- **Proveedores de IA con claves guardadas de forma segura.** Nueva pestaña
+  **Configuración → Proveedores de IA** para agregar tantos servidores como quieras:
+  Ollama (local o remoto), LM Studio, llama.cpp, vLLM, OpenAI, **OpenRouter**,
+  **Google Gemini**, Anthropic, Groq, DeepSeek, Mistral, Together, xAI o cualquier
+  servidor compatible con OpenAI, cada uno con un atajo que ya trae su dirección.
+  **Probar conexión** dice si responde (y cuántos modelos tiene) antes de guardar. La
+  clave de API se guarda **cifrada** con tu contraseña maestra (ver más arriba), nunca
+  en texto plano ni en el archivo de la base; si prefieres no guardarla, puedes indicar
+  la variable de entorno que la tiene. El selector de modelos del chat ahora **busca**, y marca cuáles
+  ven imágenes y cuáles usan herramientas (con la ventana de contexto y el precio
+  cuando el proveedor los publica). Los servidores que ya tenías de versiones
+  anteriores se conservan, y tus chats viejos siguen abriendo.
+- **Un workspace nuevo ya trae su primer `.scad`.** En vez de una carpeta vacía,
+  crear un workspace —o importar una carpeta que no tiene ningún `.scad`— deja un
+  `001-<nombre>.scad` válido, con su cabecera de checkpoint, parámetros del Customizer
+  y una pieza con `color()` que renderiza, ya seleccionado. Si la carpeta tenía
+  archivos `.scad`, no se toca nada.
+
 - **Doble clic en la cabecera agranda la ventana.** En macOS la barra de título
   nativa está oculta y la cabecera de ScadLab hace de barra, pero el doble clic no
   hacía nada. Ahora agranda o restaura la ventana —o la minimiza, o no hace nada, si
   así lo elegiste en Ajustes del Sistema → Escritorio y Dock—, igual que en
   cualquier otra app. Sobre un botón o una pestaña de proyecto, el doble clic sigue
   siendo de ese control.
+- **Editor de skills dentro de la app.** En Configuración → Skills, cada skill
+  propia tiene un botón **Editar** que abre un editor con la lista de sus archivos
+  (`SKILL.md`, `README.md`, `references/`, `templates/`…) y el mismo Monaco local del
+  código, en Markdown u OpenSCAD según la extensión. Puedes crear, renombrar y borrar
+  archivos sin salir de la carpeta de la skill, guardar con ⌘S / Ctrl+S y, al cerrar,
+  se te avisa si quedan cambios sin guardar. Las skills incluidas se abren con **Ver**,
+  en solo lectura.
+  - **El frontmatter se valida mientras escribes.** `name` y `description` son
+    obligatorios y `name` tiene que ser igual al nombre de la carpeta; los errores se
+    subrayan en el editor y se listan debajo (un clic lleva a la línea), y mientras
+    haya alguno no se guarda el `SKILL.md`, porque los agentes ignorarían una skill
+    rota sin avisar. Una descripción que sigue siendo el texto de ejemplo, de más de
+    1024 caracteres o con «: » sin comillas solo da un aviso.
+  - **Guardar actualiza todo.** La lista muestra la descripción nueva y la skill se
+    vuelve a copiar a los proyectos abiertos; a los demás, al abrirlos.
+  - **Una skill nueva ya no hereda la descripción de la plantilla.** «Plantilla para
+    crear skills nuevas…» quedaba como descripción real y no había cómo cambiarla
+    desde la app. Ahora nace con su `name` puesto y una descripción pendiente (con un
+    aviso hasta que la escribas), y **Nueva skill abre su editor** en vez de abrir el
+    Finder.
+- **Eliminar y renombrar skills propias.** Cada skill propia tiene su botón de
+  eliminar, con una confirmación que nombra la skill y su carpeta. La carpeta no se
+  borra: va a una papelera dentro de los datos de la app (`trash/skills`), de donde se
+  recupera moviéndola de vuelta. También se quita de los workspaces donde estaba
+  instalada, pero solo las copias que instaló ScadLab y nadie tocó: si editaste una a
+  mano, se deja y se te dice cuáles fueron. Las incluidas no se eliminan, solo se
+  apagan. **Renombrar** cambia la carpeta, el `name` del `SKILL.md` y las copias
+  instaladas, y no deja repetir el nombre de otra skill (propia o incluida).
+- **Elegir dónde viven tus skills propias.** Configuración → Skills muestra la
+  **carpeta de skills propias** con **Cambiar…** (por ejemplo, una carpeta sincronizada
+  en la nube o dentro de tu repositorio). Si ya tienes skills, eliges entre **mover** tus
+  skills a la carpeta nueva —las que ya existan allí no se pisan— o **solo apuntar** a
+  ella, sin tocar la anterior. La elección se recuerda, y **Predeterminada** vuelve a la
+  carpeta de siempre.
 
 ### Corregido
 
+- **Un `^[[?1;2c` aparecía en la primera línea de Antigravity al volver a una terminal.**
+  Al reenganchar una terminal, ScadLab vuelve a dibujar lo que ya había pasado, y la
+  terminal volvía a contestar la pregunta «¿qué terminal eres?» que el agente hizo al
+  arrancar. Esa respuesta llegaba cuando el agente ya estaba en marcha y la mostraba
+  como si la hubieras escrito. Ahora, mientras se repone lo ya visto, esas respuestas
+  automáticas (tipo de terminal, posición del cursor y colores) no se envían al agente;
+  lo que tecleas pasa igual.
+- **El botón de carpeta de Configuración → Skills no hacía nada.** Abría la carpeta de
+  skills propias, pero esa carpeta no existe hasta que se crea la primera skill, y el
+  sistema se negaba a abrir una ruta inexistente sin que el error llegara a ningún
+  aviso. Ahora el botón **Abrir** crea la carpeta si falta y la muestra en el
+  Finder o el Explorador, y si el sistema no puede abrirla lo dice con un aviso. Lo
+  mismo vale para «Mostrar en el Finder» de un workspace.
 - **«Elegir…» no abría el diálogo de carpetas si la carpeta todavía no existía.**
   En «Nuevo workspace», la ubicación predeterminada (`~/Documents/ScadLab`) se crea
   recién con el primer workspace, y el diálogo nativo se negaba a abrir con «default

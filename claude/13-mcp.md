@@ -209,3 +209,11 @@ variables de paquete `agyExec` y `agyPath` inyectables en tests) y
 - **Pruebas.** `app_mcp_test.go` (`fakeAgy` con la salida real, argv exacto de add,
   remove y list, ciclo de estados, otros servidores intactos, fallos) y
   `mcpconf/antigravity_test.go`. Los tests nunca lanzan el `agy` real.
+
+## La misma caja, en proceso (Hermes, S12)
+
+`mcp.NewToolbox(mcp.ToolboxOptions{WorkspaceDir, Store, Engine, WASM, Parts, InApp: true})` expone **las mismas herramientas** sin lanzar un
+subproceso `--mcp`: el chat de la app (Hermes, [19-hermes.md](19-hermes.md)) las llama como funciones (`Tools()`, `Call(ctx, name, args)` →
+`ToolOutput{Text, Images, IsError}`), con la base, el motor de render, el WebAssembly y la caché de partes **de la app** inyectados (no abre
+una segunda base ni un segundo motor; `Close()` no cierra lo inyectado). `InApp` suma `list_skills`, `read_skill` e `inspect_reference`,
+que el servidor `--mcp` no ofrece (el agente externo ya lee las skills del disco). Una herramienta nueva se agrega una sola vez y llega a los dos.

@@ -176,6 +176,92 @@ CREATE TABLE IF NOT EXISTS checkpoint_trash (
 ALTER TABLE workspaces ADD COLUMN last_checkpoint TEXT NOT NULL DEFAULT '';
 `,
 	},
+	{
+		version: 5,
+		desc:    "servidores de modelos del chat (S12): model_servers, con las filas de chat de ai_providers, y el último modelo de cada workspace",
+		sql: `
+-- Los servidores de modelos del chat: Ollama, compatibles con OpenAI (OpenRouter,
+-- Gemini, LM Studio…) y Anthropic, varios por tipo. La clave de API NUNCA va en
+-- claro: encrypted_token + token_nonce son AES-256-GCM con una clave de datos que
+-- vive en el llavero del sistema (backend/secrets). api_key_env es la alternativa:
+-- el nombre de la variable de entorno que la tiene.
+CREATE TABLE IF NOT EXISTS model_servers (
+	id              TEXT PRIMARY KEY,
+	kind            TEXT NOT NULL CHECK (kind IN ('ollama','openai','anthropic')),
+	preset          TEXT NOT NULL DEFAULT '',
+	name            TEXT NOT NULL,
+	base_url        TEXT NOT NULL DEFAULT '',
+	api_key_env     TEXT NOT NULL DEFAULT '',
+	encrypted_token BLOB,
+	token_nonce     BLOB,
+	default_model   TEXT NOT NULL DEFAULT '',
+	context_tokens  INTEGER NOT NULL DEFAULT 0,
+	enabled         INTEGER NOT NULL DEFAULT 1,
+	sort_order      INTEGER NOT NULL DEFAULT 0,
+	created_at      INTEGER NOT NULL,
+	updated_at      INTEGER NOT NULL
+);
+
+-- Se copian las filas de chat de ai_providers CON EL MISMO ID: chats.provider_id
+-- de los chats ya guardados ('ollama', 'openai', 'anthropic') sigue resolviendo.
+-- ai_providers no se toca (los CLIs siguen ahí). json_valid evita que una config
+-- corrupta —que decodeConfig toleraba— tumbe la migración entera.
+INSERT OR IGNORE INTO model_servers
+	(id, kind, preset, name, base_url, api_key_env, default_model, context_tokens, enabled, sort_order, created_at, updated_at)
+SELECT
+	id, kind, '', name,
+	CASE
+		WHEN json_valid(config) AND COALESCE(json_extract(config, '$.baseUrl'), '') <> '' THEN json_extract(config, '$.baseUrl')
+		WHEN kind = 'ollama' THEN 'http://localhost:11434'
+		WHEN kind = 'anthropic' THEN 'https://api.anthropic.com'
+		ELSE ''
+	END,
+	CASE WHEN json_valid(config) THEN COALESCE(json_extract(config, '$.apiKeyEnv'), '') ELSE '' END,
+	CASE WHEN json_valid(config) THEN COALESCE(json_extract(config, '$.model'), '') ELSE '' END,
+	CASE WHEN json_valid(config) AND kind = 'ollama' THEN COALESCE(CAST(json_extract(config, '$.numCtx') AS INTEGER), 0) ELSE 0 END,
+	enabled, sort_order, updated_at, updated_at
+FROM ai_providers
+WHERE kind IN ('ollama','openai','anthropic');
+
+-- Último servidor y modelo elegidos en el chat de cada proyecto: JSON
+-- {"serverId","model"} o vacío. La elección global vive en settings ('lastModel').
+-- Dato de la interfaz: sin FK ni limpieza al borrar un servidor.
+ALTER TABLE workspaces ADD COLUMN last_model TEXT NOT NULL DEFAULT '';
+`,
+	},
+	{
+		version: 6,
+		desc:    "Hermes (S12): partes, tokens y costo de cada mensaje del chat",
+		sql: `
+-- parts: JSON con lo que no cabe en el texto. En un mensaje del usuario, los
+-- metadatos de sus adjuntos; en uno del asistente, los pasos de herramienta del
+-- turno. role sigue siendo 'user' | 'assistant' (el CHECK de la migración 2 no
+-- se puede cambiar de forma aditiva): los pasos viajan dentro de parts.
+ALTER TABLE chat_messages ADD COLUMN parts TEXT NOT NULL DEFAULT '';
+-- Tokens y costo del turno que cerró este mensaje (0 = el servidor no lo dijo).
+ALTER TABLE chat_messages ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE chat_messages ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE chat_messages ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0;
+`,
+	},
+	{
+		version: 7,
+		desc:    "llavero propio (S12): vault_meta con el verificador de la contraseña maestra",
+		sql: `
+-- La contraseña maestra NUNCA se guarda, ni su llave. Esta fila guarda solo un
+-- texto conocido cifrado con la llave derivada (argon2id): si se abre, la
+-- contraseña es la buena. El salt vive en <datos>/vault.salt, aparte de la base.
+-- remember = 1 dice que la llave derivada se guardó en el llavero del sistema
+-- («Recordar en este equipo»); la llave en sí nunca está acá. Una sola fila.
+CREATE TABLE IF NOT EXISTS vault_meta (
+	id             INTEGER PRIMARY KEY CHECK (id = 1),
+	verifier       BLOB NOT NULL,
+	verifier_nonce BLOB NOT NULL,
+	remember       INTEGER NOT NULL DEFAULT 0,
+	created_at     INTEGER NOT NULL
+);
+`,
+	},
 }
 
 func (s *Store) migrate() error {

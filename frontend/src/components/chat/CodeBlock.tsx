@@ -1,7 +1,7 @@
 import {useRef, useState} from 'react'
-import {Check, Copy, GitBranchPlus} from 'lucide-react'
+import {Check, ChevronDown, Copy, GitBranchPlus} from 'lucide-react'
 import {copyText} from '../../lib/clipboard'
-import {useT} from '../../i18n'
+import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {isScadBlock} from './scadBlock'
 
@@ -9,6 +9,12 @@ export type CodeActions = {
     /** Guardar este bloque como checkpoint; sin ella (o con `undefined`) no hay botón. */
     onSave?: (code: string) => void
 }
+
+// Un bloque más largo que esto arranca plegado: un archivo entero dentro de una
+// respuesta empujaría fuera de la vista el texto que lo explica (y, con Hermes,
+// los pasos que vienen después).
+const COLLAPSE_LINES = 30
+const COLLAPSED_LINES = 14
 
 // Bloque de código de una respuesta. Los de OpenSCAD son los que importan:
 // llevan «Guardar como checkpoint» (solo cuando el cerco ya cerró —durante el
@@ -20,6 +26,11 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
     const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
     const scad = isScadBlock(lang, code)
     const canSave = scad && closed && !!actions?.onSave && code.trim() !== ''
+    const [expanded, setExpanded] = useState(false)
+    const lines = code.split('\n')
+    // Mientras llega (closed=false) no se pliega: el bloque está creciendo.
+    const collapsible = closed && lines.length > COLLAPSE_LINES
+    const shown = collapsible && !expanded ? lines.slice(0, COLLAPSED_LINES).join('\n') : code
 
     const copy = async () => {
         if (!(await copyText(code))) return
@@ -34,6 +45,7 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
                 <span className={cn('font-mono text-ui-10 tracking-[0.12em] uppercase', scad ? 'text-accent' : 'text-faint')}>
                     {scad ? 'OpenSCAD' : lang || t.chat.code}
                 </span>
+                {lines.length > 3 ? <span className="font-mono text-ui-10 text-faint">{fmt(t.chat.codeLines, {n: lines.length})}</span> : null}
                 <div className="ml-auto flex items-center gap-0.5">
                     <button
                         type="button"
@@ -58,8 +70,19 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
                 </div>
             </div>
             <pre className="selectable max-h-[22rem] overflow-auto px-3 py-2 font-mono text-chat-sm leading-relaxed text-fg">
-                <code>{code}</code>
+                <code>{shown}</code>
             </pre>
+            {collapsible ? (
+                <button
+                    type="button"
+                    title={expanded ? t.chat.codeCollapseHint : t.chat.codeExpandHint}
+                    onClick={() => setExpanded((v) => !v)}
+                    className="no-drag flex w-full items-center justify-center gap-1 border-t border-line bg-surface-2 py-1 text-ui-11 text-muted transition-colors hover:text-fg"
+                >
+                    <ChevronDown className={cn('icon-ui-12 transition-transform', expanded && 'rotate-180')} />
+                    {expanded ? t.chat.codeCollapse : fmt(t.chat.codeExpand, {n: lines.length - COLLAPSED_LINES})}
+                </button>
+            ) : null}
         </div>
     )
 }

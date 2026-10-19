@@ -58,7 +58,8 @@ func (a *App) PreviewWorkspacePath(name, parentDir string) string {
 }
 
 // CreateWorkspaceIn crea la carpeta del workspace dentro de parentDir (vacío = la
-// predeterminada), escribe las reglas e instala las skills. parentDir debe ser
+// predeterminada), escribe las reglas, un primer checkpoint por defecto e
+// instala las skills. parentDir debe ser
 // absoluta y se crea si no existe; si el destino <padre>/<slug> ya existe y no
 // está vacío devuelve un error que nombra la carpeta, sin tocar nada.
 func (a *App) CreateWorkspaceIn(name, printerID, parentDir string) (store.Workspace, error) {
@@ -74,6 +75,7 @@ func (a *App) CreateWorkspaceIn(name, printerID, parentDir string) (store.Worksp
 	if w.ID, err = a.store.InsertWorkspace(w); err != nil {
 		return store.Workspace{}, err
 	}
+	a.writeStarter(dir, name)
 	a.syncWorkspaceMCPQuiet(w)
 	if err := a.syncSkills(dir); err != nil {
 		return w, i18n.Errorf(i18n.Msg{ES: "workspace creado, pero falló la instalación de skills: %v", EN: "workspace created, but installing skills failed: %v"}, err)
@@ -82,7 +84,8 @@ func (a *App) CreateWorkspaceIn(name, printerID, parentDir string) (store.Worksp
 }
 
 // ImportWorkspace registra una carpeta existente (p. ej. un proyecto que el
-// usuario ya tenía). Escribe las reglas solo si faltan.
+// usuario ya tenía). Escribe las reglas solo si faltan y, si la carpeta no tiene
+// ningún .scad, el checkpoint por defecto; con modelos propios no los toca.
 func (a *App) ImportWorkspace(dir, printerID string) (store.Workspace, error) {
 	if err := a.ready(); err != nil {
 		return store.Workspace{}, err
@@ -101,9 +104,32 @@ func (a *App) ImportWorkspace(dir, printerID string) (store.Workspace, error) {
 	if w.ID, err = a.store.InsertWorkspace(w); err != nil {
 		return store.Workspace{}, err
 	}
+	a.writeStarter(dir, name)
 	_ = a.syncSkills(dir)
 	a.syncWorkspaceMCPQuiet(w)
 	return a.store.GetWorkspace(w.ID)
+}
+
+// skipStarter apaga el checkpoint por defecto. Es un gancho de PRUEBAS: lo sube
+// newTestApp porque casi todas las fixtures de los tests de la app arman su
+// propio árbol de checkpoints (001-base.scad…) sobre un workspace recién creado,
+// y un 001 ya escrito les cambiaría los nombres y los conteos. Los tests del
+// starter lo bajan (withStarter). En la app real nunca se toca.
+var skipStarter bool
+
+// writeStarter deja el primer checkpoint por defecto (001-<nombre>.scad) en un
+// workspace que no tiene ningún .scad: un proyecto nuevo abre con una pieza que
+// ver y de la que partir. Va ANTES de que se reescanee o se abra el proyecto, para
+// que el árbol ya lo traiga y el visor lo seleccione y lo renderice como el más
+// nuevo. Una carpeta con modelos no se toca. Un fallo solo se registra: no
+// puede hacer fallar el alta de un workspace que sí quedó creado.
+func (a *App) writeStarter(dir, name string) {
+	if skipStarter {
+		return
+	}
+	if _, err := workspace.WriteStarter(dir, name, i18n.Lang()); err != nil {
+		log.Printf("scadlab: .scad inicial de %s: %v", dir, err)
+	}
 }
 
 // UpdateWorkspace cambia nombre, impresora o descripción. Si cambió la

@@ -1,99 +1,182 @@
-// Package llm habla con proveedores de modelos por HTTP para el chat de diseño
-// de ScadLab: Ollama, cualquier servidor compatible con la API de OpenAI (LM
-// Studio, vLLM, llama.cpp server, OpenRouter…) y la API de Anthropic.
+// Package llm habla con proveedores de modelos por HTTP: Ollama, cualquier
+// servidor compatible con la API de OpenAI (LM Studio, vLLM, llama.cpp
+// server, OpenRouter, Google Gemini por su endpoint compatible, Groq,
+// DeepSeek…) y la API de Anthropic.
 //
-// Es un puerto reducido de backend/llm de mini-tools: solo conversación de
-// texto con streaming y cancelación. No hay adjuntos, herramientas ni
-// pensamiento visible; lo que el modelo "piensa" antes de contestar se descarta
-// y al usuario le llega únicamente la respuesta.
+// Es el paquete de mini-tools (mismo autor, misma pila) portado a ScadLab: lo
+// genérico se porta, no se reinventa. Lo que ScadLab conserva de su versión
+// reducida de S5: `num_ctx` de Ollama (lo decide quien arma el cliente), el
+// pensamiento fuera del texto visible (viaja aparte, en Delta.Thinking) y el
+// tipo StatusError.
 //
-// # Por qué a mano (Ollama y OpenAI) y con el SDK (Anthropic)
+// # Por qué a mano y no con un SDK (Ollama y OpenAI)
 //
-// Ollama transmite NDJSON y la API de OpenAI, SSE: los dos caben en net/http y
-// encoding/json, y lo único que importa mirar es qué llega en cada trozo. La
-// API de Anthropic, en cambio, tiene eventos tipados, errores con tipo y
-// reintentos con retry-after: reimplementarlo a mano es código que parece
-// andar y se rompe con la siguiente versión de la API, así que ese cliente usa
-// el SDK oficial.
+// Son dos protocolos chicos —Ollama transmite NDJSON y la API de OpenAI,
+// SSE— y los dos caben en `net/http` + `encoding/json`. Un SDK sumaría una
+// dependencia para ocultar lo único que acá hay que mirar de cerca: qué llega
+// en cada trozo del stream.
+//
+// # La excepción: Anthropic usa el SDK oficial
+//
+// La API de Anthropic no es chica: bloques de contenido tipados, pensamiento
+// con firmas que hay que devolver intactas, caché de prompt, `stop_reason`
+// con refusals, errores tipados y reintentos con `retry-after`. Reimplementar
+// eso a mano es el tipo de código que parece andar y se rompe con la
+// siguiente versión de la API, así que ese cliente (anthropic.go) usa
+// github.com/anthropics/anthropic-sdk-go.
 //
 // # Qué NO hace
 //
 // No conoce la base ni los workspaces: recibe una URL, un token opcional y
-// mensajes, y devuelve texto en trozos. De dónde sale el token lo decide quien
-// arma el cliente (app_chat.go lo lee de la variable de entorno que nombra
-// apiKeyEnv); aquí nunca se guarda ni se escribe en un log ni en un error.
+// mensajes, y devuelve texto en trozos. Quien arma el cliente (app_servers.go)
+// decide de dónde sale el token —que aquí nunca se guarda ni se escribe en un
+// log ni en un error—; quien consume el stream (backend/chat) decide cómo
+// mostrarlo.
+//
+// Los tipos ya cargan herramientas, llamadas a herramientas, imágenes y uso de
+// tokens, aunque el bucle que ejecuta las herramientas no viva acá: ese bucle
+// lo arma quien llama (Hermes), con sus propios permisos, y este paquete solo
+// tiene que llevarlas y traerlas sin perder datos.
 package llm
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"scadlab/backend/i18n"
 )
 
-// Tipos de servidor (coinciden con ai_providers.kind).
+// Tipos de servidor.
 const (
-	KindOllama    = "ollama"
-	KindOpenAI    = "openai"
+	KindOllama = "ollama"
+	KindOpenAI = "openai"
+	// KindAnthropic es la API de Anthropic (Claude), con su SDK oficial.
 	KindAnthropic = "anthropic"
 )
 
 // Roles de un mensaje.
 const (
+	RoleSystem    = "system"
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
+	RoleTool      = "tool"
 )
 
-// Message es un mensaje de la conversación, común a los tres protocolos.
+// Message es un mensaje de la conversación, en un modelo común a los dos
+// protocolos: cada cliente lo traduce al suyo.
 type Message struct {
 	Role    string
 	Content string
+	// Images son rutas de archivo. El cliente las lee y las codifica en
+	// base64 al armar el request (Ollama las manda en `images`; OpenAI, como
+	// partes `image_url` con un data URI): quien llama no carga bytes.
+	Images []string
+	// ToolCalls son las llamadas que pidió el modelo (rol assistant).
+	ToolCalls []ToolCall
+	// ToolCallID y Name responden a una llamada (rol tool). OpenAI correlaciona
+	// por id; Ollama, por nombre de herramienta.
+	ToolCallID string
+	Name       string
+	// Raw es el mensaje del asistente tal como lo devolvió el proveedor, en su
+	// propio formato, para reenviarlo SIN tocar. Es opaco para todo el que no
+	// sea el cliente que lo produjo: el runner lo lleva de ida y vuelta sin
+	// mirarlo y los demás clientes lo ignoran. Existe por el pensamiento de
+	// Anthropic: los bloques `thinking` llevan una firma y solo valen si vuelven
+	// idénticos dentro del turno (ver anthropic.go). nil = no hay nada que
+	// preservar y el mensaje se reconstruye de Content y ToolCalls.
+	Raw any
 }
 
-// ChatRequest es un turno a enviar. System va aparte porque cada protocolo lo
-// pone en un lugar distinto (primer mensaje o parámetro propio).
+// ToolCall es una llamada a herramienta pedida por el modelo.
+type ToolCall struct {
+	// ID lo asigna el servidor (OpenAI). Ollama no lo manda: se completa con
+	// uno sintético para poder correlacionar la respuesta.
+	ID   string
+	Name string
+	// Arguments ya viene decodificado: Ollama lo manda como objeto y OpenAI
+	// como cadena JSON, y el cliente unifica.
+	Arguments map[string]any
+}
+
+// ToolDef declara una herramienta que el modelo puede pedir.
+type ToolDef struct {
+	Name        string
+	Description string
+	// Parameters es un JSON Schema.
+	Parameters map[string]any
+}
+
+// ChatRequest es un turno a enviar.
 type ChatRequest struct {
 	Model    string
-	System   string
 	Messages []Message
+	Tools    []ToolDef
 }
 
-// Result es la respuesta. Text trae lo recibido hasta donde se llegó, también
-// cuando Chat devuelve error: quien llama decide si conserva el parcial (una
-// cancelación a mitad de respuesta conserva lo ya escrito).
-type Result struct {
-	Text string
+// Delta es un trozo de la respuesta que llega en vivo.
+type Delta struct {
+	Text     string
+	Thinking string
+}
+
+// Usage son los tokens que informó el servidor. Cero significa "no lo dijo".
+type Usage struct {
+	// Input incluye los tokens leídos y escritos en caché: es todo lo que el
+	// modelo recibió, que es lo que el resto del programa suma.
+	Input  int64
+	Output int64
+	// CacheRead y CacheWrite son la parte de Input que salió de la caché del
+	// prompt o se escribió en ella (Anthropic). Thinking es la parte de Output
+	// que fue razonamiento interno. Los tres son 0 si el proveedor no los dice.
+	CacheRead  int64
+	CacheWrite int64
+	Thinking   int64
+}
+
+// ChatResult es la respuesta ya completa.
+type ChatResult struct {
+	// Message es el mensaje del asistente, con el texto acumulado y las
+	// llamadas a herramientas, si las hubo.
+	Message Message
+	Usage   Usage
 	// Model es el que respondió de verdad, que puede diferir del pedido.
 	Model string
 }
 
 // Client es lo que ofrece un servidor de modelos.
 type Client interface {
+	// Version informa la versión del servidor. Ollama la publica; el
+	// protocolo de OpenAI no, y ahí devuelve "" sin error.
+	Version(ctx context.Context) (string, error)
 	// Models lista los ids de los modelos disponibles.
 	Models(ctx context.Context) ([]string, error)
 	// Chat envía la conversación y transmite la respuesta por onDelta (puede
-	// ser nil) a medida que llega. Devuelve cuando el stream termina.
-	Chat(ctx context.Context, req ChatRequest, onDelta func(text string)) (Result, error)
+	// ser nil). Devuelve cuando el stream termina.
+	Chat(ctx context.Context, req ChatRequest, onDelta func(Delta)) (ChatResult, error)
 }
 
-// Options son los datos de conexión de un servidor.
+// Options son los datos de conexión de un servidor, todos opcionales.
 type Options struct {
 	// Token se manda como `Authorization: Bearer <token>` (o x-api-key en
 	// Anthropic). Vacío = sin autenticación, lo normal en un LM Studio local.
 	Token string
-	// NumCtx es la ventana de contexto que se le pide a Ollama (options.num_ctx).
-	// 0 = la del servidor. Un servidor compatible con OpenAI la ignora.
-	NumCtx int
+	// ContextTokens es la ventana de contexto que se le pide a Ollama
+	// (`options.num_ctx`) en cada /api/chat. 0 = no mandarla y dejar la que
+	// traiga el servidor. Un servidor compatible con OpenAI la ignora: la fija
+	// al cargar el modelo y su API no la admite por petición.
+	ContextTokens int
 }
-
-// DefaultAnthropicBaseURL es la API oficial de Anthropic.
-const DefaultAnthropicBaseURL = "https://api.anthropic.com"
 
 // New arma el cliente del tipo pedido.
 func New(kind, baseURL string, opt Options) (Client, error) {
-	baseURL = normalizeFor(kind, baseURL)
+	baseURL = NormalizeBaseURLFor(kind, baseURL)
 	base, err := NormalizeBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -101,7 +184,7 @@ func New(kind, baseURL string, opt Options) (Client, error) {
 	r := requester{base: base, token: opt.Token, http: newHTTPClient()}
 	switch kind {
 	case KindOllama:
-		return &ollamaClient{requester: r, numCtx: opt.NumCtx}, nil
+		return &ollamaClient{requester: r, numCtx: opt.ContextTokens}, nil
 	case KindOpenAI:
 		return &openaiClient{requester: r}, nil
 	case KindAnthropic:
@@ -110,11 +193,15 @@ func New(kind, baseURL string, opt Options) (Client, error) {
 	return nil, i18n.Errorf(i18n.Msg{ES: "llm: tipo de servidor desconocido %q", EN: "llm: unknown server kind %q"}, kind)
 }
 
-// normalizeFor aplica a la URL lo propio de cada tipo antes de validarla:
+// DefaultAnthropicBaseURL es la API oficial de Anthropic.
+const DefaultAnthropicBaseURL = "https://api.anthropic.com"
+
+// NormalizeBaseURLFor aplica a la URL lo propio de cada tipo, antes de validarla:
 // Anthropic tiene una URL por defecto (vacía = la oficial) y el SDK agrega
-// `/v1/...` por su cuenta, así que un `/v1` final —como se copia la URL de un
-// proxy— se saca para no pedir `/v1/v1/messages`.
-func normalizeFor(kind, raw string) string {
+// `/v1/...` por su cuenta, así que un `/v1` final —que es como se copia la URL
+// de un proxy— se saca para no pedir `/v1/v1/messages`. Los demás tipos pasan
+// tal cual.
+func NormalizeBaseURLFor(kind, raw string) string {
 	if kind != KindAnthropic {
 		return raw
 	}
@@ -130,22 +217,105 @@ func NormalizeBaseURL(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return "", i18n.New(i18n.Msg{ES: "la URL del servidor tiene que ser http:// o https:// con un host", EN: "the server URL must be http:// or https:// with a host"})
+		return "", i18n.Errorf(i18n.Msg{ES: "llm: la URL del servidor tiene que ser http:// o https:// con un host", EN: "llm: the server URL must be http:// or https:// with a host"})
 	}
 	return strings.TrimRight(raw, "/"), nil
 }
 
-// controlTimeout acota las llamadas cortas (lista de modelos). El chat no lo
+// controlTimeout acota las llamadas cortas (versión, modelos). El chat no lo
 // usa: un modelo grande puede tardar minutos en cargarse antes del primer
 // byte, y ahí manda el contexto de quien llama.
 const controlTimeout = 10 * time.Second
 
-// maxLine acota una línea del stream. Un trozo normal no se acerca a esto;
-// una línea de 8 MB significa que no es lo que creemos.
+// maxErrBody es cuánto del cuerpo de un error se incluye en el mensaje.
+const maxErrBody = 300
+
+// StatusError es una respuesta HTTP que no fue 2xx. Es un tipo propio y no un
+// fmt.Errorf para que quien llama pueda mirar el status (un 401 invita a
+// revisar la clave; IsToolsUnsupported) sin parsear el texto.
+type StatusError struct {
+	Base   string
+	Status int
+	Msg    string
+}
+
+func (e *StatusError) Error() string {
+	return i18n.T(i18n.Msg{ES: "el servidor %s respondió %d: %s", EN: "the server %s answered %d: %s"}, e.Base, e.Status, e.Msg)
+}
+
+// IsToolsUnsupported dice si el servidor rechazó el request por las
+// herramientas: el modelo no las soporta (Ollama: «… does not support tools»,
+// HTTP 400) o el servidor no tiene el function calling encendido (vLLM:
+// «"auto" tool choice requires --enable-auto-tool-choice», llama.cpp: «tools
+// param requires --jinja flag»). Quien llama reintenta sin herramientas.
+//
+// Se decide por el texto además del status porque los servidores compatibles
+// con OpenAI no se ponen de acuerdo ni en el código (400, 422 y hasta 500) ni
+// en las palabras; lo que sí comparten es mencionar «tool» o «function
+// call» junto a un «not supported / requires». Un error de red o un 401 nunca
+// llegan acá: no mencionan herramientas.
+func IsToolsUnsupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	var se *StatusError
+	if errors.As(err, &se) && se.Status != 400 && se.Status != 422 && se.Status != 500 && se.Status != 501 {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "tool") && !strings.Contains(msg, "function call") {
+		return false
+	}
+	for _, w := range []string{"not support", "unsupported", "requires", "not enabled", "not available", "--jinja"} {
+		if strings.Contains(msg, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// errorSnippet saca el mensaje de un cuerpo de error. Los dos protocolos
+// responden JSON con `error` como texto (Ollama) u objeto con `message`
+// (OpenAI); si no es ninguno, se muestra el comienzo del cuerpo crudo.
+func errorSnippet(body []byte) string {
+	return trimSnippet(errorFromBody(body), body)
+}
+
+func trimSnippet(msg string, body []byte) string {
+	if msg == "" {
+		msg = strings.TrimSpace(string(body))
+	}
+	if len(msg) > maxErrBody {
+		msg = msg[:maxErrBody] + "…"
+	}
+	if msg == "" {
+		return "-"
+	}
+	return msg
+}
+
+// readImage lee una imagen y la devuelve en base64 y con su tipo MIME.
+func readImage(path string) (b64, mime string, err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", i18n.Errorf(i18n.Msg{ES: "no se pudo leer la imagen %q: %w", EN: "could not read the image %q: %w"}, filepath.Base(path), err)
+	}
+	mime = http.DetectContentType(data)
+	if !strings.HasPrefix(mime, "image/") {
+		return "", "", i18n.Errorf(i18n.Msg{ES: "%q no es una imagen", EN: "%q is not an image"}, filepath.Base(path))
+	}
+	return base64.StdEncoding.EncodeToString(data), mime, nil
+}
+
+// maxLine acota una línea del stream. Un trozo con razonamiento largo no se
+// acerca a esto; una línea de 8 MB significa que no es lo que creemos.
 const maxLine = 8 << 20
 
-// AnthropicModels es la lista fija que ofrece ScadLab para la API de Anthropic
-// (el modelo más capaz primero). Es fija a propósito: listar por red exigiría
-// la clave solo para llenar un desplegable, y quien use otro modelo (o un
-// proxy) lo escribe a mano en Configuración → IA.
-var AnthropicModels = []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}

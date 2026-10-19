@@ -6,6 +6,14 @@ export function AddAntigravityMCP() {
   return window['go']['main']['App']['AddAntigravityMCP']();
 }
 
+export function AddChatAttachment(arg1, arg2) {
+  return window['go']['main']['App']['AddChatAttachment'](arg1, arg2);
+}
+
+export function AddChatAttachmentData(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AddChatAttachmentData'](arg1, arg2, arg3);
+}
+
 export function AntigravityMCPStatus() {
   return window['go']['main']['App']['AntigravityMCPStatus']();
 }
@@ -22,8 +30,20 @@ export function CancelRender(arg1) {
   return window['go']['main']['App']['CancelRender'](arg1);
 }
 
+export function ChangeMasterPassword(arg1, arg2) {
+  return window['go']['main']['App']['ChangeMasterPassword'](arg1, arg2);
+}
+
+export function ChangeSkillsFolder(arg1, arg2) {
+  return window['go']['main']['App']['ChangeSkillsFolder'](arg1, arg2);
+}
+
 export function ChatCheckpointParent(arg1, arg2) {
   return window['go']['main']['App']['ChatCheckpointParent'](arg1, arg2);
+}
+
+export function ChooseChatAttachment(arg1) {
+  return window['go']['main']['App']['ChooseChatAttachment'](arg1);
 }
 
 export function ChooseDirectory(arg1, arg2) {
@@ -42,8 +62,16 @@ export function CloseTerminal(arg1) {
   return window['go']['main']['App']['CloseTerminal'](arg1);
 }
 
+export function CreateMasterPassword(arg1, arg2) {
+  return window['go']['main']['App']['CreateMasterPassword'](arg1, arg2);
+}
+
 export function CreateSkill(arg1) {
   return window['go']['main']['App']['CreateSkill'](arg1);
+}
+
+export function CreateSkillFile(arg1, arg2) {
+  return window['go']['main']['App']['CreateSkillFile'](arg1, arg2);
 }
 
 export function CreateWorkspace(arg1, arg2) {
@@ -56,6 +84,18 @@ export function CreateWorkspaceIn(arg1, arg2, arg3) {
 
 export function DeleteChat(arg1) {
   return window['go']['main']['App']['DeleteChat'](arg1);
+}
+
+export function DeleteModelServer(arg1) {
+  return window['go']['main']['App']['DeleteModelServer'](arg1);
+}
+
+export function DeleteSkill(arg1) {
+  return window['go']['main']['App']['DeleteSkill'](arg1);
+}
+
+export function DeleteSkillFile(arg1, arg2) {
+  return window['go']['main']['App']['DeleteSkillFile'](arg1, arg2);
 }
 
 export function DetectSlicers() {
@@ -82,6 +122,10 @@ export function ExportCheckpoint(arg1, arg2, arg3) {
   return window['go']['main']['App']['ExportCheckpoint'](arg1, arg2, arg3);
 }
 
+export function ForgetThisDevice() {
+  return window['go']['main']['App']['ForgetThisDevice']();
+}
+
 export function FormatScad(arg1) {
   return window['go']['main']['App']['FormatScad'](arg1);
 }
@@ -96,6 +140,10 @@ export function GetBootstrap() {
 
 export function GetChat(arg1) {
   return window['go']['main']['App']['GetChat'](arg1);
+}
+
+export function GetLastModel(arg1) {
+  return window['go']['main']['App']['GetLastModel'](arg1);
 }
 
 export function GetMCPStatus(arg1) {
@@ -126,6 +174,10 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function GetSkillsFolder() {
+  return window['go']['main']['App']['GetSkillsFolder']();
+}
+
 export function ImportWorkspace(arg1, arg2) {
   return window['go']['main']['App']['ImportWorkspace'](arg1, arg2);
 }
@@ -150,6 +202,10 @@ export function ListMaterials() {
   return window['go']['main']['App']['ListMaterials']();
 }
 
+export function ListModelServers() {
+  return window['go']['main']['App']['ListModelServers']();
+}
+
 export function ListOpenProjects() {
   return window['go']['main']['App']['ListOpenProjects']();
 }
@@ -164,6 +220,14 @@ export function ListProviderModels(arg1) {
 
 export function ListProviders() {
   return window['go']['main']['App']['ListProviders']();
+}
+
+export function ListServerModels(arg1, arg2) {
+  return window['go']['main']['App']['ListServerModels'](arg1, arg2);
+}
+
+export function ListSkillFiles(arg1) {
+  return window['go']['main']['App']['ListSkillFiles'](arg1);
 }
 
 export function ListSkills() {
@@ -184,10 +248,6 @@ export function ListWorkspaces() {
 
 export function NewChat(arg1, arg2, arg3) {
   return window['go']['main']['App']['NewChat'](arg1, arg2, arg3);
-}
-
-export function OllamaModels(arg1) {
-  return window['go']['main']['App']['OllamaModels'](arg1);
 }
 
 export function OpenInSlicer(arg1, arg2) {
@@ -226,12 +286,20 @@ export function ReadCheckpointPair(arg1, arg2) {
   return window['go']['main']['App']['ReadCheckpointPair'](arg1, arg2);
 }
 
+export function ReadSkillFile(arg1, arg2) {
+  return window['go']['main']['App']['ReadSkillFile'](arg1, arg2);
+}
+
 export function ReadTerminalBuffer(arg1) {
   return window['go']['main']['App']['ReadTerminalBuffer'](arg1);
 }
 
 export function RemoveAntigravityMCP() {
   return window['go']['main']['App']['RemoveAntigravityMCP']();
+}
+
+export function RemoveChatAttachment(arg1) {
+  return window['go']['main']['App']['RemoveChatAttachment'](arg1);
 }
 
 export function RemoveDownloadedOpenSCAD() {
@@ -242,8 +310,20 @@ export function RemoveWorkspace(arg1) {
   return window['go']['main']['App']['RemoveWorkspace'](arg1);
 }
 
+export function RenameChat(arg1, arg2) {
+  return window['go']['main']['App']['RenameChat'](arg1, arg2);
+}
+
 export function RenameCheckpoint(arg1, arg2, arg3) {
   return window['go']['main']['App']['RenameCheckpoint'](arg1, arg2, arg3);
+}
+
+export function RenameSkill(arg1, arg2) {
+  return window['go']['main']['App']['RenameSkill'](arg1, arg2);
+}
+
+export function RenameSkillFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RenameSkillFile'](arg1, arg2, arg3);
 }
 
 export function RenderCheckpoint(arg1, arg2) {
@@ -256,6 +336,10 @@ export function ReorderProjects(arg1) {
 
 export function RescanWorkspace(arg1) {
   return window['go']['main']['App']['RescanWorkspace'](arg1);
+}
+
+export function ResetVault() {
+  return window['go']['main']['App']['ResetVault']();
 }
 
 export function ResizeTerminal(arg1, arg2, arg3) {
@@ -310,6 +394,10 @@ export function SaveMaterial(arg1) {
   return window['go']['main']['App']['SaveMaterial'](arg1);
 }
 
+export function SaveModelServer(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveModelServer'](arg1, arg2, arg3);
+}
+
 export function SaveProvider(arg1) {
   return window['go']['main']['App']['SaveProvider'](arg1);
 }
@@ -322,6 +410,10 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
+export function SaveSkillFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveSkillFile'](arg1, arg2, arg3);
+}
+
 export function SaveSwatches(arg1) {
   return window['go']['main']['App']['SaveSwatches'](arg1);
 }
@@ -330,8 +422,8 @@ export function SaveViewer(arg1) {
   return window['go']['main']['App']['SaveViewer'](arg1);
 }
 
-export function SendChatMessage(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SendChatMessage'](arg1, arg2, arg3);
+export function SendChatMessage(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SendChatMessage'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SetActiveParent(arg1, arg2) {
@@ -346,6 +438,10 @@ export function SetAutoIterate(arg1) {
   return window['go']['main']['App']['SetAutoIterate'](arg1);
 }
 
+export function SetChatModel(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetChatModel'](arg1, arg2, arg3);
+}
+
 export function SetCheckpointUI(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SetCheckpointUI'](arg1, arg2, arg3, arg4);
 }
@@ -358,8 +454,16 @@ export function SetLastCheckpoint(arg1, arg2) {
   return window['go']['main']['App']['SetLastCheckpoint'](arg1, arg2);
 }
 
+export function SetLastModel(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetLastModel'](arg1, arg2, arg3);
+}
+
 export function SetMCPEnabled(arg1) {
   return window['go']['main']['App']['SetMCPEnabled'](arg1);
+}
+
+export function SetRememberDevice(arg1) {
+  return window['go']['main']['App']['SetRememberDevice'](arg1);
 }
 
 export function SetSkillEnabled(arg1, arg2) {
@@ -382,6 +486,10 @@ export function SyncWorkspaceSkills(arg1) {
   return window['go']['main']['App']['SyncWorkspaceSkills'](arg1);
 }
 
+export function TestModelServer(arg1, arg2) {
+  return window['go']['main']['App']['TestModelServer'](arg1, arg2);
+}
+
 export function TitleBarDoubleClick() {
   return window['go']['main']['App']['TitleBarDoubleClick']();
 }
@@ -390,8 +498,20 @@ export function TrashCheckpoint(arg1, arg2, arg3) {
   return window['go']['main']['App']['TrashCheckpoint'](arg1, arg2, arg3);
 }
 
+export function UnlockVault(arg1, arg2) {
+  return window['go']['main']['App']['UnlockVault'](arg1, arg2);
+}
+
 export function UpdateWorkspace(arg1) {
   return window['go']['main']['App']['UpdateWorkspace'](arg1);
+}
+
+export function ValidateSkillMarkdown(arg1, arg2) {
+  return window['go']['main']['App']['ValidateSkillMarkdown'](arg1, arg2);
+}
+
+export function VaultStatus() {
+  return window['go']['main']['App']['VaultStatus']();
 }
 
 export function WriteTerminal(arg1, arg2) {

@@ -1,23 +1,18 @@
 import {useCallback, useEffect, useState} from 'react'
-import {CheckCircle2, CircleDashed, FolderOpen, Plus, RefreshCw, Coffee, Heart} from 'lucide-react'
+import {CheckCircle2, CircleDashed, RefreshCw, Coffee, Heart} from 'lucide-react'
 import type {detect, main, printers} from '../../../wailsjs/go/models'
 import {store} from '../../../wailsjs/go/models'
 import {
     ChooseDirectory,
     ChooseFile,
-    CreateSkill,
     DetectSlicers,
     DetectTools,
     EffectiveWorkspacesRoot,
     ListMaterials,
     ListProviders,
-    ListSkills,
-    OllamaModels,
-    OpenSkillsFolder,
     SaveMaterial,
     SaveProvider,
     SaveSettings,
-    SetSkillEnabled,
 } from '../../../wailsjs/go/main/App'
 import {BrowserOpenURL} from '../../../wailsjs/runtime/runtime'
 import {BUY_ME_A_COFFEE_URL, PATREON_JOIN_URL, PATREON_PAGE_URL} from '../../lib/support'
@@ -35,21 +30,12 @@ import type {Appearance} from '../../lib/appearance'
 import {AppearanceSettings} from './AppearanceSettings'
 import {McpSettings} from './McpSettings'
 import {OpenSCADSettings} from './OpenSCADSettings'
+import {ProvidersSettings} from './providers/ProvidersSettings'
+import {SkillsSettings} from './SkillsSettings'
 
-export type SettingsTab = 'general' | 'openscad' | 'ai' | 'printing' | 'skills' | 'about'
+export type SettingsTab = 'general' | 'openscad' | 'ai' | 'providers' | 'printing' | 'skills' | 'about'
 type Tab = SettingsTab
-const TABS: Tab[] = ['general', 'openscad', 'ai', 'printing', 'skills', 'about']
-
-type ProviderCfg = {baseUrl?: string; model?: string; apiKeyEnv?: string}
-
-function parseCfg(raw: unknown): ProviderCfg {
-    if (raw && typeof raw === 'object') return raw as ProviderCfg
-    try {
-        return JSON.parse(String(raw ?? '{}'))
-    } catch {
-        return {}
-    }
-}
+const TABS: Tab[] = ['general', 'openscad', 'ai', 'providers', 'printing', 'skills', 'about']
 
 function ToolStatus({tool}: {tool?: detect.Tool}) {
     const t = useT()
@@ -111,10 +97,7 @@ export function SettingsDialog({
     const [slicers, setSlicers] = useState<main.Slicer[]>([])
     const [detecting, setDetecting] = useState(false)
     const [providers, setProviders] = useState<store.AIProvider[]>([])
-    const [models, setModels] = useState<Record<string, string[]>>({})
     const [materials, setMaterials] = useState<store.Material[]>([])
-    const [skills, setSkills] = useState<main.SkillView[]>([])
-    const [newSkill, setNewSkill] = useState('')
 
     const detectAll = useCallback(async () => {
         setDetecting(true)
@@ -134,7 +117,6 @@ export function SettingsDialog({
         EffectiveWorkspacesRoot().then(setDefaultRoot).catch(() => {})
         ListProviders().then(setProviders).catch((e) => toast.error(errorText(e)))
         ListMaterials().then(setMaterials).catch((e) => toast.error(errorText(e)))
-        ListSkills().then(setSkills).catch((e) => toast.error(errorText(e)))
         DetectSlicers().then((l) => setSlicers(l ?? [])).catch(() => {})
         void detectAll()
     }, [open, boot.settings, detectAll, initialTab])
@@ -168,7 +150,6 @@ export function SettingsDialog({
 
     const tool = (id: string) => tools.find((x) => x.id === id)
     const cliProviders = providers.filter((p) => p.kind === 'cli')
-    const serverProviders = providers.filter((p) => p.kind !== 'cli')
 
     return (
         <Dialog
@@ -404,78 +385,10 @@ export function SettingsDialog({
                             </div>
 
                             <McpSettings workspaceId={workspaceId} workspaceName={workspaceName} />
-
-                            <div className="flex flex-col gap-2">
-                                <h3 className="text-ui-13 font-semibold">{t.settings.modelServers}</h3>
-                                {serverProviders.map((p) => {
-                                    const cfg = parseCfg(p.config)
-                                    const update = (patch: ProviderCfg) =>
-                                        setProviders((l) =>
-                                            l.map((x) => (x.id === p.id ? store.AIProvider.createFrom({...x, config: {...cfg, ...patch}}) : x)),
-                                        )
-                                    return (
-                                        <div key={p.id} className="flex flex-col gap-3 rounded-lg border border-line p-3">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-ui-12-5 font-medium">{p.name}</span>
-                                                <Toggle
-                                                    checked={p.enabled}
-                                                    title={t.settings.enabled}
-                                                    onChange={(v) => saveProvider(store.AIProvider.createFrom({...p, enabled: v}))}
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-3" onBlur={() => saveProvider(p)}>
-                                                {p.kind !== 'anthropic' ? (
-                                                    <Field label={t.settings.baseUrl}>
-                                                        <Input value={cfg.baseUrl ?? ''} onChange={(e) => update({baseUrl: e.target.value})} />
-                                                    </Field>
-                                                ) : null}
-                                                <Field label={t.settings.model}>
-                                                    {models[p.id]?.length ? (
-                                                        <Select value={cfg.model ?? ''} onChange={(e) => update({model: e.target.value})}>
-                                                            <option value="">—</option>
-                                                            {models[p.id].map((m) => (
-                                                                <option key={m} value={m}>
-                                                                    {m}
-                                                                </option>
-                                                            ))}
-                                                        </Select>
-                                                    ) : (
-                                                        <Input value={cfg.model ?? ''} onChange={(e) => update({model: e.target.value})} />
-                                                    )}
-                                                </Field>
-                                                {p.kind !== 'ollama' ? (
-                                                    <Field label={t.settings.apiKeyEnv} hint={t.settings.apiKeyEnvHint}>
-                                                        <Input className="font-mono" value={cfg.apiKeyEnv ?? ''} onChange={(e) => update({apiKeyEnv: e.target.value})} />
-                                                    </Field>
-                                                ) : null}
-                                            </div>
-                                            {p.kind === 'ollama' ? (
-                                                <div className="flex items-center gap-3">
-                                                    <Button
-                                                        title={t.settings.testConnection}
-                                                        onClick={async () => {
-                                                            try {
-                                                                const list = await OllamaModels(cfg.baseUrl ?? '')
-                                                                setModels((m) => ({...m, [p.id]: list}))
-                                                                toast.ok(fmt(t.settings.modelsFound, {n: list.length}))
-                                                            } catch (e) {
-                                                                toast.error(errorText(e))
-                                                            }
-                                                        }}
-                                                    >
-                                                        {t.settings.testConnection}
-                                                    </Button>
-                                                    {models[p.id] ? (
-                                                        <span className="text-ui-11-5 text-ok">{fmt(t.settings.modelsFound, {n: models[p.id].length})}</span>
-                                                    ) : null}
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    )
-                                })}
-                            </div>
                         </div>
                     )}
+
+                    {tab === 'providers' && <ProvidersSettings />}
 
                     {tab === 'printing' && (
                         <div className="flex flex-col gap-4">
@@ -644,72 +557,7 @@ export function SettingsDialog({
                     )}
 
                     {tab === 'skills' && (
-                        <div className="flex flex-col gap-4">
-                            <p className="text-ui-12 leading-relaxed text-muted">{t.settings.skillsIntro}</p>
-                            <div className="divide-y divide-line rounded-lg border border-line">
-                                {skills.map((k) => (
-                                    <div key={k.name} className="flex items-start gap-3 px-3 py-2.5">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-mono text-ui-12 font-medium">{k.name}</span>
-                                                <span
-                                                    className={cn(
-                                                        'rounded px-1.5 py-px font-mono text-ui-10',
-                                                        k.source === 'user' ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-faint',
-                                                    )}
-                                                >
-                                                    {k.source === 'user' ? t.settings.user : t.settings.builtin}
-                                                </span>
-                                            </div>
-                                            <p className="mt-0.5 line-clamp-2 text-ui-11-5 leading-snug text-faint">{k.description}</p>
-                                        </div>
-                                        <Toggle
-                                            checked={k.enabled}
-                                            title={t.settings.enabled}
-                                            onChange={async (v) => {
-                                                setSkills((l) => l.map((x) => (x.name === k.name ? {...x, enabled: v} : x)) as main.SkillView[])
-                                                try {
-                                                    await SetSkillEnabled(k.name, v)
-                                                } catch (e) {
-                                                    toast.error(errorText(e))
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                            <Field label={t.settings.newSkill} hint={t.settings.newSkillHint}>
-                                <div className="flex gap-2">
-                                    <Input
-                                        className="font-mono"
-                                        value={newSkill}
-                                        placeholder={t.settings.newSkillPlaceholder}
-                                        onChange={(e) => setNewSkill(e.target.value.toLowerCase())}
-                                    />
-                                    <Button
-                                        variant="primary"
-                                        title={t.settings.newSkillHint}
-                                        disabled={!newSkill.trim()}
-                                        onClick={async () => {
-                                            try {
-                                                const dir = await CreateSkill(newSkill.trim())
-                                                toast.ok(fmt(t.settings.skillCreated, {dir}))
-                                                setNewSkill('')
-                                                setSkills(await ListSkills())
-                                            } catch (e) {
-                                                toast.error(errorText(e))
-                                            }
-                                        }}
-                                    >
-                                        <Plus className="icon-ui-14" />
-                                        {t.settings.newSkill}
-                                    </Button>
-                                    <Button title={t.settings.openSkillsFolder} onClick={() => OpenSkillsFolder().catch((e) => toast.error(errorText(e)))}>
-                                        <FolderOpen className="icon-ui-14" />
-                                    </Button>
-                                </div>
-                            </Field>
-                        </div>
+                        <SkillsSettings fontSize={appearance.editorFontSize || 13} tabSize={s.editorIndent === 2 ? 2 : 4} wordWrap={s.editorWordWrap} />
                     )}
 
                     {tab === 'about' && (

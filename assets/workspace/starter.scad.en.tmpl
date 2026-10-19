@@ -1,0 +1,51 @@
+// @checkpoint parent= desc="{{.Desc}}"
+// ScadLab starting point: a chamfered base with a knob on top.
+// Change the sizes in the Customizer (parameters panel) or write your own model:
+// every version you save becomes a new checkpoint, this one is never edited.
+
+/* [Base] */
+base_width = 50;    // [20:1:150]
+base_depth = 50;    // [20:1:150]
+base_height = 6;    // [2:0.5:20]
+corner_radius = 6;  // [2:0.5:25]
+// Chamfer on the bottom edge: avoids elephant foot on the first layer
+bottom_chamfer = 1; // [0:0.25:3]
+
+/* [Knob] */
+knob_diameter = 22; // [8:1:60]
+knob_height = 14;   // [6:1:40]
+
+/* [Colors] */
+base_color = "#2F6FDE";
+knob_color = "#F2B134";
+
+/* [Hidden] */
+eps = 0.01;
+$fn = $preview ? 32 : 72;
+
+assert(corner_radius > bottom_chamfer, "corner_radius must be greater than bottom_chamfer");
+assert(corner_radius * 2 <= min(base_width, base_depth), "corner_radius is too large for the base");
+assert(knob_diameter <= min(base_width, base_depth) - 2, "the knob does not fit on the base");
+
+// ---------- Assembly ----------
+color(base_color) base(base_width, base_depth, base_height, corner_radius, bottom_chamfer);
+color(knob_color) translate([0, 0, base_height]) knob(knob_diameter, knob_height);
+
+// ---------- Modules ----------
+// Base with rounded corners and a chamfer on the bottom edge.
+module base(w, d, h, r, c) {
+    hull()
+        for (sx = [-1, 1], sy = [-1, 1])
+            translate([sx * (w / 2 - r), sy * (d / 2 - r), 0]) {
+                cylinder(r1 = r - c, r2 = r, h = c + eps);
+                translate([0, 0, c]) cylinder(r = r, h = h - c);
+            }
+}
+
+// Knob: a straight column with a flattened dome on top.
+module knob(d, h) {
+    dome = d / 4;
+    body = max(h - dome, dome);
+    cylinder(d = d, h = body);
+    translate([0, 0, body]) scale([1, 1, 0.5]) sphere(d = d);
+}

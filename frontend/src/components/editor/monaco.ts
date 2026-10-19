@@ -34,6 +34,9 @@ import 'monaco-editor/esm/vs/features/suggest/register.js'
 import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController.js'
 import 'monaco-editor/esm/vs/features/wordHighlighter/register.js'
 import 'monaco-editor/esm/vs/features/wordOperations/register.js'
+// Markdown para el editor de skills (Configuración → Skills). Solo registra el
+// lenguaje: el tokenizador se carga cuando se abre un .md. Local, sin CDN.
+import 'monaco-editor/esm/vs/languages/definitions/markdown/register.js'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker.js?worker'
 import {FormatScad} from '../../../wailsjs/go/main/App'
 import {errorText} from '../../lib/errors'

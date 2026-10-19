@@ -24,7 +24,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
    lanzar un dev como agente genérico, pasar `model: sonnet` (si no, hereda el
    modelo de la sesión).
 4. **Verificar antes de cerrar**: `go build ./... && go vet ./... && go test ./...`,
-   `cd frontend && pnpm build`, `./scripts/i18n-check.sh` (sin línea base: todo
+   `cd frontend && pnpm build && pnpm test`, `./scripts/i18n-check.sh` (sin línea base: todo
    hallazgo se corrige).
 5. **CodeGraph**: si existe `.codegraph/`, consultarlo antes de grep y correr
    `codegraph sync` tras cada bloque de ediciones. Nunca `init`/`index` sin pedido.
@@ -63,6 +63,9 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/16-persistencia.md](claude/16-persistencia.md) | Qué recuerda la app al cerrar (checkpoint elegido, visor, paneles, barras; el modo enfoque no), bindings livianos, dónde se crea un workspace (`CreateWorkspaceIn`), prueba `uishot-persist.sh` |
 | [claude/17-motor-wasm.md](claude/17-motor-wasm.md) | Motor integrado (S11): OpenSCAD oficial en WebAssembly ejecutado en Go con wazero cuando no hay OpenSCAD nativo; host emscripten, montajes, fuentes, licencia, medidas |
 | [claude/18-descarga-openscad.md](claude/18-descarga-openscad.md) | «Descargar OpenSCAD» (S11): snapshot fijado con SHA-256 en `<datos>/tools/openscad/`, cuarentena de macOS, orden de detección, `SCADLAB_NO_SYSTEM_OPENSCAD` para pruebas |
+| [claude/19-hermes.md](claude/19-hermes.md) | Hermes (S12): chat agéntico con herramientas de ScadLab en proceso, bucle y tope de pasos, adjuntos (imágenes y modelos STL/3MF/OBJ), conversaciones, tokens y costo, proveedores, arreglo de la terminal |
+| [claude/20-skills-propias.md](claude/20-skills-propias.md) | Skills propias (Configuración → Skills): editor de archivos con Monaco y validación del frontmatter, papelera, renombrar, carpeta elegible (mover o solo apuntar), botón de carpeta |
+| [claude/21-llavero.md](claude/21-llavero.md) | Llavero propio (S12, 12.10): contraseña maestra (argon2id) que se crea al guardar la primera clave de API, «Recordar en este equipo» en el llavero del SO, una sola lectura perezosa por sesión, desbloqueo con reintento, cambiar/olvidar/restablecer, migración de T1, qué se averiguó del Keychain de macOS |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

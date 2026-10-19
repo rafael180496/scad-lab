@@ -246,3 +246,30 @@ func TestRealOpenSCADMeshes(t *testing.T) {
 		}
 	}
 }
+
+// Una malla indexada (OBJ, 3MF) da las mismas cuentas que el STL del mismo
+// cubo, y un índice fuera de rango es un error y no un pánico.
+func TestInfoFromIndexed(t *testing.T) {
+	verts := [][3]float64{{0, 0, 0}, {10, 0, 0}, {10, 10, 0}, {0, 10, 0}, {0, 0, 10}, {10, 0, 10}, {10, 10, 10}, {0, 10, 10}}
+	tris := [][3]int32{
+		{0, 3, 2}, {0, 2, 1}, {4, 5, 6}, {4, 6, 7},
+		{0, 1, 5}, {0, 5, 4}, {3, 7, 6}, {3, 6, 2},
+		{0, 4, 7}, {0, 7, 3}, {1, 2, 6}, {1, 6, 5},
+	}
+	got, err := InfoFromIndexed(verts, tris)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Triangles != 12 || !got.Watertight || math.Abs(got.VolumeMM3-1000) > 1e-9 || math.Abs(got.AreaMM2-600) > 1e-9 {
+		t.Errorf("cubo indexado: %+v", got)
+	}
+	if got.Size != [3]float64{10, 10, 10} {
+		t.Errorf("tamaño: %v", got.Size)
+	}
+	if _, err := InfoFromIndexed(verts, [][3]int32{{0, 1, 99}}); !errors.Is(err, ErrBadIndex) {
+		t.Errorf("índice fuera de rango: %v", err)
+	}
+	if _, err := InfoFromIndexed(verts, [][3]int32{{0, 1, -1}}); !errors.Is(err, ErrBadIndex) {
+		t.Errorf("índice negativo: %v", err)
+	}
+}

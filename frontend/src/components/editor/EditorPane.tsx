@@ -226,6 +226,9 @@ export function EditorPane({
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (isMod(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+                // Con un diálogo abierto (p. ej. el editor de skills, que guarda su propio
+                // archivo con ⌘S) el atajo no es de este editor.
+                if (document.querySelector('dialog[open]')) return
                 e.preventDefault()
                 e.stopPropagation()
                 openSave()

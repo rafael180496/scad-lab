@@ -33,6 +33,7 @@ import {ExportDialog} from './components/export/ExportDialog'
 import {NewWorkspaceDialog, type NewWorkspaceShot} from './components/workspace/NewWorkspaceDialog'
 import {SettingsDialog, type SettingsTab} from './components/settings/SettingsDialog'
 import {ConfirmHost, confirmDialog} from './components/ui/Dialog'
+import {VaultHost} from './components/vault/VaultHost'
 import {Toaster, toast} from './components/ui/Toast'
 import {fmt, normalizeLang, setLanguage, useT} from './i18n'
 import {errorText} from './lib/errors'
@@ -52,6 +53,7 @@ import {
     type OpenProjectInfo,
 } from './lib/projectsApi'
 import {forgetPartSelection, rememberPartSelection} from './lib/printSession'
+import {onOpenProvidersSettings} from './lib/modelServers'
 import {projectClosed} from './lib/sessionBridge'
 import {LAYOUT_DEFAULTS, LAYOUT_LIMITS, sidebarMaxFor, useLayout, useWindowWidth} from './hooks/useLayout'
 import {useAppearance} from './hooks/useAppearance'
@@ -74,7 +76,7 @@ export type ShotOptions = {
     /** Panel que queda activo al abrir (agent-1, chat, problems…). */
     panel?: PanelId
     /** Diseño de paneles a armar: una división distinta con un panel flotante, o solo el visor. */
-    dock?: 'custom' | 'hidden' | 'tall' | 'minimized' | 'print' | 'diff'
+    dock?: 'custom' | 'hidden' | 'tall' | 'chat' | 'minimized' | 'print' | 'diff'
     /** Abre el menú «…» del grupo de un panel; con `submenu`, entra en esa entrada («move»). */
     dockMenu?: {panel: PanelId; submenu?: string}
     /** Abre el menú Ver o el diálogo de diseños guardados. */
@@ -531,6 +533,9 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         setSettingsTab(tab)
         setSettingsOpen(true)
     }
+    // El aviso «sin servidores» del chat abre Configuración → Proveedores de IA
+    // (el chat vive en otro árbol de React: no recibe esta función por props).
+    useEffect(() => onOpenProvidersSettings(() => openSettings('providers')), [])
 
     // Atajos de las pestañas de proyecto, en captura (antes que Monaco y xterm):
     //   ⌃Tab / ⌃⇧Tab     siguiente / anterior (Control, también en macOS)
@@ -1000,6 +1005,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 onSaved={(s) => setBoot({...boot, settings: s} as main.Bootstrap)}
             />
             <ConfirmHost title="ScadLab" />
+            <VaultHost />
             <Toaster />
         </div>
     )

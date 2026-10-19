@@ -53,8 +53,10 @@ func TestMigration4AddsLastCheckpointKeepingRows(t *testing.T) {
 		if err != nil {
 			t.Fatalf("apertura %d: %v", i, err)
 		}
-		if v, err := s.SchemaVersion(); err != nil || v != 4 {
-			t.Fatalf("versión %d, %v (esperaba 4)", v, err)
+		// Sube a la última versión (la 4 fue la de last_checkpoint; las que
+		// vinieron después son aditivas y no cambian lo que esta prueba mira).
+		if v, err := s.SchemaVersion(); err != nil || v != migrations[len(migrations)-1].version {
+			t.Fatalf("versión %d, %v (esperaba %d)", v, err, migrations[len(migrations)-1].version)
 		}
 		ws, err := s.ListWorkspaces()
 		if err != nil || len(ws) != 2 {

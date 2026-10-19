@@ -26,3 +26,10 @@ export function loadDiffViewer() {
 }
 
 export const DiffViewer = lazy(loadDiffViewer)
+
+// El editor de archivos de las skills (Markdown / OpenSCAD) comparte el chunk de Monaco.
+export function loadSkillCodeEditor() {
+    return loadNls().then(() => import('./SkillCodeEditor'))
+}
+
+export const SkillCodeEditor = lazy(loadSkillCodeEditor)

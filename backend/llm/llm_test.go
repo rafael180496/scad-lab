@@ -8,357 +8,523 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
-	"time"
+
+	"scadlab/backend/i18n"
 )
 
-// flushWrite escribe y vacía el buffer: sin Flush el cliente recibiría todo
-// junto al cerrar y no se probaría el streaming.
-func flushWrite(w http.ResponseWriter, s string) {
-	_, _ = io.WriteString(w, s)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
+func TestMain(m *testing.M) {
+	i18n.SetLang("es")
+	os.Exit(m.Run())
 }
 
-func newClient(t *testing.T, kind, url string, opt Options) Client {
+func newTestClient(t *testing.T, kind string, h http.Handler, token string) Client {
 	t.Helper()
-	c, err := New(kind, url, opt)
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	base := srv.URL
+	if kind == KindOpenAI {
+		base += "/v1"
+	}
+	c, err := New(kind, base, Options{Token: token})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("New: %v", err)
 	}
 	return c
 }
 
-// collect acumula los deltas que recibe onDelta.
-type collect struct {
-	mu    sync.Mutex
-	parts []string
-}
-
-func (c *collect) add(s string) {
-	c.mu.Lock()
-	c.parts = append(c.parts, s)
-	c.mu.Unlock()
-}
-
-func (c *collect) all() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]string(nil), c.parts...)
-}
-
-func TestNewValidatesURL(t *testing.T) {
+func TestNormalizeBaseURL(t *testing.T) {
+	got, err := NormalizeBaseURL(" http://localhost:11434/ ")
+	if err != nil || got != "http://localhost:11434" {
+		t.Fatalf("got %q, %v", got, err)
+	}
 	for _, bad := range []string{"", "localhost:11434", "ftp://x", "http://"} {
-		if _, err := New(KindOllama, bad, Options{}); err == nil {
+		if _, err := NormalizeBaseURL(bad); err == nil {
 			t.Errorf("%q debería rechazarse", bad)
 		}
 	}
 	if _, err := New("otro", "http://x", Options{}); err == nil {
 		t.Error("un tipo desconocido debería rechazarse")
 	}
-	// Anthropic: vacío = la oficial, y un /v1 final se saca.
-	if got := normalizeFor(KindAnthropic, ""); got != DefaultAnthropicBaseURL {
-		t.Errorf("default: %q", got)
-	}
-	if got := normalizeFor(KindAnthropic, "https://proxy.example/v1/"); got != "https://proxy.example" {
-		t.Errorf("/v1: %q", got)
-	}
 }
 
-// --- Ollama (NDJSON) --------------------------------------------------------
+// --- Ollama ---------------------------------------------------------------
 
-func TestOllamaStreamsNDJSON(t *testing.T) {
-	var gotBody map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/chat" {
-			t.Errorf("ruta: %s", r.URL.Path)
-		}
-		raw, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(raw, &gotBody)
-		w.Header().Set("Content-Type", "application/x-ndjson")
-		flushWrite(w, `{"model":"qwen3","message":{"role":"assistant","content":"Ho"},"done":false}`+"\n")
-		// Una línea JSON cortada entre dos escrituras: el cliente tiene que
-		// esperar a tenerla entera.
-		flushWrite(w, `{"model":"qwen3","message":{"role":"assistant","content":"la, "`)
-		time.Sleep(20 * time.Millisecond)
-		flushWrite(w, `},"done":false}`+"\n"+`{"message":{"content":"mundo"},"done":false}`+"\n")
-		flushWrite(w, "esto no es json\n")
-		flushWrite(w, `{"message":{"content":""},"done":true,"eval_count":9}`+"\n")
-	}))
-	defer srv.Close()
-
-	var got collect
-	c := newClient(t, KindOllama, srv.URL, Options{NumCtx: 16384})
-	res, err := c.Chat(context.Background(), ChatRequest{
-		Model:    "qwen3",
-		System:   "Sos experto en OpenSCAD",
-		Messages: []Message{{Role: RoleUser, Content: "hola"}},
-	}, got.add)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Text != "Hola, mundo" || res.Model != "qwen3" {
-		t.Errorf("resultado: %+v", res)
-	}
-	if strings.Join(got.all(), "|") != "Ho|la, |mundo" {
-		t.Errorf("deltas: %v", got.all())
-	}
-	msgs := gotBody["messages"].([]any)
-	if len(msgs) != 2 || msgs[0].(map[string]any)["role"] != "system" || msgs[1].(map[string]any)["content"] != "hola" {
-		t.Errorf("mensajes enviados: %v", msgs)
-	}
-	if gotBody["stream"] != true {
-		t.Errorf("stream: %v", gotBody["stream"])
-	}
-	if opts, _ := gotBody["options"].(map[string]any); opts["num_ctx"] != float64(16384) {
-		t.Errorf("num_ctx: %v", gotBody["options"])
-	}
-}
-
-func TestOllamaHTTPError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
-		_, _ = io.WriteString(w, `{"error":"model 'nope' not found"}`)
-	}))
-	defer srv.Close()
-	_, err := newClient(t, KindOllama, srv.URL, Options{}).Chat(context.Background(), ChatRequest{Model: "nope", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
-	var se *StatusError
-	if !errors.As(err, &se) || se.Status != 404 || !strings.Contains(err.Error(), "model 'nope' not found") {
-		t.Fatalf("error: %v", err)
-	}
-}
-
-func TestOllamaErrorInStreamAndTruncated(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.RawQuery, "x") {
-			return
-		}
-		flushWrite(w, `{"message":{"content":"par"},"done":false}`+"\n")
-		flushWrite(w, `{"error":"out of memory"}`+"\n")
-	}))
-	defer srv.Close()
-	res, err := newClient(t, KindOllama, srv.URL, Options{}).Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "out of memory") {
-		t.Fatalf("error: %v", err)
-	}
-	if res.Text != "par" {
-		t.Errorf("el parcial se conserva: %q", res.Text)
-	}
-
-	// Cierra sin `done`: es un corte, no una respuesta completa.
-	cut := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flushWrite(w, `{"message":{"content":"par"},"done":false}`+"\n")
-	}))
-	defer cut.Close()
-	_, err = newClient(t, KindOllama, cut.URL, Options{}).Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
-	var ce *ConnError
-	if !errors.As(err, &ce) || ce.Kind != ConnEnded {
-		t.Fatalf("esperaba ConnEnded, vino %v", err)
-	}
-}
-
-func TestOllamaCancelMidStream(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flushWrite(w, `{"message":{"content":"uno "},"done":false}`+"\n")
-		<-r.Context().Done() // se queda "pensando" hasta que el cliente corte
-	}))
-	defer srv.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	first := make(chan struct{}, 1)
-	res, err := newClient(t, KindOllama, srv.URL, Options{}).Chat(ctx, ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, func(string) {
-		select {
-		case first <- struct{}{}:
-		default:
-		}
-		cancel()
+func ollamaHandler(t *testing.T, onChat func(body map[string]any)) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"version":"0.9.1"}`)
 	})
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("esperaba context.Canceled, vino %v", err)
-	}
-	if res.Text != "uno " {
-		t.Errorf("parcial: %q", res.Text)
-	}
-	select {
-	case <-first:
-	default:
-		t.Error("nunca llegó el primer delta")
-	}
-}
-
-func TestOllamaConnectionRefused(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	url := srv.URL
-	srv.Close() // nadie escucha
-	_, err := newClient(t, KindOllama, url, Options{}).Models(context.Background())
-	var ce *ConnError
-	if !errors.As(err, &ce) || ce.Kind != ConnRefused {
-		t.Fatalf("esperaba ConnRefused, vino %v", err)
-	}
-}
-
-func TestOllamaModels(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/tags" {
-			t.Errorf("ruta: %s", r.URL.Path)
+	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"models":[{"name":"qwen2.5:3b"},{"name":"llama3.2:1b"}]}`)
+	})
+	mux.HandleFunc("/api/chat", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if onChat != nil {
+			onChat(body)
 		}
-		_, _ = io.WriteString(w, `{"models":[{"name":"qwen3-coder:30b"},{"name":""},{"name":"llama3.2:3b"}]}`)
-	}))
-	defer srv.Close()
-	got, err := newClient(t, KindOllama, srv.URL+"/", Options{}).Models(context.Background())
-	if err != nil || strings.Join(got, ",") != "qwen3-coder:30b,llama3.2:3b" {
-		t.Fatalf("modelos: %v, %v", got, err)
+		for _, l := range []string{
+			`{"model":"qwen2.5:3b","message":{"role":"assistant","content":"","thinking":"pienso"},"done":false}`,
+			`{"model":"qwen2.5:3b","message":{"role":"assistant","content":"Ho"},"done":false}`,
+			`{"model":"qwen2.5:3b","message":{"role":"assistant","content":"la"},"done":false}`,
+			`{"model":"qwen2.5:3b","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_file","arguments":{"path":"a.go"}}}]},"done":false}`,
+			`{"model":"qwen2.5:3b","message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":12,"eval_count":5}`,
+		} {
+			fmt.Fprintln(w, l)
+		}
+	})
+	return mux
+}
+
+func TestOllamaVersionAndModels(t *testing.T) {
+	c := newTestClient(t, KindOllama, ollamaHandler(t, nil), "")
+	v, err := c.Version(context.Background())
+	if err != nil || v != "0.9.1" {
+		t.Fatalf("Version = %q, %v", v, err)
 	}
-	// Un servidor que no es Ollama no devuelve JSON de modelos.
-	html := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "<html>") }))
-	defer html.Close()
-	if _, err := newClient(t, KindOllama, html.URL, Options{}).Models(context.Background()); err == nil {
-		t.Error("una respuesta que no es de Ollama debería dar error")
+	models, err := c.Models(context.Background())
+	if err != nil || len(models) != 2 || models[0] != "qwen2.5:3b" {
+		t.Fatalf("Models = %v, %v", models, err)
 	}
 }
 
-// --- OpenAI-compatible (SSE) ------------------------------------------------
+func TestOllamaChatStreams(t *testing.T) {
+	img := filepath.Join(t.TempDir(), "p.png")
+	// Cabecera PNG mínima: alcanza para que DetectContentType diga image/png.
+	if err := os.WriteFile(img, []byte("\x89PNG\r\n\x1a\n0000"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]any
+	c := newTestClient(t, KindOllama, ollamaHandler(t, func(b map[string]any) { sent = b }), "")
 
-func sseData(s string) string { return "data: " + s + "\n\n" }
-
-func TestOpenAIStreamsSSE(t *testing.T) {
-	var gotBody map[string]any
-	var gotAuth string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/chat/completions" {
-			t.Errorf("ruta: %s", r.URL.Path)
-		}
-		gotAuth = r.Header.Get("Authorization")
-		raw, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(raw, &gotBody)
-		w.Header().Set("Content-Type", "text/event-stream")
-		flushWrite(w, ": keep-alive\n\n")
-		flushWrite(w, sseData(`{"model":"gpt-x","choices":[{"delta":{"role":"assistant","content":""}}]}`))
-		flushWrite(w, sseData(`{"choices":[{"delta":{"content":"cu"}}]}`))
-		// Un `data:` partido entre dos lecturas, a mitad del JSON.
-		flushWrite(w, `data: {"choices":[{"delta":{"con`)
-		time.Sleep(20 * time.Millisecond)
-		flushWrite(w, `tent":"be()"}}]}`+"\n\n")
-		flushWrite(w, sseData(`{"choices":[{"delta":{"reasoning_content":"pensando…"}}]}`))
-		flushWrite(w, sseData(`{"choices":[{"delta":{"content":";"},"finish_reason":"stop"}]}`))
-		flushWrite(w, "data: [DONE]\n\n")
-	}))
-	defer srv.Close()
-
-	var got collect
-	c := newClient(t, KindOpenAI, srv.URL+"/v1/", Options{Token: "sk-secreto"})
+	var text, think strings.Builder
 	res, err := c.Chat(context.Background(), ChatRequest{
-		Model:    "gpt-x",
-		System:   "sistema",
-		Messages: []Message{{Role: RoleUser, Content: "hola"}, {Role: RoleAssistant, Content: "qué tal"}, {Role: RoleUser, Content: "un cubo"}},
-	}, got.add)
+		Model: "qwen2.5:3b",
+		Messages: []Message{
+			{Role: RoleSystem, Content: "sé breve"},
+			{Role: RoleUser, Content: "hola", Images: []string{img}},
+		},
+		Tools: []ToolDef{{Name: "read_file", Description: "lee", Parameters: map[string]any{"type": "object"}}},
+	}, func(d Delta) { text.WriteString(d.Text); think.WriteString(d.Thinking) })
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if text.String() != "Hola" || think.String() != "pienso" {
+		t.Errorf("deltas: text=%q thinking=%q", text.String(), think.String())
+	}
+	if res.Message.Content != "Hola" || res.Usage.Input != 12 || res.Usage.Output != 5 || res.Model != "qwen2.5:3b" {
+		t.Errorf("result = %+v", res)
+	}
+	if len(res.Message.ToolCalls) != 1 || res.Message.ToolCalls[0].Name != "read_file" || res.Message.ToolCalls[0].Arguments["path"] != "a.go" {
+		t.Errorf("tool calls = %+v", res.Message.ToolCalls)
+	}
+
+	if sent["stream"] != true {
+		t.Errorf("stream = %v", sent["stream"])
+	}
+	msgs := sent["messages"].([]any)
+	user := msgs[1].(map[string]any)
+	if imgs, _ := user["images"].([]any); len(imgs) != 1 {
+		t.Errorf("la imagen no viajó en base64: %v", user)
+	}
+	if tools, _ := sent["tools"].([]any); len(tools) != 1 {
+		t.Errorf("tools = %v", sent["tools"])
+	}
+}
+
+func TestOllamaErrors(t *testing.T) {
+	c := newTestClient(t, KindOllama, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"error":"model 'x' not found"}`)
+	}), "")
+	_, err := c.Chat(context.Background(), ChatRequest{Model: "x", Messages: []Message{{Role: RoleUser, Content: "hi"}}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "404") || !strings.Contains(err.Error(), "model 'x' not found") {
+		t.Fatalf("error = %v", err)
+	}
+
+	// Error en mitad del stream.
+	c = newTestClient(t, KindOllama, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"error":"se acabó la memoria"}`)
+	}), "")
+	_, err = c.Chat(context.Background(), ChatRequest{Model: "x", Messages: []Message{{Role: RoleUser, Content: "hi"}}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "se acabó la memoria") {
+		t.Fatalf("error de stream = %v", err)
+	}
+
+	// Stream que se corta sin done.
+	c = newTestClient(t, KindOllama, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"message":{"content":"a"},"done":false}`)
+	}), "")
+	_, err = c.Chat(context.Background(), ChatRequest{Model: "x", Messages: []Message{{Role: RoleUser, Content: "hi"}}}, nil)
+	if err == nil {
+		t.Fatal("un stream sin done debería ser error")
+	}
+}
+
+func TestConnectionRefused(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close()
+	c, _ := New(KindOllama, url, Options{})
+	_, err := c.Version(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no se pudo conectar a "+url) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	c := newTestClient(t, KindOllama, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Hay que leer el cuerpo para que el servidor vigile la conexión y
+		// se entere de que el cliente cortó.
+		_, _ = io.Copy(io.Discard, r.Body)
+		cancel()
+		<-r.Context().Done()
+	}), "")
+	_, err := c.Chat(ctx, ChatRequest{Model: "x", Messages: []Message{{Role: RoleUser, Content: "hi"}}}, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, quería context.Canceled", err)
+	}
+}
+
+// --- OpenAI ---------------------------------------------------------------
+
+func openaiHandler(t *testing.T, gotAuth *string, onChat func(body map[string]any)) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/models", func(w http.ResponseWriter, r *http.Request) {
+		if gotAuth != nil {
+			*gotAuth = r.Header.Get("Authorization")
+		}
+		fmt.Fprint(w, `{"object":"list","data":[{"id":"qwen2.5-7b"},{"id":"gemma"}]}`)
+	})
+	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if onChat != nil {
+			onChat(body)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, l := range []string{
+			`: keep-alive`,
+			`data: {"model":"qwen2.5-7b","choices":[{"delta":{"role":"assistant","reasoning_content":"pienso"}}]}`,
+			``,
+			`data: {"choices":[{"delta":{"content":"Ho"}}]}`,
+			`data: {"choices":[{"delta":{"content":"la"}}]}`,
+			`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"read_file","arguments":"{\"pa"}}]}}]}`,
+			`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\":\"a.go\"}"}}]}}]}`,
+			`data: {"choices":[],"usage":{"prompt_tokens":20,"completion_tokens":7}}`,
+			`data: [DONE]`,
+		} {
+			fmt.Fprintln(w, l)
+		}
+	})
+	return mux
+}
+
+func TestOpenAIVersionAndModels(t *testing.T) {
+	var auth string
+	c := newTestClient(t, KindOpenAI, openaiHandler(t, &auth, nil), "sk-secreto")
+	if v, err := c.Version(context.Background()); err != nil || v != "" {
+		t.Fatalf("Version = %q, %v", v, err)
+	}
+	models, err := c.Models(context.Background())
+	if err != nil || len(models) != 2 || models[0] != "qwen2.5-7b" {
+		t.Fatalf("Models = %v, %v", models, err)
+	}
+	if auth != "Bearer sk-secreto" {
+		t.Errorf("Authorization = %q", auth)
+	}
+}
+
+func TestOpenAIChatStreams(t *testing.T) {
+	img := filepath.Join(t.TempDir(), "p.png")
+	if err := os.WriteFile(img, []byte("\x89PNG\r\n\x1a\n0000"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]any
+	c := newTestClient(t, KindOpenAI, openaiHandler(t, nil, func(b map[string]any) { sent = b }), "")
+
+	var text, think strings.Builder
+	res, err := c.Chat(context.Background(), ChatRequest{
+		Model: "qwen2.5-7b",
+		Messages: []Message{
+			{Role: RoleSystem, Content: "sé breve"},
+			{Role: RoleUser, Content: "mirá", Images: []string{img}},
+			{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "c0", Name: "list_dir", Arguments: map[string]any{"path": "."}}}},
+			{Role: RoleTool, ToolCallID: "c0", Name: "list_dir", Content: "a.go"},
+		},
+	}, func(d Delta) { text.WriteString(d.Text); think.WriteString(d.Thinking) })
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if text.String() != "Hola" || think.String() != "pienso" {
+		t.Errorf("deltas: text=%q thinking=%q", text.String(), think.String())
+	}
+	if res.Message.Content != "Hola" || res.Usage.Input != 20 || res.Usage.Output != 7 || res.Model != "qwen2.5-7b" {
+		t.Errorf("result = %+v", res)
+	}
+	if len(res.Message.ToolCalls) != 1 || res.Message.ToolCalls[0].ID != "c1" || res.Message.ToolCalls[0].Arguments["path"] != "a.go" {
+		t.Errorf("tool calls = %+v", res.Message.ToolCalls)
+	}
+
+	if sent["stream"] != true {
+		t.Errorf("stream = %v", sent["stream"])
+	}
+	if so, _ := sent["stream_options"].(map[string]any); so["include_usage"] != true {
+		t.Errorf("stream_options = %v", sent["stream_options"])
+	}
+	msgs := sent["messages"].([]any)
+	parts, ok := msgs[1].(map[string]any)["content"].([]any)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("la imagen no viajó como partes: %v", msgs[1])
+	}
+	url := parts[1].(map[string]any)["image_url"].(map[string]any)["url"].(string)
+	if !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Errorf("image_url = %q", url)
+	}
+	asst := msgs[2].(map[string]any)
+	if asst["content"] != nil {
+		t.Errorf("un assistant solo con tool_calls debe llevar content null: %v", asst["content"])
+	}
+	tc := asst["tool_calls"].([]any)[0].(map[string]any)["function"].(map[string]any)
+	if tc["arguments"] != `{"path":"."}` {
+		t.Errorf("arguments = %v", tc["arguments"])
+	}
+	if msgs[3].(map[string]any)["tool_call_id"] != "c0" {
+		t.Errorf("tool_call_id = %v", msgs[3])
+	}
+}
+
+func TestOpenAIErrors(t *testing.T) {
+	c := newTestClient(t, KindOpenAI, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"error":{"message":"Incorrect API key","type":"invalid_request_error"}}`)
+	}), "mala")
+	_, err := c.Models(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "401") || !strings.Contains(err.Error(), "Incorrect API key") {
+		t.Fatalf("Models error = %v", err)
+	}
+	_, err = c.Chat(context.Background(), ChatRequest{Model: "x", Messages: []Message{{Role: RoleUser, Content: "hi"}}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("Chat error = %v", err)
+	}
+
+	// Cuerpo que no es JSON: se muestra recortado.
+	c = newTestClient(t, KindOpenAI, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprint(w, strings.Repeat("x", 1000))
+	}), "")
+	_, err = c.Models(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "502") || len(err.Error()) > 500 {
+		t.Fatalf("error = %v", err)
+	}
+
+	// Error dentro del stream.
+	c = newTestClient(t, KindOpenAI, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `data: {"error":{"message":"context length exceeded"}}`)
+	}), "")
+	_, err = c.Chat(context.Background(), ChatRequest{Model: "x", Messages: []Message{{Role: RoleUser, Content: "hi"}}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "context length exceeded") {
+		t.Fatalf("stream error = %v", err)
+	}
+}
+
+func TestIsToolsUnsupported(t *testing.T) {
+	yes := []error{
+		&StatusError{Base: "http://x", Status: 400, Msg: "registry.ollama.ai/library/gemma:2b does not support tools"},
+		&StatusError{Base: "http://x", Status: 400, Msg: `"auto" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set`},
+		&StatusError{Base: "http://x", Status: 500, Msg: "tools param requires --jinja flag"},
+		&StatusError{Base: "http://x", Status: 422, Msg: "Function calling is not supported by this model; tools unsupported"},
+		fmt.Errorf("el servidor x respondió con un error: model does not support tools"),
+	}
+	for _, e := range yes {
+		if !IsToolsUnsupported(e) {
+			t.Errorf("debería ser «no soporta herramientas»: %v", e)
+		}
+	}
+	no := []error{
+		nil,
+		&StatusError{Base: "http://x", Status: 401, Msg: "tools are not supported for this key"},
+		&StatusError{Base: "http://x", Status: 400, Msg: "context length exceeded"},
+		&StatusError{Base: "http://x", Status: 404, Msg: "model not found"},
+		errors.New("no se pudo conectar a http://x: la conexión fue rechazada"),
+	}
+	for _, e := range no {
+		if IsToolsUnsupported(e) {
+			t.Errorf("no debería ser «no soporta herramientas»: %v", e)
+		}
+	}
+}
+
+// El servidor rechaza el request con las herramientas: el error del cliente
+// tiene que reconocerse de punta a punta, tal como llega por HTTP.
+func TestOllamaToolsRejectedIsRecognized(t *testing.T) {
+	c := newTestClient(t, KindOllama, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"error":"registry.ollama.ai/library/gemma:2b does not support tools"}`)
+	}), "")
+	_, err := c.Chat(context.Background(), ChatRequest{
+		Model:    "gemma:2b",
+		Messages: []Message{{Role: RoleUser, Content: "hi"}},
+		Tools:    []ToolDef{{Name: "t", Parameters: map[string]any{"type": "object"}}},
+	}, nil)
+	if !IsToolsUnsupported(err) {
+		t.Fatalf("err = %v", err)
+	}
+	var se *StatusError
+	if !errors.As(err, &se) || se.Status != 400 {
+		t.Fatalf("no es un StatusError 400: %v", err)
+	}
+}
+
+// Un mensaje assistant con llamadas viaja sin `index` (OpenAI) y con los
+// argumentos como cadena; el mensaje tool de Ollama lleva tool_name.
+func TestToolMessagesEncoding(t *testing.T) {
+	var sent map[string]any
+	c := newTestClient(t, KindOpenAI, openaiHandler(t, nil, func(b map[string]any) { sent = b }), "")
+	_, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{
+		{Role: RoleUser, Content: "x"},
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "read_file", Arguments: map[string]any{"path": "a"}}}},
+		{Role: RoleTool, ToolCallID: "call_0", Name: "read_file", Content: "ok"},
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Text != "cube();" || res.Model != "gpt-x" {
-		t.Errorf("resultado: %+v", res)
+	call := sent["messages"].([]any)[1].(map[string]any)["tool_calls"].([]any)[0].(map[string]any)
+	if _, has := call["index"]; has {
+		t.Errorf("tool_calls del historial no debe llevar index: %v", call)
 	}
-	if strings.Join(got.all(), "|") != "cu|be()|;" {
-		t.Errorf("deltas: %v", got.all())
+	if call["id"] != "call_0" || call["type"] != "function" {
+		t.Errorf("tool call = %v (el id vacío debe completarse para correlacionar)", call)
 	}
-	if gotAuth != "Bearer sk-secreto" {
-		t.Errorf("Authorization: %q", gotAuth)
+
+	var ollamaSent map[string]any
+	oc := newTestClient(t, KindOllama, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&ollamaSent)
+		fmt.Fprintln(w, `{"model":"m","message":{"role":"assistant","content":"ok"},"done":true}`)
+	}), "")
+	_, err = oc.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{
+		{Role: RoleUser, Content: "x"},
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "call_0", Name: "read_file", Arguments: map[string]any{"path": "a"}}}},
+		{Role: RoleTool, ToolCallID: "call_0", Name: "read_file", Content: "ok"},
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	msgs := gotBody["messages"].([]any)
-	if len(msgs) != 4 || msgs[0].(map[string]any)["role"] != "system" {
-		t.Errorf("mensajes: %v", msgs)
+	msgs := ollamaSent["messages"].([]any)
+	if msgs[2].(map[string]any)["tool_name"] != "read_file" {
+		t.Errorf("Ollama correlaciona por tool_name: %v", msgs[2])
+	}
+	args := msgs[1].(map[string]any)["tool_calls"].([]any)[0].(map[string]any)["function"].(map[string]any)["arguments"]
+	if _, ok := args.(map[string]any); !ok {
+		t.Errorf("Ollama espera arguments como objeto, llegó %T", args)
 	}
 }
 
-func TestOpenAINoTokenNoAuthHeader(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := r.Header["Authorization"]; ok {
-			t.Error("sin token no debe mandarse Authorization")
-		}
-		flushWrite(w, sseData(`{"choices":[{"delta":{"content":"ok"}}]}`))
-	}))
-	defer srv.Close()
-	// Sin [DONE], pero con contenido: se da por completa (LM Studio viejo).
-	res, err := newClient(t, KindOpenAI, srv.URL, Options{}).Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
-	if err != nil || res.Text != "ok" {
-		t.Fatalf("%+v, %v", res, err)
+// Servidores que no mandan `index`: dos llamadas distintas no se funden en una.
+func TestOpenAIToolCallsWithoutIndex(t *testing.T) {
+	c := newTestClient(t, KindOpenAI, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `data: {"choices":[{"delta":{"tool_calls":[{"id":"a","function":{"name":"f","arguments":"{\"x\":1}"}}]}}]}`)
+		fmt.Fprintln(w, `data: {"choices":[{"delta":{"tool_calls":[{"id":"b","function":{"name":"g","arguments":"{\"y\":2}"}}]}}]}`)
+		fmt.Fprintln(w, `data: [DONE]`)
+	}), "")
+	res, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := res.Message.ToolCalls
+	if len(calls) != 2 || calls[0].Name != "f" || calls[1].Name != "g" || calls[1].Arguments["y"] != float64(2) {
+		t.Fatalf("calls = %+v", calls)
 	}
 }
 
-func TestOpenAIHTTPErrorDoesNotLeakToken(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(401)
-		_, _ = io.WriteString(w, `{"error":{"message":"Incorrect API key provided","type":"invalid_request_error"}}`)
-	}))
-	defer srv.Close()
-	_, err := newClient(t, KindOpenAI, srv.URL, Options{Token: "sk-secreto"}).Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
-	var se *StatusError
-	if !errors.As(err, &se) || se.Status != 401 || !strings.Contains(err.Error(), "Incorrect API key provided") {
-		t.Fatalf("error: %v", err)
-	}
-	if strings.Contains(err.Error(), "sk-secreto") {
-		t.Error("el token no puede aparecer en un error")
-	}
-}
+// --- Clasificación de fallos --------------------------------------------------
 
-func TestOpenAIErrorEventAndEmptyStream(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flushWrite(w, sseData(`{"choices":[{"delta":{"content":"a"}}]}`))
-		flushWrite(w, sseData(`{"error":{"message":"context length exceeded"}}`))
-	}))
-	defer srv.Close()
-	res, err := newClient(t, KindOpenAI, srv.URL, Options{}).Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "context length exceeded") || res.Text != "a" {
-		t.Fatalf("%+v, %v", res, err)
-	}
-	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	defer empty.Close()
-	_, err = newClient(t, KindOpenAI, empty.URL, Options{}).Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
+func TestConnErrorKinds(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close()
+	c, _ := New(KindOllama, url, Options{})
+	_, err := c.Version(context.Background())
 	var ce *ConnError
-	if !errors.As(err, &ce) || ce.Kind != ConnEnded {
-		t.Fatalf("esperaba ConnEnded, vino %v", err)
+	if !errors.As(err, &ce) || ce.Kind != ConnRefused || !IsRetryable(err) {
+		t.Fatalf("refused debería ser ConnRefused y reintentable: %#v", err)
+	}
+
+	// Un 4xx no es de conexión: no se reintenta.
+	se := &StatusError{Base: "http://x", Status: 401, Msg: "no"}
+	if IsRetryable(se) || IsRetryable(context.Canceled) || IsRetryable(nil) {
+		t.Error("StatusError / Canceled / nil no son reintentables")
+	}
+	// Un corte con EOF sí; un corte de lectura cualquiera, no.
+	if !IsRetryable(interruptedError("http://x", io.ErrUnexpectedEOF)) {
+		t.Error("EOF debería ser reintentable")
+	}
+	if IsRetryable(interruptedError("http://x", errors.New("bufio.Scanner: token too long"))) {
+		t.Error("un corte de lectura cualquiera no es reintentable")
 	}
 }
 
-func TestOpenAICancelMidStream(t *testing.T) {
+// Un servidor que cierra la conexión sin contestar es un corte reintentable.
+func TestServerClosingConnectionIsReset(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flushWrite(w, sseData(`{"choices":[{"delta":{"content":"par"}}]}`))
-		<-r.Context().Done()
+		hj, _ := w.(http.Hijacker)
+		conn, _, _ := hj.Hijack()
+		conn.Close()
 	}))
 	defer srv.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	res, err := newClient(t, KindOpenAI, srv.URL, Options{}).Chat(ctx, ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, func(string) { cancel() })
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("esperaba context.Canceled, vino %v", err)
-	}
-	if res.Text != "par" {
-		t.Errorf("parcial: %q", res.Text)
+	c, _ := New(KindOllama, srv.URL, Options{})
+	_, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil)
+	if !IsRetryable(err) {
+		t.Fatalf("err = %v, debería ser reintentable", err)
 	}
 }
 
-func TestOpenAIModels(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/models" {
-			t.Errorf("ruta: %s", r.URL.Path)
+// options.num_ctx viaja solo con Ollama y solo si hay una ventana configurada.
+func TestOllamaSendsNumCtxOnlyWhenSet(t *testing.T) {
+	chat := func(ctxTokens int) map[string]any {
+		var sent map[string]any
+		srv := httptest.NewServer(ollamaHandler(t, func(b map[string]any) { sent = b }))
+		defer srv.Close()
+		c, err := New(KindOllama, srv.URL, Options{ContextTokens: ctxTokens})
+		if err != nil {
+			t.Fatal(err)
 		}
-		fmt.Fprint(w, `{"data":[{"id":"a"},{"id":"b"}]}`)
-	}))
+		if _, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hola"}}}, nil); err != nil {
+			t.Fatalf("Chat: %v", err)
+		}
+		return sent
+	}
+
+	with := chat(16384)
+	opts, _ := with["options"].(map[string]any)
+	if opts["num_ctx"] != float64(16384) {
+		t.Errorf("options = %v, debía llevar num_ctx 16384", with["options"])
+	}
+	if _, has := chat(0)["options"]; has {
+		t.Error("con 0 no debe mandarse options: el servidor usa la suya")
+	}
+}
+
+// Un servidor OpenAI no admite la ventana por petición: aunque la opción
+// llegue, no viaja nada parecido a num_ctx.
+func TestOpenAIIgnoresContextTokens(t *testing.T) {
+	var sent map[string]any
+	srv := httptest.NewServer(openaiHandler(t, new(string), func(b map[string]any) { sent = b }))
 	defer srv.Close()
-	got, err := newClient(t, KindOpenAI, srv.URL+"/v1", Options{}).Models(context.Background())
-	if err != nil || strings.Join(got, ",") != "a,b" {
-		t.Fatalf("modelos: %v, %v", got, err)
+	c, err := New(KindOpenAI, srv.URL+"/v1", Options{ContextTokens: 16384})
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestMissingModel(t *testing.T) {
-	for _, kind := range []string{KindOllama, KindOpenAI, KindAnthropic} {
-		c := newClient(t, kind, "http://localhost:1", Options{})
-		if _, err := c.Chat(context.Background(), ChatRequest{Messages: []Message{{Role: RoleUser, Content: "x"}}}, nil); err == nil {
-			t.Errorf("%s: sin modelo debería fallar antes de conectar", kind)
-		}
+	if _, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hola"}}}, nil); err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	raw, _ := json.Marshal(sent)
+	if strings.Contains(string(raw), "num_ctx") {
+		t.Errorf("el request OpenAI no debe llevar la ventana: %s", raw)
 	}
 }

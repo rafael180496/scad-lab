@@ -13,6 +13,7 @@ export function Dialog({
     children,
     footer,
     className,
+    onCancel,
 }: {
     open: boolean
     onClose: () => void
@@ -21,6 +22,8 @@ export function Dialog({
     children: ReactNode
     footer?: ReactNode
     className?: string
+    /** Con esto, Escape no cierra el <dialog> por su cuenta: avisa acá (p. ej. para preguntar por cambios sin guardar). */
+    onCancel?: () => void
 }) {
     const ref = useRef<HTMLDialogElement>(null)
     useEffect(() => {
@@ -45,6 +48,14 @@ export function Dialog({
             ref={ref}
             tabIndex={-1}
             onClose={onClose}
+            onCancel={
+                onCancel
+                    ? (e) => {
+                          e.preventDefault()
+                          onCancel()
+                      }
+                    : undefined
+            }
             onClick={(e) => e.target === ref.current && onClose()}
             className={cn(
                 'm-auto max-h-[86vh] outline-none w-[560px] max-w-[92vw] overflow-clip rounded-xl border border-line bg-surface p-0 text-fg shadow-2xl shadow-black/40 backdrop:bg-black/50',
@@ -69,12 +80,13 @@ export function Dialog({
 
 // ConfirmDialog reemplaza a confirm(): promesa que resuelve true/false.
 let pending: ((ok: boolean) => void) | null = null
-let state: {text: string; okLabel: string; cancelLabel: string} | null = null
+let state: {text: string; okLabel: string; cancelLabel: string; danger: boolean} | null = null
 const listeners = new Set<() => void>()
 
-export function confirmDialog(text: string, okLabel: string, cancelLabel: string): Promise<boolean> {
+// `danger` pinta el botón de confirmar como destructivo (borrar, descartar).
+export function confirmDialog(text: string, okLabel: string, cancelLabel: string, opts?: {danger?: boolean}): Promise<boolean> {
     pending?.(false)
-    state = {text, okLabel, cancelLabel}
+    state = {text, okLabel, cancelLabel, danger: !!opts?.danger}
     listeners.forEach((l) => l())
     return new Promise((resolve) => {
         pending = resolve
@@ -107,7 +119,7 @@ export function ConfirmHost({title}: {title: string}) {
                     <Button title={s?.cancelLabel ?? ''} onClick={() => close(false)}>
                         {s?.cancelLabel}
                     </Button>
-                    <Button variant="primary" title={s?.okLabel ?? ''} onClick={() => close(true)}>
+                    <Button variant={s?.danger ? 'destructive' : 'primary'} title={s?.okLabel ?? ''} onClick={() => close(true)}>
                         {s?.okLabel}
                     </Button>
                 </>

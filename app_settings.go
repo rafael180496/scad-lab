@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,40 +164,4 @@ func (a *App) SaveProvider(p store.AIProvider) error {
 		return err
 	}
 	return a.store.UpdateProvider(p)
-}
-
-// OllamaModels consulta /api/tags de un servidor Ollama y devuelve sus
-// modelos. Sirve a la vez de prueba de conexión.
-func (a *App) OllamaModels(baseURL string) ([]string, error) {
-	u, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, i18n.New(i18n.Msg{ES: "URL de Ollama inválida (ej.: http://localhost:11434)", EN: "invalid Ollama URL (e.g. http://localhost:11434)"})
-	}
-	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String()+"/api/tags", nil)
-	if err != nil {
-		return nil, err
-	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, i18n.Errorf(i18n.Msg{ES: "no se pudo conectar con Ollama: %v", EN: "could not reach Ollama: %v"}, err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return nil, i18n.Errorf(i18n.Msg{ES: "Ollama respondió HTTP %d", EN: "Ollama answered HTTP %d"}, res.StatusCode)
-	}
-	var body struct {
-		Models []struct {
-			Name string `json:"name"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(body.Models))
-	for _, m := range body.Models {
-		out = append(out, m.Name)
-	}
-	return out, nil
 }

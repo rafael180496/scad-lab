@@ -376,7 +376,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li><a href="#ia-reglas">Reglas del workspace: CLAUDE.md y AGENTS.md</a></li>
     <li><a href="#ia-mcp">Servidor MCP de ScadLab</a></li>
     <li><a href="#ia-autoiteracion">Auto-iteración de errores</a></li>
-    <li><a href="#ia-ollama">Chat con modelos: Ollama, OpenAI y Anthropic</a></li>
+    <li><a href="#ia-hermes">Hermes: el chat con herramientas y los proveedores de IA</a></li>
     <li><a href="#ia-prompts">Cómo pedirle un modelo a la IA</a></li>
     <li><a href="#ia-skills">Skills incluidas</a></li>
     <li><a href="#ia-skill-propia">Crear tu propia skill</a></li>
@@ -453,14 +453,14 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <tr><th>Área</th><th>Estado en v0.1.0</th></tr>
     <tr><td>Workspaces, configuración, idioma ES/EN</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Detección de OpenSCAD y de CLIs de agentes</td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Skills incluidas y plantilla para skills propias</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Skills incluidas; skills propias: crear, editar, renombrar, eliminar y elegir su carpeta</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Render con OpenSCAD: estado, diagnósticos, auto-render y <code>RENDER_ERRORS.md</code></td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Visor 3D: navegación, vistas, modos, medidas, colores, captura PNG y vista dividida</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Editor de código: resaltado, buscar y reemplazar, linter, formato, autocompletado y guardar como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Ventana: paneles acoplables (mover, dividir, flotar, minimizar y ocultar), diseños guardados, modo enfoque, barra lateral plegable, barra de estado y panel Problemas</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Varios proyectos a la vez: pestañas de proyecto con indicadores de fondo, reordenar, atajos y reapertura al arrancar</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Terminal de agentes (Claude Code, opencode, Codex, Antigravity) con sesiones y auto-iteración de errores</td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Chat con modelos (Ollama, compatible con OpenAI, Anthropic) y guardar el código como checkpoint</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Chat Hermes: proveedores de IA con claves cifradas (Ollama, compatibles con OpenAI, OpenRouter, Gemini, Anthropic), modo Agente con herramientas, adjuntos (imágenes y modelos STL/3MF/OBJ), conversaciones, tokens y costo</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Exportar: STL, 3MF multicolor para Bambu (una parte por color con su extrusor), STL por color y abrir en Bambu Studio</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Servidor MCP de ScadLab: los agentes renderizan, validan, miden y ven sus modelos, configurado solo en cada CLI</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Medición por partes: selección en el visor, peso, filamento y costo estimados, aviso de placa y panel Impresión</td><td><span class="badge ok">Disponible</span></td></tr>
@@ -608,7 +608,7 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
 
   <h2 id="requisitos--agentes">Agentes de IA (opcionales)</h2>
   <p>ScadLab no trae su propio modelo: usa los CLIs que ya tengas instalados y con sesión iniciada para la
-  <a href="#ia-agentes">terminal</a>, y los servidores de modelos que habilites para el <a href="#ia-ollama">chat</a>.
+  <a href="#ia-agentes">terminal</a>, y los servidores de modelos que habilites para el <a href="#ia-hermes">chat</a>.
   Detecta cualquiera de estos:</p>
   <div class="tablewrap"><table>
     <tr><th>Agente</th><th>Qué necesitas</th></tr>
@@ -699,6 +699,9 @@ color("SteelBlue") difference() {
     <code>&lt;ubicación&gt;/&lt;nombre-en-minúsculas-y-guiones&gt;</code>). Con <strong>Usar esta carpeta como predeterminada</strong>
     los próximos se crean ahí. Una carpeta de destino que ya existe y tiene archivos se rechaza sin tocarla.</li>
     <li><strong>Abrir</strong>: elige una carpeta existente; ScadLab completa lo que falte (skills, reglas) sin tocar tus archivos <code>.scad</code>.</li>
+    <li><strong>Un primer <code>.scad</code> de entrada</strong>: un workspace nuevo —y una carpeta que abres y no tiene ningún <code>.scad</code>— arranca con un
+    <code>001-&lt;nombre&gt;.scad</code> válido (cabecera de checkpoint, <code>$fn</code>, parámetros del Customizer y una pieza con <code>color()</code> que renderiza), ya seleccionado. Si la carpeta
+    ya tenía archivos <code>.scad</code>, no se agrega ni se toca nada.</li>
     <li>La lista de recientes se guarda en la <a href="#config-datos">base local</a>.</li>
   </ul>
 
@@ -1370,7 +1373,7 @@ color("SteelBlue") difference() {
 
   <h2 id="ia-agentes--abrir">Abrir un agente</h2>
   <p>Debajo del visor hay, en pestañas, cuatro paneles: <strong>Agente 1</strong>, <strong>Agente 2</strong>,
-  <a href="#ia-ollama"><strong>Chat</strong></a> y <a href="#editor--problemas"><strong>Problemas</strong></a>
+  <a href="#ia-hermes"><strong>Chat</strong></a> y <a href="#editor--problemas"><strong>Problemas</strong></a>
   (puedes moverlos, ver <a href="#ventana">La ventana</a>).</p>
   <ol class="steps">
     <li>Abre el panel de un agente y elige el agente en el selector.</li>
@@ -1386,7 +1389,7 @@ color("SteelBlue") difference() {
   <p>Claude Code, opencode, Codex y Antigravity — <strong>solo los que estén instalados y habilitados</strong> en
   <a href="#config-general--clis">Configuración → IA</a>: la detección decide qué aparece en el selector. Si no hay
   ninguno, la pestaña lo avisa con un botón que abre esa configuración. Para conversar con un modelo sin instalar
-  ningún CLI, está el <a href="#ia-ollama">chat con modelos</a>.</p>
+  ningún CLI, está el <a href="#ia-hermes">chat con modelos</a>.</p>
 
   <p>En la barra del panel, el indicador <strong>MCP ✓</strong> confirma que el agente dispone de las herramientas del
   <a href="#ia-mcp">servidor MCP de ScadLab</a> en este workspace.</p>
@@ -1670,70 +1673,136 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   activa). Apagada, el agente no recibe avisos; <code>RENDER_ERRORS.md</code> se sigue escribiendo.</p>
 </article>
 
-<article class="topic" id="ia-ollama" data-title="Chat con modelos: Ollama, OpenAI y Anthropic">
-  <h1>Chat con modelos: Ollama, OpenAI y Anthropic</h1>
-  <p class="lead">La pestaña <strong>Chat</strong> conversa con un modelo para pensar ideas y pedir código OpenSCAD,
-  y cada bloque de código se guarda como checkpoint con un clic.</p>
+<article class="topic" id="ia-hermes" data-title="Hermes: el chat con herramientas y los proveedores de IA">
+  <h1>Hermes: el chat con herramientas y los proveedores de IA</h1>
+  <p class="lead">La pestaña <strong>Chat</strong> conversa con un modelo que tú eliges —local o en la nube— y, con
+  <strong>Agente</strong> encendido, ese modelo usa las herramientas de ScadLab: <strong>crea un checkpoint, lo renderiza, lo mira, lo mide
+  y lo corrige solo</strong> hasta que la pieza queda como la pediste. A ese agente lo llamamos Hermes.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/chat.png" alt="Panel Chat con una respuesta que incluye un bloque OpenSCAD y los botones Copiar y Guardar como checkpoint" loading="lazy"><figcaption>Una respuesta del modelo con su bloque de OpenSCAD: <strong>Copiar</strong> y <strong>Guardar como checkpoint</strong>.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/chat.png" alt="Panel Chat con el servidor OpenRouter y el modelo claude-sonnet: la respuesta muestra cuatro tarjetas de paso (crear checkpoint, renderizar, mirar el modelo con su imagen y medir), el texto final y debajo los tokens y el costo" loading="lazy"><figcaption>Un turno de Hermes: sus pasos como tarjetas (la de <em>Mirar el modelo</em> con la imagen que vio) y, debajo, la respuesta final con sus tokens y su costo.</figcaption></figure>
 
-  <div class="note"><span class="lbl">Chat o terminal</span><p>El chat solo <strong>conversa</strong>: el modelo no
-  toca tus archivos ni renderiza. Para que la IA edite el workspace, cree checkpoints y se corrija sola, usa un
-  <a href="#ia-agentes">agente en la terminal</a>.</p></div>
+  <div class="note"><span class="lbl">Chat o terminal</span><p>Hermes trabaja dentro de ScadLab: crea checkpoints, renderiza y mide sin que copies nada.
+  El <a href="#ia-agentes">agente en la terminal</a> (Claude Code, opencode, Codex, Antigravity) sigue siendo la forma de tener la
+  experiencia completa de un CLI; los dos usan las mismas <a href="#ia-mcp">herramientas</a>.</p></div>
 
-  <h2 id="ia-ollama--proveedores">Proveedores</h2>
-  <p>Se habilitan en <a href="#config-materiales--ollama">Configuración → IA</a>:</p>
-  <div class="tablewrap"><table>
-    <tr><th>Proveedor</th><th>Qué indicas</th></tr>
-    <tr><td>Ollama</td><td>La URL del servidor (por defecto <code>http://localhost:11434</code>)</td></tr>
-    <tr><td>Compatible con OpenAI</td><td>La URL del servidor y la variable de entorno con su API key — LM Studio, vLLM, OpenRouter…</td></tr>
-    <tr><td>Anthropic</td><td>La variable de entorno con tu API key</td></tr>
-  </table></div>
-  <p><strong>Las claves no se guardan</strong>: ScadLab solo guarda el <em>nombre</em> de la variable de entorno y lee la
-  clave de ahí cuando la necesita. Funciona también si la definiste en <code>~/.zshrc</code>, aunque abras la app
-  desde el Finder.</p>
+  <h2 id="ia-hermes--proveedores">Proveedores de IA: servidores y claves</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-providers.png" alt="Configuración, pestaña Proveedores de IA: el panel Llavero de claves (recordado en este equipo, con los botones Cambiar contraseña, Olvidar este equipo y Restablecer) sobre cinco servidores (Ollama local, OpenRouter, Google Gemini, Anthropic y un LM Studio en la red), cada uno con su interruptor, su botón Probar y el resultado de la prueba" loading="lazy"><figcaption>Configuración → Proveedores de IA: el <a href="#ia-hermes--llavero">llavero de claves</a> arriba y después tantos servidores como quieras, cada uno con su prueba.</figcaption></figure>
+  <p>En <strong>Configuración → Proveedores de IA</strong> agregas los servidores con los que puede hablar el chat, varios de cada tipo. <strong>Agregar servidor</strong>
+  ofrece atajos que ya traen la dirección: Ollama (local y remoto), LM Studio, llama.cpp, vLLM, OpenAI, <strong>OpenRouter</strong>,
+  <strong>Google Gemini</strong>, Anthropic, Groq, DeepSeek, Mistral, Together, xAI o cualquier servidor <em>compatible con OpenAI</em>.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-providers-add.png" alt="Formulario Agregar servidor con el atajo de OpenRouter elegido: nombre, dirección, campo de la clave de API, modelo por defecto y el botón Probar conexión" loading="lazy"><figcaption>Agregar servidor: elige un atajo, pega la clave y pulsa <strong>Probar conexión</strong>.</figcaption></figure>
+  <ul>
+    <li><strong>Probar conexión</strong> te dice, antes de guardar, si el servidor responde (y cuántos modelos tiene) o por qué no:
+      conexión rechazada, tiempo agotado, clave equivocada (401).</li>
+    <li><strong>La clave de API se guarda cifrada</strong> (AES-256-GCM) en la base de ajustes, con una llave derivada de tu
+      <a href="#ia-hermes--llavero">contraseña maestra</a>, <strong>nunca en texto plano</strong>, y no se vuelve a mostrar ni sale
+      de tu equipo salvo hacia el servidor que elegiste. Al editar, deja el campo vacío para conservar la clave guardada.</li>
+    <li>Si prefieres no guardarla, escribe el <strong>nombre de una variable de entorno</strong> que la tenga; ScadLab la lee de ahí (también
+      si la definiste en <code>~/.zshrc</code>), sin ninguna contraseña.</li>
+    <li>Los servidores que ya tenías de versiones anteriores se conservan, y tus chats viejos siguen abriendo.</li>
+  </ul>
 
-  <h2 id="ia-ollama--preparar">Preparar Ollama</h2>
-  <p>Si eliges el modelo local, instala Ollama y descarga uno:</p>
-  <div class="codewrap"><pre><code>ollama pull qwen2.5-coder:14b     <span class="c"># o el modelo de código que prefieras</span>
-ollama serve                      <span class="c"># si no está corriendo ya</span></code></pre></div>
-  <p>Con Ollama no hay cuenta, ni coste por token, ni sale nada de tu equipo. Los modelos locales pequeños se
-  equivocan más con la geometría.</p>
+  <h2 id="ia-hermes--llavero">Contraseña maestra: el llavero de claves</h2>
+  <p>La primera vez que guardas una clave de API, ScadLab te pide <strong>crear una contraseña maestra</strong>. Es la que cifra tus claves en este
+  equipo (AES-256-GCM, con una llave derivada de la contraseña con Argon2id); la contraseña en sí nunca se guarda. La creas una sola vez.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/vault-create.png" alt="Diálogo Crear contraseña maestra sobre Configuración, Proveedores de IA: campos de contraseña y confirmación con una barra de fuerza en «fuerte», la casilla Recordar en este equipo marcada y un aviso de que una contraseña olvidada no se puede recuperar" loading="lazy"><figcaption>Crear contraseña maestra: escríbela dos veces, mira la barra de fuerza y deja marcado <strong>Recordar en este equipo</strong>.</figcaption></figure>
+  <ul>
+    <li><strong>Recordar en este equipo</strong> viene marcado. ScadLab guarda la <em>llave derivada</em> —nunca la contraseña— en el llavero del
+      sistema (Keychain en macOS, Administrador de credenciales en Windows) y desde entonces usa tus claves sin preguntar: guardar otra clave,
+      usar el chat o abrir la app no vuelve a pedir nada. La llave se lee del llavero <strong>una vez por sesión</strong>, la primera vez que algo
+      la necesita.</li>
+    <li>Si la desmarcas, o el llavero del sistema niega el acceso, ScadLab pide la contraseña <strong>una vez por sesión</strong>, y solo cuando algo
+      necesita una clave: enviar un mensaje a un servidor que la tiene, listar sus modelos o probar la conexión. Al escribirla, la acción que
+      estabas haciendo sigue sola.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/vault-unlock.png" alt="Diálogo Desbloquear las claves de API sobre el chat: el campo de la contraseña, la casilla Recordar en este equipo sin marcar y el enlace ¿La olvidaste?" loading="lazy"><figcaption>Desbloquear: una vez por sesión, solo cuando hace falta una clave. Marca <strong>Recordar en este equipo</strong> aquí si prefieres no volver a escribirla.</figcaption></figure>
+  <ul>
+    <li>En <strong>Configuración → Proveedores de IA → Llavero de claves</strong> puedes <strong>cambiar la contraseña</strong> (todas las claves se vuelven
+      a cifrar, todas o ninguna), <strong>Olvidar este equipo</strong> (borra la llave del llavero del sistema) o <strong>Restablecer</strong>.</li>
+    <li>Si macOS llega a preguntar si ScadLab puede usar el llavero, <em>Permitir siempre</em> evita la pregunta; si lo niegas no se rompe nada:
+      ScadLab pide la contraseña una vez por sesión.</li>
+    <li>La alternativa de la variable de entorno que se explicó arriba no necesita contraseña.</li>
+  </ul>
+  <div class="note warn"><span class="lbl">Sin vuelta atrás</span><p>Una contraseña maestra olvidada <strong>no se puede recuperar</strong>. La única salida es
+  <strong>Restablecer</strong>, que borra todas las claves de API guardadas y la contraseña (los servidores quedan, sin clave); después vuelves a escribir
+  las claves y creas una contraseña nueva.</p></div>
 
-  <h2 id="ia-ollama--empezar">Empezar un chat</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/chat-new.png" alt="Chat nuevo con el selector de proveedor (Ollama) y el selector de modelo, y sugerencias de qué pedir" loading="lazy"><figcaption>Un chat nuevo: eliges proveedor y modelo, y escribes abajo.</figcaption></figure>
+  <h2 id="ia-hermes--empezar">Empezar un chat y elegir el modelo</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-models.png" alt="Selector de modelo abierto con un buscador: modelos de OpenRouter con un ojo si ven imágenes y una llave si usan herramientas, más su ventana de contexto y su precio" loading="lazy"><figcaption>El selector de modelo busca, y marca cuáles ven imágenes (ojo) y cuáles usan herramientas (llave).</figcaption></figure>
   <ol class="steps">
     <li>Abre la pestaña <strong>Chat</strong> y pulsa <strong>Chat nuevo</strong>.</li>
-    <li>Elige el <strong>proveedor</strong> y el <strong>modelo</strong>. La lista de modelos sale del servidor; si no
-      responde, escribe el nombre del modelo a mano.</li>
+    <li>Elige el <strong>servidor</strong> y luego el <strong>modelo</strong>: la lista sale del servidor, con un buscador. Cada modelo muestra si
+      <strong>ve imágenes</strong> y si <strong>usa herramientas</strong> —cuando el servidor lo informa—, su ventana de contexto y, con los
+      proveedores que publican precios (OpenRouter), cuánto cuesta por millón de tokens. Si el servidor no lo lista, escribe el nombre a mano.</li>
     <li>Escribe lo que quieres y envía con <kbd>Enter</kbd> (<kbd>Mayús+Enter</kbd> agrega una línea).</li>
   </ol>
-  <p>El modelo queda <strong>fijo en ese chat</strong>; para probar otro, empieza un chat nuevo. El historial de chats
-  queda guardado por workspace, y puedes cambiar de conversación o borrar una desde la barra del chat.</p>
+  <p>Puedes cambiar de servidor y de modelo <strong>a mitad de una conversación</strong>: el historial se conserva y el siguiente mensaje ya
+  usa el nuevo. ScadLab recuerda el último que elegiste en cada proyecto.</p>
 
-  <h2 id="ia-ollama--contexto">Qué sabe el modelo de tu workspace</h2>
+  <h2 id="ia-hermes--agente">El modo Agente: el bucle de herramientas</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-agent-steps.png" alt="Un turno con cinco pasos: el render de la tapa deslizante falla y su tarjeta se abre con la línea 14 y el código que dio el error, el modelo lo corrige en un checkpoint nuevo, renderiza otra vez y mira la vista previa" loading="lazy"><figcaption>El render falló: la tarjeta se abre con la línea y el código, el modelo lo corrige en un checkpoint <em>nuevo</em>, vuelve a renderizar y mira la imagen.</figcaption></figure>
+  <p>Con el interruptor <strong>Agente</strong> encendido, el modelo decide qué hacer: mira los checkpoints y la impresora, crea un checkpoint con el código
+  <strong>completo</strong>, lo renderiza, lo mira desde una vista, lo mide y, si algo falla, lo corrige en <em>otro</em> checkpoint (nunca edita uno
+  existente). También puede leer las skills del workspace e inspeccionar las <a href="#ia-hermes--adjuntos">referencias</a> que adjuntes. Los checkpoints
+  que crea aparecen en el árbol como cualquier otro.</p>
+  <ul>
+    <li><strong>Cada paso es una tarjeta</strong> con la herramienta, sus argumentos y su resultado; con un clic se pliega o se despliega el detalle.
+      Un render que falla se abre solo con la <strong>línea y el código que dio el error</strong>. La imagen que el modelo miró se ve en la tarjeta y se
+      amplía con un clic.</li>
+    <li><strong>El modelo ve lo que dibuja</strong> si tiene visión; si no, solo recibe las medidas y ScadLab te lo avisa.</li>
+    <li><strong>Pasos</strong>: el tope de llamadas a herramientas por mensaje (de 1 a 30, 12 por defecto). Al llegar, el modelo resume lo que logró y se
+      detiene; pídele que siga si falta algo.</li>
+    <li><strong>Detener</strong> muestra un reloj y corta en el acto, incluso a mitad de una herramienta: lo que ya hizo se conserva.</li>
+    <li>Si el modelo <strong>no usa herramientas</strong>, el interruptor se apaga solo y lo explica; si el servidor las rechaza al primer intento, el chat
+      sigue como texto con un aviso.</li>
+  </ul>
+
+  <h2 id="ia-hermes--texto">El modo texto</h2>
+  <p>Con <strong>Agente</strong> apagado, el chat solo <strong>conversa</strong> (como en versiones anteriores): cada bloque de OpenSCAD trae
+  <strong>Copiar</strong> y, cuando terminó de llegar, <strong>Guardar como checkpoint</strong>, que crea un hijo del archivo abierto o, si no hay ninguno
+  abierto, del último checkpoint. Los bloques largos arrancan plegados.</p>
+
+  <h2 id="ia-hermes--adjuntos">Adjuntos: imágenes y modelos 3D</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-attachments.png" alt="Compositor del chat con dos chips con miniatura sobre el texto: la foto de un croquis y un modelo STL con su vista previa, que dice refs/soporte-pared.stl" loading="lazy"><figcaption>Dos adjuntos listos para enviar: una foto y un STL (se copió a <code>refs/</code>).</figcaption></figure>
+  <p>Con el <strong>clip</strong>, <strong>pegando</strong> (⌘V / Ctrl+V) o <strong>arrastrando</strong> sobre el panel puedes adjuntar, hasta 10 por mensaje:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Tipo</th><th>Límite</th><th>Qué pasa</th></tr>
+    <tr><td>Imagen: PNG, JPG, GIF, WebP</td><td>5 MB</td><td>Viaja como imagen: la foto de lo que quieres copiar, un croquis, una captura.</td></tr>
+    <tr><td>Modelo 3D: STL, 3MF, OBJ</td><td>64 MB</td><td>Se copia a la carpeta <code>refs/</code> del proyecto, ScadLab lo mide (tamaño, volumen, triángulos, si la malla es cerrada, las partes por color de un 3MF) y le da al modelo ese informe más una vista previa dibujada, para que pueda copiarlo o encajar una pieza con él.</td></tr>
+  </table></div>
+  <ul>
+    <li>Cada adjunto es un <strong>chip con su miniatura</strong> y un botón para quitarlo. El tipo lo decide el <strong>contenido</strong> del archivo, no su nombre.</li>
+    <li><strong>Sin visión</strong>: si el modelo informó que no ve imágenes, el chip lo dice y <strong>Enviar</strong> espera a que quites la imagen o elijas otro modelo.
+      Un modelo 3D siempre se envía: sin visión, solo sus medidas. Un servidor que no informa si su modelo ve imágenes nunca te lo impide.</li>
+    <li><code>import("refs/pieza.stl")</code> sirve para un STL u OBJ de una sola pieza; un 3MF se reconstruye con primitivas a partir de sus medidas, porque no todas las
+      versiones de OpenSCAD lo importan.</li>
+    <li>El historial guarda el nombre, la miniatura y el informe de cada adjunto, <strong>no el archivo</strong>. Quitar un chip antes de enviar borra la copia que hizo en <code>refs/</code>.</li>
+  </ul>
+
+  <h2 id="ia-hermes--conversaciones">Conversaciones, tokens y costo</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-conversations.png" alt="Lista de conversaciones del proyecto abierta: la primera con sus botones de renombrar y borrar y la segunda en renombrado en línea, con el campo seleccionado" loading="lazy"><figcaption>La lista de conversaciones: renombrar en línea (<kbd>Enter</kbd> guarda, <kbd>Esc</kbd> cancela) y borrar.</figcaption></figure>
+  <ul>
+    <li>Las conversaciones se guardan <strong>por proyecto</strong>. Al abrir ScadLab retomas la última. Desde la lista puedes <strong>renombrar</strong> una (hasta 120 letras) y
+      <strong>borrarla</strong>, con confirmación: los checkpoints que guardaste desde ella no se tocan.</li>
+    <li>Debajo de cada respuesta ves los <strong>tokens</strong> del turno (entrada y salida) y, si el proveedor publica precios, el <strong>costo</strong>. Si el servidor no lo
+      informa, no se muestra ningún costo: un costo ausente no es «gratis».</li>
+    <li>Tras reabrir la app el modelo <strong>recuerda la conversación</strong> (lo que escribiste, lo que contestó y las referencias que adjuntaste), pero no el detalle de sus pasos
+      anteriores: eso está en los checkpoints.</li>
+  </ul>
+
+  <h2 id="ia-hermes--contexto">Qué sabe el modelo de tu workspace</h2>
   <ul>
     <li>El <strong>checkpoint abierto</strong>: su código, hasta unos 12 KB.</li>
     <li>Los <strong>checkpoints que ya existen</strong>, para sugerir el nombre del siguiente.</li>
     <li>Los datos de tu <strong>impresora</strong>: el volumen de impresión y los colores del AMS.</li>
+    <li>En modo Agente, también el <strong>nombre y la descripción de las skills del workspace</strong> (las lee cuando las necesita) y las referencias que adjuntaste.</li>
   </ul>
-  <p>Además lleva instrucciones propias sobre las reglas de checkpoints, el color por pieza y el diseño para FDM.
-  No ve nada más: ni tus otros archivos ni el visor.</p>
+  <p>Además lleva instrucciones propias sobre las reglas de checkpoints, el color por pieza y el diseño para FDM. No ve nada más: ni tus otros archivos ni el visor.</p>
 
-  <h2 id="ia-ollama--respuesta">La respuesta</h2>
-  <p>Llega en <strong>streaming</strong>, palabra a palabra. <strong>Detener</strong> corta la respuesta en el acto y
-  conserva lo que ya se escribió.</p>
-  <p>Cada bloque de OpenSCAD trae dos botones:</p>
-  <ul>
-    <li><strong>Copiar</strong>: lleva el código al portapapeles.</li>
-    <li><strong>Guardar como checkpoint</strong>: aparece cuando el bloque terminó de llegar. Te pide un rótulo y
-      crea un checkpoint nuevo, hijo del archivo abierto o, si no hay ninguno abierto, del último checkpoint.</li>
-  </ul>
-
-  <h2 id="ia-ollama--sin-proveedor">Si no hay proveedores habilitados</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/chat-empty.png" alt="Panel Chat sin proveedores: el aviso «No hay ningún proveedor de chat habilitado» con el botón Abrir Configuración → IA" loading="lazy"><figcaption>Sin proveedores habilitados, el chat lo avisa y te lleva a Configuración → IA.</figcaption></figure>
-  <p>El chat lo avisa con un botón que abre Configuración → IA. Habilita un proveedor, vuelve al panel y pulsa
-  <strong>Ya lo habilité</strong>.</p>
+  <h2 id="ia-hermes--sin-proveedor">Si no hay servidores habilitados</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-empty.png" alt="Panel Chat sin servidores: el aviso «No hay ningún servidor de modelos habilitado» con el botón Abrir Proveedores de IA" loading="lazy"><figcaption>Sin servidores habilitados, el chat lo avisa y te lleva a Configuración → Proveedores de IA.</figcaption></figure>
+  <p>El chat lo avisa con un botón que abre Configuración → Proveedores de IA. Agrega o enciende un servidor, vuelve al panel y pulsa
+  <strong>Ya lo agregué</strong>.</p>
 </article>
 
 <article class="topic" id="ia-prompts" data-title="Cómo pedirle un modelo a la IA">
@@ -1767,7 +1836,7 @@ ollama serve                      <span class="c"># si no está corriendo ya</sp
   <p class="lead">Instrucciones empaquetadas que le enseñan al agente a escribir OpenSCAD correcto e imprimible
   en Bambu Lab. Se copian a cada workspace para todos los CLIs.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Configuración, pestaña Skills: las cinco skills incluidas con su interruptor y una skill propia, gear-helper" loading="lazy"><figcaption>Configuración → Skills: incluidas y propias, cada una con su interruptor.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Configuración, pestaña Skills: las cinco skills incluidas con su interruptor y dos skills propias, gear-helper y hinge-kit" loading="lazy"><figcaption>Configuración → Skills: incluidas y propias, cada una con su interruptor.</figcaption></figure>
 
   <h2 id="ia-skills--donde">Dónde se copian</h2>
   <div class="tablewrap"><table>
@@ -1808,14 +1877,37 @@ ollama serve                      <span class="c"># si no está corriendo ya</sp
   <p class="lead">Si siempre le explicas lo mismo al agente —tus tornillos, tu estilo, tus piezas estándar—,
   conviértelo en una skill y deja de repetirlo.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Campo Nueva skill bajo la lista de skills, con el botón para crearla desde la plantilla y el de abrir la carpeta" loading="lazy"><figcaption>Nueva skill: se escribe el nombre en kebab-case y se crea desde la plantilla.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Configuración, pestaña Skills: las skills propias con los botones Editar, renombrar y eliminar, las incluidas con Ver, la carpeta de skills propias con Cambiar… y Abrir, y el campo Nueva skill" loading="lazy"><figcaption>Configuración → Skills: cada skill propia se edita, renombra y elimina desde su fila; las incluidas solo se ven y se apagan.</figcaption></figure>
 
   <h2 id="ia-skill-propia--crear">Crearla desde Configuración</h2>
   <ol class="steps">
-    <li>Ve a <strong>Configuración → Skills</strong> y pulsa <strong>Nueva skill</strong>.</li>
-    <li>ScadLab parte de la plantilla <code>_skill-template</code>: te pide nombre (kebab-case) y descripción.</li>
-    <li>Edita el <code>SKILL.md</code> generado. Al abrir cualquier workspace, la skill se copia junto con las incluidas.</li>
+    <li>Ve a <strong>Configuración → Skills</strong>, escribe el nombre en kebab-case y pulsa <strong>Nueva skill</strong>.</li>
+    <li>ScadLab crea la skill desde la plantilla <code>_skill-template</code>, con el <code>name</code> ya puesto y la descripción pendiente, y <strong>abre su editor</strong>.</li>
+    <li>Escribe la <code>description</code> (cuándo debe usarla el agente) y el cuerpo, y guarda con <kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd>.</li>
+    <li>Al guardar, la skill se copia a los proyectos abiertos; en los demás, al abrirlos.</li>
   </ol>
+
+  <h2 id="ia-skill-propia--editor">Editarla: el editor de la skill</h2>
+  <p>El botón <strong>Editar</strong> de una skill propia abre un editor dentro de la app: a la izquierda los archivos de la skill
+  (<code>SKILL.md</code>, <code>README.md</code>, <code>references/…</code>, <code>templates/…</code>) y a la derecha el mismo
+  editor del código, con Markdown u OpenSCAD según la extensión. Funciona sin internet.</p>
+  <ul>
+    <li><strong>Guardar:</strong> <kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd> (o el botón). Un punto naranja marca el archivo con cambios sin guardar, y al cerrar el editor se te pregunta antes de descartarlos.</li>
+    <li><strong>Archivos:</strong> el icono de archivo nuevo crea uno (<code>references/tabla.md</code> crea también la carpeta); al pasar el ratón por un archivo aparecen renombrar y borrar. Todo queda dentro de la carpeta de la skill, y <code>SKILL.md</code> no se renombra ni se borra. Un archivo borrado va a la papelera de ScadLab, no se elimina.</li>
+    <li><strong>Al guardar</strong> la lista se actualiza (la descripción nueva se ve enseguida) y la skill se vuelve a copiar a los proyectos abiertos.</li>
+    <li>Las <strong>incluidas</strong> se abren con <strong>Ver</strong>, en solo lectura: se actualizan con la app.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/skills-editor.png" alt="Editor de la skill gear-helper: a la izquierda sus cuatro archivos, a la derecha su SKILL.md en Markdown con el frontmatter, y debajo el aviso de que el frontmatter es válido" loading="lazy"><figcaption>El editor de una skill propia: archivos a la izquierda, SKILL.md a la derecha y la validación del frontmatter debajo.</figcaption></figure>
+
+  <h3 id="ia-skill-propia--frontmatter">Validación del frontmatter</h3>
+  <p>Mientras escribes, ScadLab revisa el bloque del principio de <code>SKILL.md</code> y marca los problemas en el editor y en una lista
+  debajo (un clic lleva a la línea):</p>
+  <ul>
+    <li><strong>Errores</strong> (no dejan guardar, porque los agentes ignorarían una skill rota sin avisar): falta el bloque <code>---</code>, falta <code>name</code> o <code>description</code>, <code>name</code> no está en kebab-case o <strong>no es igual al nombre de la carpeta</strong>.</li>
+    <li><strong>Avisos</strong>: la descripción sigue siendo el texto de ejemplo, pasa de 1024 caracteres, o lleva «: » sin comillas (el YAML puede no leerse).</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/skills-editor-errors.png" alt="SKILL.md con la descripción vacía: la línea está subrayada en rojo, el archivo lleva un icono de error en la lista y debajo se lee Línea 3, description está vacía" loading="lazy"><figcaption>Un error de frontmatter: la línea queda subrayada, el archivo lo marca en la lista y Guardar espera a que lo corrijas.</figcaption></figure>
+
 
   <h2 id="ia-skill-propia--formato">El formato de SKILL.md</h2>
   <div class="codewrap"><pre><code>---
@@ -1829,6 +1921,25 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
 - Inserto térmico M3 × 5 mm: agujero de 4,2 mm, profundidad 5,5 mm.
 - Paso de tornillo M3: 3,4 mm. Cabeza avellanada: 6,5 mm a 90°.
 - Tuerca M3 cautiva: hexágono de 6,4 mm entre caras, 2,6 mm de alto.</code></pre></div>
+
+  <h2 id="ia-skill-propia--renombrar-eliminar">Renombrar y eliminar</h2>
+  <ul>
+    <li><strong>Renombrar</strong> cambia la carpeta, el campo <code>name</code> de <code>SKILL.md</code> y las copias ya instaladas. El nombre va en kebab-case y no puede repetir el de otra skill, propia o incluida. Si estaba apagada, sigue apagada.</li>
+    <li><strong>Eliminar</strong> pide confirmación con el nombre y la carpeta. La carpeta <strong>no se borra</strong>: se mueve a la papelera de ScadLab (<code>trash/skills</code> dentro de la carpeta de datos), y la recuperas moviéndola de vuelta a mano.</li>
+    <li>También se quita de los workspaces donde estaba instalada, pero <strong>solo las copias que instaló ScadLab y que nadie tocó</strong>. Si editaste una a mano, se deja donde está y ScadLab te avisa cuáles fueron.</li>
+    <li>Las <strong>incluidas</strong> no se eliminan: se apagan con su interruptor.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/skills-delete.png" alt="Diálogo de confirmación: Vas a eliminar la skill gear-helper, su carpeta se mueve a la papelera de ScadLab y se quita de los workspaces salvo las copias editadas a mano; botones Cancelar y Eliminar" loading="lazy"><figcaption>Eliminar pide confirmación y dice adónde va la carpeta.</figcaption></figure>
+
+  <h2 id="ia-skill-propia--carpeta">La carpeta de las skills propias</h2>
+  <p>Debajo de la lista, <strong>Carpeta de skills propias</strong> muestra dónde viven las tuyas (por defecto, dentro de la carpeta de datos de la app).</p>
+  <ul>
+    <li><strong>Abrir</strong> la muestra en el Finder o el Explorador. Si todavía no existe, la crea; si no se puede abrir, lo dice con un aviso.</li>
+    <li><strong>Cambiar…</strong> te deja elegir otra carpeta, por ejemplo una sincronizada en la nube o dentro de tu repositorio. Si ya tienes skills propias, eliges qué hacer con ellas: <strong>Mover mis skills</strong> las lleva a la carpeta nueva (si allí ya hay una con el mismo nombre, no se pisa), o <strong>Solo apuntar</strong> usa la nueva sin mover nada: las de la anterior dejan de aparecer pero siguen en su carpeta.</li>
+    <li><strong>Predeterminada</strong> aparece cuando usas otra carpeta y vuelve a la de siempre.</li>
+    <li>Las copias que ya están instaladas en tus workspaces no se tocan al cambiar de carpeta.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/skills-folder.png" alt="Diálogo Cambiar la carpeta de skills: muestra la carpeta de ahora y la nueva, y los botones Cancelar, Solo apuntar y Mover mis skills" loading="lazy"><figcaption>Cambiar la carpeta: mover tus skills a la nueva o solo apuntar a ella.</figcaption></figure>
 
   <h2 id="ia-skill-propia--consejos">Consejos</h2>
   <ul>
@@ -2117,7 +2228,7 @@ color("Black") label();                                    // texto que llena el
   instalas uno con la app abierta, pulsa <strong>Volver a detectar</strong>. Solo los agentes <strong>habilitados</strong>
   aparecen en el selector de la <a href="#ia-agentes">terminal</a>, y el <strong>agente por defecto</strong> es el que
   se preselecciona. Más abajo está el bloque del <a href="#ia-mcp">servidor MCP de ScadLab</a> y, después, los
-  servidores de modelos del <a href="#ia-ollama">chat</a>.</p>
+  servidores de modelos del <a href="#ia-hermes">chat</a>.</p>
 
   <h2 id="config-general--skills">Skills</h2>
   <p>Lista las incluidas y las tuyas, y permite crear una nueva desde la plantilla: ver
@@ -2138,18 +2249,11 @@ color("Black") label();                                    // texto que llena el
   (en macOS, la carpeta <code>BambuStudio.app</code>; en Windows, <code>bambu-studio.exe</code>). Se aplica al
   guardar.</p>
 
-  <h2 id="config-materiales--ollama">Servidores de modelos (pestaña IA)</h2>
-  <p>Son los proveedores del <a href="#ia-ollama">chat</a>. Habilita los que uses:</p>
-  <ul>
-    <li><strong>Ollama</strong>: la URL (por defecto <code>http://localhost:11434</code>; puede ser otra máquina de tu
-      red) y el modelo. <strong>Probar y listar modelos</strong> comprueba la conexión y trae los que tengas
-      descargados.</li>
-    <li><strong>Compatible con OpenAI</strong> (LM Studio, vLLM, OpenRouter…): la URL base y la variable de entorno de
-      la API key.</li>
-    <li><strong>Anthropic</strong>: la variable de entorno de la API key.</li>
-  </ul>
-  <p>La clave <strong>nunca se guarda</strong> en ScadLab: solo el nombre de la variable de entorno, de la que se
-  lee cuando hace falta.</p>
+  <h2 id="config-materiales--proveedores">Pestaña Proveedores de IA</h2>
+  <p>Aquí se agregan, prueban y encienden o apagan los <a href="#ia-hermes--proveedores">servidores de modelos del chat</a>: Ollama (local o en otra máquina),
+  cualquier servidor compatible con OpenAI (LM Studio, vLLM, OpenRouter, Google Gemini…) y Anthropic, con atajos que ya traen la dirección.
+  <strong>Probar conexión</strong> comprueba el servidor antes de guardar. La clave de API se guarda <strong>cifrada</strong>, con tu <a href="#ia-hermes--llavero">contraseña maestra</a> (el panel de arriba muestra su estado y
+  deja cambiarla, olvidar este equipo o restablecerla), o indicas el nombre de la variable de entorno que la tiene.</p>
 
   <h2 id="config-materiales--estimacion">Datos de la estimación</h2>
   <p>En la pestaña <strong>Impresión</strong>, junto al relleno, están los valores con los que se estima el peso y el costo
@@ -2198,8 +2302,8 @@ color("Black") label();                                    // texto que llena el
 
   <h2 id="config-datos--red">Qué sale a la red</h2>
   <p>ScadLab no tiene cuenta ni telemetría. Lo único que sale de tu máquina es lo que envían los agentes de IA
-  que tú ejecutas a su propio proveedor y, en el <a href="#ia-ollama">chat</a>, lo que escribes junto con el contexto
-  del checkpoint abierto, hacia el servidor que elijas. Con Ollama local, nada.</p>
+  que tú ejecutas a su propio proveedor y, en el <a href="#ia-hermes">chat</a>, lo que escribes junto con el contexto
+  del checkpoint abierto (y las imágenes y modelos 3D que adjuntes), hacia el servidor que elijas. Con Ollama local, nada.</p>
 </article>
 
 <!-- ============================================================= RECETAS -->
@@ -2212,8 +2316,7 @@ color("Black") label();                                    // texto que llena el
 
   <ol class="steps">
     <li><strong>Crea el workspace</strong> <em>Llavero</em> con la impresora <strong>A1 mini</strong>.</li>
-    <li><strong>Pídeselo al agente</strong> en la terminal (o a un modelo en el <a href="#ia-ollama">Chat</a>, y guarda
-      su código como checkpoint):
+    <li><strong>Pídeselo al agente</strong> en la terminal (o a Hermes en el <a href="#ia-hermes">Chat</a>, que crea los checkpoints solo):
       <div class="prompt"><p>Llavero de 50×20×4 mm con esquinas redondeadas de 3 mm y un agujero de 4 mm para la
       anilla. Mi nombre «MARCO» embutido 1 mm, en negro sobre base amarilla. Una pieza por color, sin solapes.</p></div></li>
     <li><strong>Revisa en el visor</strong>: vista <em>Arriba</em> para leer el texto y <em>Abajo</em> para comprobar que la
@@ -2339,7 +2442,7 @@ color("Black") label();                                    // texto que llena el
   tocarlo a mano.</p></details>
   <details><summary>¿Necesito una suscripción de IA?</summary><p>Para los agentes de terminal, la que pida cada CLI
   (Claude Code, Codex…); para el chat, la de su proveedor. Si no quieres pagar, usa el
-  <a href="#ia-ollama">chat con Ollama</a> en local, con menos precisión.</p></details>
+  <a href="#ia-hermes">chat con Ollama</a> en local, con menos precisión.</p></details>
   <details><summary>¿Por qué la IA no puede editar un checkpoint?</summary><p>Porque el historial se reconstruye de los
   archivos: si uno cambiara, el árbol dejaría de decir la verdad. Ver <a href="#checkpoints--inmutables">por qué son
   inmutables</a>.</p></details>

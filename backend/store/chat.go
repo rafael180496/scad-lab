@@ -11,13 +11,34 @@ type Chat struct {
 	UpdatedAt   int64  `json:"updatedAt"`
 }
 
-// ChatMessage es un mensaje del chat: role es "user" o "assistant".
+// ChatMessage es un mensaje del chat: role es "user" o "assistant". Los pasos de
+// herramienta de Hermes no son filas aparte (el CHECK de role no se puede
+// ampliar de forma aditiva): viajan dentro de Parts.
 type ChatMessage struct {
 	ID        int64  `json:"id"`
 	ChatID    int64  `json:"chatId"`
 	Role      string `json:"role"`
 	Content   string `json:"content"`
 	CreatedAt int64  `json:"createdAt"`
+	// Parts es un JSON opaco para este paquete: en un mensaje del usuario, los
+	// metadatos de sus adjuntos; en uno del asistente, los pasos del turno. ""
+	// = nada (los mensajes anteriores a Hermes).
+	Parts string `json:"parts"`
+	// Tokens y costo del turno que cerró este mensaje. 0 = el servidor no lo
+	// informó (CostUSD solo existe si el proveedor publica precios).
+	InputTokens  int64   `json:"inputTokens"`
+	OutputTokens int64   `json:"outputTokens"`
+	CostUSD      float64 `json:"costUsd"`
+}
+
+// NewChatMessage es lo que se guarda al agregar un mensaje.
+type NewChatMessage struct {
+	Role         string
+	Content      string
+	Parts        string
+	InputTokens  int64
+	OutputTokens int64
+	CostUSD      float64
 }
 
 const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at`
@@ -81,9 +102,38 @@ func (s *Store) SetChatTitle(id int64, title string) error {
 	return err
 }
 
+// RenameChat pone el título del chat. A diferencia de SetChatTitle (que solo
+// completa un título vacío) pisa el que haya: es el nombre que eligió la
+// persona. quien llama valida el texto. ErrNotFound si el chat no existe.
+func (s *Store) RenameChat(id int64, title string) error {
+	res, err := s.db.Exec(`UPDATE chats SET title = ? WHERE id = ?`, title, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetChatModel cambia el servidor y el modelo con que sigue el chat. No toca
+// updated_at: elegir otro modelo no es actividad de la conversación.
+func (s *Store) SetChatModel(id int64, providerID, model string) error {
+	res, err := s.db.Exec(`UPDATE chats SET provider_id = ?, model = ? WHERE id = ?`, providerID, model, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+const messageCols = `id, chat_id, role, content, created_at, parts, input_tokens, output_tokens, cost_usd`
+
 // ListChatMessages devuelve la conversación en orden cronológico.
 func (s *Store) ListChatMessages(chatID int64) ([]ChatMessage, error) {
-	rows, err := s.db.Query(`SELECT id, chat_id, role, content, created_at FROM chat_messages WHERE chat_id = ? ORDER BY id`, chatID)
+	rows, err := s.db.Query(`SELECT `+messageCols+` FROM chat_messages WHERE chat_id = ? ORDER BY id`, chatID)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +141,7 @@ func (s *Store) ListChatMessages(chatID int64) ([]ChatMessage, error) {
 	out := []ChatMessage{}
 	for rows.Next() {
 		var m ChatMessage
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.Role, &m.Content, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.Role, &m.Content, &m.CreatedAt, &m.Parts, &m.InputTokens, &m.OutputTokens, &m.CostUSD); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -99,17 +149,24 @@ func (s *Store) ListChatMessages(chatID int64) ([]ChatMessage, error) {
 	return out, rows.Err()
 }
 
-// AddChatMessage agrega un mensaje y sube el chat al tope de la lista
+// AddChatMessage agrega un mensaje de solo texto (ver AddChatMessageFull).
+func (s *Store) AddChatMessage(chatID int64, role, content string) (ChatMessage, error) {
+	return s.AddChatMessageFull(chatID, NewChatMessage{Role: role, Content: content})
+}
+
+// AddChatMessageFull agrega un mensaje y sube el chat al tope de la lista
 // (updated_at). Las dos escrituras van en una transacción: un mensaje sin su
 // fecha de chat dejaría el listado desordenado.
-func (s *Store) AddChatMessage(chatID int64, role, content string) (ChatMessage, error) {
+func (s *Store) AddChatMessageFull(chatID int64, m NewChatMessage) (ChatMessage, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return ChatMessage{}, err
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op tras Commit
 	t := now()
-	res, err := tx.Exec(`INSERT INTO chat_messages (chat_id, role, content, created_at) VALUES (?, ?, ?, ?)`, chatID, role, content, t)
+	role, content := m.Role, m.Content
+	res, err := tx.Exec(`INSERT INTO chat_messages (chat_id, role, content, created_at, parts, input_tokens, output_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		chatID, role, content, t, m.Parts, m.InputTokens, m.OutputTokens, m.CostUSD)
 	if err != nil {
 		return ChatMessage{}, err
 	}
@@ -123,5 +180,6 @@ func (s *Store) AddChatMessage(chatID int64, role, content string) (ChatMessage,
 	if err := tx.Commit(); err != nil {
 		return ChatMessage{}, err
 	}
-	return ChatMessage{ID: id, ChatID: chatID, Role: role, Content: content, CreatedAt: t}, nil
+	return ChatMessage{ID: id, ChatID: chatID, Role: role, Content: content, CreatedAt: t,
+		Parts: m.Parts, InputTokens: m.InputTokens, OutputTokens: m.OutputTokens, CostUSD: m.CostUSD}, nil
 }

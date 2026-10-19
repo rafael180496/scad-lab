@@ -129,7 +129,7 @@ en `verify` de cada impresora. La impresora del workspace se escribe en
 Agregar una skill incluida: carpeta nueva en `assets/skills/<nombre>/` con
 `SKILL.md` (frontmatter `name` = carpeta, `description` que diga cuándo usarla).
 Se embebe sola en el binario. Una skill del usuario se crea desde Configuración
-→ Skills y vive en `<datos>/skills/`.
+→ Skills y vive en `<datos>/skills/` (o la carpeta que elijas ahí); desde la misma pantalla se edita, renombra y elimina ([20-skills-propias.md](20-skills-propias.md)).
 
 ## Verificado con OpenSCAD real (snapshot 2026.10.11, macOS)
 

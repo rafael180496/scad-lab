@@ -37,9 +37,23 @@ type env struct {
 	store *store.Store // nil si scadlab.db no existe o no abrió: se trabaja con los defaults
 	parts *parts.Store // caché de partes por color (la misma de la app); nil sin directorio de datos
 
+	// owned dice qué recursos abrió este env y por lo tanto cierra. Lo que le
+	// inyectó la app (Toolbox) es de la app: cerrarlo aquí le apagaría el motor
+	// y la base a todo lo demás.
+	owned struct{ engine, wasm, store bool }
+
 	mu      sync.Mutex
 	scad    scadCache
 	results map[string]render.Result // último render de este proceso, por checkpoint
+}
+
+// injected son los recursos que la app le presta al env en vez de que abra los
+// suyos (nil = abrir como hace el servidor `--mcp`).
+type injected struct {
+	store  *store.Store
+	engine *render.Engine
+	wasm   *scadwasm.Runner
+	parts  *parts.Store
 }
 
 // scadCache recuerda dónde está OpenSCAD: detect.OpenSCAD corre `openscad
@@ -51,7 +65,11 @@ type scadCache struct {
 	tool     detect.Tool
 }
 
-func newEnv(opts Options, lg *log.Logger) (*env, error) {
+func newEnv(opts Options, lg *log.Logger) (*env, error) { return newEnvWith(opts, lg, injected{}) }
+
+// newEnvWith es newEnv con recursos prestados: el servidor `--mcp` no presta
+// ninguno y lo abre todo; la caja de herramientas de la app presta los suyos.
+func newEnvWith(opts Options, lg *log.Logger, in injected) (*env, error) {
 	ws, err := resolveWorkspace(opts.WorkspaceDir)
 	if err != nil {
 		return nil, i18n.Errorf(i18n.Msg{ES: "no se pudo abrir la carpeta del workspace: %w", EN: "could not open the workspace folder: %w"}, err)
@@ -60,32 +78,44 @@ func newEnv(opts Options, lg *log.Logger) (*env, error) {
 		return nil, i18n.Errorf(i18n.Msg{ES: "el workspace %s no es una carpeta", EN: "the workspace %s is not a folder"}, ws)
 	}
 	e := &env{ws: ws, log: lg, results: map[string]render.Result{}}
+	e.store, e.engine, e.wasm, e.parts = in.store, in.engine, in.wasm, in.parts
 
 	dir, derr := appdata.Dir()
 	if derr != nil {
 		lg.Printf("directorio de datos: %v", derr)
 		e.engineErr = derr
-		e.wasm = scadwasm.New("")
+		if e.wasm == nil {
+			e.wasm, e.owned.wasm = scadwasm.New(""), true
+		}
 	} else {
 		e.dataDir = dir
 		// La caché de compilación del wasm es la misma que usa la app: el
 		// primer render de un agente no paga los 2-3 s si la app ya compiló.
-		e.wasm = scadwasm.New(filepath.Join(dir, "cache", "wasm"))
-		e.parts = parts.NewStore(filepath.Join(dir, "cache", "parts"))
+		if e.wasm == nil {
+			e.wasm, e.owned.wasm = scadwasm.New(filepath.Join(dir, "cache", "wasm")), true
+		}
+		if e.parts == nil {
+			e.parts = parts.NewStore(filepath.Join(dir, "cache", "parts"))
+		}
 		// La caché de mallas es la misma que usa la app: lo que renderiza el
 		// agente queda disponible para el visor y viceversa.
-		e.engine, e.engineErr = render.NewEngine(filepath.Join(dir, "cache", "meshes"))
-		if e.engineErr != nil {
-			lg.Printf("motor de render: %v", e.engineErr)
+		if e.engine == nil {
+			e.engine, e.engineErr = render.NewEngine(filepath.Join(dir, "cache", "meshes"))
+			e.owned.engine = e.engine != nil
+			if e.engineErr != nil {
+				lg.Printf("motor de render: %v", e.engineErr)
+			}
 		}
 		// La base solo se abre si ya existe: crearla sería un efecto
 		// colateral de lanzar un agente, y la app la crea al arrancar.
-		if dbPath, err := appdata.DBPath(); err == nil {
-			if _, err := os.Stat(dbPath); err == nil {
-				if st, err := store.Open(dbPath); err != nil {
-					lg.Printf("abrir %s: %v", dbPath, err)
-				} else {
-					e.store = st
+		if e.store == nil {
+			if dbPath, err := appdata.DBPath(); err == nil {
+				if _, err := os.Stat(dbPath); err == nil {
+					if st, err := store.Open(dbPath); err != nil {
+						lg.Printf("abrir %s: %v", dbPath, err)
+					} else {
+						e.store, e.owned.store = st, true
+					}
 				}
 			}
 		}
@@ -94,14 +124,15 @@ func newEnv(opts Options, lg *log.Logger) (*env, error) {
 	return e, nil
 }
 
+// close libera lo que el env abrió; lo prestado queda como estaba.
 func (e *env) close() {
-	if e.engine != nil {
+	if e.owned.engine && e.engine != nil {
 		e.engine.Close()
 	}
-	if e.wasm != nil {
+	if e.owned.wasm && e.wasm != nil {
 		_ = e.wasm.Close()
 	}
-	if e.store != nil {
+	if e.owned.store && e.store != nil {
 		_ = e.store.Close()
 	}
 }

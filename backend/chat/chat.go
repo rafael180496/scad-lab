@@ -21,7 +21,7 @@ import (
 
 // ErrBusy lo devuelve Begin si el chat ya está respondiendo: dos turnos a la
 // vez sobre la misma conversación se pisarían el historial.
-var ErrBusy = i18n.New(i18n.Msg{ES: "este chat todavía está respondiendo; espera o detenelo", EN: "this chat is still answering; wait or stop it"})
+var ErrBusy = i18n.New(i18n.Msg{ES: "este chat todavía está respondiendo; espera o deténlo", EN: "this chat is still answering; wait or stop it"})
 
 // FlushInterval es cada cuánto se manda a la pantalla lo acumulado. Un modelo
 // local puede soltar un delta por token (50–100 por segundo); un evento de
@@ -137,13 +137,26 @@ type Outcome struct {
 	// Cancelled: lo cortó el usuario (Cancel) o el cierre de la app. Text trae
 	// lo escrito hasta ahí, que se conserva.
 	Cancelled bool
+	// Usage y Model son lo que informó el servidor (cero/vacío si no lo dijo, o
+	// si el turno se cortó antes de que lo dijera).
+	Usage llm.Usage
+	Model string
 }
 
-// Run envía la conversación y reparte la respuesta por emit(seq, texto) en
-// trozos agrupados cada FlushInterval. Cuando vuelve, todo lo recibido ya pasó
+// TextStream agrupa el texto visible de un turno y lo reparte a la pantalla.
+// Lo usa Run (un solo pedido al modelo) y el bucle de Hermes (varias vueltas
+// con herramientas en medio): los dos comparten el mismo orden, el mismo
+// Snapshot y la misma cadencia.
+type TextStream struct {
+	t *Turn
+	b *batcher
+}
+
+// Stream abre el reparto del texto del turno por emit(seq, texto), en trozos
+// agrupados cada FlushInterval. Cuando Close vuelve, todo lo recibido ya pasó
 // por emit: el "listo" que mande quien llama no puede adelantarse al texto.
-func (t *Turn) Run(client llm.Client, req llm.ChatRequest, emit func(seq int, text string)) (Outcome, error) {
-	b := &batcher{interval: FlushInterval, emit: func(s string) {
+func (t *Turn) Stream(emit func(seq int, text string)) *TextStream {
+	return &TextStream{t: t, b: &batcher{interval: FlushInterval, emit: func(s string) {
 		// Bajo el candado del turno, para que Snapshot vea el mismo orden que
 		// la pantalla: el texto de un trozo nunca queda en el snapshot y en el
 		// evento de otro.
@@ -152,14 +165,58 @@ func (t *Turn) Run(client llm.Client, req llm.ChatRequest, emit func(seq int, te
 		t.partial.WriteString(s)
 		t.seq++
 		emit(t.seq, s)
-	}}
-	res, err := client.Chat(t.ctx, req, b.add)
-	b.close()
+	}}}
+}
 
+// Add suma texto visible.
+func (s *TextStream) Add(text string) {
+	if text != "" {
+		s.b.add(text)
+	}
+}
+
+// Flush manda ya lo pendiente: se llama antes de anunciar un paso de
+// herramienta, para que el texto que lo precede no llegue después de él.
+func (s *TextStream) Flush() { s.b.flush() }
+
+// Close manda lo pendiente y no acepta más.
+func (s *TextStream) Close() { s.b.close() }
+
+// WasCancelled dice si el usuario (o el cierre de la app) pidió cortar el turno.
+func (t *Turn) WasCancelled() bool {
 	t.mu.Lock()
-	cancelled := t.cancelled
-	t.mu.Unlock()
-	out := Outcome{Text: res.Text}
+	defer t.mu.Unlock()
+	return t.cancelled
+}
+
+// Run envía la conversación y reparte la respuesta por emit(seq, texto) en
+// trozos agrupados cada FlushInterval. Cuando vuelve, todo lo recibido ya pasó
+// por emit: el "listo" que mande quien llama no puede adelantarse al texto.
+//
+// Outcome.Text es lo que se le mostró al usuario: se arma acá con los trozos de
+// texto y no sale de la respuesta del cliente, que ante un corte o un error
+// devuelve el resultado vacío. Así una cancelación o un fallo a mitad de
+// respuesta conserva lo ya escrito. El pensamiento del modelo (Delta.Thinking)
+// no es parte de la respuesta visible y se descarta.
+func (t *Turn) Run(client llm.Client, req llm.ChatRequest, emit func(seq int, text string)) (Outcome, error) {
+	stream := t.Stream(emit)
+	var textMu sync.Mutex
+	var visible strings.Builder
+	res, err := client.Chat(t.ctx, req, func(d llm.Delta) {
+		if d.Text == "" {
+			return
+		}
+		textMu.Lock()
+		visible.WriteString(d.Text)
+		textMu.Unlock()
+		stream.Add(d.Text)
+	})
+	stream.Close()
+
+	cancelled := t.WasCancelled()
+	textMu.Lock()
+	out := Outcome{Text: visible.String(), Usage: res.Usage, Model: res.Model}
+	textMu.Unlock()
 	if err != nil && errors.Is(err, context.Canceled) {
 		// Cancelado por el usuario o por el cierre de la app: no es un fallo.
 		out.Cancelled = true
@@ -199,6 +256,17 @@ func (b *batcher) add(s string) {
 	if wait := b.interval - time.Since(b.last); wait > 0 {
 		b.timer = time.AfterFunc(wait, b.onTimer)
 		return
+	}
+	b.flushLocked()
+}
+
+// flush manda ya lo acumulado, sin esperar al vencimiento.
+func (b *batcher) flush() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.timer != nil {
+		b.timer.Stop()
+		b.timer = nil
 	}
 	b.flushLocked()
 }
@@ -260,6 +328,20 @@ func Title(text string) string {
 		title += "…"
 	}
 	return title
+}
+
+// MaxTitleRunes es el largo máximo de un título puesto a mano.
+const MaxTitleRunes = 120
+
+// CleanTitle valida el nombre que la persona escribió para un chat: colapsa los
+// espacios y saltos de línea, recorta y lo limita a MaxTitleRunes. "" = vacío
+// (quien llama rechaza el cambio y conserva el nombre anterior).
+func CleanTitle(raw string) string {
+	t := strings.Join(strings.Fields(raw), " ")
+	if r := []rune(t); len(r) > MaxTitleRunes {
+		t = strings.TrimSpace(string(r[:MaxTitleRunes]))
+	}
+	return t
 }
 
 // TrimHistory deja los mensajes más recientes que entran en maxChars, sin

@@ -15,8 +15,7 @@ Fuente: `app*.go`. Tipos TS generados en `frontend/wailsjs/go/models.ts` con
 | `DetectTools()` | `[]detect.Tool{id, found, path, version, source}` | openscad + cada CLI; en paralelo. `source` (solo OpenSCAD): `custom` (ruta fijada), `managed` (descargado por la app) o `system`; `""` si no se encontró |
 | `ListPrinters()` | `[]printers.Printer` | de `printers.json` |
 | `ListMaterials()` / `SaveMaterial(m)` | `store.Material` | |
-| `ListProviders()` / `SaveProvider(p)` | `store.AIProvider{id, kind, name, command, config, enabled}` | `kind`: cli, ollama, openai, anthropic |
-| `OllamaModels(baseUrl)` | `[]string` | prueba de conexión + modelos |
+| `ListProviders()` / `SaveProvider(p)` | `store.AIProvider{id, kind, name, command, config, enabled}` | `kind`: cli, ollama, openai, anthropic. Desde S12 el chat **no** lee los de tipo servidor: usa `model_servers` (sección siguiente); quedan para los CLIs |
 
 ## Workspaces — `app_workspaces.go`
 
@@ -202,9 +201,11 @@ Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
 | `terminal:data` | `{id, data (base64), seq}` | PTY de una terminal de agente (S5) |
 | `terminal:exit` | `{id, code}` | el proceso de la terminal terminó |
 | `chat:delta` | `{chatId, text, seq}` | turno de chat en curso (deltas agrupados cada 40 ms) |
-| `chat:done` | `{chatId, messageId, cancelled}` | fin del turno (también al cancelar con texto parcial) |
+| `chat:step` | `{chatId, step{id, index, tool, args, status, text, images[], durationMs, textAt}}` | Hermes: un paso de herramienta, dos veces con el mismo `id` (`status` `running` al arrancar; `ok` o `error` al terminar). `images` son data URL (PNG en vivo); `textAt` = texto visible previo en unidades UTF-16 |
+| `chat:usage` | `{chatId, inputTokens, outputTokens, costUsd}` | uso acumulado del turno tras cada vuelta; `costUsd` 0 = «no informado» (solo hay costo con precios publicados) |
+| `chat:done` | `{chatId, messageId, cancelled}` | fin del turno (también al cancelar con texto parcial o pasos) |
 | `mcp:changed` | `{enabled}` | se apagó/encendió el servidor MCP o se resincronizó un workspace (`SetMCPEnabled`, `SyncWorkspaceMCP`) |
-| `chat:error` | `{chatId, message, messageId}` | error del proveedor; si había texto, se guardó como respuesta parcial |
+| `chat:error` | `{chatId, message, messageId}` | error del proveedor; si había texto o pasos, se guardaron como respuesta parcial |
 
 Watcher (`backend/watch`): raíz del workspace abierto, no recursivo, solo
 `.scad`. Si aparece un `.scad` nuevo y `autoRender` está activo, renderiza el
@@ -216,9 +217,74 @@ de número más alto.
 |---|---|
 | `ListSkills()` | `[]SkillView{name, description, source, dir, enabled}` |
 | `SetSkillEnabled(name, enabled)` | — |
-| `CreateSkill(name)` | carpeta creada (kebab-case) |
-| `OpenSkillsFolder()` | — |
+| `CreateSkill(name)` | carpeta creada (kebab-case); desde la plantilla, con `name` y descripción pendiente; **no abre nada** |
+| `GetSkillsFolder()` | `SkillsFolder{path, default, custom, exists, count}` |
+| `OpenSkillsFolder()` | — (crea la carpeta si falta; error claro si el sistema no puede abrirla) |
+| `ChangeSkillsFolder(dir, move)` | `SkillsFolderChange{path, moved[], skipped[], syncError}`; `dir` vacío = predeterminada |
+| `DeleteSkill(name)` | `DeleteSkillResult{trash, removed, kept[], syncError}` — a la papelera de la app; solo propias |
+| `RenameSkill(old, new)` | `RenameSkillResult{name, removed, kept[], syncError}` — solo propias |
 | `SyncWorkspaceSkills(id)` | — |
+| `ListSkillFiles(name)` | `[]skills.File{path, size, text}` (SKILL.md primero) |
+| `ReadSkillFile(name, rel)` | texto; las incluidas también |
+| `SaveSkillFile(name, rel, content)` | `SaveSkillFileResult{saved, diagnostics[], syncError}`; `saved:false` si el SKILL.md tiene errores |
+| `CreateSkillFile(name, rel)` / `RenameSkillFile(name, from, to)` / `DeleteSkillFile(name, rel)` | — / syncError / ruta en la papelera |
+| `ValidateSkillMarkdown(name, text)` | `[]skills.Diagnostic{line, severity, code, message}` |
+
+Detalle (papelera, confinamiento de rutas, copias en workspaces): [20-skills-propias.md](20-skills-propias.md).
+
+## Servidores de modelos — `app_servers.go` (S12, 12.1)
+
+Ollama, compatibles con OpenAI (OpenRouter, Gemini, LM Studio, vLLM…) y Anthropic, varios por tipo, en la tabla
+`model_servers` ([07-database.md](07-database.md)). La clave de API se cifra con AES-256-GCM con la llave derivada de la contraseña
+maestra (`backend/vaultgate`, ver la sección siguiente); **nunca** cruza hacia el frontend (`hasToken`) ni aparece en un log o error.
+Detalle: [19-hermes.md](19-hermes.md).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `ListModelServers()` | `[]store.ModelServer{id, kind, preset, name, baseUrl, apiKeyEnv, hasToken, defaultModel, contextTokens, enabled, sortOrder, updatedAt}` | sin claves |
+| `SaveModelServer(s, token, clearToken)` | `store.ModelServer` | id vacío = alta; `token` vacío conserva la guardada. Con `token` y sin contraseña maestra falla con el error de código `vault-uninitialized`; con la app bloqueada, `vault-locked` (alternativa sin contraseña: `apiKeyEnv`) |
+| `DeleteModelServer(id)` | — | borra también la clave cifrada; los chats quedan legibles |
+| `TestModelServer(s, token)` | `ServerProbe{ok, status, message, models, modelIds[], latencyMs}` | sin guardar; un servidor caído **no** es error del binding (sí lo son `vault-locked` / `vault-uninitialized` si la clave guardada no se puede abrir) |
+| `ListServerModels(serverId, refresh)` | `[]ModelInfo{id, vision, visionKnown, tools, toolsKnown, contextTokens, promptPricePerM, completionPricePerM}` | caché de 5 min por servidor; `…Known=false` = «no se sabe» (no bloquea, solo avisa) |
+| `ListProviderModels(providerId)` | `[]string` | alias de S5: los ids de `ListServerModels` |
+| `SetLastModel(workspaceId, serverId, model)` / `GetLastModel(workspaceId)` | — / `LastModel{serverId, model}` | por proyecto y global; cae al global y a «ninguno» si el servidor ya no existe |
+
+### Llavero propio — `app_vault.go` (S12, 12.10)
+
+Detalle y flujos: [21-llavero.md](21-llavero.md). La contraseña solo entra por `CreateMasterPassword`, `UnlockVault` y
+`ChangeMasterPassword`; ni ella ni la llave salen nunca de Go. Reemplaza a `KeyringStatus()` de T1 (ya no existe).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `VaultStatus()` | `VaultStatus{initialized, unlocked, remembered, keyringAvailable, keyringDetail}` | **no** lee la llave recordada (con `remembered` puede haber `unlocked=false` hasta el primer uso); sondea el llavero una vez por sesión |
+| `CreateMasterPassword(password, remember)` | `VaultResult{rememberFailed, detail, lostKeys}` | mínimo 8 caracteres; solo si no hay una (`ErrAlreadyInitialized`); re-cifra las claves de T1 y borra su entrada; `remember` guarda la **llave derivada**. Que el llavero no deje no es error: `rememberFailed=true` |
+| `UnlockVault(password, remember)` | `VaultResult` | error de código `vault-wrong-password`; `remember` enciende o apaga la entrada del llavero |
+| `ChangeMasterPassword(oldPassword, newPassword)` | `VaultResult` | re-cifra todas las claves en una transacción; `vault-wrong-password` si la vieja no es |
+| `ForgetThisDevice()` | — | «Olvidar este equipo»: borra la entrada del llavero; la sesión actual sigue desbloqueada |
+| `SetRememberDevice(remember)` | — | encender necesita la app desbloqueada (`vault-locked`); apagar = `ForgetThisDevice` |
+| `ResetVault()` | `number` | cuántas claves se borraron; borra claves, verificador, `vault.salt` y entradas del llavero |
+
+Códigos de error (`errorCode(e)` en el frontend, `lib/vault.ts`): `vault-uninitialized` (abrir «Crear contraseña maestra»),
+`vault-locked` (abrir «Desbloquear») y `vault-wrong-password`. Los devuelven `SaveModelServer` (con token),
+`TestModelServer`, `ListServerModels` y `SendChatMessage` (esta última **antes** de guardar el mensaje);
+`withVault()` abre el diálogo y reintenta la llamada una sola vez.
+
+## Chat con Hermes — `app_chat.go`, `app_chat_attach.go` (S12, 12.4–12.6)
+
+Tabla completa del chat (con `NewChat`, `ListChats`…) en [09-agents-ai.md](09-agents-ai.md#chat-con-modelos--app_chatgo-s5-s12).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent, maxSteps}` (`maxSteps` 1–30, 0 = 12; `agent=false` = modo texto de S5). Texto vacío solo con adjuntos. Falla **antes** de guardar nada si el servidor no responde o una imagen va a un modelo que informó no ver |
+| `AddChatAttachment(workspaceId, path)` | `hermes.Attachment{id, kind, name, mime, size, thumbDataUrl, refPath, summary}` | `kind` `image` (≤ 5 MB) o `model` (STL/3MF/OBJ ≤ 64 MB, copiado a `refs/` y analizado); por contenido |
+| `AddChatAttachmentData(workspaceId, name, dataBase64)` | `hermes.Attachment` | pegar / arrastrar; acepta data URL; `name` solo aporta nombre y extensión |
+| `ChooseChatAttachment(workspaceId)` | `[]hermes.Attachment` | diálogo nativo; si uno falla no queda ninguno de la tanda y el error nombra el archivo |
+| `RemoveChatAttachment(id)` | — | borra lo que se creó (la copia en `refs/` solo si la hizo el adjunto); no es error quitar uno que ya no está |
+| `RenameChat(chatId, title)` | — | recorta y colapsa espacios, máx. 120 letras, no vacío |
+| `SetChatModel(chatId, serverId, model)` | — | cambia servidor y modelo a mitad de camino (modelo vacío = el del servidor); también es el último elegido del proyecto |
+| `GetChat(chatId)` | `ChatView{chat, messages, running, partial, partialSeq, steps[], usage}` | `steps` y `usage` son los del turno en curso |
+
+`store.ChatMessage` ganó `parts` (JSON: adjuntos del usuario o pasos del asistente), `inputTokens`, `outputTokens` y `costUsd`.
 
 ## Bindings documentados en su segmento
 

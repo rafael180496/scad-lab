@@ -57,6 +57,8 @@ type fakeOllama struct {
 func (f *fakeOllama) server(t *testing.T) *httptest.Server {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/api/version":
+			_, _ = io.WriteString(w, `{"version":"0.5.1"}`)
 		case "/api/tags":
 			_, _ = io.WriteString(w, `{"models":[{"name":"qwen3-coder:30b"},{"name":"llama3.2:3b"}]}`)
 		case "/api/chat":
@@ -86,19 +88,18 @@ func (f *fakeOllama) server(t *testing.T) *httptest.Server {
 	return srv
 }
 
-// chatApp deja un App con un workspace (con un checkpoint) y Ollama apuntando
-// al servidor falso.
+// chatApp deja un App con un workspace (con un checkpoint) y el servidor
+// «ollama» (migrado de S5, mismo id) apuntando al servidor falso.
 func chatApp(t *testing.T, f *fakeOllama) (*App, int64, string, *chatEvents) {
 	t.Helper()
 	a, wsID, dir := editorWorkspace(t)
 	srv := f.server(t)
-	p, err := a.store.GetProvider("ollama")
+	p, err := a.store.GetModelServer("ollama")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Config = map[string]any{"baseUrl": srv.URL, "model": "qwen3-coder:30b"}
-	p.Enabled = true
-	if err := a.SaveProvider(p); err != nil {
+	p.BaseURL, p.DefaultModel, p.Enabled = srv.URL, "qwen3-coder:30b", true
+	if _, err := a.SaveModelServer(p, "", false); err != nil {
 		t.Fatal(err)
 	}
 	return a, wsID, dir, captureChatEvents(a)
@@ -125,7 +126,7 @@ func TestChatSendStreamsPersistsAndTitles(t *testing.T) {
 	if err != nil || c.Model != "qwen3-coder:30b" {
 		t.Fatalf("NewChat: %+v, %v", c, err)
 	}
-	um, err := a.SendChatMessage(c.ID, "  Haz un cubo de diez milímetros para mi pieza  ", "001-base.scad")
+	um, err := a.SendChatMessage(c.ID, "  Haz un cubo de diez milímetros para mi pieza  ", "001-base.scad", nil, SendOptions{})
 	if err != nil || um.Role != "user" || um.Content != "Haz un cubo de diez milímetros para mi pieza" {
 		t.Fatalf("Send: %+v, %v", um, err)
 	}
@@ -166,7 +167,7 @@ func TestChatSendStreamsPersistsAndTitles(t *testing.T) {
 	f.mu.Lock()
 	f.chunks = []string{"Listo."}
 	f.mu.Unlock()
-	if _, err := a.SendChatMessage(c.ID, "ahora un cilindro", ""); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "ahora un cilindro", "", nil, SendOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	waitDone(t, ev)
@@ -185,7 +186,7 @@ func TestChatBusyAndCancelKeepsPartial(t *testing.T) {
 	f := &fakeOllama{chunks: []string{"a medias"}, hold: true}
 	a, wsID, _, ev := chatApp(t, f)
 	c, _ := a.NewChat(wsID, "ollama", "m")
-	if _, err := a.SendChatMessage(c.ID, "hola", ""); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "hola", "", nil, SendOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	// Mientras responde: GetChat lo informa y un segundo envío se rechaza.
@@ -199,7 +200,7 @@ func TestChatBusyAndCancelKeepsPartial(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err := a.SendChatMessage(c.ID, "otra", ""); err == nil {
+	if _, err := a.SendChatMessage(c.ID, "otra", "", nil, SendOptions{}); err == nil {
 		t.Error("un segundo envío con el chat ocupado debería fallar")
 	}
 	a.CancelChat(c.ID)
@@ -217,7 +218,7 @@ func TestChatServerErrorEmitsErrorAndKeepsUserMessage(t *testing.T) {
 	f := &fakeOllama{status: 404}
 	a, wsID, _, ev := chatApp(t, f)
 	c, _ := a.NewChat(wsID, "ollama", "nope")
-	if _, err := a.SendChatMessage(c.ID, "hola", ""); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "hola", "", nil, SendOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -237,7 +238,7 @@ func TestChatServerErrorEmitsErrorAndKeepsUserMessage(t *testing.T) {
 	f.mu.Lock()
 	f.status, f.chunks = 0, []string{"ok"}
 	f.mu.Unlock()
-	if _, err := a.SendChatMessage(c.ID, "reintento", ""); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "reintento", "", nil, SendOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	waitDone(t, ev)
@@ -253,31 +254,31 @@ func TestChatValidation(t *testing.T) {
 	f := &fakeOllama{}
 	a, wsID, _, _ := chatApp(t, f)
 	if _, err := a.NewChat(wsID, "claude", "x"); err == nil {
-		t.Error("un CLI agéntico no es un proveedor de chat")
+		t.Error("un CLI agéntico no es un servidor de modelos")
 	}
 	if _, err := a.NewChat(wsID, "anthropic", "x"); err == nil {
-		t.Error("un proveedor deshabilitado no sirve")
+		t.Error("un servidor deshabilitado no sirve")
 	}
 	if _, err := a.NewChat(wsID, "nope", "x"); err == nil {
-		t.Error("proveedor inexistente")
+		t.Error("servidor inexistente")
 	}
 	if _, err := a.NewChat(99999, "ollama", "x"); err == nil {
 		t.Error("workspace inexistente")
 	}
-	p, _ := a.store.GetProvider("ollama")
-	p.Config = map[string]any{"baseUrl": p.Config["baseUrl"], "model": ""}
-	_ = a.SaveProvider(p)
+	p, _ := a.store.GetModelServer("ollama")
+	p.DefaultModel = ""
+	_, _ = a.SaveModelServer(p, "", false)
 	if _, err := a.NewChat(wsID, "ollama", " "); err == nil {
 		t.Error("sin modelo en ningún lado debería pedirlo")
 	}
 	c, _ := a.NewChat(wsID, "ollama", "m")
-	if _, err := a.SendChatMessage(c.ID, "   ", ""); err == nil {
+	if _, err := a.SendChatMessage(c.ID, "   ", "", nil, SendOptions{}); err == nil {
 		t.Error("mensaje vacío")
 	}
-	if _, err := a.SendChatMessage(c.ID, strings.Repeat("x", maxChatTextBytes+1), ""); err == nil {
+	if _, err := a.SendChatMessage(c.ID, strings.Repeat("x", maxChatTextBytes+1), "", nil, SendOptions{}); err == nil {
 		t.Error("mensaje enorme")
 	}
-	if _, err := a.SendChatMessage(99999, "hola", ""); err == nil {
+	if _, err := a.SendChatMessage(99999, "hola", "", nil, SendOptions{}); err == nil {
 		t.Error("chat inexistente")
 	}
 }
@@ -285,16 +286,17 @@ func TestChatValidation(t *testing.T) {
 func TestChatAnthropicNeedsKeyBeforeAnyRequest(t *testing.T) {
 	f := &fakeOllama{}
 	a, wsID, _, _ := chatApp(t, f)
-	p, _ := a.store.GetProvider("anthropic")
-	p.Enabled = true
-	p.Config = map[string]any{"model": "claude-sonnet-5-5", "apiKeyEnv": "SCADLAB_TEST_NO_SUCH_KEY"}
-	_ = a.SaveProvider(p)
+	p, _ := a.store.GetModelServer("anthropic")
+	p.Enabled, p.DefaultModel, p.APIKeyEnv = true, "claude-sonnet-5-5", "SCADLAB_TEST_NO_SUCH_KEY"
+	if _, err := a.SaveModelServer(p, "", false); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("SHELL", "/nonexistent/shell") // que el respaldo de la shell de login no encuentre nada
 	c, err := a.NewChat(wsID, "anthropic", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = a.SendChatMessage(c.ID, "hola", "")
+	_, err = a.SendChatMessage(c.ID, "hola", "", nil, SendOptions{})
 	if err == nil || !strings.Contains(err.Error(), "SCADLAB_TEST_NO_SUCH_KEY") {
 		t.Fatalf("debería pedir la variable por nombre: %v", err)
 	}
@@ -307,7 +309,7 @@ func TestChatDeleteCascades(t *testing.T) {
 	f := &fakeOllama{chunks: []string{"x"}, hold: true}
 	a, wsID, _, _ := chatApp(t, f)
 	c, _ := a.NewChat(wsID, "ollama", "m")
-	if _, err := a.SendChatMessage(c.ID, "hola", ""); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "hola", "", nil, SendOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.DeleteChat(c.ID); err != nil {
@@ -337,15 +339,16 @@ func TestListProviderModels(t *testing.T) {
 	f := &fakeOllama{}
 	a, _, _, _ := chatApp(t, f)
 	got, err := a.ListProviderModels("ollama")
-	if err != nil || strings.Join(got, ",") != "qwen3-coder:30b,llama3.2:3b" {
+	// La lista sale ordenada para que la búsqueda y el ojo encuentren.
+	if err != nil || strings.Join(got, ",") != "llama3.2:3b,qwen3-coder:30b" {
 		t.Fatalf("ollama: %v, %v", got, err)
 	}
-	p, _ := a.store.GetProvider("anthropic")
-	p.Enabled = true
-	_ = a.SaveProvider(p)
-	got, err = a.ListProviderModels("anthropic")
-	if err != nil || len(got) < 2 || !strings.HasPrefix(got[0], "claude-") {
-		t.Fatalf("anthropic (lista fija, sin red ni clave): %v, %v", got, err)
+	// Anthropic sin clave: el error nombra qué falta, antes de pedir nada.
+	p, _ := a.store.GetModelServer("anthropic")
+	p.Enabled, p.APIKeyEnv = true, ""
+	_, _ = a.SaveModelServer(p, "", false)
+	if _, err = a.ListProviderModels("anthropic"); err == nil || !strings.Contains(err.Error(), "clave") && !strings.Contains(err.Error(), "key") {
+		t.Fatalf("anthropic sin clave: %v", err)
 	}
 	if _, err := a.ListProviderModels("claude"); err == nil {
 		t.Error("un CLI no lista modelos")

@@ -8,6 +8,8 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/wailsapp/wails/v2 v2.13.0
+	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/crypto v0.53.0
 	golang.org/x/text v0.39.0
 	modernc.org/sqlite v1.57.0
 )
@@ -18,9 +20,10 @@ require (
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/creack/pty v1.1.24 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
@@ -52,7 +55,6 @@ require (
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect

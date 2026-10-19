@@ -204,6 +204,30 @@ func parseASCII(r io.Reader) (Info, error) {
 	return acc.info(), nil
 }
 
+// ErrBadIndex: un triángulo apunta a un vértice que no existe.
+var ErrBadIndex = i18n.New(i18n.Msg{ES: "la malla tiene un triángulo con un vértice inexistente", EN: "the mesh has a triangle that points to a missing vertex"})
+
+// InfoFromIndexed analiza una malla indexada (la que sale de un OBJ o de un
+// 3MF) con las mismas cuentas que un STL: los vértices se sueldan por posición
+// exacta, así que dos vértices repetidos en el mismo punto no rompen la
+// estanqueidad.
+func InfoFromIndexed(verts [][3]float64, tris [][3]int32) (Info, error) {
+	acc := newAccumulator(len(tris))
+	for _, t := range tris {
+		var tri [3][3]float64
+		for k, i := range t {
+			if i < 0 || int(i) >= len(verts) {
+				return Info{}, ErrBadIndex
+			}
+			tri[k] = verts[i]
+		}
+		if err := acc.add(tri); err != nil {
+			return Info{}, err
+		}
+	}
+	return acc.info(), nil
+}
+
 func asciiError(line int) error {
 	return i18n.Errorf(i18n.Msg{ES: "STL ASCII inválido en la línea %d", EN: "invalid ASCII STL at line %d"}, line)
 }

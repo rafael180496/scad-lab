@@ -166,6 +166,7 @@ empaquetar**: eso se hace solo cuando el usuario dice «preparar la versión»
 | 10.3 | Workflow del tag (`release.yml`): validado (YAML, notas con `changelog-section.sh` sobre una sección simulada) | architect | ✅ |
 | 10.4 | Probar el `.exe` en una Windows real | usuario | ⬜ |
 | 10.5 | Primera versión (v0.1.0) con `releases.md` — **solo cuando el usuario lo pida** | — | ⬜ |
+| 10.6 | Skills propias (Configuración → Skills): botón de carpeta que sí abre, editor de archivos con validación del frontmatter, eliminar (papelera), renombrar y carpeta elegible — [20-skills-propias.md](20-skills-propias.md) | FS | ✅ |
 
 ## S11 — Motor integrado (OpenSCAD WASM) y descarga de OpenSCAD ✅ (falta 11.6, prueba del usuario en Windows)
 
@@ -179,3 +180,21 @@ Plan: [.claude/specs/s11-motor-wasm-descarga.md](../.claude/specs/s11-motor-wasm
 | 11.4 | UI: aviso del motor integrado en el panel de render y la barra de estado, Configuración → OpenSCAD, ayuda, capturas, CHANGELOG | FS | ✅ |
 | 11.5 | Integración, medidas y prueba de humo con OpenSCAD ausente (`SCADLAB_NO_SYSTEM_OPENSCAD=1`): visor con malla WASM, error con línea, STL cerrado, 3MF con una parte por color y su extrusor (igual que el nativo), estimación, MCP render/export/preview | architect | ✅ |
 | 11.6 | Probar en una Windows real: descarga del zip, `openscad.exe` detectado, render WASM sin OpenSCAD | usuario | ⬜ |
+
+## S12 — Hermes: chat agéntico con proveedores de IA ✅ (falta 12.11, prueba del usuario en la ventana real)
+
+Plan: [.claude/specs/s12-hermes-proveedores.md](../.claude/specs/s12-hermes-proveedores.md). Capa de modelos portada de mini-tools (proveedores, servidores, claves, modelos, streaming, tool calling, conversaciones, adjuntos, tokens y costo) y mejorada para OpenSCAD (herramientas de render/lint/measure/preview en el bucle, vista previa de vuelta al modelo, STL/3MF de referencia, skills). Detalle: [claude/19-hermes.md](19-hermes.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 12.1 | Proveedores y servidores (Ollama ×N, OpenAI, Anthropic, Gemini, OpenRouter, compatibles OpenAI), claves cifradas (AES-256-GCM, con la llave de la contraseña maestra: ver 12.10), modelos reales con búsqueda, Configuración → Proveedores de IA con «Probar conexión»; selector de servidor y modelo en el chat | FS | ✅ |
+| 12.2 | Caja de herramientas OpenSCAD en proceso (`mcp.Toolbox`), `list_skills`/`read_skill`, prompt de Hermes, análisis de referencias STL/3MF/OBJ (`backend/refmodel`) con vista previa rasterizada y copia a `refs/` | OS | ✅ |
+| 12.3 | Workspace nuevo (y carpeta importada vacía) con `001-<slug>.scad` por defecto, válido, con cabecera, `$fn`, Customizer y `color()`; se selecciona y renderiza al abrir | OS | ✅ |
+| 12.4 | Hermes: bucle agéntico con tool calling nativo, tarjetas de pasos plegables con imagen, detener, tope de pasos, modo de respaldo sin herramientas | FS | ✅ |
+| 12.5 | Adjuntos (imágenes por pegar/arrastrar/elegir; STL/3MF/OBJ de referencia) con chips y miniatura, aviso sin visión | FS | ✅ |
+| 12.6 | Conversaciones: renombrar, borrar, retomar, tokens y costo | FS | ✅ |
+| 12.7 | Terminal: la respuesta DA (`^[[?1;2c`) ya no se cuela en el agente al reenganchar | FS | ✅ |
+| 12.8 | Capturas (chat con proveedor y modelo, adjuntos, pasos, Configuración → Proveedores), ayuda es/en, CHANGELOG, `claude/19-hermes.md` | FS | ✅ |
+| 12.9 | Integración, verificación y prueba de humo con servidor simulado (`wails dev` + CDP, `SCADLAB_FAKE_KEYRING=1`): starter renderizado, llavero, adjuntos, ciclo del agente, terminal sin `^[[?1;2c`; arreglado el chat en blanco al reabrir pasos guardados (`images: null`) | architect | ✅ |
+| 12.10 | Llavero propio: contraseña maestra (argon2id) pedida solo al guardar la primera clave, «Recordar en este equipo» (marcado por defecto) en el llavero del SO, sin recordar = una vez por sesión; cambiar, olvidar este equipo, restablecer. Detalle: [21-llavero.md](21-llavero.md) | FS | ✅ |
+| 12.11 | Probar en la ventana real con un proveedor real (clave propia) y el Keychain real de macOS: ¿pregunta «ScadLab quiere acceder…» tras cada build? Antigravity en la terminal sin `^[[?1;2c` | usuario | ⬜ |

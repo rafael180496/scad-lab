@@ -27,13 +27,14 @@ import './index.css'
 import App, {type ShotOptions} from './App'
 import type {SettingsTab} from './components/settings/SettingsDialog'
 import {loadMesh, loadParts} from './lib/mesh'
-import {loadCodeEditor} from './components/editor/lazy'
+import {loadCodeEditor, loadSkillCodeEditor} from './components/editor/lazy'
 import {setLanguage} from './i18n'
 import {terminalShot} from './components/terminal/shot'
 import {shotTools} from './components/dock/dock'
 import {printStore, selectPart} from './lib/printSession'
 import {editorCommands, editorSession} from './lib/editorSession'
 import {installScrollGuard} from './lib/scrollGuard'
+import {skillsShot} from './lib/skillsShot'
 import {slugify} from './lib/slug'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
@@ -86,9 +87,24 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'settings-mcp': {scenario: 'ok', shot: {settingsTab: 'ai'}},
     // Chat con modelos (S5, bloque 5.B): una conversación cuya respuesta trae un
     // bloque OpenSCAD con «Guardar como checkpoint», y el aviso sin proveedores.
-    chat: {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    chat: {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    // S12: Hermes con herramientas. Los pasos de un turno (render con error de línea → corrige → preview con
+    // imagen), los adjuntos pendientes (una foto y un STL con miniatura) y la lista de conversaciones con una en
+    // renombrado en línea.
+    'chat-agent-steps': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    'chat-attachments': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    'chat-conversations': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
     'chat-empty': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'chat-new': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    // S12: el selector de modelo abierto (búsqueda, insignias de visión y herramientas, precios de OpenRouter).
+    'chat-models': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    // S12: el formulario «Agregar servidor» con el atajo de OpenRouter elegido.
+    'settings-providers-add': {scenario: 'ok', shot: {settingsTab: 'providers'}},
+    // S12 (12.10): el llavero propio. «Crear contraseña maestra» aparece al guardar la primera clave de API (sobre
+    // Proveedores de IA, con el formulario de OpenRouter detrás); «Desbloquear» cuando la llave no se recuperó sola
+    // y hace falta una clave (sobre el chat).
+    'vault-create': {scenario: 'ok', shot: {settingsTab: 'providers'}},
+    'vault-unlock': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
     'chat-stream': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     // Exportación (S9, tanda 9.B): el diálogo de 3MF con dos colores y sin avisos,
     // y con cinco colores en una A1 mini (admite 4: aviso de colores de más).
@@ -140,9 +156,20 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
 VIEWS['small'] = {scenario: 'ok', shot: {panel: 'agent-1'}}
 VIEWS['appearance-150'] = {scenario: 'ok', shot: {panel: 'agent-1'}}
 VIEWS['settings-appearance'] = {scenario: 'ok', shot: {settingsTab: 'general'}}
-for (const tab of ['general', 'openscad', 'ai', 'printing', 'skills', 'about'] as SettingsTab[]) {
+for (const tab of ['general', 'openscad', 'ai', 'providers', 'printing', 'skills', 'about'] as SettingsTab[]) {
     VIEWS[`settings-${tab}`] = {scenario: 'ok', shot: {settingsTab: tab}}
 }
+// Skills (Configuración → Skills): la lista con sus botones, el editor de una skill propia (y con un error
+// de frontmatter), una incluida en solo lectura, la confirmación de borrado y el cambio de carpeta.
+const SKILLS_VIEWS: Record<string, NonNullable<typeof skillsShot.mode>> = {
+    'skills-editor': 'editor',
+    'skills-editor-errors': 'editor-errors',
+    'skills-view': 'editor-builtin',
+    'skills-delete': 'delete',
+    'skills-folder': 'folder',
+}
+for (const [v, mode] of Object.entries(SKILLS_VIEWS)) VIEWS[v] = {scenario: 'ok', shot: {settingsTab: 'skills'}}
+skillsShot.mode = SKILLS_VIEWS[view]
 const cfg = VIEWS[view] ?? VIEWS.main
 const isTerminalView = view === 'terminal' || view === 'terminal-sessions' || view === 'terminal-mcp' || view === 'appearance-150' || view === 'small' || view === 'dock-150'
 if (view === 'terminal-sessions') terminalShot.openSessions = true
@@ -161,6 +188,69 @@ document.head.appendChild(noMotion)
 // ── Datos inventados ────────────────────────────────────────────────────────
 const P = <T,>(v: T) => Promise.resolve(v)
 const home = platform === 'windows' ? 'C:\\Users\\maker\\Documents\\ScadLab' : '/Users/maker/Documents/ScadLab'
+// Skills propias (inventadas): dónde viven y el contenido de las que se abren en el editor.
+const sep = platform === 'windows' ? '\\' : '/'
+const skillsDir = platform === 'windows' ? 'C:\\Users\\maker\\AppData\\Roaming\\ScadLab\\skills' : '/Users/maker/Library/Application Support/ScadLab/skills'
+const gearDescription = es ? 'Engranajes helicoidales con el módulo de mi taller.' : 'Helical gears using my workshop module.'
+const gearSkillMd = es
+    ? `---
+name: gear-helper
+description: ${gearDescription} Úsala cuando el usuario pida engranajes, piñones o cremalleras.
+---
+
+# Engranajes del taller
+
+Todos mis engranajes usan módulo 1,5 y ángulo de presión de 20°.
+
+## Reglas
+
+- Parte siempre de \`templates/engranaje.scad\`.
+- Holgura entre dientes: 0,2 mm en la A1 mini.
+- Cada versión es un checkpoint nuevo \`NNN-slug.scad\`.
+
+## Flujo
+
+1. Pregunta el número de dientes y el ancho.
+2. Copia la plantilla como checkpoint nuevo y ajusta los parámetros.
+3. Renderiza y revisa que los dientes engranen.
+`
+    : `---
+name: gear-helper
+description: ${gearDescription} Use it when the user asks for gears, pinions or racks.
+---
+
+# Workshop gears
+
+All my gears use module 1.5 and a 20° pressure angle.
+
+## Rules
+
+- Always start from \`templates/engranaje.scad\`.
+- Tooth clearance: 0.2 mm on the A1 mini.
+- Every version is a new \`NNN-slug.scad\` checkpoint.
+
+## Flow
+
+1. Ask for the number of teeth and the width.
+2. Copy the template as a new checkpoint and adjust the parameters.
+3. Render and check that the teeth mesh.
+`
+const coreSkillMd = `---
+name: openscad-core
+description: ${es ? 'Reglas de modelado paramétrico y del workspace.' : 'Parametric modeling and workspace rules.'}
+---
+
+# OpenSCAD core
+
+${es ? 'Cada versión de un modelo es un checkpoint nuevo; nunca se sobrescribe un .scad.' : 'Every version of a model is a new checkpoint; a .scad is never overwritten.'}
+`
+const gearScad = `// @checkpoint parent= desc="Engranaje base"
+teeth = 24;   // [8:1:80]
+module_mm = 1.5;
+width = 8;
+
+color("#ff7a1a") cylinder(d = teeth * module_mm, h = width, $fn = teeth * 4);
+`
 
 // ── «Cerrar y abrir» (persist=reset|1) ─────────────────────────────────────
 // Lo que Go guardaría en scadlab.db, en localStorage: settings por clave (igual que la tabla
@@ -605,6 +695,75 @@ const chatItems = [
     {id: 2, workspaceId: 1, providerId: 'ollama', model: 'llama3.2:3b', title: es ? 'Ranuras de ventilación' : 'Ventilation slots', createdAt: 1_789_900_000, updatedAt: 1_789_900_600},
     {id: 1, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Cuántos milímetros de holgura para una tapa' : 'How much clearance for a lid', createdAt: 1_789_800_000, updatedAt: 1_789_800_400},
 ]
+// ── Servidores de modelos (S12, bloque 12.1) ───────────────────────────────
+// Cinco servidores inventados (nada de claves reales: solo `hasToken`). OpenRouter
+// es el que recuerda el selector en `chat-models`, para que se vean los precios.
+const serverFixtures = [
+    {id: 'ollama', kind: 'ollama', preset: 'ollamaLocal', name: 'Ollama', baseUrl: 'http://localhost:11434', apiKeyEnv: '', hasToken: false, defaultModel: 'qwen3-coder:30b', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 5, updatedAt: 1_790_000_000},
+    {id: 'srv-4f1a9c2e7b30', kind: 'openai', preset: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: '', hasToken: true, defaultModel: 'anthropic/claude-sonnet-5-5', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 6, updatedAt: 1_790_000_100},
+    {id: 'srv-8c3d5e1f0a92', kind: 'openai', preset: 'gemini', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKeyEnv: 'GEMINI_API_KEY', hasToken: false, defaultModel: 'gemini-2.5-pro', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 7, updatedAt: 1_790_000_200},
+    {id: 'anthropic', kind: 'anthropic', preset: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com', apiKeyEnv: '', hasToken: true, defaultModel: 'claude-sonnet-5-5', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 8, updatedAt: 1_790_000_300},
+    {id: 'srv-2b7e6d4a1c58', kind: 'openai', preset: 'lmstudio', name: es ? 'LM Studio del taller' : 'Workshop LM Studio', baseUrl: 'http://192.168.1.40:1234/v1', apiKeyEnv: '', hasToken: false, defaultModel: '', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 9, updatedAt: 1_790_000_400},
+]
+const mi = (id: string, vision: boolean, tools: boolean, ctx: number, pp = 0, cp = 0) => ({
+    id, vision, visionKnown: true, tools, toolsKnown: true, contextTokens: ctx, promptPricePerM: pp, completionPricePerM: cp,
+})
+const serverModels: Record<string, ReturnType<typeof mi>[]> = {
+    ollama: [mi('deepseek-r1:14b', false, false, 131072), mi('gemma3:12b', true, false, 131072), mi('llama3.2:3b', false, true, 131072), mi('qwen3-coder:30b', false, true, 262144), mi('qwen3-vl:8b', true, true, 262144)],
+    'srv-4f1a9c2e7b30': [
+        mi('anthropic/claude-opus-5-5', true, true, 1_000_000, 15, 75),
+        mi('anthropic/claude-sonnet-5-5', true, true, 1_000_000, 3, 15),
+        mi('deepseek/deepseek-chat', false, true, 163840, 0.27, 1.1),
+        mi('google/gemini-2.5-pro', true, true, 1_048_576, 1.25, 10),
+        mi('meta-llama/llama-3.3-70b-instruct', false, true, 131072, 0.13, 0.4),
+        mi('mistralai/mistral-small-3.2', true, true, 131072, 0.1, 0.3),
+        mi('openai/gpt-5-mini', true, true, 400000, 0.25, 2),
+        mi('qwen/qwen3-coder', false, true, 262144, 0.22, 0.95),
+    ],
+    'srv-8c3d5e1f0a92': [mi('gemini-2.5-flash', true, true, 1_048_576), mi('gemini-2.5-pro', true, true, 1_048_576)],
+    anthropic: [mi('claude-opus-5-5', true, true, 1_000_000), mi('claude-sonnet-5-5', true, true, 1_000_000), mi('claude-haiku-5-5', true, true, 200000)],
+    'srv-2b7e6d4a1c58': [],
+}
+// Pruebas de conexión: todo responde bien salvo el LM Studio del taller (apagado).
+const probeFor = (id: string) =>
+    id === 'srv-2b7e6d4a1c58'
+        ? {ok: false, status: 0, message: es ? 'no se pudo conectar a http://192.168.1.40:1234/v1: la conexión fue rechazada (¿está el servidor en marcha?)' : 'could not connect to http://192.168.1.40:1234/v1: connection refused (is the server running?)', models: 0, modelIds: [], latencyMs: 0}
+        : {ok: true, status: 200, message: id === 'ollama' ? '0.12.5' : '', models: (serverModels[id] ?? []).length, modelIds: (serverModels[id] ?? []).map((m) => m.id), latencyMs: id === 'ollama' ? 18 : 240}
+// chat-models recuerda a OpenRouter (el que tiene precios); el resto, a Ollama.
+const lastModelShot = view === 'chat-models' ? {serverId: 'srv-4f1a9c2e7b30', model: 'anthropic/claude-sonnet-5-5'} : {serverId: 'ollama', model: 'qwen3-coder:30b'}
+// vault-create: la contraseña se crea al pulsar «Crear» en el diálogo; el reintento de Guardar ya pasa.
+let vaultCreated = false
+const serverMocks = {
+    ListModelServers: () => P(serverFixtures),
+    // vault-create: la primera clave de API aún no tiene contraseña maestra, así que Go responde con el error de
+    // código vault-uninitialized (invisible entre dos U+2063) y la interfaz abre «Crear contraseña maestra».
+    SaveModelServer: (s: Record<string, unknown>, token?: string) =>
+        view === 'vault-create' && token && !vaultCreated
+            ? Promise.reject(new Error('\u2063vault-uninitialized\u2063' + (es ? 'primero crea la contraseña maestra que protege las claves de API' : 'first create the master password that protects the API keys')))
+            : P({...s, id: s.id || 'srv-new', hasToken: Boolean(s.hasToken) || Boolean(token)}),
+    DeleteModelServer: () => P(undefined),
+    TestModelServer: (s: {id: string}) => P(probeFor(s.id)),
+    ListServerModels: (id: string) => P(serverModels[id] ?? []),
+    ListProviderModels: (id: string) => P((serverModels[id] ?? []).map((m) => m.id)),
+    GetLastModel: () => P(lastModelShot),
+    SetLastModel: () => P(undefined),
+    // Llavero propio (12.10): sin contraseña en vault-create; bloqueado y sin recordar en vault-unlock; en el resto,
+    // recordado en este equipo (lo normal después del primer uso).
+    VaultStatus: () =>
+        P({
+            initialized: view !== 'vault-create',
+            unlocked: view !== 'vault-create' && view !== 'vault-unlock',
+            remembered: view !== 'vault-create' && view !== 'vault-unlock',
+            keyringAvailable: true,
+            keyringDetail: '',
+        }),
+    CreateMasterPassword: () => ((vaultCreated = true), P({rememberFailed: false, detail: '', lostKeys: 0})),
+    UnlockVault: () => P({rememberFailed: false, detail: '', lostKeys: 0}),
+    ChangeMasterPassword: () => P({rememberFailed: false, detail: '', lostKeys: 0}),
+    ForgetThisDevice: () => P(undefined),
+    SetRememberDevice: () => P(undefined),
+    ResetVault: () => P(2),
+}
 const chatScad = `// @checkpoint parent=006-two-color-logo.scad desc="${es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid'}"
 board_w = 85;   // [60:1:120]
 board_d = 56;   // [40:1:90]
@@ -634,9 +793,157 @@ const chatMessages = [
 const streamParts = es
     ? ['Sumo las ranuras de ventilación en la pared trasera:\n\n```openscad\n', 'slots = 6;\nfor (i = [0 : slots - 1])\n', '    translate([8 + i * 10, board_d, 6])\n', '        cube([6, wall + 1, 14]);\n']
     : ['Adding ventilation slots on the back wall:\n\n```openscad\n', 'slots = 6;\nfor (i = [0 : slots - 1])\n', '    translate([8 + i * 10, board_d, 6])\n', '        cube([6, wall + 1, 14]);\n']
+// ── Hermes (S12, 12.4–12.6): pasos de herramienta, adjuntos y conversaciones ───
+// Las imágenes del «preview» y las miniaturas se DIBUJAN aquí con un canvas
+// (cajas isométricas sombreadas): el banco no tiene OpenSCAD, y una captura
+// real traería el modelo y las carpetas de alguien. Todo es inventado.
+const hermesView = view === 'chat' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations'
+const hermesServerId = 'srv-4f1a9c2e7b30'
+const hermesModel = 'anthropic/claude-sonnet-5-5'
+
+const shadeHex = (hex: string, f: number) => {
+    const n = parseInt(hex.slice(1), 16)
+    const c = (v: number) => Math.max(0, Math.min(255, Math.round(v * f)))
+    return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`
+}
+type Iso = (x: number, y: number, z: number) => [number, number]
+function drawScene(w: number, h: number, kind: 'case' | 'bracket' | 'sketch', mime: 'image/png' | 'image/jpeg' = 'image/png'): string {
+    const cv = document.createElement('canvas')
+    cv.width = w
+    cv.height = h
+    const c = cv.getContext('2d')!
+    const bg = c.createLinearGradient(0, 0, 0, h)
+    bg.addColorStop(0, kind === 'sketch' ? '#efe6d2' : '#f4f5f8')
+    bg.addColorStop(1, kind === 'sketch' ? '#d9ccb0' : '#dfe2e9')
+    c.fillStyle = bg
+    c.fillRect(0, 0, w, h)
+    const COS = Math.cos(Math.PI / 6)
+    const poly = (pts: [number, number][], fill: string) => {
+        c.beginPath()
+        pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)))
+        c.closePath()
+        c.fillStyle = fill
+        c.fill()
+    }
+    const cuboid = (iso: Iso, x: number, y: number, z: number, W: number, D: number, H: number, base: string) => {
+        poly([iso(x, y + D, z + H), iso(x + W, y + D, z + H), iso(x + W, y + D, z), iso(x, y + D, z)], shadeHex(base, 0.78))
+        poly([iso(x + W, y, z + H), iso(x + W, y + D, z + H), iso(x + W, y + D, z), iso(x + W, y, z)], shadeHex(base, 0.58))
+        poly([iso(x, y, z + H), iso(x + W, y, z + H), iso(x + W, y + D, z + H), iso(x, y + D, z + H)], shadeHex(base, 1.12))
+    }
+    if (kind === 'case') {
+        // Caja de 85 × 56 × 24 con la cavidad abierta, y su tapa naranja al lado.
+        const s = w / 250
+        const iso: Iso = (x, y, z) => [w * 0.52 + (x - y) * COS * s, h * 0.2 + (x + y) * 0.5 * s - z * s]
+        cuboid(iso, 0, 0, 0, 85, 56, 24, '#2b2f38')
+        c.save()
+        c.beginPath()
+        ;[iso(3, 3, 24), iso(82, 3, 24), iso(82, 53, 24), iso(3, 53, 24)].forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)))
+        c.closePath()
+        c.clip()
+        poly([iso(3, 3, 3), iso(82, 3, 3), iso(82, 53, 3), iso(3, 53, 3)], shadeHex('#2b2f38', 0.55))
+        poly([iso(3, 3, 24), iso(3, 53, 24), iso(3, 53, 3), iso(3, 3, 3)], shadeHex('#2b2f38', 0.92))
+        poly([iso(3, 3, 24), iso(82, 3, 24), iso(82, 3, 3), iso(3, 3, 3)], shadeHex('#2b2f38', 0.72))
+        c.restore()
+        cuboid(iso, 6, 70, 0, 85, 56, 3, '#ff7a1a')
+    } else if (kind === 'bracket') {
+        // Soporte en L con dos agujeros de tornillo.
+        const s = w / 150
+        const iso: Iso = (x, y, z) => [w * 0.5 + (x - y) * COS * s, h * 0.42 + (x + y) * 0.5 * s - z * s]
+        cuboid(iso, 0, 0, 0, 60, 10, 40, '#9aa3b2')
+        cuboid(iso, 0, 10, 0, 60, 34, 8, '#9aa3b2')
+        for (const x of [14, 46]) poly([iso(x - 4, 22, 8), iso(x + 4, 22, 8), iso(x + 4, 30, 8), iso(x - 4, 30, 8)], '#4a505c')
+    } else {
+        // «Foto» de un croquis sobre una mesa de madera.
+        c.fillStyle = '#b88a5a'
+        c.fillRect(0, h * 0.62, w, h * 0.38)
+        c.fillStyle = '#fbfaf5'
+        c.fillRect(w * 0.18, h * 0.12, w * 0.64, h * 0.62)
+        c.strokeStyle = '#3d4350'
+        c.lineWidth = Math.max(2, w / 90)
+        c.strokeRect(w * 0.28, h * 0.28, w * 0.44, h * 0.3)
+        c.beginPath()
+        c.moveTo(w * 0.28, h * 0.43)
+        c.lineTo(w * 0.72, h * 0.43)
+        c.stroke()
+    }
+    return cv.toDataURL(mime, 0.82)
+}
+const previewCase = drawScene(480, 320, 'case')
+const previewBracket = drawScene(480, 320, 'bracket')
+const photoSketch = drawScene(320, 240, 'sketch', 'image/jpeg')
+
+const ra = es
+    ? {sentence: 'Voy a crear la caja con paredes de 2 mm y a comprobar que renderiza.', done: 'Listo: dejé el checkpoint **007-caja-rpi5.scad**. Mide 89 × 60 × 24 mm, cabe en la A1 mini y pesa unos 31 g. La tapa deslizante va en un checkpoint aparte, para imprimirla plana. ¿Quieres ranuras de ventilación o recortes para los puertos?'}
+    : {sentence: 'I will create the box with 2 mm walls and check that it renders.', done: 'Done: I left the checkpoint **007-rpi5-case.scad**. It measures 89 × 60 × 24 mm, fits the A1 mini and weighs about 31 g. The sliding lid goes in its own checkpoint, so it prints flat. Do you want ventilation slots or port cutouts?'}
+const caseFile = es ? '007-caja-rpi5.scad' : '007-rpi5-case.scad'
+const hermesStep = (index: number, tool: string, args: Record<string, unknown>, status: 'ok' | 'error', text: string, durationMs: number, textAt: number, images: string[] = []) => ({
+    id: `st-${index}`, index, tool, args, status, text, images, durationMs, textAt,
+})
+const stepsChat = [
+    hermesStep(1, 'create_checkpoint', {parent: '006-two-color-logo.scad', label: es ? 'caja rpi5' : 'rpi5 case', description: es ? 'Caja para Raspberry Pi 5' : 'Raspberry Pi 5 case', source: chatScad}, 'ok', `{"file":"${caseFile}","parent":"006-two-color-logo.scad"}`, 38, ra.sentence.length),
+    hermesStep(2, 'render', {file: caseFile}, 'ok', `{"file":"${caseFile}","status":"ok","durationMs":1412,"engine":"native","mesh":{"triangles":1836,"watertight":true,"size":[89,60,24]},"fitsBuildVolume":true}`, 1448, ra.sentence.length),
+    hermesStep(3, 'preview', {file: caseFile, view: 'iso'}, 'ok', `{"file":"${caseFile}","view":"iso","size":640}`, 2310, ra.sentence.length, [previewCase]),
+    hermesStep(4, 'measure', {file: caseFile}, 'ok', `{"file":"${caseFile}","mesh":{"size":[89,60,24],"volumeMm3":18420},"estimate":{"totalGrams":31.4}}`, 96, ra.sentence.length),
+]
+const hermesUsage = {inputTokens: 18_420, outputTokens: 2_135, costUsd: 0.0873}
+const lidFile = es ? '008-tapa-deslizante.scad' : '008-sliding-lid.scad'
+const lidFixed = es ? '009-tapa-deslizante-v2.scad' : '009-sliding-lid-v2.scad'
+const rb = es
+    ? {sentence: 'Creo la tapa deslizante con su riel y la compruebo.', fix: 'Me faltaba cerrar un corchete en la línea 14. Lo corrijo en un checkpoint nuevo y vuelvo a renderizar.', done: `La tapa ya renderiza: **${lidFixed}** mide 85 × 56 × 3 mm y desliza por el riel con 0,3 mm de holgura por lado. En el preview se ve alineada con la caja.`}
+    : {sentence: 'I create the sliding lid with its rail and check it.', fix: 'I was missing a closing bracket on line 14. I fix it in a new checkpoint and render again.', done: `The lid renders now: **${lidFixed}** measures 85 × 56 × 3 mm and slides along the rail with 0.3 mm clearance per side. The preview shows it aligned with the case.`}
+const renderErr = es
+    ? `error: {"file":"${lidFile}","status":"error","durationMs":412,"diagnostics":[{"severity":"error","line":14,"col":24,"message":"syntax error","code":"cube([board_w, 4, 6);"}],"message":"El modelo no renderiza. Corrígelo en un checkpoint NUEVO (create_checkpoint con parent=${lidFile}), nunca editando este."}`
+    : `error: {"file":"${lidFile}","status":"error","durationMs":412,"diagnostics":[{"severity":"error","line":14,"col":24,"message":"syntax error","code":"cube([board_w, 4, 6);"}],"message":"The model does not render. Fix it in a NEW checkpoint (create_checkpoint with parent=${lidFile}), never by editing this one."}`
+const stepsFix = [
+    hermesStep(1, 'create_checkpoint', {parent: caseFile, label: es ? 'tapa deslizante' : 'sliding lid', source: 'color("#ff7a1a") difference() {\n    cube([board_w, board_d, 3]);\n    translate([wall, 0, 1.5]) cube([board_w, 4, 6);\n}\n'}, 'ok', `{"file":"${lidFile}"}`, 41, rb.sentence.length),
+    hermesStep(2, 'render', {file: lidFile}, 'error', renderErr, 412, rb.sentence.length),
+    hermesStep(3, 'create_checkpoint', {parent: lidFile, label: es ? 'tapa deslizante v2' : 'sliding lid v2', source: 'color("#ff7a1a") difference() {\n    cube([board_w, board_d, 3]);\n    translate([wall, 0, 1.5]) cube([board_w, 4, 6]);\n}\n'}, 'ok', `{"file":"${lidFixed}","parent":"${lidFile}"}`, 37, rb.sentence.length + 2 + rb.fix.length),
+    hermesStep(4, 'render', {file: lidFixed}, 'ok', `{"file":"${lidFixed}","status":"ok","durationMs":980,"mesh":{"triangles":412,"watertight":true,"size":[85,56,3]}}`, 1003, rb.sentence.length + 2 + rb.fix.length),
+    hermesStep(5, 'preview', {file: lidFixed, view: 'iso'}, 'ok', `{"file":"${lidFixed}","view":"iso","size":640}`, 2144, rb.sentence.length + 2 + rb.fix.length, [previewCase]),
+]
+const shelfFile = es ? '007-repisa-de-pared.scad' : '007-wall-shelf.scad'
+const sentAtt = [{kind: 'image', name: es ? 'croquis-repisa.jpg' : 'shelf-sketch.jpg', mime: 'image/jpeg', size: 187_000, thumb: photoSketch}]
+const ro = es
+    ? {ask: 'Haz una repisa de pared como la del croquis.', sentence: 'Tomo las medidas del croquis y creo la repisa.', done: `Listo: **${shelfFile}** es una repisa de 150 × 40 × 6 mm con dos tornillos M4. ¿La encajo con el soporte de pared que tienes?`}
+    : {ask: 'Make a wall shelf like the one in the sketch.', sentence: 'I take the measurements from the sketch and create the shelf.', done: `Done: **${shelfFile}** is a 150 × 40 × 6 mm shelf with two M4 screws. Shall I fit it to the wall bracket you have?`}
+const stepsAtt = [
+    hermesStep(1, 'create_checkpoint', {parent: '006-two-color-logo.scad', label: es ? 'repisa de pared' : 'wall shelf', source: chatScad}, 'ok', `{"file":"${shelfFile}"}`, 40, ro.sentence.length),
+    hermesStep(2, 'render', {file: shelfFile}, 'ok', `{"file":"${shelfFile}","status":"ok","durationMs":801}`, 830, ro.sentence.length),
+]
+const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
+const parts = (p: Record<string, unknown>) => JSON.stringify(p)
+const hermesMessages =
+    view === 'chat-agent-steps'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: es ? 'Ahora hazme la tapa deslizante, con su riel y 0,3 mm de holgura.' : 'Now make me the sliding lid, with its rail and 0.3 mm clearance.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rb.sentence}\n\n${rb.fix}\n\n${rb.done}`, parts: parts({steps: stepsFix, model: hermesModel}), inputTokens: 31_870, outputTokens: 3_940, costUsd: 0.1547},
+          ]
+        : view === 'chat-attachments'
+          ? [
+                {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: ro.ask, parts: parts({attachments: sentAtt}), inputTokens: 0, outputTokens: 0, costUsd: 0},
+                {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${ro.sentence}\n\n${ro.done}`, parts: parts({steps: stepsAtt, model: hermesModel}), inputTokens: 9_260, outputTokens: 1_020, costUsd: 0.0431},
+            ]
+          : [
+                {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: es ? 'Haz una caja para una Raspberry Pi 5 con tapa deslizante.' : 'Make a box for a Raspberry Pi 5 with a sliding lid.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+                {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${ra.sentence}\n\n${ra.done}`, parts: parts({steps: stepsChat, model: hermesModel}), inputTokens: hermesUsage.inputTokens, outputTokens: hermesUsage.outputTokens, costUsd: hermesUsage.costUsd},
+            ]
+const chatsFor = () => (hermesView ? [hermesChatItem, chatItems[1], chatItems[2]] : chatItems)
+// Lo que devuelve el diálogo de archivos de «Adjuntar» en chat-attachments.
+const pickedAttachments = [
+    {id: 'att-1', kind: 'image', name: es ? 'foto-repisa.jpg' : 'shelf-photo.jpg', mime: 'image/jpeg', size: 1_840_000, thumbDataUrl: photoSketch, refPath: '', summary: ''},
+    {id: 'att-2', kind: 'model', name: es ? 'soporte-pared.stl' : 'wall-bracket.stl', mime: 'model/stl', size: 412_000, thumbDataUrl: previewBracket, refPath: es ? 'refs/soporte-pared.stl' : 'refs/wall-bracket.stl', summary: (es ? 'Reference: refs/soporte-pared.stl' : 'Reference: refs/wall-bracket.stl') + ' (STL, 3 812 triangles).'},
+]
+// Registro de lo que la interfaz llamó (window.__calls), para las pruebas con CDP.
+const calls = (name: string, args: unknown[]) => {
+    const w = window as unknown as {__calls?: [string, unknown[]][]}
+    ;(w.__calls ||= []).push([name, args])
+}
 const chatMocks = {
-    ListChats: () => P(view === 'chat-new' ? [] : chatItems),
+    ListChats: () => P(view === 'chat-new' || view === 'chat-models' ? [] : chatsFor()),
     GetChat: (id: number) => {
+        if (hermesView) {
+            return P({chat: id === 3 ? hermesChatItem : (chatItems.find((c) => c.id === id) ?? hermesChatItem), messages: id === 3 ? hermesMessages : [], running: false, partial: '', partialSeq: 0, steps: [], usage: {inputTokens: 0, outputTokens: 0, costUsd: 0}})
+        }
         if (view === 'chat-stream') {
             setTimeout(() => {
                 emit('chat:delta', {chatId: id, text: streamParts[1], seq: 2})
@@ -655,12 +962,17 @@ const chatMocks = {
             running: false, partial: '', partialSeq: 0,
         })
     },
-    ListProviderModels: () => P(['qwen3-coder:30b', 'llama3.2:3b', 'gemma3:12b']),
     ChatCheckpointParent: () => P(selectedFile),
     NewChat: () => P(chatItems[0]),
-    SendChatMessage: () => P(chatMessages[0]),
-    CancelChat: () => P(undefined),
-    DeleteChat: () => P(undefined),
+    SendChatMessage: (...a: unknown[]) => (calls('SendChatMessage', a), P(chatMessages[0])),
+    CancelChat: (...a: unknown[]) => (calls('CancelChat', a), P(undefined)),
+    DeleteChat: (...a: unknown[]) => (calls('DeleteChat', a), P(undefined)),
+    RenameChat: (...a: unknown[]) => (calls('RenameChat', a), P(undefined)),
+    SetChatModel: (...a: unknown[]) => (calls('SetChatModel', a), P(undefined)),
+    ChooseChatAttachment: () => P(pickedAttachments),
+    AddChatAttachmentData: (_ws: number, name: string) => P({...pickedAttachments[1], name}),
+    AddChatAttachment: () => P(pickedAttachments[1]),
+    RemoveChatAttachment: (...a: unknown[]) => (calls('RemoveChatAttachment', a), P(undefined)),
 }
 
 // Exportación 3MF: lo que devolvería PreviewExportParts. Los nombres tienen la
@@ -898,6 +1210,7 @@ const App_ = {
     ResumeCheckpointSession: () => P({kind: 'terminal', terminalId: 'term-1', agentId: 'claude', chatId: 0}),
     ReadCheckpointPair: (_id: number, file: string) => P({file, parent: '005-snap-lid.scad', parentSource: parentSource(), source}),
     ...chatMocks,
+    ...serverMocks,
     GetScadCatalog: () => P(catalog),
     // Terminal de agentes: en las vistas `terminal*` hay un Claude Code abierto.
     ListTerminals: () =>
@@ -963,12 +1276,39 @@ const App_ = {
     ListSkills: () =>
         P([
             {name: 'bambu-lab-printers', source: 'builtin', dir: '', enabled: true, description: es ? 'Perfiles de impresoras Bambu Lab y reglas de diseño FDM.' : 'Bambu Lab printer profiles and FDM design rules.'},
+            {name: 'gear-helper', source: 'user', dir: `${skillsDir}${sep}gear-helper`, enabled: true, description: gearDescription},
+            {name: 'hinge-kit', source: 'user', dir: `${skillsDir}${sep}hinge-kit`, enabled: false, description: es ? 'Bisagras de impresión en sitio con holgura de 0,3 mm para la A1 mini.' : 'Print-in-place hinges with 0.3 mm clearance for the A1 mini.'},
             {name: 'openscad-3mf-multicolor', source: 'builtin', dir: '', enabled: true, description: es ? 'Modelos multicolor para el AMS y exportación 3MF.' : 'Multicolor models for the AMS and 3MF export.'},
             {name: 'openscad-core', source: 'builtin', dir: '', enabled: true, description: es ? 'Reglas de modelado paramétrico y del workspace.' : 'Parametric modeling and workspace rules.'},
             {name: 'openscad-libraries', source: 'builtin', dir: '', enabled: false, description: es ? 'BOSL2, MCAD y NopSCADlib.' : 'BOSL2, MCAD and NopSCADlib.'},
             {name: 'openscad-templates', source: 'builtin', dir: '', enabled: true, description: es ? 'Diez plantillas paramétricas listas para imprimir.' : 'Ten print-ready parametric templates.'},
-            {name: 'gear-helper', source: 'user', dir: '', enabled: true, description: es ? 'Engranajes helicoidales con el módulo de mi taller.' : 'Helical gears using my workshop module.'},
         ]),
+    GetSkillsFolder: () => P({path: skillsDir, default: skillsDir, custom: false, exists: true, count: 2}),
+    ListSkillFiles: (name: string) =>
+        P(
+            name === 'gear-helper'
+                ? [
+                      {path: 'SKILL.md', size: 1180, text: true},
+                      {path: 'README.md', size: 240, text: true},
+                      {path: 'references/modulos.md', size: 860, text: true},
+                      {path: 'templates/engranaje.scad', size: 520, text: true},
+                  ]
+                : [
+                      {path: 'SKILL.md', size: 9800, text: true},
+                      {path: 'references/convenciones.md', size: 4200, text: true},
+                      {path: 'templates/base.scad', size: 700, text: true},
+                  ],
+        ),
+    ReadSkillFile: (_name: string, path: string) => P(path === 'SKILL.md' ? (_name === 'gear-helper' ? gearSkillMd : coreSkillMd) : path.endsWith('.scad') ? gearScad : '# ' + path + '\n'),
+    ValidateSkillMarkdown: (name: string, text: string) => {
+        const lines = text.split('\n')
+        const i = lines.findIndex((l) => l.startsWith('description:'))
+        const diags: {line: number; severity: string; code: string; message: string}[] = []
+        if (i >= 0 && lines[i].slice('description:'.length).trim() === '')
+            diags.push({line: i + 1, severity: 'error', code: 'SK006', message: es ? 'description está vacía' : 'description is empty'})
+        void name
+        return P(diags)
+    },
 }
 
 // Cualquier binding no simulado devuelve vacío en vez de romper la vista.
@@ -1009,7 +1349,7 @@ const syncGL = window.setInterval(() => {
 // El editor (Monaco) también entra con lazy(): mismo motivo. El idioma va
 // antes, porque decide con qué textos carga Monaco sus widgets.
 setLanguage(lang)
-Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
+Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadSkillCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
     .catch(() => {})
     .then(() =>
         createRoot(document.getElementById('root')!).render(
@@ -1025,6 +1365,8 @@ Promise.all([import('./components/viewer/Viewer'), import('./components/terminal
 ;(window as unknown as {__print: typeof printStore}).__print = printStore
 // Para las pruebas de las pestañas de proyecto con CDP: leer y mover el estado que cada pestaña conserva.
 ;(window as unknown as {__proj: unknown}).__proj = {editorSession, editorCommands, selectPart}
+// Para las pruebas con CDP del chat: emitir un evento de Go y leer lo que llamó la interfaz.
+;(window as unknown as {__emit: typeof emit}).__emit = emit
 
 // Guard de desplazamiento igual que la app real (main.tsx).
 installScrollGuard()
@@ -1044,6 +1386,140 @@ if (view === 'settings-appearance') {
 // settings-openscad-download: la descarga va por la mitad (el evento de progreso que mandaría Go).
 if (view === 'settings-openscad-download') {
     window.setTimeout(() => emit('openscad:download', {phase: 'download', received: 38_400_000, total: 62_687_889, message: ''}), 400)
+}
+
+// settings-providers: se prueban dos servidores (uno responde, otro no) para que se vean los dos resultados en línea.
+// chat-models: se abre el selector de modelos del chat nuevo.
+// settings-providers-add: se abre «Agregar servidor» y se elige el atajo de OpenRouter.
+if (view === 'settings-providers-add') {
+    let tries = 0
+    const steps = ['[data-testid="server-add"]', '[data-preset="openrouter"]']
+    let step = 0
+    const next = window.setInterval(() => {
+        const el = document.querySelector<HTMLElement>(steps[step])
+        if (el) {
+            el.click()
+            if (++step === steps.length) {
+                window.clearInterval(next)
+                // El diálogo se desplaza: el formulario entero queda a la vista.
+                window.setTimeout(() => document.querySelector('[data-testid="server-form"]')?.scrollIntoView({block: 'start'}), 150)
+            }
+        } else if (++tries > 120) window.clearInterval(next)
+    }, 150)
+}
+// Escribe en un <input> controlado de React (el setter nativo + el evento input).
+function typeInto(el: HTMLInputElement, value: string) {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value)
+    el.dispatchEvent(new Event('input', {bubbles: true}))
+}
+
+// vault-create: se abre «Agregar servidor», se elige OpenRouter, se pega una clave inventada y se pulsa Guardar:
+// Go responde vault-uninitialized y aparece «Crear contraseña maestra», donde se escribe la contraseña dos veces.
+// vault-unlock: el chat pide una clave con la llave sin recuperar; se abre «Desbloquear» y se escribe la contraseña.
+if (view === 'vault-create' || view === 'vault-unlock') {
+    let tries = 0
+    let stage = 0
+    const run = window.setInterval(() => {
+        tries++
+        if (tries > 200) window.clearInterval(run)
+        if (view === 'vault-unlock') {
+            if (stage === 0) {
+                if (document.querySelector('[data-testid="chat-switcher"]')) {
+                    stage = 1
+                    void import('./lib/vault').then((m) => void m.requestVault('unlock'))
+                }
+            } else {
+                const f = document.querySelector<HTMLFormElement>('[data-testid="vault-unlock"]')
+                const input = f?.querySelector<HTMLInputElement>('input[type="password"]')
+                if (input) {
+                    typeInto(input, 'Bosque-azul-42')
+                    window.clearInterval(run)
+                }
+            }
+            return
+        }
+        const click = (sel: string) => document.querySelector<HTMLElement>(sel)?.click()
+        const form = document.querySelector<HTMLFormElement>('[data-testid="vault-create"]')
+        if (form) {
+            const [pw, confirm] = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="password"]'))
+            if (pw && confirm) {
+                typeInto(pw, 'Bosque-azul-42')
+                typeInto(confirm, 'Bosque-azul-42')
+                window.clearInterval(run)
+            }
+        } else if (stage === 0 && document.querySelector('[data-testid="server-add"]')) {
+            click('[data-testid="server-add"]')
+            stage = 1
+        } else if (stage === 1 && document.querySelector('[data-preset="openrouter"]')) {
+            click('[data-preset="openrouter"]')
+            stage = 2
+        } else if (stage === 2) {
+            const key = document.querySelector<HTMLInputElement>('[data-testid="server-form"] input[type="password"]')
+            if (key) {
+                typeInto(key, 'sk-or-v1-clave-inventada-0000')
+                stage = 3
+            }
+        } else if (stage === 3) {
+            // Guardar: el último botón primario del formulario.
+            const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-testid="server-form"] button')).find((b) => /^(Guardar|Save)$/.test(b.textContent?.trim() ?? ''))
+            if (save && !save.disabled) {
+                save.click()
+                stage = 4
+            }
+        }
+    }, 150)
+}
+
+if (view === 'settings-providers' || view === 'chat-models') {
+    const sel = view === 'settings-providers' ? ['ollama', 'srv-2b7e6d4a1c58'].map((id) => `[data-server="${id}"] [data-testid="server-test"]`) : ['[data-testid="model-picker"]']
+    let tries = 0
+    const click = window.setInterval(() => {
+        const btns = sel.map((q) => document.querySelector<HTMLElement>(q))
+        if (btns.every(Boolean)) {
+            btns.forEach((b) => b!.click())
+            window.clearInterval(click)
+        } else if (++tries > 80) window.clearInterval(click)
+    }, 100)
+}
+
+// chat-attachments: se elige «Adjuntar» (el diálogo simulado devuelve una foto y un STL) y se escribe el mensaje.
+// chat-conversations: se abre la lista de conversaciones y la segunda pasa a renombrado en línea.
+if (view === 'chat-attachments' || view === 'chat-conversations') {
+    let tries = 0
+    let stage = 0
+    const run = window.setInterval(() => {
+        tries++
+        if (view === 'chat-attachments') {
+            if (stage === 0) {
+                const btn = document.querySelector<HTMLElement>('[data-testid="chat-attach"]')
+                if (btn && !btn.hasAttribute('disabled')) {
+                    btn.click()
+                    stage = 1
+                }
+            } else if (document.querySelectorAll('[data-attach-chip]').length >= 2) {
+                const ta = document.querySelector<HTMLTextAreaElement>('[data-font-area="chat"] textarea')
+                if (ta) {
+                    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+                    set.call(ta, es ? 'Ahora encaja la repisa con este soporte de pared y mira la foto de cómo queda.' : 'Now fit the shelf to this wall bracket and look at the photo of how it ends up.')
+                    ta.dispatchEvent(new Event('input', {bubbles: true}))
+                    window.clearInterval(run)
+                }
+            }
+        } else if (stage === 0) {
+            const sw = document.querySelector<HTMLElement>('[data-testid="chat-switcher"]')
+            if (sw) {
+                sw.click()
+                stage = 1
+            }
+        } else {
+            const rename = document.querySelectorAll<HTMLElement>('[data-testid="chat-rename"]')[1]
+            if (rename) {
+                rename.click()
+                window.clearInterval(run)
+            }
+        }
+        if (tries > 160) window.clearInterval(run)
+    }, 100)
 }
 
 // settings-mcp: Configuración → IA desplazada hasta el bloque del servidor MCP.

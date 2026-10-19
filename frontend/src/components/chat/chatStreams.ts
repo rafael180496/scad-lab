@@ -1,6 +1,7 @@
 import {EventsOn} from '../../../wailsjs/runtime/runtime'
 import type {main} from '../../../wailsjs/go/models'
 import {createStore} from '../../lib/store'
+import {toStep, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
 
 // Estado de las respuestas en curso, por chat. Vive a nivel de módulo y no en
 // el componente por dos razones:
@@ -13,6 +14,7 @@ import {createStore} from '../../lib/store'
 //    escrito hasta ahí; ver syncStream).
 //
 // Contrato de eventos con app_chat.go: chat:delta {chatId, text, seq},
+// chat:step {chatId, step}, chat:usage {chatId, inputTokens, outputTokens, costUsd},
 // chat:done {chatId, messageId, cancelled}, chat:error {chatId, message, messageId}.
 
 export type Stream = {
@@ -32,6 +34,12 @@ export type Stream = {
     /** Mensaje guardado al terminar (0 = no hubo texto que guardar). */
     messageId: number
     finished: boolean
+    /** Pasos de herramienta del turno (Hermes), en orden; se actualizan por id. */
+    steps: ChatStep[]
+    /** Uso acumulado del turno hasta ahora; null si el servidor no informó nada. */
+    usage: ChatUsage | null
+    /** Cuándo arrancó el turno (ms), para el reloj del botón Detener. */
+    startedAt: number
 }
 
 type State = {byChat: Record<number, Stream>}
@@ -46,7 +54,25 @@ const fresh = (synced: boolean): Stream => ({
     error: null,
     messageId: 0,
     finished: false,
+    steps: [],
+    usage: null,
+    startedAt: Date.now(),
 })
+
+const FINAL = new Set(['ok', 'error'])
+
+/**
+ * Suma un paso por su id. Un paso que ya terminó no vuelve a «en curso»: un
+ * evento viejo que llega después de la foto de GetChat no puede deshacerlo.
+ */
+function upsertStep(steps: ChatStep[], step: ChatStep): ChatStep[] {
+    const i = steps.findIndex((s) => s.id === step.id)
+    if (i < 0) return [...steps, step]
+    if (FINAL.has(steps[i].status) && !FINAL.has(step.status)) return steps
+    const next = steps.slice()
+    next[i] = step
+    return next
+}
 
 function patch(chatId: number, fn: (s: Stream) => Stream, create?: () => Stream) {
     const cur = store.get().byChat[chatId] ?? create?.()
@@ -88,7 +114,23 @@ export function syncStream(chatId: number, v: main.ChatView) {
             seq = p.seq
         }
     }
-    patch(chatId, (s) => ({...s, running: true, text, seq, synced: true, pending: []}), () => fresh(false))
+    // Los pasos de la foto se mezclan con los que ya llegaron por evento.
+    const steps = (v.steps ?? []).map(toStep)
+    const usage = v.usage && (v.usage.inputTokens || v.usage.outputTokens) ? {inputTokens: v.usage.inputTokens, outputTokens: v.usage.outputTokens, costUsd: v.usage.costUsd} : null
+    patch(
+        chatId,
+        (s) => ({
+            ...s,
+            running: true,
+            text,
+            seq,
+            synced: true,
+            pending: [],
+            steps: steps.reduce(upsertStep, s.steps),
+            usage: s.usage ?? usage,
+        }),
+        () => fresh(false),
+    )
 }
 
 let wired = false
@@ -107,6 +149,12 @@ export function ensureChatEvents() {
             () => fresh(false),
         )
     })
+    EventsOn('chat:step', (e: {chatId: number; step: Parameters<typeof toStep>[0]}) => {
+        patch(e.chatId, (s) => ({...s, steps: upsertStep(s.steps, toStep(e.step))}), () => fresh(false))
+    })
+    EventsOn('chat:usage', (e: {chatId: number} & ChatUsage) => {
+        patch(e.chatId, (s) => ({...s, usage: {inputTokens: e.inputTokens, outputTokens: e.outputTokens, costUsd: e.costUsd}}), () => fresh(false))
+    })
     EventsOn('chat:done', (e: {chatId: number; messageId: number}) => {
         patch(e.chatId, (s) => ({...s, running: false, finished: true, messageId: e.messageId}), () => fresh(false))
     })
@@ -122,3 +170,8 @@ export const useStreamRunning = (chatId: number | null) => store.use((s) => (cha
 export const useStreamFinished = (chatId: number | null) => store.use((s) => (chatId == null ? false : (s.byChat[chatId]?.finished ?? false)))
 export const useStreamError = (chatId: number | null) => store.use((s) => (chatId == null ? null : (s.byChat[chatId]?.error ?? null)))
 export const useStreamMessageId = (chatId: number | null) => store.use((s) => (chatId == null ? 0 : (s.byChat[chatId]?.messageId ?? 0)))
+export const useStreamSteps = (chatId: number | null) => store.use((s) => (chatId == null ? NO_STEPS : (s.byChat[chatId]?.steps ?? NO_STEPS)))
+export const useStreamUsage = (chatId: number | null) => store.use((s) => (chatId == null ? null : (s.byChat[chatId]?.usage ?? null)))
+export const useStreamStartedAt = (chatId: number | null) => store.use((s) => (chatId == null ? 0 : (s.byChat[chatId]?.startedAt ?? 0)))
+// Referencia estable: un selector que devolviera un [] nuevo en cada lectura redibujaría sin parar.
+const NO_STEPS: ChatStep[] = []

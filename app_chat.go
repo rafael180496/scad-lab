@@ -12,24 +12,32 @@ import (
 	"time"
 
 	"scadlab/backend/chat"
+	"scadlab/backend/hermes"
 	"scadlab/backend/i18n"
 	"scadlab/backend/llm"
+	"scadlab/backend/mcp"
 	"scadlab/backend/printers"
 	"scadlab/backend/prompts"
 	"scadlab/backend/store"
 	"scadlab/backend/workspace"
 )
 
-// Chat de diseño con modelos (S5, bloque 5.B): conversación de texto con
-// Ollama, un servidor compatible con OpenAI o la API de Anthropic. La
-// orquestación (turnos, cancelación, agrupado de trozos) vive en
-// backend/chat y los clientes en backend/llm; aquí se resuelve el workspace,
-// el proveedor y la persistencia, y se emiten los eventos.
+// Chat de diseño con modelos (S5, bloque 5.B) y Hermes (S12): conversación con
+// Ollama, un servidor compatible con OpenAI o la API de Anthropic. Con «Agente»
+// encendido el modelo usa las herramientas de ScadLab (crear checkpoints,
+// renderizar, mirar, medir…) en un bucle (backend/hermes); apagado, es el chat
+// de texto de S5. La orquestación de los turnos (cancelación, agrupado de
+// trozos) vive en backend/chat, los clientes en backend/llm y el bucle en
+// backend/hermes; aquí se resuelve el workspace, el servidor de modelos
+// (app_servers.go), los adjuntos (app_chat_attach.go) y la persistencia, y se
+// emiten los eventos.
 
 // Eventos Wails del chat (Go → React). Los nombres son contrato con
 // frontend/src/components/chat/chatStreams.ts.
 const (
 	evChatDelta = "chat:delta"
+	evChatStep  = "chat:step"
+	evChatUsage = "chat:usage"
 	evChatDone  = "chat:done"
 	evChatError = "chat:error"
 )
@@ -43,31 +51,60 @@ type ChatDeltaEvent struct {
 	Seq    int    `json:"seq"`
 }
 
+// ChatStepEvent anuncia un paso de herramienta: una vez al arrancar (status
+// running) y otra al terminar (ok o error) con el mismo Step.ID.
+type ChatStepEvent struct {
+	ChatID int64       `json:"chatId"`
+	Step   hermes.Step `json:"step"`
+}
+
+// ChatUsageEvent es el uso acumulado del turno hasta ahora. CostUSD es 0 cuando
+// el proveedor no publica precios («no informado»).
+type ChatUsageEvent struct {
+	ChatID       int64   `json:"chatId"`
+	InputTokens  int64   `json:"inputTokens"`
+	OutputTokens int64   `json:"outputTokens"`
+	CostUSD      float64 `json:"costUsd"`
+}
+
 // ChatDoneEvent cierra un turno. MessageID es la respuesta guardada (0 si no
-// hubo texto). Cancelled dice que el usuario cortó: lo escrito hasta ahí se
-// conserva igual.
+// hubo texto ni pasos). Cancelled dice que el usuario cortó: lo escrito hasta
+// ahí se conserva igual.
 type ChatDoneEvent struct {
 	ChatID    int64 `json:"chatId"`
 	MessageID int64 `json:"messageId"`
 	Cancelled bool  `json:"cancelled"`
 }
 
-// ChatErrorEvent es un fallo durante el turno. Si ya había texto, se guarda
-// como respuesta parcial y viaja su MessageID.
+// ChatErrorEvent es un fallo durante el turno. Si ya había texto o pasos, se
+// guarda como respuesta parcial y viaja su MessageID.
 type ChatErrorEvent struct {
 	ChatID    int64  `json:"chatId"`
 	Message   string `json:"message"`
 	MessageID int64  `json:"messageId"`
 }
 
-// ChatView es un chat con su conversación. Running y Partial permiten retomar
-// una respuesta que sigue en curso (la pestaña se cerró y se volvió a abrir).
+// ChatView es un chat con su conversación. Running, Partial, Steps y Usage
+// permiten retomar una respuesta que sigue en curso (la pestaña se cerró y se
+// volvió a abrir).
 type ChatView struct {
 	Chat       store.Chat          `json:"chat"`
 	Messages   []store.ChatMessage `json:"messages"`
 	Running    bool                `json:"running"`
 	Partial    string              `json:"partial"`
 	PartialSeq int                 `json:"partialSeq"`
+	// Steps y Usage son los del turno en curso (vacíos si no hay).
+	Steps []hermes.Step `json:"steps"`
+	Usage hermes.Usage  `json:"usage"`
+}
+
+// SendOptions son las opciones de un envío. Agent=false es el modo texto de S5
+// (bloques de código y «Guardar como checkpoint»); Agent=true, Hermes con
+// herramientas. MaxSteps es el tope de llamadas a herramientas del turno
+// (1–30; 0 = 12).
+type SendOptions struct {
+	Agent    bool `json:"agent"`
+	MaxSteps int  `json:"maxSteps"`
 }
 
 // maxChatTextBytes acota un mensaje: pegar un archivo entero por error no debe
@@ -79,9 +116,28 @@ const maxChatTextBytes = 100 * 1024
 // pasan de eso. Se puede cambiar con `numCtx` en la config del proveedor.
 const chatDefaultNumCtx = 16384
 
-// El estado del chat vive acá y no en App (app.go no se toca en S5): un mapa
-// por App, creado la primera vez que se usa y cerrado con onShutdown.
-type chatService struct{ mgr *chat.Manager }
+// El estado del chat vive acá y no en App (app.go no se toca): un mapa por App,
+// creado la primera vez que se usa y cerrado con onShutdown.
+type chatService struct {
+	mgr *chat.Manager
+	// attachments son los adjuntos elegidos y todavía no enviados.
+	attachments *hermes.Registry
+	// pruned dice si ya se barrió la carpeta de preparación en esta sesión.
+	pruneOnce sync.Once
+
+	mu sync.Mutex
+	// live es el estado de los turnos en curso (pasos y uso), para retomarlos.
+	live map[int64]*liveTurn
+	// noTools recuerda los modelos que ya rechazaron las herramientas (servidor|
+	// modelo): no se vuelve a intentar en cada turno para fallar otra vez.
+	noTools map[string]bool
+}
+
+// liveTurn es lo que GetChat necesita de un turno en curso además de su texto.
+type liveTurn struct {
+	steps []hermes.Step
+	usage hermes.Usage
+}
 
 var chatServices sync.Map // *App → *chatService
 
@@ -89,100 +145,95 @@ func (a *App) chatSvc() *chatService {
 	if v, ok := chatServices.Load(a); ok {
 		return v.(*chatService)
 	}
-	s := &chatService{mgr: chat.NewManager()}
+	s := &chatService{mgr: chat.NewManager(), attachments: hermes.NewRegistry(), live: map[int64]*liveTurn{}, noTools: map[string]bool{}}
 	actual, loaded := chatServices.LoadOrStore(a, s)
 	if !loaded {
 		a.onShutdown(func() {
 			// Cancela y espera: un turno que guarda su parcial después de cerrada
 			// la base se perdería con un error.
 			s.mgr.CancelAll(3 * time.Second)
+			s.discardAllAttachments()
 			chatServices.Delete(a)
 		})
 	}
 	return actual.(*chatService)
 }
 
-// isChatProvider dice si el proveedor sirve para el chat: los CLIs agénticos
-// van por la terminal, no por acá.
-func isChatProvider(p store.AIProvider) bool {
-	return p.Kind == llm.KindOllama || p.Kind == llm.KindOpenAI || p.Kind == llm.KindAnthropic
+func (s *chatService) beginLive(chatID int64) {
+	s.mu.Lock()
+	s.live[chatID] = &liveTurn{}
+	s.mu.Unlock()
 }
 
-func cfgString(p store.AIProvider, key string) string {
-	s, _ := p.Config[key].(string)
-	return strings.TrimSpace(s)
+func (s *chatService) endLive(chatID int64) {
+	s.mu.Lock()
+	delete(s.live, chatID)
+	s.mu.Unlock()
 }
 
-func cfgInt(p store.AIProvider, key string) int {
-	switch n := p.Config[key].(type) {
-	case float64:
-		return int(n)
-	case int:
-		return n
+// upsertStep guarda el paso por su ID (un paso se anuncia al arrancar y de nuevo
+// al terminar).
+func (s *chatService) upsertStep(chatID int64, st hermes.Step) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l := s.live[chatID]
+	if l == nil {
+		return
 	}
-	return 0
-}
-
-// chatProvider lee un proveedor y verifica que se pueda chatear con él.
-func (a *App) chatProvider(id string) (store.AIProvider, error) {
-	p, err := a.store.GetProvider(id)
-	if errors.Is(err, store.ErrNotFound) {
-		return p, i18n.New(i18n.Msg{ES: "el proveedor de IA no existe", EN: "the AI provider does not exist"})
-	}
-	if err != nil {
-		return p, err
-	}
-	if !isChatProvider(p) {
-		return p, i18n.Errorf(i18n.Msg{ES: "%s corre en la terminal, no en el chat", EN: "%s runs in the terminal, not in the chat"}, p.Name)
-	}
-	if !p.Enabled {
-		return p, i18n.Errorf(i18n.Msg{ES: "el proveedor %s está deshabilitado (Configuración → IA)", EN: "the provider %s is disabled (Settings → AI)"}, p.Name)
-	}
-	return p, nil
-}
-
-// chatClient arma el cliente del proveedor. La clave sale de la variable de
-// entorno que nombra apiKeyEnv; nunca se guarda ni se loguea.
-func chatClient(p store.AIProvider) (llm.Client, error) {
-	opt := llm.Options{}
-	if env := cfgString(p, "apiKeyEnv"); env != "" {
-		if !chat.ValidEnvName(env) {
-			return nil, i18n.Errorf(i18n.Msg{ES: "%q no es un nombre de variable de entorno válido (Configuración → IA)", EN: "%q is not a valid environment variable name (Settings → AI)"}, env)
-		}
-		if key, ok := chat.LookupAPIKey(env); ok {
-			opt.Token = key
-		} else if p.Kind == llm.KindAnthropic {
-			// Anthropic no responde sin clave. Un servidor compatible con OpenAI
-			// sí puede (LM Studio y vLLM locales), así que ahí se sigue sin
-			// clave y, si el servidor la exige, contesta 401 con su motivo.
-			return nil, i18n.Errorf(i18n.Msg{
-				ES: "falta la clave de API: define la variable de entorno %s con tu clave y reinicia ScadLab",
-				EN: "the API key is missing: set the environment variable %s to your key and restart ScadLab",
-			}, env)
-		}
-	} else if p.Kind == llm.KindAnthropic {
-		return nil, i18n.New(i18n.Msg{ES: "falta indicar la variable de entorno con la clave (Configuración → IA)", EN: "the environment variable that holds the key is not set (Settings → AI)"})
-	}
-	baseURL := cfgString(p, "baseUrl")
-	if p.Kind == llm.KindOllama {
-		if baseURL == "" {
-			baseURL = "http://localhost:11434"
-		}
-		opt.NumCtx = chatDefaultNumCtx
-		if n := cfgInt(p, "numCtx"); n > 0 {
-			opt.NumCtx = n
+	for i := range l.steps {
+		if l.steps[i].ID == st.ID {
+			l.steps[i] = st
+			return
 		}
 	}
-	return llm.New(p.Kind, baseURL, opt)
+	l.steps = append(l.steps, st)
 }
 
-// chatErrorText agrega a un fallo de autenticación el nombre de la variable
-// que se leyó: «401» a secas no dice qué revisar.
-func chatErrorText(p store.AIProvider, err error) string {
+func (s *chatService) setUsage(chatID int64, u hermes.Usage) {
+	s.mu.Lock()
+	if l := s.live[chatID]; l != nil {
+		l.usage = u
+	}
+	s.mu.Unlock()
+}
+
+func (s *chatService) liveSnapshot(chatID int64) ([]hermes.Step, hermes.Usage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l := s.live[chatID]
+	if l == nil {
+		return []hermes.Step{}, hermes.Usage{}
+	}
+	return append([]hermes.Step{}, l.steps...), l.usage
+}
+
+func noToolsKey(serverID, model string) string { return serverID + "|" + model }
+
+func (s *chatService) knownNoTools(serverID, model string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.noTools[noToolsKey(serverID, model)]
+}
+
+func (s *chatService) markNoTools(serverID, model string) {
+	s.mu.Lock()
+	s.noTools[noToolsKey(serverID, model)] = true
+	s.mu.Unlock()
+}
+
+// chatErrorText agrega a un fallo de autenticación de dónde salió la clave: «401»
+// a secas no dice qué revisar.
+func chatErrorText(s store.ModelServer, err error) string {
 	msg := err.Error()
 	var se *llm.StatusError
-	if env := cfgString(p, "apiKeyEnv"); env != "" && errors.As(err, &se) && (se.Status == 401 || se.Status == 403) {
-		msg += i18n.T(i18n.Msg{ES: " (clave leída de la variable %s)", EN: " (key read from the %s variable)"}, env)
+	if !errors.As(err, &se) || (se.Status != 401 && se.Status != 403) {
+		return msg
+	}
+	switch {
+	case s.HasToken:
+		msg += i18n.T(i18n.Msg{ES: " (usa la clave guardada del servidor «%s»; revísala en Configuración → Proveedores de IA)", EN: " (uses the saved key of the server “%s”; check it in Settings → AI providers)"}, s.Name)
+	case s.APIKeyEnv != "":
+		msg += i18n.T(i18n.Msg{ES: " (clave leída de la variable %s)", EN: " (key read from the %s variable)"}, s.APIKeyEnv)
 	}
 	return msg
 }
@@ -211,11 +262,13 @@ func (a *App) GetChat(chatID int64) (ChatView, error) {
 	}
 	v := ChatView{Chat: c, Messages: msgs}
 	v.Running, v.Partial, v.PartialSeq = a.chatSvc().mgr.Snapshot(chatID)
+	v.Steps, v.Usage = a.chatSvc().liveSnapshot(chatID)
 	return v, nil
 }
 
-// NewChat abre un chat vacío en el workspace con el proveedor y modelo dados.
-// Un modelo vacío toma el de la config del proveedor.
+// NewChat abre un chat vacío en el workspace con el servidor de modelos
+// (providerID es un id de model_servers) y el modelo dados. Un modelo vacío
+// toma el predeterminado del servidor.
 func (a *App) NewChat(workspaceID int64, providerID, model string) (store.Chat, error) {
 	if err := a.ready(); err != nil {
 		return store.Chat{}, err
@@ -223,13 +276,13 @@ func (a *App) NewChat(workspaceID int64, providerID, model string) (store.Chat, 
 	if _, err := a.store.GetWorkspace(workspaceID); err != nil {
 		return store.Chat{}, err
 	}
-	p, err := a.chatProvider(providerID)
+	p, err := a.chatServer(providerID)
 	if err != nil {
 		return store.Chat{}, err
 	}
 	model = strings.TrimSpace(model)
 	if model == "" {
-		model = cfgString(p, "model")
+		model = p.DefaultModel
 	}
 	if model == "" {
 		return store.Chat{}, i18n.New(i18n.Msg{ES: "elige un modelo para el chat", EN: "pick a model for the chat"})
@@ -238,15 +291,21 @@ func (a *App) NewChat(workspaceID int64, providerID, model string) (store.Chat, 
 }
 
 // SendChatMessage guarda el mensaje del usuario y lanza la respuesta, que llega
-// por los eventos chat:delta / chat:done / chat:error. currentFile es el
-// checkpoint abierto en el editor ("" si ninguno): su código entra al prompt
-// de sistema. Devuelve el mensaje guardado.
-func (a *App) SendChatMessage(chatID int64, text, currentFile string) (store.ChatMessage, error) {
+// por los eventos chat:delta / chat:step / chat:usage / chat:done / chat:error.
+// currentFile es el checkpoint abierto en el editor ("" si ninguno): su código
+// entra al prompt de sistema. attachmentIDs son los adjuntos elegidos (imágenes
+// y modelos de referencia, ver app_chat_attach.go); con ellos el texto puede ir
+// vacío. opts.Agent enciende las herramientas. Devuelve el mensaje guardado.
+//
+// Todo lo que puede fallar antes de empezar (el servidor no responde, un adjunto
+// que el modelo no admite, el chat ocupado) falla ANTES de guardar nada: no
+// queda un mensaje del usuario huérfano.
+func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachmentIDs []string, opts SendOptions) (store.ChatMessage, error) {
 	if err := a.ready(); err != nil {
 		return store.ChatMessage{}, err
 	}
 	text = strings.TrimSpace(text)
-	if text == "" {
+	if text == "" && len(attachmentIDs) == 0 {
 		return store.ChatMessage{}, i18n.New(i18n.Msg{ES: "escribe un mensaje", EN: "type a message"})
 	}
 	if len(text) > maxChatTextBytes {
@@ -256,7 +315,7 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string) (store.Cha
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
-	p, err := a.chatProvider(c.ProviderID)
+	p, err := a.chatServer(c.ProviderID)
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
@@ -264,8 +323,18 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string) (store.Cha
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
-	client, err := chatClient(p)
+	pending, err := a.pendingAttachments(attachmentIDs, w.ID)
 	if err != nil {
+		return store.ChatMessage{}, err
+	}
+	// Con el chequeo previo del servidor: si no responde, el turno ni empieza
+	// y no se guarda el mensaje.
+	client, err := a.llmClientForTurn(p)
+	if err != nil {
+		return store.ChatMessage{}, err
+	}
+	caps := a.modelCapabilities(p, client, c.Model, opts.Agent || len(pending) > 0)
+	if err := hermes.CheckVision(pending, caps.Vision, caps.VisionKnown, p.Name+" · "+c.Model); err != nil {
 		return store.ChatMessage{}, err
 	}
 
@@ -275,34 +344,71 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string) (store.Cha
 	}
 	// El historial se lee DESPUÉS de reservar el turno: si la respuesta anterior
 	// terminó justo ahora, ya guardó su mensaje y tiene que entrar.
-	history, err := a.store.ListChatMessages(chatID)
+	stored, err := a.store.ListChatMessages(chatID)
 	if err != nil {
 		turn.End()
 		return store.ChatMessage{}, err
 	}
-	um, err := a.store.AddChatMessage(chatID, "user", text)
+	prepared, err := hermes.Prepare(text, pending, caps.assumeVision(), a.chatDir(chatID))
 	if err != nil {
 		turn.End()
 		return store.ChatMessage{}, err
 	}
-	if len(history) == 0 {
-		if err := a.store.SetChatTitle(chatID, chat.Title(text)); err != nil {
+	um, err := a.store.AddChatMessageFull(chatID, store.NewChatMessage{
+		Role: "user", Content: text, Parts: hermes.EncodeParts(hermes.Parts{Attachments: prepared.Metas}),
+	})
+	if err != nil {
+		turn.End()
+		return store.ChatMessage{}, err
+	}
+	a.chatSvc().releaseAttachments(attachmentIDs)
+	if len(stored) == 0 {
+		title := text
+		if title == "" && len(prepared.Metas) > 0 {
+			title = prepared.Metas[0].Name
+		}
+		if err := a.store.SetChatTitle(chatID, chat.Title(title)); err != nil {
 			log.Printf("scadlab: título del chat %d: %v", chatID, err)
 		}
 	}
 
-	msgs := make([]llm.Message, 0, len(history)+1)
-	for _, m := range history {
-		msgs = append(msgs, llm.Message{Role: m.Role, Content: m.Content})
+	job := chatJob{
+		turn: turn, chat: c, server: p, client: client, workspace: w, caps: caps,
+		currentFile: currentFile, user: hermes.UserMessage(prepared), agent: opts.Agent,
+		maxSteps: hermes.ClampSteps(opts.MaxSteps), history: seedFrom(stored, p.Kind), refs: referencePaths(stored, prepared.Metas),
 	}
-	msgs = append(msgs, llm.Message{Role: llm.RoleUser, Content: text})
-	req := llm.ChatRequest{
-		Model:    c.Model,
-		System:   prompts.SystemPrompt(chatPromptContext(w, currentFile)),
-		Messages: chat.TrimHistory(chat.MergeRoles(msgs), chat.HistoryBudget(p.Kind)),
-	}
-	go a.runChatTurn(turn, c, p, client, req)
+	a.chatSvc().beginLive(chatID)
+	go a.runChatTurn(job)
 	return um, nil
+}
+
+// seedFrom arma el historial del modelo con las filas guardadas.
+func seedFrom(stored []store.ChatMessage, kind string) []llm.Message {
+	rows := make([]hermes.StoredMessage, len(stored))
+	for i, m := range stored {
+		rows[i] = hermes.StoredMessage{Role: m.Role, Content: m.Content, Parts: m.Parts}
+	}
+	return hermes.SeedHistory(rows, chat.HistoryBudget(kind))
+}
+
+// referencePaths son las referencias 3D que el chat tiene adjuntas (las de los
+// mensajes anteriores y las de este), para el prompt de sistema.
+func referencePaths(stored []store.ChatMessage, current []hermes.AttachmentMeta) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(metas []hermes.AttachmentMeta) {
+		for _, m := range metas {
+			if m.Kind == hermes.KindModel && m.RefPath != "" && !seen[m.RefPath] {
+				seen[m.RefPath] = true
+				out = append(out, m.RefPath)
+			}
+		}
+	}
+	for _, m := range stored {
+		add(hermes.ParseParts(m.Parts).Attachments)
+	}
+	add(current)
+	return out
 }
 
 // appCtx es el contexto de la app (Background en los tests que no lo traen).
@@ -313,17 +419,64 @@ func (a *App) appCtx() context.Context {
 	return context.Background()
 }
 
+// chatJob es todo lo que un turno necesita una vez validado el envío.
+type chatJob struct {
+	turn        *chat.Turn
+	chat        store.Chat
+	server      store.ModelServer
+	client      llm.Client
+	workspace   store.Workspace
+	caps        modelCaps
+	currentFile string
+	user        llm.Message
+	agent       bool
+	maxSteps    int
+	history     []llm.Message
+	refs        []string
+}
+
 // runChatTurn corre la respuesta, la guarda y avisa a la pantalla. Un
-// cancelado conserva lo escrito; un fallo con texto previo también (es lo que
-// el usuario vio y puede querer copiar).
-func (a *App) runChatTurn(turn *chat.Turn, c store.Chat, p store.AIProvider, client llm.Client, req llm.ChatRequest) {
-	defer turn.End()
-	out, err := turn.Run(client, req, func(seq int, text string) {
+// cancelado conserva lo escrito y los pasos; un fallo con texto o pasos previos
+// también (es lo que el usuario vio y puede querer copiar).
+func (a *App) runChatTurn(j chatJob) {
+	defer j.turn.End()
+	c, p := j.chat, j.server
+	svc := a.chatSvc()
+	defer svc.endLive(c.ID)
+
+	cfg := a.hermesConfig(j)
+	if cl, ok := cfg.Tools.(io.Closer); ok {
+		// La caja se cierra al terminar el turno; lo inyectado (base, motor,
+		// WebAssembly, caché de partes) es de la app y no se cierra.
+		defer cl.Close()
+	}
+	stream := j.turn.Stream(func(seq int, text string) {
 		a.emit(evChatDelta, ChatDeltaEvent{ChatID: c.ID, Text: text, Seq: seq})
 	})
+	res, err := hermes.Run(j.turn.Context(), cfg, hermes.Hooks{
+		Text:  stream.Add,
+		Flush: stream.Flush,
+		Step: func(st hermes.Step) {
+			svc.upsertStep(c.ID, st)
+			a.emit(evChatStep, ChatStepEvent{ChatID: c.ID, Step: st})
+		},
+		Usage: func(u hermes.Usage) {
+			svc.setUsage(c.ID, u)
+			a.emit(evChatUsage, ChatUsageEvent{ChatID: c.ID, InputTokens: u.Input, OutputTokens: u.Output, CostUSD: u.CostUSD})
+		},
+	})
+	stream.Close()
+	if res.ToolsUnsupported {
+		svc.markNoTools(p.ID, c.Model)
+	}
+
 	var messageID int64
-	if strings.TrimSpace(out.Text) != "" {
-		m, serr := a.store.AddChatMessage(c.ID, "assistant", out.Text)
+	if strings.TrimSpace(res.Text) != "" || len(res.Steps) > 0 {
+		m, serr := a.store.AddChatMessageFull(c.ID, store.NewChatMessage{
+			Role: "assistant", Content: res.Text,
+			Parts:       hermes.EncodeParts(hermes.Parts{Steps: hermes.StepsForStorage(res.Steps), Model: res.Model, StepLimit: res.StepLimit}),
+			InputTokens: res.Usage.Input, OutputTokens: res.Usage.Output, CostUSD: res.Usage.CostUSD,
+		})
 		switch {
 		case serr == nil:
 			messageID = m.ID
@@ -337,7 +490,61 @@ func (a *App) runChatTurn(turn *chat.Turn, c store.Chat, p store.AIProvider, cli
 		a.emit(evChatError, ChatErrorEvent{ChatID: c.ID, Message: chatErrorText(p, err), MessageID: messageID})
 		return
 	}
-	a.emit(evChatDone, ChatDoneEvent{ChatID: c.ID, MessageID: messageID, Cancelled: out.Cancelled})
+	a.emit(evChatDone, ChatDoneEvent{ChatID: c.ID, MessageID: messageID, Cancelled: res.Cancelled})
+}
+
+// hermesConfig arma la configuración del bucle: los dos prompts de sistema (con
+// y sin herramientas), la caja de herramientas del workspace si el modelo las
+// puede usar, y el historial.
+func (a *App) hermesConfig(j chatJob) hermes.Config {
+	c, p, w := j.chat, j.server, j.workspace
+	pctx := chatPromptContext(w, j.currentFile)
+	vision := j.caps.assumeVision()
+	base := prompts.AgentContext{Context: pctx, Vision: vision, MaxSteps: j.maxSteps, References: j.refs}
+	toolsCtx := base
+	toolsCtx.Tools = true
+	toolsCtx.Skills = mcp.ListWorkspaceSkills(w.Path)
+	textCtx := base // Tools=false: el prompt de S5
+
+	cfg := hermes.Config{
+		Client: j.client, Model: c.Model,
+		SystemTools: prompts.AgentSystemPrompt(toolsCtx),
+		SystemText:  prompts.AgentSystemPrompt(textCtx),
+		History:     j.history,
+		User:        j.user,
+		Vision:      vision,
+		ImageDir:    a.chatDir(c.ID),
+		MaxSteps:    j.maxSteps,
+		Price:       hermes.Price{PromptPerM: j.caps.PromptPricePerM, CompletionPerM: j.caps.CompletionPricePerM},
+		NoTools:     true,
+	}
+	if !j.agent {
+		return cfg
+	}
+	switch {
+	case j.caps.ToolsKnown && !j.caps.Tools, a.chatSvc().knownNoTools(p.ID, c.Model):
+		// El modelo ya mostró que no las soporta: modo texto, con el aviso.
+		cfg.NoToolsNotice = true
+		return cfg
+	}
+	tools, err := newChatToolset(a, w)
+	if err != nil {
+		log.Printf("scadlab: caja de herramientas del chat %d: %v", c.ID, err)
+		cfg.NoToolsNotice = true
+		return cfg
+	}
+	cfg.Tools, cfg.NoTools = tools, false
+	return cfg
+}
+
+// newChatToolset abre la caja de herramientas del workspace para un turno, con la
+// base, el motor de render, el WebAssembly y la caché de partes DE LA APP
+// inyectados: Hermes no abre una segunda base ni un segundo motor. Es una
+// variable para que las pruebas pongan una caja de mentira.
+var newChatToolset = func(a *App, w store.Workspace) (hermes.Toolset, error) {
+	return mcp.NewToolbox(mcp.ToolboxOptions{
+		WorkspaceDir: w.Path, Store: a.store, Engine: a.engine, WASM: a.wasm(), Parts: partsStoreFor(a.dataDir), InApp: true,
+	})
 }
 
 func (a *App) chatGone(chatID int64) bool {
@@ -356,29 +563,60 @@ func (a *App) DeleteChat(chatID int64) error {
 		return err
 	}
 	a.chatSvc().mgr.Cancel(chatID)
-	return a.store.DeleteChat(chatID)
+	if err := a.store.DeleteChat(chatID); err != nil {
+		return err
+	}
+	// Las imágenes que el chat mandó ya no sirven a nadie.
+	if dir := a.chatDir(chatID); dir != "" {
+		_ = os.RemoveAll(dir)
+	}
+	return nil
 }
 
-// ListProviderModels lista los modelos que ofrece un proveedor: Ollama
-// (/api/tags) y los compatibles con OpenAI (/v1/models) por red; Anthropic, una
-// lista fija (llm.AnthropicModels), para no pedir la clave solo para llenar un
-// desplegable.
-func (a *App) ListProviderModels(providerID string) ([]string, error) {
+// RenameChat cambia el nombre de una conversación. El texto se recorta y los
+// espacios se colapsan; no puede quedar vacío ni pasar de 120 letras.
+func (a *App) RenameChat(chatID int64, title string) error {
 	if err := a.ready(); err != nil {
-		return nil, err
+		return err
 	}
-	p, err := a.chatProvider(providerID)
+	title = chat.CleanTitle(title)
+	if title == "" {
+		return i18n.New(i18n.Msg{ES: "el nombre de la conversación no puede estar vacío", EN: "the conversation name cannot be empty"})
+	}
+	return a.store.RenameChat(chatID, title)
+}
+
+// SetChatModel cambia el servidor y el modelo con que sigue una conversación (a
+// mitad de camino): el historial se conserva y el próximo turno ya usa el nuevo.
+// Un turno en curso termina con el modelo anterior.
+func (a *App) SetChatModel(chatID int64, serverID, model string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	c, err := a.store.GetChat(chatID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if p.Kind == llm.KindAnthropic {
-		return append([]string(nil), llm.AnthropicModels...), nil
-	}
-	client, err := chatClient(p)
+	srv, err := a.chatServer(strings.TrimSpace(serverID))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return client.Models(a.appCtx())
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = srv.DefaultModel
+	}
+	if model == "" {
+		return i18n.New(i18n.Msg{ES: "elige un modelo para el chat", EN: "pick a model for the chat"})
+	}
+	if err := a.store.SetChatModel(chatID, srv.ID, model); err != nil {
+		return err
+	}
+	// La elección también es la última del proyecto (lo que arranca el próximo
+	// chat nuevo). No es crítico.
+	if err := a.store.SetLastModel(c.WorkspaceID, store.LastModel{ServerID: srv.ID, Model: model}); err != nil {
+		log.Printf("scadlab: recordar el modelo del chat %d: %v", chatID, err)
+	}
+	return nil
 }
 
 // SaveChatCheckpoint es SaveAsCheckpoint desde un bloque de código del chat: además
