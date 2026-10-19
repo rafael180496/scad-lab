@@ -10,9 +10,12 @@
 //   theme  dark | light
 //   platform darwin | windows
 //   scale  tamaño de la interfaz en % (90–150); por defecto 100
+//   click  selector CSS de un elemento al que hacerle clic antes de fotografiar (UISHOT_CLICK en uishot.sh): para revisar un
+//          menú o un desplegable de cualquier vista sin escribir una vista nueva
 //   keytest 1 = simula ⌘+ ⌘- ⌘0 (interfaz) y ⌘+ con el foco en el editor, la terminal
 //          y el chat; el resultado queda en data-keytest
 //   dockraw  texto crudo del diseño de paneles guardado (prueba de diseño roto o ajeno)
+//   vh     alto de la ventana en px (lo pone uishot.sh): fija el alto de la página para que el dock no se reacomode al fotografiar
 //   poke   1 = intenta desplazar el documento (scrollTo, focus, scrollIntoView)
 //          para comprobar que no se mueve; el resultado queda en data-docfit
 //   persist  reset | 1 = «cerrar y abrir»: los bindings de guardado escriben en localStorage
@@ -21,20 +24,27 @@
 //          (scripts/uishot-persist.sh lo maneja por CDP)
 //
 // Una vista nueva = una entrada en VIEWS + su fila en scripts/help-shots.sh.
-import {StrictMode} from 'react'
+import {StrictMode, Suspense, lazy} from 'react'
 import {createRoot} from 'react-dom/client'
 import './index.css'
 import App, {type ShotOptions} from './App'
 import type {SettingsTab} from './components/settings/SettingsDialog'
-import {loadMesh, loadParts} from './lib/mesh'
+import {loadMesh, loadParts, loadRawMesh} from './lib/mesh'
 import {loadCodeEditor, loadSkillCodeEditor} from './components/editor/lazy'
 import {setLanguage} from './i18n'
+import {ConfirmHost} from './components/ui/Dialog'
+import {Toaster} from './components/ui/Toast'
+import {VaultHost} from './components/vault/VaultHost'
+import {APPEARANCE_DEFAULTS, applyAppearance} from './lib/appearance'
+import {setPlatform} from './lib/platform'
+import {applyTheme} from './lib/theme'
 import {terminalShot} from './components/terminal/shot'
 import {shotTools} from './components/dock/dock'
 import {printStore, selectPart} from './lib/printSession'
 import {editorCommands, editorSession} from './lib/editorSession'
 import {installScrollGuard} from './lib/scrollGuard'
 import {skillsShot} from './lib/skillsShot'
+import {prepareSession} from './lib/meshEditSession'
 import {slugify} from './lib/slug'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
@@ -94,12 +104,66 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'chat-agent-steps': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
     'chat-attachments': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
     'chat-conversations': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
-    'chat-empty': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
-    'chat-new': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    // S12.b: una respuesta de texto en «Solo consulta» con Markdown (tabla, títulos, listas, enlace) y su bloque OpenSCAD con
+    // «Abrir en el editor» y «Guardar como checkpoint».
+    'chat-code': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    // S13 (editar un STL): el diálogo de importar con una malla abierta, el modo «Editar» con el gizmo de mover y la pila,
+    // el plano de corte partiendo en dos colores, un cilindro como agujero (rojo translúcido) y «Modificar con IA» (el
+    // chat con el modelo adjunto y el texto sugerido). `mesh-edit-w320/480/720` es el editor solo, en un panel de ese ancho.
+    'mesh-import': {scenario: 'ok', shot: {meshImport: {path: '/Users/maker/Downloads/soporte-abierto.stl'}}},
+    'mesh-edit': {
+        scenario: 'ok',
+        shot: {
+            dock: 'hidden',
+            meshEdit: {
+                tool: 'translate',
+                select: 'model',
+                view: 'iso',
+                steps: [
+                    {op: 'move', to: [-12, -62, 0]},
+                    {op: 'add', shape: 'cube', mode: 'union', at: [26, 0, 31.6], size: [20, 14, 8], color: '#ff7a1a'},
+                    {op: 'move', to: [-24, -62, 0]},
+                ],
+            },
+        },
+    },
+    'mesh-cut': {
+        scenario: 'ok',
+        shot: {
+            dock: 'hidden',
+            meshEdit: {
+                tool: 'translate',
+                select: 'cut',
+                view: 'iso',
+                steps: [{op: 'cut', point: [0, 0, 13.8], normal: [0, 0, 1], keep: 'both', split: 'colors', colors: ['#ff7a1a', '#5aa2ff']}],
+            },
+        },
+    },
+    'mesh-hole': {
+        scenario: 'ok',
+        shot: {
+            dock: 'hidden',
+            meshEdit: {
+                tool: 'translate',
+                select: 'part:0',
+                view: 'iso',
+                steps: [{op: 'add', shape: 'cylinder', mode: 'hole', at: [0, 0, 13.8], size: [14, 14, 40]}],
+            },
+        },
+    },
+    'mesh-ai': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat', meshAI: '006-two-color-logo.scad'}},
+    // S12.b: el chat nuevo con sugerencias (chat-empty), el selector de proveedor abierto con los CLIs detectados y
+    // un servidor (chat-providers), los modelos de un CLI (chat-cli-models) y el aviso sin ningún proveedor.
+    'chat-empty': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    'chat-providers': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-cli-models': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-no-providers': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     // S12: el selector de modelo abierto (búsqueda, insignias de visión y herramientas, precios de OpenRouter).
     'chat-models': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     // S12: el formulario «Agregar servidor» con el atajo de OpenRouter elegido.
     'settings-providers-add': {scenario: 'ok', shot: {settingsTab: 'providers'}},
+    // S12.b: Configuración → Proveedores con los CLIs detectados, y el diálogo de «Importar servidores de mini-tools».
+    'settings-import-minitools': {scenario: 'ok', shot: {settingsTab: 'providers'}},
     // S12 (12.10): el llavero propio. «Crear contraseña maestra» aparece al guardar la primera clave de API (sobre
     // Proveedores de IA, con el formulario de OpenRouter detrás); «Desbloquear» cuando la llave no se recuperó sola
     // y hace falta una clave (sobre el chat).
@@ -170,7 +234,13 @@ const SKILLS_VIEWS: Record<string, NonNullable<typeof skillsShot.mode>> = {
 }
 for (const [v, mode] of Object.entries(SKILLS_VIEWS)) VIEWS[v] = {scenario: 'ok', shot: {settingsTab: 'skills'}}
 skillsShot.mode = SKILLS_VIEWS[view]
-const cfg = VIEWS[view] ?? VIEWS.main
+// S13: el editor de STL solo, en un panel de N px (mesh-edit-w320…), para ver cómo se pliega y comprobar que nada desborda.
+const meshWidth = Number(/^mesh-edit-w(\d+)$/.exec(view)?.[1] ?? 0)
+const meshHarness = meshWidth > 0
+const cfg = VIEWS[view] ?? (meshHarness ? VIEWS['mesh-edit'] : VIEWS.main)
+// S12.b: el chat solo, en un panel de N px de ancho (chat-narrow = 360), para ver y comprobar que la barra no se desborda.
+const chatWidth = view === 'chat-narrow' ? 360 : Number(/^chat-w(\d+)$/.exec(view)?.[1] ?? 0)
+const chatHarness = chatWidth > 0
 const isTerminalView = view === 'terminal' || view === 'terminal-sessions' || view === 'terminal-mcp' || view === 'appearance-150' || view === 'small' || view === 'dock-150'
 if (view === 'terminal-sessions') terminalShot.openSessions = true
 
@@ -698,12 +768,14 @@ const chatItems = [
 // ── Servidores de modelos (S12, bloque 12.1) ───────────────────────────────
 // Cinco servidores inventados (nada de claves reales: solo `hasToken`). OpenRouter
 // es el que recuerda el selector en `chat-models`, para que se vean los precios.
+// chat-no-providers: ni CLIs ni servidores (el aviso con el botón «Abrir Proveedores de IA»).
+const noProviders = view === 'chat-no-providers'
 const serverFixtures = [
-    {id: 'ollama', kind: 'ollama', preset: 'ollamaLocal', name: 'Ollama', baseUrl: 'http://localhost:11434', apiKeyEnv: '', hasToken: false, defaultModel: 'qwen3-coder:30b', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 5, updatedAt: 1_790_000_000},
-    {id: 'srv-4f1a9c2e7b30', kind: 'openai', preset: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: '', hasToken: true, defaultModel: 'anthropic/claude-sonnet-5-5', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 6, updatedAt: 1_790_000_100},
-    {id: 'srv-8c3d5e1f0a92', kind: 'openai', preset: 'gemini', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKeyEnv: 'GEMINI_API_KEY', hasToken: false, defaultModel: 'gemini-2.5-pro', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 7, updatedAt: 1_790_000_200},
-    {id: 'anthropic', kind: 'anthropic', preset: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com', apiKeyEnv: '', hasToken: true, defaultModel: 'claude-sonnet-5-5', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 8, updatedAt: 1_790_000_300},
-    {id: 'srv-2b7e6d4a1c58', kind: 'openai', preset: 'lmstudio', name: es ? 'LM Studio del taller' : 'Workshop LM Studio', baseUrl: 'http://192.168.1.40:1234/v1', apiKeyEnv: '', hasToken: false, defaultModel: '', contextTokens: 0, enabled: view !== 'chat-empty', sortOrder: 9, updatedAt: 1_790_000_400},
+    {id: 'ollama', kind: 'ollama', preset: 'ollamaLocal', name: 'MacOS · Ollama', baseUrl: 'http://localhost:11434', apiKeyEnv: '', hasToken: false, defaultModel: 'qwen3-coder:30b', contextTokens: 0, enabled: !noProviders, sortOrder: 5, updatedAt: 1_790_000_000},
+    {id: 'srv-4f1a9c2e7b30', kind: 'openai', preset: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: '', hasToken: true, defaultModel: 'anthropic/claude-sonnet-5-5', contextTokens: 0, enabled: !noProviders, sortOrder: 6, updatedAt: 1_790_000_100},
+    {id: 'srv-8c3d5e1f0a92', kind: 'openai', preset: 'gemini', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKeyEnv: 'GEMINI_API_KEY', hasToken: false, defaultModel: 'gemini-2.5-pro', contextTokens: 0, enabled: !noProviders, sortOrder: 7, updatedAt: 1_790_000_200},
+    {id: 'anthropic', kind: 'anthropic', preset: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com', apiKeyEnv: '', hasToken: true, defaultModel: 'claude-sonnet-5-5', contextTokens: 0, enabled: !noProviders, sortOrder: 8, updatedAt: 1_790_000_300},
+    {id: 'srv-2b7e6d4a1c58', kind: 'openai', preset: 'lmstudio', name: es ? 'LM Studio del taller' : 'Workshop LM Studio', baseUrl: 'http://192.168.1.40:1234/v1', apiKeyEnv: '', hasToken: false, defaultModel: '', contextTokens: 0, enabled: !noProviders, sortOrder: 9, updatedAt: 1_790_000_400},
 ]
 const mi = (id: string, vision: boolean, tools: boolean, ctx: number, pp = 0, cp = 0) => ({
     id, vision, visionKnown: true, tools, toolsKnown: true, contextTokens: ctx, promptPricePerM: pp, completionPricePerM: cp,
@@ -729,8 +801,84 @@ const probeFor = (id: string) =>
     id === 'srv-2b7e6d4a1c58'
         ? {ok: false, status: 0, message: es ? 'no se pudo conectar a http://192.168.1.40:1234/v1: la conexión fue rechazada (¿está el servidor en marcha?)' : 'could not connect to http://192.168.1.40:1234/v1: connection refused (is the server running?)', models: 0, modelIds: [], latencyMs: 0}
         : {ok: true, status: 200, message: id === 'ollama' ? '0.12.5' : '', models: (serverModels[id] ?? []).length, modelIds: (serverModels[id] ?? []).map((m) => m.id), latencyMs: id === 'ollama' ? 18 : 240}
+// ── CLIs como proveedores (S12.b) ──────────────────────────────────────────
+// Los cuatro CLIs «instalados» (nada de rutas reales: son inventadas) y lo que el selector sabe de ellos.
+const cliFixtures = [
+    {id: 'cli:claude', short: 'claude', name: 'Claude Code', vendor: 'Anthropic', version: '2.1.300'},
+    {id: 'cli:codex', short: 'codex', name: 'Codex CLI', vendor: 'OpenAI', version: '0.98.0'},
+    {id: 'cli:antigravity', short: 'antigravity', name: 'Antigravity CLI', vendor: 'Google', version: '1.7.2'},
+    {id: 'cli:opencode', short: 'opencode', name: 'OpenCode', vendor: 'SST', version: '1.4.2'},
+]
+// chat-providers: el selector con un solo servidor (el del Mac), como en la ayuda.
+const providerServers = serverFixtures.filter((x) => x.enabled && (view !== 'chat-providers' || x.id === 'ollama'))
+const chatProviderList = noProviders
+    ? []
+    : [
+          ...cliFixtures.map((c) => ({id: c.id, kind: 'cli', name: c.name, vendor: c.vendor, installed: true, path: `/Users/maker/.local/bin/${c.short}`, remote: false, enabled: true})),
+          ...providerServers.map((x) => ({id: x.id, kind: x.kind, name: x.name, vendor: '', installed: true, path: '', remote: !/localhost|127\.0\.0\.1/.test(x.baseUrl), enabled: true})),
+      ]
+const cliModels: Record<string, {id: string; label: string; description: string}[]> = {
+    'cli:claude': [
+        {id: 'opus', label: 'Opus', description: es ? 'El más capaz, para diseños difíciles' : 'The most capable, for hard designs'},
+        {id: 'sonnet', label: 'Sonnet', description: es ? 'Equilibrio entre velocidad y calidad' : 'Balance of speed and quality'},
+        {id: 'haiku', label: 'Haiku', description: es ? 'El más rápido, para retoques' : 'The fastest, for tweaks'},
+    ],
+    'cli:codex': [
+        {id: 'gpt-5-codex', label: 'GPT-5 Codex', description: es ? 'Pensado para código' : 'Built for code'},
+        {id: 'gpt-5-codex-mini', label: 'GPT-5 Codex Mini', description: es ? 'Más barato y rápido' : 'Cheaper and faster'},
+    ],
+    'cli:antigravity': [
+        {id: 'gemini-4-argon-high', label: 'Gemini 4 Argon (High)', description: es ? 'Razonamiento largo, el más preciso' : 'Long reasoning, the most precise'},
+        {id: 'gemini-4-argon-low', label: 'Gemini 4 Argon (Low)', description: es ? 'La misma familia con menos razonamiento' : 'Same family with less reasoning'},
+        {id: 'gemini-4-flash', label: 'Gemini 4 Flash', description: es ? 'Respuestas casi instantáneas' : 'Near-instant answers'},
+        {id: 'claude-sonnet-5-5-thinking', label: 'Claude Sonnet 5.5 (Thinking)', description: es ? 'Claude con razonamiento extendido' : 'Claude with extended reasoning'},
+        {id: 'gpt-oss-240b-medium', label: 'GPT-OSS 240B (Medium)', description: es ? 'Pesos abiertos' : 'Open weights'},
+    ],
+    'cli:opencode': [
+        {id: 'anthropic/claude-sonnet-5-5', label: 'Claude Sonnet 5.5', description: 'anthropic'},
+        {id: 'openai/gpt-5-mini', label: 'GPT-5 mini', description: 'openai'},
+    ],
+}
+// Salud: los CLIs responden (instalados, sin latencia); los servidores, con su sondeo; el LM Studio del taller está apagado.
+const providerHealth = (id: string) => {
+    if (id.startsWith('cli:')) return {ok: true, latencyMs: 0, error: ''}
+    const pr = probeFor(id)
+    return {ok: pr.ok, latencyMs: pr.latencyMs, error: pr.ok ? '' : pr.message}
+}
+const chatCatalog = (id: string) => {
+    if (id.startsWith('cli:')) {
+        return {
+            defaultHint: es ? 'El que tenga configurado el CLI' : 'Whatever the CLI has configured',
+            models: (cliModels[id] ?? []).map((m) => ({...m, vision: false, visionKnown: false, tools: true, toolsKnown: true, contextTokens: 0, promptPricePerM: 0, completionPricePerM: 0})),
+        }
+    }
+    const def = serverFixtures.find((x) => x.id === id)?.defaultModel
+    return {
+        defaultHint: def ? (es ? `El predeterminado del servidor (${def})` : `The server's default (${def})`) : es ? 'El primero que devuelva el servidor' : 'The first one the server returns',
+        models: (serverModels[id] ?? []).map((m) => ({...m, label: '', description: ''})),
+    }
+}
+// mini-tools (S12.b): lo que vería «Importar servidores» con una base falsa. Dos servidores nuevos y uno que ya está en ScadLab.
+const miniToolsPath = platform === 'windows' ? 'C:\\Users\\maker\\AppData\\Roaming\\mini-tools\\vault.db' : '/Users/maker/Library/Application Support/mini-tools/vault.db'
+const miniToolsImport = {
+    found: true,
+    path: miniToolsPath,
+    imported: 0,
+    servers: [
+        {name: es ? 'Ollama del estudio' : 'Studio Ollama', kind: 'ollama', baseUrl: 'http://192.168.1.60:11434', defaultModel: 'qwen3-coder:30b', exists: false},
+        {name: 'Groq', kind: 'openai', baseUrl: 'https://api.groq.com/openai/v1', defaultModel: 'llama-3.3-70b-versatile', exists: false},
+        {name: 'OpenRouter', kind: 'openai', baseUrl: 'https://openrouter.ai/api/v1', defaultModel: 'anthropic/claude-sonnet-5-5', exists: true},
+    ],
+}
 // chat-models recuerda a OpenRouter (el que tiene precios); el resto, a Ollama.
-const lastModelShot = view === 'chat-models' ? {serverId: 'srv-4f1a9c2e7b30', model: 'anthropic/claude-sonnet-5-5'} : {serverId: 'ollama', model: 'qwen3-coder:30b'}
+const lastModelShot =
+    view === 'chat-models'
+        ? {serverId: 'srv-4f1a9c2e7b30', model: 'anthropic/claude-sonnet-5-5'}
+        : view === 'chat-providers' || view === 'chat-empty'
+          ? {serverId: 'cli:claude', model: ''}
+          : view === 'chat-cli-models'
+            ? {serverId: 'cli:antigravity', model: ''}
+            : {serverId: 'ollama', model: 'qwen3-coder:30b'}
 // vault-create: la contraseña se crea al pulsar «Crear» en el diálogo; el reintento de Guardar ya pasa.
 let vaultCreated = false
 const serverMocks = {
@@ -744,6 +892,12 @@ const serverMocks = {
     DeleteModelServer: () => P(undefined),
     TestModelServer: (s: {id: string}) => P(probeFor(s.id)),
     ListServerModels: (id: string) => P(serverModels[id] ?? []),
+    ListChatProviders: () => P(chatProviderList),
+    RefreshChatProviders: () => P(chatProviderList),
+    ProviderHealth: (id: string) => P(providerHealth(id)),
+    ChatModelCatalog: (id: string) => P(chatCatalog(id)),
+    ListDetectedCLIs: () => P(cliFixtures.map((c) => ({id: c.short, name: c.name, vendor: c.vendor, installed: true, path: `/Users/maker/.local/bin/${c.short}`, version: c.version}))),
+    ImportMiniToolsServers: (dryRun: boolean) => P(dryRun ? miniToolsImport : {...miniToolsImport, imported: miniToolsImport.servers.filter((x) => !x.exists).length}),
     ListProviderModels: (id: string) => P((serverModels[id] ?? []).map((m) => m.id)),
     GetLastModel: () => P(lastModelShot),
     SetLastModel: () => P(undefined),
@@ -797,9 +951,12 @@ const streamParts = es
 // Las imágenes del «preview» y las miniaturas se DIBUJAN aquí con un canvas
 // (cajas isométricas sombreadas): el banco no tiene OpenSCAD, y una captura
 // real traería el modelo y las carpetas de alguien. Todo es inventado.
-const hermesView = view === 'chat' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations'
-const hermesServerId = 'srv-4f1a9c2e7b30'
-const hermesModel = 'anthropic/claude-sonnet-5-5'
+const hermesView = view === 'chat' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || chatHarness
+// El chat del banco corre sobre OpenRouter; el panel angosto (chat-narrow, chat-w*), sobre un CLI: sus pasos usan las mismas tarjetas.
+// chat-code: el chat arranca en «Solo consulta» (el modo se recuerda en localStorage).
+if (view === 'chat-code') localStorage.setItem('scadlab.chat.agent', 'off')
+const hermesServerId = chatHarness ? 'cli:codex' : 'srv-4f1a9c2e7b30'
+const hermesModel = chatHarness ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
 
 const shadeHex = (hex: string, f: number) => {
     const n = parseInt(hex.slice(1), 16)
@@ -910,10 +1067,18 @@ const stepsAtt = [
     hermesStep(1, 'create_checkpoint', {parent: '006-two-color-logo.scad', label: es ? 'repisa de pared' : 'wall shelf', source: chatScad}, 'ok', `{"file":"${shelfFile}"}`, 40, ro.sentence.length),
     hermesStep(2, 'render', {file: shelfFile}, 'ok', `{"file":"${shelfFile}","status":"ok","durationMs":801}`, 830, ro.sentence.length),
 ]
-const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
+const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, cliSession: '', title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
 const parts = (p: Record<string, unknown>) => JSON.stringify(p)
+const codeMd = es
+    ? `Te dejo la caja de la **Raspberry Pi 5**. Estas son las medidas que usé:\n\n| Pieza | Medida | Nota |\n|:--|--:|:-:|\n| Placa | 85 × 56 mm | la de la Pi 5 |\n| Paredes | 2 mm | imprimen bien en la A1 mini |\n| Altura | 24 mm | deja sitio al ventilador |\n\n## Qué cambié\n\n- La tapa va en un checkpoint **aparte**, para imprimirla plana.\n- Los tornillos son \`M2.5\`; si quedan justos mira [la guía de tolerancias](https://example.com/tolerancias).\n- [x] Paredes de 2 mm\n- [ ] Ranuras de ventilación\n\n\`\`\`openscad\n${chatScad}\`\`\``
+    : `Here is the **Raspberry Pi 5** case. These are the measurements I used:\n\n| Part | Size | Note |\n|:--|--:|:-:|\n| Board | 85 × 56 mm | the Pi 5's |\n| Walls | 2 mm | print well on the A1 mini |\n| Height | 24 mm | leaves room for the fan |\n\n## What I changed\n\n- The lid goes in its **own** checkpoint, so it prints flat.\n- The screws are \`M2.5\`; if they end up tight see [the tolerance guide](https://example.com/tolerances).\n- [x] 2 mm walls\n- [ ] Ventilation slots\n\n\`\`\`openscad\n${chatScad}\`\`\``
 const hermesMessages =
-    view === 'chat-agent-steps'
+    view === 'chat-code'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: es ? 'Haz una caja para una Raspberry Pi 5 con tapa deslizante.' : 'Make a box for a Raspberry Pi 5 with a sliding lid.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: codeMd, parts: parts({model: hermesModel}), inputTokens: 6_420, outputTokens: 910, costUsd: 0.0312},
+          ]
+        : view === 'chat-agent-steps'
         ? [
               {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: es ? 'Ahora hazme la tapa deslizante, con su riel y 0,3 mm de holgura.' : 'Now make me the sliding lid, with its rail and 0.3 mm clearance.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
               {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rb.sentence}\n\n${rb.fix}\n\n${rb.done}`, parts: parts({steps: stepsFix, model: hermesModel}), inputTokens: 31_870, outputTokens: 3_940, costUsd: 0.1547},
@@ -927,22 +1092,35 @@ const hermesMessages =
                 {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: es ? 'Haz una caja para una Raspberry Pi 5 con tapa deslizante.' : 'Make a box for a Raspberry Pi 5 with a sliding lid.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
                 {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${ra.sentence}\n\n${ra.done}`, parts: parts({steps: stepsChat, model: hermesModel}), inputTokens: hermesUsage.inputTokens, outputTokens: hermesUsage.outputTokens, costUsd: hermesUsage.costUsd},
             ]
+// Lo que dijeron los otros dos chats: la búsqueda de «Conversaciones» también mira el contenido.
+const otherChats: Record<number, {id: number; chatId: number; role: string; createdAt: number; content: string; parts: string; inputTokens: number; outputTokens: number; costUsd: number}[]> = {
+    2: [
+        {id: 21, chatId: 2, role: 'user', createdAt: 1_789_900_100, content: es ? 'Agrega ranuras de ventilación a la caja.' : 'Add ventilation slots to the case.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+        {id: 22, chatId: 2, role: 'assistant', createdAt: 1_789_900_500, content: es ? 'Te propongo seis ranuras de 6 × 14 mm en la pared trasera, a 4 mm del borde de la tapa, para que no se vean al cerrarla.' : 'I suggest six 6 × 14 mm slots on the back wall, 4 mm from the edge of the lid, so they are hidden when it is closed.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+    ],
+    1: [
+        {id: 11, chatId: 1, role: 'user', createdAt: 1_789_800_100, content: es ? '¿Cuántos milímetros de holgura le doy a una tapa?' : 'How many millimeters of clearance should I give a lid?', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+        {id: 12, chatId: 1, role: 'assistant', createdAt: 1_789_800_300, content: es ? 'Para una A1 mini, 0,3 mm por lado es un buen punto de partida.' : 'For an A1 mini, 0.3 mm per side is a good starting point.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+    ],
+}
 const chatsFor = () => (hermesView ? [hermesChatItem, chatItems[1], chatItems[2]] : chatItems)
 // Lo que devuelve el diálogo de archivos de «Adjuntar» en chat-attachments.
 const pickedAttachments = [
     {id: 'att-1', kind: 'image', name: es ? 'foto-repisa.jpg' : 'shelf-photo.jpg', mime: 'image/jpeg', size: 1_840_000, thumbDataUrl: photoSketch, refPath: '', summary: ''},
     {id: 'att-2', kind: 'model', name: es ? 'soporte-pared.stl' : 'wall-bracket.stl', mime: 'model/stl', size: 412_000, thumbDataUrl: previewBracket, refPath: es ? 'refs/soporte-pared.stl' : 'refs/wall-bracket.stl', summary: (es ? 'Reference: refs/soporte-pared.stl' : 'Reference: refs/wall-bracket.stl') + ' (STL, 3 812 triangles).'},
 ]
+// «Modificar con IA» (mesh-ai): el modelo del checkpoint, ya adjunto, con el informe y la vista previa que arma Go.
+const meshAttachment = {id: 'att-ai', kind: 'model', name: es ? 'caja-rpi5.stl' : 'rpi5-case.stl', mime: 'model/stl', size: 412_000, thumbDataUrl: previewCase, refPath: es ? 'refs/caja-rpi5.stl' : 'refs/rpi5-case.stl', summary: 'Reference: refs/rpi5-case.stl (STL, 4 176 triangles).'}
 // Registro de lo que la interfaz llamó (window.__calls), para las pruebas con CDP.
 const calls = (name: string, args: unknown[]) => {
     const w = window as unknown as {__calls?: [string, unknown[]][]}
     ;(w.__calls ||= []).push([name, args])
 }
 const chatMocks = {
-    ListChats: () => P(view === 'chat-new' || view === 'chat-models' ? [] : chatsFor()),
+    ListChats: () => P(['chat-models', 'chat-empty', 'chat-providers', 'chat-cli-models', 'chat-no-providers'].includes(view) ? [] : chatsFor()),
     GetChat: (id: number) => {
         if (hermesView) {
-            return P({chat: id === 3 ? hermesChatItem : (chatItems.find((c) => c.id === id) ?? hermesChatItem), messages: id === 3 ? hermesMessages : [], running: false, partial: '', partialSeq: 0, steps: [], usage: {inputTokens: 0, outputTokens: 0, costUsd: 0}})
+            return P({chat: id === 3 ? hermesChatItem : (chatItems.find((c) => c.id === id) ?? hermesChatItem), messages: id === 3 ? hermesMessages : (otherChats[id] ?? []), running: false, partial: '', partialSeq: 0, steps: [], usage: {inputTokens: 0, outputTokens: 0, costUsd: 0}})
         }
         if (view === 'chat-stream') {
             setTimeout(() => {
@@ -958,7 +1136,7 @@ const chatMocks = {
         }
         return P({
             chat: chatItems.find((c) => c.id === id) ?? chatItems[0],
-            messages: id === 3 ? chatMessages : [],
+            messages: id === 3 ? chatMessages : (otherChats[id] ?? []),
             running: false, partial: '', partialSeq: 0,
         })
     },
@@ -971,7 +1149,7 @@ const chatMocks = {
     SetChatModel: (...a: unknown[]) => (calls('SetChatModel', a), P(undefined)),
     ChooseChatAttachment: () => P(pickedAttachments),
     AddChatAttachmentData: (_ws: number, name: string) => P({...pickedAttachments[1], name}),
-    AddChatAttachment: () => P(pickedAttachments[1]),
+    AddChatAttachment: () => P(view === 'mesh-ai' ? meshAttachment : pickedAttachments[1]),
     RemoveChatAttachment: (...a: unknown[]) => (calls('RemoveChatAttachment', a), P(undefined)),
 }
 
@@ -1039,6 +1217,30 @@ const parentSource = () =>
         .replace(/color\("#ff7a1a"\)\n[^\n]*\n[^\n]*\n\n/, '')
 
 const agyStatus = {state: 'missing', agyPath: '/Users/maker/.local/bin/agy', command: `${scadlabBin} --mcp`, current: '', detail: ''}
+
+// ── Editar un STL (S13) ─────────────────────────────────────────────────────
+const meshReport = (path: string) => ({
+    format: /\.3mf$/i.test(path) ? '3mf' : 'stl',
+    triangles: sampleInfo.triangles, min: sampleInfo.min, max: sampleInfo.max, size: sampleInfo.size,
+    volumeMm3: sampleInfo.volumeMm3, areaMm2: sampleInfo.areaMm2,
+    // La malla de ejemplo es cerrada; la del diálogo de importar es una abierta (el aviso que hay que ver).
+    watertight: view !== 'mesh-import',
+    parts: [],
+})
+const meshEditBase = (file: string) => ({
+    ref: es ? 'refs/caja-rpi5.stl' : 'refs/rpi5-case.stl',
+    parent: file,
+    meshPath: `${meshDir}${fakeKey('mesh-edit')}.stl`,
+    report: meshReport('x.stl'),
+    fromImport: true,
+    model: {translate: [-39, -62, 0], rotate: [0, 0, 0], scale: [1, 1, 1], mirror: [false, false, false]},
+    color: '',
+})
+// El código que escribiría Go, resumido: la cabecera, las operaciones y el import. (El real: backend/meshedit.)
+const fakeEditCode = (scene: Record<string, unknown>) => {
+    const ops = ((scene.ops as string[]) ?? []).map((o, i) => `//   ${i + 1}. ${o}`).join('\n')
+    return `// @checkpoint parent=${selectedFile} desc="${es ? 'Edición de STL' : 'STL edit'}"\n// ${es ? 'Operaciones' : 'Operations'}:\n${ops}\n\nmodule modelo() {\n    translate([-39, -62, 0])\n        import("${scene.ref}", convexity = 10);\n}\ncolor("#9ca3af") modelo();\n`
+}
 
 const App_ = {
     // Bambu Studio detectado; abrir y mostrar no hacen nada (el banco no lanza apps).
@@ -1135,6 +1337,14 @@ const App_ = {
     },
     CancelRender: () => P(undefined),
     GetMeshInfo: () => P(shotModel.info),
+    // Editar un STL (S13). PrepareMeshEdit devuelve la malla cruda del ejemplo (enclosure.stl, con su esquina en el origen) y
+    // la pose con que se importó: centrada en la placa. Los demás bindings son lo que devolvería Go con datos inventados.
+    PrepareMeshEdit: (_id: number, file: string) => P(meshEditBase(file)),
+    PreviewMeshEdit: (_id: number, scene: Record<string, unknown>) => P(fakeEditCode(scene)),
+    ApplyMeshEdit: (...a: unknown[]) => (calls('ApplyMeshEdit', a), P(es ? '007-edicion-de-stl.scad' : '007-stl-edit.scad')),
+    ChooseModelFile: () => P('/Users/maker/Downloads/soporte-abierto.stl'),
+    AnalyzeModelFile: (path: string) => P(meshReport(path)),
+    ImportModel: (...a: unknown[]) => (calls('ImportModel', a), P({file: es ? '007-soporte-abierto.scad' : '007-open-bracket.scad', ref: 'refs/soporte-abierto.stl', report: meshReport('x.stl'), warnings: []})),
     // Partes por color de S7 (lo que devolvería backend/parts) y su estimación,
     // con la misma fórmula que backend/estimate.
     GetModelParts: (_id: number, file: string) => {
@@ -1268,7 +1478,7 @@ const App_ = {
             {id: 'opencode', kind: 'cli', name: 'opencode', command: 'opencode', config: {}, enabled: true, sortOrder: 2},
             {id: 'codex', kind: 'cli', name: 'Codex', command: 'codex', config: {}, enabled: true, sortOrder: 3},
             {id: 'antigravity', kind: 'cli', name: 'Antigravity', command: 'agy', config: {}, enabled: true, sortOrder: 4},
-            {id: 'ollama', kind: 'ollama', name: 'Ollama', command: '', config: {baseUrl: 'http://localhost:11434', model: 'qwen3-coder:30b'}, enabled: view !== 'chat-empty', sortOrder: 5},
+            {id: 'ollama', kind: 'ollama', name: 'Ollama', command: '', config: {baseUrl: 'http://localhost:11434', model: 'qwen3-coder:30b'}, enabled: !noProviders, sortOrder: 5},
             {id: 'openai', kind: 'openai', name: 'OpenAI-compatible', command: '', config: {baseUrl: 'http://localhost:1234/v1', model: '', apiKeyEnv: 'OPENAI_API_KEY'}, enabled: false, sortOrder: 6},
             {id: 'anthropic', kind: 'anthropic', name: 'Anthropic API', command: '', config: {model: 'claude-sonnet-5-5', apiKeyEnv: 'ANTHROPIC_API_KEY'}, enabled: false, sortOrder: 7},
         ]),
@@ -1348,14 +1558,52 @@ const syncGL = window.setInterval(() => {
 // montar.
 // El editor (Monaco) también entra con lazy(): mismo motivo. El idioma va
 // antes, porque decide con qué textos carga Monaco sus widgets.
+// ── Chat solo, a un ancho dado (S12.b) ─────────────────────────────────────
+// El panel entra con lazy() como en la app (PanelHost): importarlo a secas adelantaba su montaje en las demás vistas y
+// cambiaba cuándo el dock termina de repartir el alto (la foto salía con el panel de abajo pisando la barra de pestañas).
+const ChatPanel = lazy(() => import('./components/chat/ChatPanel'))
+// chat-narrow (360 px) y chat-w320/480/720/1200: el panel del chat sin el resto de la app, de ese ancho en la
+// ventana, para ver cómo se pliega su barra y para que uishot-fit.sh compruebe que ni la barra ni la página se
+// desbordan. El ancho se fija en el contenedor y no se pide a la ventana: Chrome headless no baja de ~500 px de
+// ancho de ventana, así que un panel de 320 px no se puede probar achicando la ventana.
+function ChatHarness() {
+    return (
+        <div style={{width: chatWidth}} className="h-full bg-surface text-fg">
+            <Suspense fallback={null}>
+                <ChatPanel workspaceId={1} currentFile={selectedFile} onCheckpointCreated={() => {}} />
+            </Suspense>
+            <ConfirmHost title="ScadLab" />
+            <VaultHost />
+            <Toaster />
+        </div>
+    )
+}
+const MeshEditor = lazy(() => import('./components/meshedit/MeshEditor'))
+// mesh-edit-w*: el editor de STL solo, de ese ancho. La sesión se abre antes de montarlo, como hace RenderPanel.
+function MeshHarness() {
+    return (
+        <div style={{width: meshWidth}} className="h-full bg-surface text-fg">
+            <Suspense fallback={null}>
+                <MeshEditor workspaceId={1} bed={{x: 180, y: 180, z: 180}} swatches={settings.swatches} shot={cfg.shot?.meshEdit} onApplied={() => {}} />
+            </Suspense>
+            <ConfirmHost title="ScadLab" />
+            <Toaster />
+        </div>
+    )
+}
+if (chatHarness || meshHarness) {
+    setPlatform(platform)
+    applyTheme(theme)
+    applyAppearance({...APPEARANCE_DEFAULTS, uiScale: scale})
+}
+
 setLanguage(lang)
-Promise.all([import('./components/viewer/Viewer'), import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadSkillCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
+Promise.all([import('./components/viewer/Viewer'), import('./components/meshedit/MeshEditor'), loadRawMesh(`${meshDir}${fakeKey('mesh-edit')}.stl`),  import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadSkillCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
     .catch(() => {})
+    .then(() => (meshHarness ? prepareSession(1, selectedFile) : null))
     .then(() =>
         createRoot(document.getElementById('root')!).render(
-            <StrictMode>
-                <App shot={cfg.shot} />
-            </StrictMode>,
+            <StrictMode>{chatHarness ? <ChatHarness /> : meshHarness ? <MeshHarness /> : <App shot={cfg.shot} />}</StrictMode>,
         ),
     )
 
@@ -1367,6 +1615,18 @@ Promise.all([import('./components/viewer/Viewer'), import('./components/terminal
 ;(window as unknown as {__proj: unknown}).__proj = {editorSession, editorCommands, selectPart}
 // Para las pruebas con CDP del chat: emitir un evento de Go y leer lo que llamó la interfaz.
 ;(window as unknown as {__emit: typeof emit}).__emit = emit
+
+// vh: alto de la ventana pedida (UISHOT… H en uishot.sh). Chrome headless da la página con 87 px menos de alto
+// mientras corre y la agranda al fotografiar: el dock se reacomoda en ese último instante y lo que está en
+// `position: fixed` y se midió antes (un desplegable abierto) queda unos píxeles fuera de lugar. Con el alto fijado
+// desde el principio no hay reacomodo.
+const pinH = Number(q.get('vh'))
+if (pinH > 0) {
+    for (const el of [document.documentElement, document.body, document.getElementById('root')!]) el.style.height = `${pinH}px`
+    // Y lo que mide `window.innerHeight` (el espacio que ven los desplegables para acotarse a la ventana) es el alto de
+    // la foto, no los 87 px menos de mientras corre.
+    Object.defineProperty(window, 'innerHeight', {get: () => pinH, configurable: true})
+}
 
 // Guard de desplazamiento igual que la app real (main.tsx).
 installScrollGuard()
@@ -1470,6 +1730,27 @@ if (view === 'vault-create' || view === 'vault-unlock') {
     }, 150)
 }
 
+// chat-providers: se abre el selector de proveedor; chat-cli-models: el de modelos de un CLI;
+// settings-import-minitools: el botón «Importar servidores de mini-tools» (abre la vista previa).
+const clickParam = q.get('click')
+const CLICK_ONE: Record<string, string> = {
+    'chat-providers': '[data-testid="provider-picker"]',
+    'chat-cli-models': '[data-testid="model-picker"]',
+    'settings-import-minitools': '[data-testid="import-minitools"]',
+}
+if (clickParam || CLICK_ONE[view]) {
+    let tries = 0
+    const click = window.setInterval(() => {
+        const btn = document.querySelector<HTMLElement>(clickParam || CLICK_ONE[view])
+        if (btn && !btn.hasAttribute('disabled')) {
+            // Un respiro: el selector se abre cuando ya llegaron la lista de proveedores y la de modelos y el dock
+            // terminó de acomodarse (un desplegable abierto antes queda unos píxeles más arriba que la barra).
+            window.setTimeout(() => btn.click(), Math.max(1200, 5000 - performance.now()))
+            window.clearInterval(click)
+        } else if (++tries > 100) window.clearInterval(click)
+    }, 100)
+}
+
 if (view === 'settings-providers' || view === 'chat-models') {
     const sel = view === 'settings-providers' ? ['ollama', 'srv-2b7e6d4a1c58'].map((id) => `[data-server="${id}"] [data-testid="server-test"]`) : ['[data-testid="model-picker"]']
     let tries = 0
@@ -1489,6 +1770,9 @@ if (view === 'chat-attachments' || view === 'chat-conversations') {
     let stage = 0
     const run = window.setInterval(() => {
         tries++
+        // El dock termina de repartir el alto un instante después de montar: un desplegable abierto antes se
+        // posiciona sobre una barra que todavía no está en su sitio definitivo.
+        if (performance.now() < 5000) return
         if (view === 'chat-attachments') {
             if (stage === 0) {
                 const btn = document.querySelector<HTMLElement>('[data-testid="chat-attach"]')
@@ -1511,7 +1795,14 @@ if (view === 'chat-attachments' || view === 'chat-conversations') {
                 sw.click()
                 stage = 1
             }
-        } else {
+        } else if (stage === 1) {
+            // La búsqueda mira título y contenido: «tapa» está en dos títulos y en lo que dijo un tercer chat.
+            const box = document.querySelector<HTMLInputElement>('[data-testid="chat-search"]')
+            if (box) {
+                typeInto(box, es ? 'tapa' : 'lid')
+                stage = 2
+            }
+        } else if (document.querySelectorAll('[data-conversations] [role="option"]').length >= 3) {
             const rename = document.querySelectorAll<HTMLElement>('[data-testid="chat-rename"]')[1]
             if (rename) {
                 rename.click()
@@ -1573,10 +1864,40 @@ if (q.get('keytest') === '1') {
 // El documento no puede medir más que la ventana ni estar desplazado; con
 // poke=1 antes se le provoca el desplazamiento que lo rompía.
 const poke = q.get('poke') === '1'
+// chat-w*: con poke=1 se abren, uno tras otro, el selector de proveedor, el de modelo, el del modo, el menú «…» y la lista
+// de conversaciones, y se anota dónde quedó cada desplegable: uishot-fit.sh falla si alguno se sale de la ventana.
+const popRects: Record<string, number[] | null> = {}
+if (chatHarness && poke) {
+    ;(window as unknown as {__popRects: typeof popRects}).__popRects = popRects
+    const ids = ['provider-picker', 'model-picker', 'mode-control', 'chat-more', 'chat-switcher']
+    let k = 0
+    const next = () => {
+        if (k >= ids.length) {
+            popRects.done = [1]
+            return
+        }
+        const id = ids[k++]
+        const btn = document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+        if (!btn) {
+            popRects[id] = null // este ancho no lo muestra (el modo pasa al menú «…» en un panel muy angosto)
+            next()
+            return
+        }
+        btn.click()
+        window.setTimeout(() => {
+            const pop = [...document.body.children].find((el) => (el.matches('[role="dialog"]:not(dialog)') || el.matches('[role="menu"]')) && getComputedStyle(el).visibility === 'visible')
+            const r = pop?.getBoundingClientRect()
+            popRects[id] = r ? [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] : [-1, -1, -1, -1]
+            document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}))
+            window.setTimeout(next, 120)
+        }, 350)
+    }
+    window.setTimeout(next, 900)
+}
 // Los contenedores con desplazamiento vertical de la barra lateral (las dos listas), elegidos por su
 // estilo y no por data-lock: el chequeo no puede depender de la marca que debe comprobar.
 const sideLists = () =>
-    [...(document.querySelector('aside')?.children ?? [])].filter((c): c is HTMLElement => c instanceof HTMLElement && ['auto', 'scroll', 'hidden'].includes(getComputedStyle(c).overflowY) && c.tagName === 'DIV' && c.scrollHeight > 0 && !c.className.includes('h-px'))
+    meshHarness ? [] : [...(document.querySelector('aside')?.children ?? [])].filter((c): c is HTMLElement => c instanceof HTMLElement && ['auto', 'scroll', 'hidden'].includes(getComputedStyle(c).overflowY) && c.tagName === 'DIV' && c.scrollHeight > 0 && !c.className.includes('h-px'))
 let pokes = 0
 const report = () => {
     const d = document.documentElement
@@ -1634,7 +1955,7 @@ const report = () => {
             .map((el) => el.tagName.toLowerCase() + (el.dataset.lock ? `[${el.dataset.lock}]` : '')),
         sideBoxes: sideLists().map((el) => ({sw: el.scrollWidth, cw: el.clientWidth, sl: el.scrollLeft})),
         sideTitleLeft: (() => {
-            const r = document.querySelector('aside span')?.getBoundingClientRect()
+            const r = meshHarness ? undefined : document.querySelector('aside span')?.getBoundingClientRect()
             return r ? Math.round(r.left) : null
         })(),
         toggleLeft: (() => {
@@ -1642,6 +1963,23 @@ const report = () => {
             return r ? Math.round(r.left) : null
         })(),
         platform,
+        // Chat (S12.b): la barra superior es de una sola línea y no puede tener contenido más ancho que su caja; tampoco
+        // la lista de mensajes ni el panel entero. `popRects` es dónde quedó cada desplegable (solo con poke=1).
+        // Un chat minimizado o aparcado (ancho 0 o la franja de un grupo minimizado) no se dibuja: no se mide.
+        chatBoxes: [...document.querySelectorAll<HTMLElement>('[data-chat-header], [data-chat-scroll], [data-font-area="chat"]')]
+            .filter(() => (document.querySelector<HTMLElement>('[data-font-area="chat"]')?.clientWidth ?? 0) >= 100)
+            .map((el) => ({
+                name: el.dataset.chatHeader !== undefined ? 'barra' : el.dataset.chatScroll !== undefined ? 'mensajes' : 'panel',
+                sw: el.scrollWidth,
+                cw: el.clientWidth,
+            })),
+        // Editor de STL (S13): la barra, el panel lateral, el pie y el editor entero no pueden tener contenido más ancho que su caja.
+        meshBoxes: [...document.querySelectorAll<HTMLElement>('[data-meshedit-toolbar], [data-meshedit-footer], [data-meshedit-side], [data-meshedit-root]')].map((el) => ({
+            name: el.dataset.meshedit !== undefined ? 'editor' : el.hasAttribute('data-meshedit-toolbar') ? 'barra' : el.hasAttribute('data-meshedit-footer') ? 'pie' : el.hasAttribute('data-meshedit-side') ? 'panel' : 'editor',
+            sw: el.scrollWidth,
+            cw: el.clientWidth,
+        })),
+        popRects: chatHarness && poke ? popRects : null,
         footerBottom: bar ? Math.round(bar.bottom) : null,
         footerRight: bar ? Math.round(bar.right) : null,
     })

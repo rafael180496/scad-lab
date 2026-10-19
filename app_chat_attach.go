@@ -357,14 +357,23 @@ func (a *App) attachModel(w store.Workspace, src, name, mime string, size int64)
 	if _, err := a.prepareStaging(); err != nil {
 		return hermes.Attachment{}, err
 	}
-	rel, err := refmodel.CopyToRefs(w.Path, src)
-	if err != nil {
-		return hermes.Attachment{}, err
+	// Un modelo que ya está en refs/ del workspace (lo adjunta «Modificar con IA»
+	// tras PrepareMeshEdit) se usa tal cual: copiarlo dejaría un refs/x-2.stl
+	// duplicado, y quitar el chip no debe borrar un archivo que no creó el chat.
+	rel, owned := existingRef(w.Path, src), false
+	if rel == "" {
+		var err error
+		if rel, err = refmodel.CopyToRefs(w.Path, src); err != nil {
+			return hermes.Attachment{}, err
+		}
+		owned = true
 	}
 	abs := filepath.Join(w.Path, filepath.FromSlash(rel))
 	report, err := refmodel.Analyze(abs)
 	if err != nil {
-		_ = os.Remove(abs)
+		if owned {
+			_ = os.Remove(abs)
+		}
 		return hermes.Attachment{}, i18n.Errorf(i18n.Msg{ES: "no se pudo leer %q como modelo 3D: %w", EN: "could not read %q as a 3D model: %w"}, name, err)
 	}
 	att := hermes.Attachment{
@@ -380,6 +389,23 @@ func (a *App) attachModel(w store.Workspace, src, name, mime string, size int64)
 	} else {
 		log.Printf("scadlab: vista previa de %s: %v", rel, perr)
 	}
-	a.chatSvc().attachments.Add(&hermes.Pending{Attachment: att, WorkspaceID: w.ID, RefAbs: abs, Owned: true, Preview: preview})
+	a.chatSvc().attachments.Add(&hermes.Pending{Attachment: att, WorkspaceID: w.ID, RefAbs: abs, Owned: owned, Preview: preview})
 	return att, nil
+}
+
+// existingRef devuelve "refs/<nombre>" si src es un archivo que ya vive
+// directamente en <ws>/refs/ (comparando rutas reales, sin enlaces), o "".
+func existingRef(wsDir, src string) string {
+	refs, err := filepath.EvalSymlinks(filepath.Join(wsDir, "refs"))
+	if err != nil {
+		return ""
+	}
+	real, err := filepath.EvalSymlinks(src)
+	if err != nil {
+		return ""
+	}
+	if st, err := os.Stat(real); err != nil || !st.Mode().IsRegular() || filepath.Dir(real) != refs {
+		return ""
+	}
+	return "refs/" + filepath.Base(real)
 }

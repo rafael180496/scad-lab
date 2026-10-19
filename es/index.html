@@ -362,6 +362,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li><a href="#visor-modos">Modos de vista y cámaras</a></li>
     <li><a href="#visor-medir">Medir una pieza: volumen, peso y costo</a></li>
     <li><a href="#visor-color">Colores, captura y vista dividida</a></li>
+    <li><a href="#editar-stl">Editar un STL</a></li>
   </ul>
 
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>Editor</button>
@@ -608,7 +609,7 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
 
   <h2 id="requisitos--agentes">Agentes de IA (opcionales)</h2>
   <p>ScadLab no trae su propio modelo: usa los CLIs que ya tengas instalados y con sesión iniciada para la
-  <a href="#ia-agentes">terminal</a>, y los servidores de modelos que habilites para el <a href="#ia-hermes">chat</a>.
+  <a href="#ia-agentes">terminal</a> y el <a href="#ia-hermes">chat</a> (en el chat aparecen solos en el selector de proveedor), y los servidores de modelos que habilites para el chat.
   Detecta cualquiera de estos:</p>
   <div class="tablewrap"><table>
     <tr><th>Agente</th><th>Qué necesitas</th></tr>
@@ -1089,6 +1090,93 @@ color("SteelBlue") difference() {
   Iso a la izquierda y Abajo a la derecha, para ver la forma y la cara de apoyo a la vez. Haz clic en una de las
   dos para activarla (queda con marco naranja): la barra y el teclado actúan sobre la activa, y cada una tiene su
   propia proyección. La <strong>×</strong> de la derecha la cierra.</p>
+</article>
+
+<article class="topic" id="editar-stl" data-title="Editar un STL">
+  <h1>Editar un STL <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Trae un modelo STL, 3MF u OBJ, muévelo, córtalo y agrégale piezas o agujeros —a mano o pidiéndoselo a la IA— sin tocar nunca el archivo original.</p>
+
+  <h2 id="editar-stl--principio">El archivo no se toca: cada edición es un checkpoint</h2>
+  <p>El STL vive intacto en la carpeta <code>refs/</code> del workspace. Cada cambio es <strong>código OpenSCAD en un
+  checkpoint nuevo</strong> que hace <code>import("refs/pieza.stl")</code> y le aplica las operaciones. Por eso una edición
+  queda en el <a href="#checkpoints-arbol">árbol</a> con su padre, se deshace volviendo al checkpoint anterior, se
+  renderiza con OpenSCAD o con el motor integrado y se <a href="#imprimir-exportar">exporta a STL o 3MF</a> como cualquier otro.</p>
+
+  <h2 id="editar-stl--importar">Importar un modelo <span class="badge ok">Disponible</span></h2>
+  <p>Hay dos caminos: el botón <strong>Importar STL/3MF/OBJ…</strong> de la barra lateral (junto a los botones de
+  checkpoints) o <strong>arrastrar el archivo a la ventana</strong>. Antes de traerlo, un diálogo analiza el archivo y te
+  muestra sus medidas, los triángulos, el volumen, si la malla es <strong>cerrada</strong> y, en un 3MF, sus colores.
+  También te avisa de lo que importa para editarlo: una malla abierta, una de más de 500 000 triángulos, un 3MF con varios
+  colores (se aplana en una sola malla y los pierde) o una pieza que no cabe en la placa de tu impresora.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/mesh-import.png" alt="Diálogo «Importar un modelo 3D» sobre la ventana de ScadLab: el archivo soporte-abierto.stl con su tamaño 78 × 124 × 27,6 mm, 4176 triángulos, la etiqueta «Abierta» en ámbar y un aviso de que cortarla o perforarla fallará; la casilla «Centrar y apoyar en la placa» marcada y el botón Importar" loading="lazy"><figcaption>El diálogo de importación: medidas, el aviso de <strong>malla abierta</strong> y «Centrar y apoyar en la placa», marcado por defecto.</figcaption></figure>
+  <p>«Centrar y apoyar en la placa» (marcado por defecto) agrega un <code>translate()</code> al checkpoint base: el modelo
+  queda en el centro de la placa y apoyado en Z = 0, y el archivo original no cambia. Un 3MF u OBJ se convierte a STL en
+  <code>refs/</code> (el original queda al lado). Al importar, el checkpoint nuevo es una <strong>raíz</strong> del árbol y
+  queda seleccionado.</p>
+
+  <h2 id="editar-stl--modo">El modo Editar</h2>
+  <p>El botón <strong>Editar</strong> de la barra del visor abre el modo de edición sobre el checkpoint elegido, sea una
+  importación o un diseño tuyo (de un diseño se congela la malla ya renderizada; <strong>los colores de un checkpoint
+  multicolor se pierden</strong> en esa base, y se recolorea por pieza). La vista previa es inmediata.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/mesh-edit.png" alt="Modo Editar del visor: arriba la barra de herramientas (Mover, Rotar, Escalar, ajuste a pasos, espejar X Y Z, Centrar, Apoyar, Cara, Cortar y piezas), la caja de ejemplo con el gizmo de mover en el centro y un bloque naranja encima, las medidas abajo a la izquierda y, a la derecha, las propiedades del modelo con la pila de seis operaciones" loading="lazy"><figcaption>El modo Editar: el gizmo de <strong>Mover</strong> sobre el modelo, sus <strong>medidas en vivo</strong> y, a la derecha, las propiedades y la <strong>pila de operaciones</strong>.</figcaption></figure>
+  <ul>
+    <li><strong>Mover, Rotar y Escalar</strong> (<kbd>W</kbd>, <kbd>E</kbd>, <kbd>R</kbd>): arrastra las flechas o los anillos del gizmo
+    o escribe los valores en mm y grados en <strong>Propiedades</strong>. El cubo central de Escalar escala por igual; las
+    flechas, por eje. El gizmo trabaja sobre el <strong>centro de la caja</strong> del modelo, no sobre el origen del archivo
+    (que en un STL suele caer lejos de la pieza).</li>
+    <li><strong>Ajuste a pasos</strong> (el imán): 1 mm, 15° y 0,1 por defecto; los cambias en Propiedades.</li>
+    <li><strong>Medidas en vivo</strong>: la caja de la selección y de todo el conjunto, y la altura del punto más bajo.</li>
+    <li><strong>Espejar</strong> en X, Y o Z (sobre los ejes del archivo; el centro de la caja no se mueve),
+    <strong>Centrar</strong> en la placa, <strong>Apoyar</strong> en la placa (el punto más bajo queda en Z = 0) y
+    <strong>Cara</strong>: haces clic en una cara del modelo y gira hasta dejarla contra la placa.</li>
+    <li><strong>Color</strong> del modelo y de cada pieza que agregues.</li>
+  </ul>
+
+  <h2 id="editar-stl--cortar">Cortar con un plano</h2>
+  <p>El botón <strong>Cortar</strong> crea un plano por el centro del modelo, con su propio gizmo para moverlo e inclinarlo
+  (o con el punto y la normal escritos, con atajos <em>Horizontal</em>, <em>Vertical X</em> e <em>Vertical Y</em>). La flecha del plano
+  marca el lado de «arriba». Eliges <strong>qué se queda</strong>: lo de arriba, lo de abajo o <strong>Partir</strong> en dos, y en ese
+  caso las dos mitades <strong>como objetos</strong> separados en X (para imprimirlas aparte) o <strong>como colores</strong> en
+  su sitio (para un 3MF multicolor), con un selector de color por mitad.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/mesh-cut.png" alt="Modo Editar con el plano de corte: la caja partida a media altura en dos colores, la mitad de arriba naranja y la de abajo azul, con la flecha del plano; a la derecha, las propiedades del plano de corte con «Partir» y «Colores» elegidos y los selectores de color de las dos mitades" loading="lazy"><figcaption>Un plano de corte que <strong>parte la caja en dos colores</strong>: la vista previa recorta lo que se ve sin tocar la malla.</figcaption></figure>
+
+  <h2 id="editar-stl--piezas">Cubo, cilindro, esfera y texto: unión o agujero</h2>
+  <p>Con <strong>Unión</strong> o <strong>Agujero</strong> elegido, los botones de cubo, cilindro, esfera y texto agregan una pieza en el centro
+  del modelo. Cada una tiene su gizmo, sus medidas (X·Y·Z, diámetro y alto, tamaño de letra y extrusión), su color y su
+  modo, que se cambia después. Un <strong>agujero</strong> se resta de todo lo que toca y en la vista se ve como un volumen
+  <strong>rojo y translúcido</strong>: es una vista previa; el resultado real es el render al aplicar.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/mesh-hole.png" alt="Modo Editar con un cilindro como agujero: un volumen rojo translúcido atraviesa la caja; a la derecha, las propiedades del cilindro con el modo Agujero, su diámetro de 14 mm y alto de 40 mm" loading="lazy"><figcaption>Un <strong>cilindro como agujero</strong>, en rojo translúcido, con su diámetro y su alto.</figcaption></figure>
+
+  <h2 id="editar-stl--pila">La pila de operaciones y deshacer</h2>
+  <p>Cada cosa que haces queda en la <strong>pila</strong> con una etiqueta legible («Mover el modelo a (−24, −62, 0) mm»,
+  «Agregar Cilindro 1 como agujero»…): esas etiquetas van como comentarios al código del checkpoint. Varios movimientos
+  seguidos del mismo objeto se funden en uno. <kbd>⌘Z</kbd> y <kbd>⇧⌘Z</kbd> (<kbd>Ctrl+Z</kbd> y <kbd>Ctrl+Shift+Z</kbd> en
+  Windows) deshacen y rehacen, y un clic en un paso vuelve a él; los pasos tachados se pueden rehacer. Los atajos solo
+  actúan con el foco dentro del modo Editar, así que no chocan con los del editor de código.</p>
+
+  <h2 id="editar-stl--aplicar">Ver código, Aplicar y Descartar</h2>
+  <p><strong>Ver código</strong> muestra el OpenSCAD que se guardaría, sin escribir nada. <strong>Aplicar</strong> pide un rótulo
+  opcional y crea el checkpoint nuevo, hijo del que editabas, y lo elige para que se renderice. <strong>Descartar</strong> (o
+  <kbd>Esc</kbd>) sale sin dejar nada, con confirmación si ya hiciste cambios; cambiar de checkpoint o cerrar el proyecto con
+  una edición a medias pregunta igual. El modo Editar <strong>no se recuerda</strong> al cerrar la app.</p>
+
+  <h2 id="editar-stl--abierta">Mallas abiertas</h2>
+  <p>Una malla que no es cerrada se puede mover, rotar, escalar y espejar, pero <strong>cortarla o perforarla falla</strong> en
+  OpenSCAD («mesh is not closed»). El visor muestra un aviso mientras editas y, si la edición corta o perfora, ScadLab te
+  pregunta antes de aplicar. Lo más sencillo es reparar la malla antes de traerla.</p>
+
+  <h2 id="editar-stl--ia">Modificar con IA</h2>
+  <p>En el menú de un checkpoint (clic derecho) y en la barra del modo Editar, <strong>Modificar con IA</strong> abre el chat
+  con el modelo ya adjunto —con su informe y su vista previa— y «Modifica este modelo: » escrito en la caja de mensaje, para que
+  termines la frase. Responde el proveedor que tengas elegido, <a href="#ia-hermes">Hermes o un CLI</a>, con la
+  herramienta <code>import_mesh</code> y la skill <code>openscad-stl-editing</code>. Lo que no hayas aplicado en el modo Editar no
+  viaja: se adjunta el modelo tal como está guardado.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/mesh-ai.png" alt="Panel Chat con un chat nuevo: el modelo caja-rpi5.stl adjunto como chip con su vista previa y la caja de mensaje con el texto «Modifica este modelo:» y el cursor al final" loading="lazy"><figcaption><strong>Modificar con IA</strong>: el chat se abre con el STL adjunto y un texto sugerido.</figcaption></figure>
+
+  <h2 id="editar-stl--panel">En un panel angosto</h2>
+  <p>La barra de herramientas pasa a solo íconos y se envuelve en varias líneas, el panel lateral se vuelve un cajón con
+  pestañas (Propiedades y Pila) bajo el visor y las medidas se reducen a la de lo seleccionado: nada se corta ni hay
+  desplazamiento horizontal.</p>
 </article>
 
 <!-- ============================================================== EDITOR -->
@@ -1675,18 +1763,31 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
 
 <article class="topic" id="ia-hermes" data-title="Hermes: el chat con herramientas y los proveedores de IA">
   <h1>Hermes: el chat con herramientas y los proveedores de IA</h1>
-  <p class="lead">La pestaña <strong>Chat</strong> conversa con un modelo que tú eliges —local o en la nube— y, con
-  <strong>Agente</strong> encendido, ese modelo usa las herramientas de ScadLab: <strong>crea un checkpoint, lo renderiza, lo mira, lo mide
-  y lo corrige solo</strong> hasta que la pieza queda como la pediste. A ese agente lo llamamos Hermes.</p>
+  <p class="lead">La pestaña <strong>Chat</strong> conversa con el proveedor que tú eliges —un <strong>CLI de IA que ya tienes instalado</strong> (Claude Code, Codex,
+  Antigravity, OpenCode) o un <strong>servidor de modelos</strong>, local o en la nube— y, en modo <strong>Agente</strong>, ese proveedor usa las herramientas de ScadLab:
+  <strong>crea un checkpoint, lo renderiza, lo mira, lo mide y lo corrige solo</strong> hasta que la pieza queda como la pediste. Con un servidor de modelos, a ese agente lo llamamos Hermes.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/chat.png" alt="Panel Chat con el servidor OpenRouter y el modelo claude-sonnet: la respuesta muestra cuatro tarjetas de paso (crear checkpoint, renderizar, mirar el modelo con su imagen y medir), el texto final y debajo los tokens y el costo" loading="lazy"><figcaption>Un turno de Hermes: sus pasos como tarjetas (la de <em>Mirar el modelo</em> con la imagen que vio) y, debajo, la respuesta final con sus tokens y su costo.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/chat.png" alt="Panel Chat sobre OpenRouter: la barra de una línea con el título de la conversación, el proveedor con su latencia de 240 ms, el modelo y el modo Agente; debajo cuatro tarjetas de paso (crear checkpoint, renderizar con los datos de la malla, mirar el modelo con su imagen y medir), cada una con el enlace a su checkpoint, y al pie el contador de contexto" loading="lazy"><figcaption>Un turno en modo Agente: la barra de arriba, los pasos como tarjetas —con el enlace a su checkpoint, los datos de la malla y la imagen que el modelo vio— y, bajo la caja, el modo, los atajos y el contador de contexto.</figcaption></figure>
 
-  <div class="note"><span class="lbl">Chat o terminal</span><p>Hermes trabaja dentro de ScadLab: crea checkpoints, renderiza y mide sin que copies nada.
+  <div class="note"><span class="lbl">Chat o terminal</span><p>El chat trabaja dentro de ScadLab: crea checkpoints, renderiza y mide sin que copies nada, y la conversación se guarda por proyecto.
   El <a href="#ia-agentes">agente en la terminal</a> (Claude Code, opencode, Codex, Antigravity) sigue siendo la forma de tener la
   experiencia completa de un CLI; los dos usan las mismas <a href="#ia-mcp">herramientas</a>.</p></div>
 
+  <h2 id="ia-hermes--cli">Tus CLIs: se detectan solos</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-providers.png" alt="Selector de proveedor abierto sobre un chat nuevo: los CLIs detectados —Claude Code (elegido, con su check), Codex CLI, Antigravity CLI y OpenCode— y debajo el servidor MacOS · Ollama con 18 ms; todos con un punto verde sobre su ícono, y al final Agregar proveedor de IA…" loading="lazy"><figcaption>El selector de proveedor: los CLIs que ScadLab detectó, tus servidores con su latencia y, al final, el camino para agregar uno.</figcaption></figure>
+  <p>Claude Code, Codex, Antigravity y OpenCode <strong>aparecen solos</strong> en el selector si los tienes instalados: no hay nada que configurar ni una ruta que escribir.
+  ScadLab los busca en el <code>PATH</code>, en las rutas habituales y, en macOS, en el <code>PATH</code> de tu shell de login (una app gráfica no hereda el de la terminal).
+  Uno <strong>no instalado no aparece</strong>, y uno recién instalado se ve al abrir el selector, sin reiniciar. Cada CLI corre en la carpeta del workspace, con las
+  <a href="#ia-mcp">herramientas de ScadLab</a> conectadas, y sus pasos llegan al chat con las mismas tarjetas que usa Hermes; la conversación se retoma con la sesión del propio CLI.</p>
+  <ul>
+    <li><strong>Punto de estado</strong> sobre cada ícono: verde responde (un CLI, que está instalado; un servidor, que contesta), rojo no responde. Al lado del selector, una
+      <strong>píldora de latencia</strong> (<code>18 ms</code>) para los servidores, que se refresca sola cada minuto, al cambiar de proveedor y con un clic; si el servidor se cae, un aviso sobre la caja lo dice y deja reintentar.</li>
+    <li>Se maneja con el teclado: <kbd>↑</kbd> <kbd>↓</kbd> recorren, <kbd>Enter</kbd> elige y <kbd>Esc</kbd> cierra.</li>
+    <li><strong>Agregar proveedor de IA…</strong> abre Configuración → Proveedores de IA, donde también ves, de solo lectura, los <strong>CLIs detectados</strong> con su versión.</li>
+  </ul>
+
   <h2 id="ia-hermes--proveedores">Proveedores de IA: servidores y claves</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/settings-providers.png" alt="Configuración, pestaña Proveedores de IA: el panel Llavero de claves (recordado en este equipo, con los botones Cambiar contraseña, Olvidar este equipo y Restablecer) sobre cinco servidores (Ollama local, OpenRouter, Google Gemini, Anthropic y un LM Studio en la red), cada uno con su interruptor, su botón Probar y el resultado de la prueba" loading="lazy"><figcaption>Configuración → Proveedores de IA: el <a href="#ia-hermes--llavero">llavero de claves</a> arriba y después tantos servidores como quieras, cada uno con su prueba.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-providers.png" alt="Configuración, pestaña Proveedores de IA: el bloque de solo lectura CLIs detectados con Claude Code, Codex CLI, Antigravity CLI y OpenCode y su versión, el panel Llavero de claves y cinco servidores (MacOS · Ollama, OpenRouter, Google Gemini, Anthropic y un LM Studio en la red), cada uno con su interruptor y su botón Probar; abajo, Agregar servidor e Importar servidores de mini-tools" loading="lazy"><figcaption>Configuración → Proveedores de IA: los <strong>CLIs detectados</strong> (solo lectura), el <a href="#ia-hermes--llavero">llavero de claves</a> y tantos servidores como quieras, cada uno con su prueba.</figcaption></figure>
   <p>En <strong>Configuración → Proveedores de IA</strong> agregas los servidores con los que puede hablar el chat, varios de cada tipo. <strong>Agregar servidor</strong>
   ofrece atajos que ya traen la dirección: Ollama (local y remoto), LM Studio, llama.cpp, vLLM, OpenAI, <strong>OpenRouter</strong>,
   <strong>Google Gemini</strong>, Anthropic, Groq, DeepSeek, Mistral, Together, xAI o cualquier servidor <em>compatible con OpenAI</em>.</p>
@@ -1701,6 +1802,13 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
       si la definiste en <code>~/.zshrc</code>), sin ninguna contraseña.</li>
     <li>Los servidores que ya tenías de versiones anteriores se conservan, y tus chats viejos siguen abriendo.</li>
   </ul>
+
+  <h2 id="ia-hermes--importar">Importar tus servidores de mini-tools</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-import-minitools.png" alt="Diálogo Importar servidores de mini-tools sobre Configuración: la ruta donde se encontró mini-tools, la lista de tres servidores —Ollama del estudio y Groq marcados como nuevos, OpenRouter como ya existente— y el aviso de que las claves no se copian, con los botones Cancelar e Importar 2" loading="lazy"><figcaption>Primero la lista de lo que hay, después la confirmación: <strong>las claves no se copian</strong>.</figcaption></figure>
+  <p>Si ya tienes servidores en mini-tools, <strong>Importar servidores de mini-tools</strong> (junto a <em>Agregar servidor</em>) los trae en tres pasos: muestra la lista, te pide
+  confirmación y recién entonces los copia —nombre, tipo, dirección y modelo por defecto—. Los que ya existen en ScadLab (mismo nombre o misma dirección) se omiten.
+  ScadLab solo <strong>lee</strong> esos datos y nunca abre lo cifrado: <strong>las claves no se copian</strong>, así que cada servidor llega sin clave y la escribes de nuevo.
+  Si mini-tools no está en tu equipo, el diálogo lo dice y no hace nada.</p>
 
   <h2 id="ia-hermes--llavero">Contraseña maestra: el llavero de claves</h2>
   <p>La primera vez que guardas una clave de API, ScadLab te pide <strong>crear una contraseña maestra</strong>. Es la que cifra tus claves en este
@@ -1728,39 +1836,65 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   las claves y creas una contraseña nueva.</p></div>
 
   <h2 id="ia-hermes--empezar">Empezar un chat y elegir el modelo</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/chat-models.png" alt="Selector de modelo abierto con un buscador: modelos de OpenRouter con un ojo si ven imágenes y una llave si usan herramientas, más su ventana de contexto y su precio" loading="lazy"><figcaption>El selector de modelo busca, y marca cuáles ven imágenes (ojo) y cuáles usan herramientas (llave).</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-empty.png" alt="Chat nuevo con Claude Code en modo Solo consulta: el título «Piensa tu diseño con un modelo», los chips del proveedor, del modelo (Por defecto) y del modo, la explicación del modo y cuatro sugerencias de OpenSCAD en dos columnas" loading="lazy"><figcaption>Un chat nuevo dice con qué vas a hablar y propone cuatro pedidos; un clic rellena la caja de mensaje.</figcaption></figure>
   <ol class="steps">
-    <li>Abre la pestaña <strong>Chat</strong> y pulsa <strong>Chat nuevo</strong>.</li>
-    <li>Elige el <strong>servidor</strong> y luego el <strong>modelo</strong>: la lista sale del servidor, con un buscador. Cada modelo muestra si
+    <li>Abre la pestaña <strong>Chat</strong> y pulsa <strong>Chat nuevo</strong>. Verás el proveedor, el modelo y el modo con los que vas a hablar, y cuatro sugerencias
+      (<em>una caja con tapa a presión para un Raspberry Pi 5</em>, <em>copia la pieza de esta foto</em>…): un clic rellena la caja de mensaje, y la editas antes de enviar.</li>
+    <li>Elige el <strong>proveedor</strong> y luego el <strong>modelo</strong>: la lista sale del proveedor, con un buscador. En un servidor, cada modelo muestra si
       <strong>ve imágenes</strong> y si <strong>usa herramientas</strong> —cuando el servidor lo informa—, su ventana de contexto y, con los
-      proveedores que publican precios (OpenRouter), cuánto cuesta por millón de tokens. Si el servidor no lo lista, escribe el nombre a mano.</li>
-    <li>Escribe lo que quieres y envía con <kbd>Enter</kbd> (<kbd>Mayús+Enter</kbd> agrega una línea).</li>
+      proveedores que publican precios (OpenRouter), cuánto cuesta por millón de tokens. Si el proveedor no lo lista, escribe el nombre a mano.</li>
+    <li>Escribe lo que quieres y envía con <kbd>Enter</kbd> (<kbd>Mayús+Enter</kbd> agrega una línea; <kbd>⌘/Ctrl+Enter</kbd> también envía).</li>
   </ol>
-  <p>Puedes cambiar de servidor y de modelo <strong>a mitad de una conversación</strong>: el historial se conserva y el siguiente mensaje ya
+  <figure class="shot"><img src="../docs/screenshots/es/chat-cli-models.png" alt="Selector de modelo abierto con Antigravity CLI: la opción Por defecto, marcada, con la explicación «El que tenga configurado el CLI», y cinco modelos con su nombre —Gemini 4 Argon (High), Gemini 4 Argon (Low), Gemini 4 Flash, Claude Sonnet 5.5 (Thinking) y GPT-OSS 240B (Medium)— y su descripción" loading="lazy"><figcaption>Los modelos de un CLI los informa el propio CLI. <strong>Por defecto</strong> deja que use el que tenga configurado.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-models.png" alt="Selector de modelo abierto con un buscador: la opción Por defecto con el modelo predeterminado del servidor y los modelos de OpenRouter con un ojo si ven imágenes y una llave si usan herramientas, más su ventana de contexto y su precio" loading="lazy"><figcaption>En un servidor, el selector busca y marca cuáles modelos ven imágenes (ojo) y cuáles usan herramientas (llave).</figcaption></figure>
+  <p>Puedes cambiar de proveedor y de modelo <strong>a mitad de una conversación</strong>: el historial se conserva y el siguiente mensaje ya
   usa el nuevo. ScadLab recuerda el último que elegiste en cada proyecto.</p>
 
-  <h2 id="ia-hermes--agente">El modo Agente: el bucle de herramientas</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/chat-agent-steps.png" alt="Un turno con cinco pasos: el render de la tapa deslizante falla y su tarjeta se abre con la línea 14 y el código que dio el error, el modelo lo corrige en un checkpoint nuevo, renderiza otra vez y mira la vista previa" loading="lazy"><figcaption>El render falló: la tarjeta se abre con la línea y el código, el modelo lo corrige en un checkpoint <em>nuevo</em>, vuelve a renderizar y mira la imagen.</figcaption></figure>
-  <p>Con el interruptor <strong>Agente</strong> encendido, el modelo decide qué hacer: mira los checkpoints y la impresora, crea un checkpoint con el código
+  <h2 id="ia-hermes--panel">La barra del chat y los paneles angostos</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-narrow.png" alt="El chat en un panel de 360 píxeles: la barra de una sola línea con el contador de conversaciones, el título, el ícono del proveedor con su punto verde, el del modelo y el menú «…»; debajo los pasos de un CLI con sus tarjetas, que se acomodan en el ancho, y la caja de mensaje con el modo y el contador de contexto" loading="lazy"><figcaption>Un panel de 360 px: la barra sigue en una línea y los pasos de un CLI usan las mismas tarjetas.</figcaption></figure>
+  <p>La barra de arriba cabe siempre en <strong>una línea</strong>: el título de la conversación (haz clic para renombrarlo), el proveedor con su latencia, el modelo, el workspace y el modo.
+  Cuando el panel se achica, lo secundario se pliega: primero el chip del workspace y <em>Chat nuevo</em> pasan al menú <strong>«…»</strong>; después se esconde la latencia (el proveedor conserva su punto de estado) y el modo queda solo como ícono; y en un panel muy angosto
+  el proveedor y el modelo quedan como íconos con su descripción al pasar el cursor y el modo pasa también al menú. No hay scroll horizontal ni controles cortados desde unos 320 px hasta una ventana completa, y los desplegables nunca se salen de la ventana.</p>
+  <ul>
+    <li><strong>Caja de mensaje.</strong> Los atajos están a la vista bajo la caja: <kbd>Enter</kbd> envía, <kbd>Mayús+Enter</kbd> agrega una línea y <kbd>⌘/Ctrl+Enter</kbd> también envía.
+      Los adjuntos pendientes se ven sobre la caja y <strong>Detener</strong> muestra un reloj.</li>
+    <li><strong>Contador de contexto.</strong> Al lado de los atajos, los tokens <em>estimados</em> del borrador más la conversación (4 caracteres ≈ 1 token) contra la ventana del modelo, cuando el proveedor
+      la informa; se pone ámbar al 70 % y rojo al 90 %, y es la señal para empezar un chat nuevo. No cuenta las instrucciones del sistema ni los adjuntos.</li>
+  </ul>
+
+  <h2 id="ia-hermes--agente">Los modos: Solo consulta y Agente</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-agent-steps.png" alt="Un turno con cinco pasos: el render de la tapa deslizante falla y su tarjeta muestra, sin abrirla, la línea 14 con el código que dio el error; el modelo lo corrige en un checkpoint nuevo, renderiza otra vez —con el tamaño, los triángulos y «cerrada»— y mira la vista previa" loading="lazy"><figcaption>El render falló: la tarjeta muestra la línea y el código, el modelo lo corrige en un checkpoint <em>nuevo</em>, vuelve a renderizar y mira la imagen.</figcaption></figure>
+  <p>El modo se elige en la barra (y bajo la caja se lee qué permite). Con un <strong>CLI</strong> arranca en <strong>Solo consulta</strong>; con un servidor, en <strong>Agente</strong>. ScadLab recuerda el último de cada tipo.</p>
+  <div class="tablewrap"><table>
+    <tr><th></th><th>Solo consulta</th><th>Agente</th></tr>
+    <tr><td><strong>Con un CLI</strong></td><td>El CLI lee tu proyecto y usa las herramientas de lectura (listar y leer checkpoints, revisar, renderizar, medir, mirar). No crea checkpoints ni exporta.</td><td>Además crea checkpoints nuevos y exporta, y los renderiza y mira por ti.</td></tr>
+    <tr><td><strong>Con un servidor</strong></td><td>El modelo solo conversa y te propone código OpenSCAD: tú lo guardas como checkpoint.</td><td>El modelo usa las herramientas de ScadLab en un bucle hasta resolver el pedido (Hermes).</td></tr>
+  </table></div>
+  <p><strong>En ningún modo un CLI ejecuta comandos de shell</strong> ni se le da permiso para saltarse sus controles. En modo Agente, el modelo decide qué hacer: mira los checkpoints y la impresora, crea un checkpoint con el código
   <strong>completo</strong>, lo renderiza, lo mira desde una vista, lo mide y, si algo falla, lo corrige en <em>otro</em> checkpoint (nunca edita uno
   existente). También puede leer las skills del workspace e inspeccionar las <a href="#ia-hermes--adjuntos">referencias</a> que adjuntes. Los checkpoints
   que crea aparecen en el árbol como cualquier otro.</p>
   <ul>
-    <li><strong>Cada paso es una tarjeta</strong> con la herramienta, sus argumentos y su resultado; con un clic se pliega o se despliega el detalle.
-      Un render que falla se abre solo con la <strong>línea y el código que dio el error</strong>. La imagen que el modelo miró se ve en la tarjeta y se
-      amplía con un clic.</li>
+    <li><strong>Cada paso es una tarjeta</strong> con la herramienta y su estado. Sin abrirla ves el <strong>checkpoint</strong> al que se refiere —un enlace que lo selecciona en el árbol y lo abre en el editor y el visor—,
+      los datos de la malla de un render o una medición (tamaño, triángulos, si es cerrada, si cabe en la placa) y, si falla, la <strong>línea y el código que dio el error</strong>. La imagen que el modelo miró
+      se ve en la tarjeta y se amplía con un clic; un clic en la tarjeta despliega los argumentos y la respuesta cruda.</li>
     <li><strong>El modelo ve lo que dibuja</strong> si tiene visión; si no, solo recibe las medidas y ScadLab te lo avisa.</li>
-    <li><strong>Pasos</strong>: el tope de llamadas a herramientas por mensaje (de 1 a 30, 12 por defecto). Al llegar, el modelo resume lo que logró y se
+    <li><strong>Pasos</strong> (con un servidor): el tope de llamadas a herramientas por mensaje (de 1 a 30, 12 por defecto). Al llegar, el modelo resume lo que logró y se
       detiene; pídele que siga si falta algo.</li>
     <li><strong>Detener</strong> muestra un reloj y corta en el acto, incluso a mitad de una herramienta: lo que ya hizo se conserva.</li>
-    <li>Si el modelo <strong>no usa herramientas</strong>, el interruptor se apaga solo y lo explica; si el servidor las rechaza al primer intento, el chat
+    <li>Si el modelo <strong>no usa herramientas</strong>, «Agente» se apaga solo y lo explica; si el servidor las rechaza al primer intento, el chat
       sigue como texto con un aviso.</li>
   </ul>
 
-  <h2 id="ia-hermes--texto">El modo texto</h2>
-  <p>Con <strong>Agente</strong> apagado, el chat solo <strong>conversa</strong> (como en versiones anteriores): cada bloque de OpenSCAD trae
-  <strong>Copiar</strong> y, cuando terminó de llegar, <strong>Guardar como checkpoint</strong>, que crea un hijo del archivo abierto o, si no hay ninguno
-  abierto, del último checkpoint. Los bloques largos arrancan plegados.</p>
+  <h2 id="ia-hermes--texto">Código en las respuestas: guardarlo o abrirlo</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-code.png" alt="Una respuesta de texto en modo Solo consulta: una tabla de medidas con sus columnas alineadas, un título, una lista con una casilla marcada y otra sin marcar, un enlace y un bloque de OpenSCAD con los botones Copiar, Abrir en el editor y Guardar como checkpoint" loading="lazy"><figcaption>Las respuestas con formato —tablas, listas, enlaces— y cada bloque de OpenSCAD con sus tres botones.</figcaption></figure>
+  <p>Cada bloque de OpenSCAD trae <strong>Copiar</strong> y, cuando terminó de llegar, dos formas de llevarlo al proyecto (en un panel angosto los botones quedan como íconos con su descripción):</p>
+  <ul>
+    <li><strong>Guardar como checkpoint</strong> abre el diálogo para ponerle nombre y lo crea como hijo del archivo abierto o, si no hay ninguno abierto, del último checkpoint.</li>
+    <li><strong>Abrir en el editor</strong> hace lo mismo <em>sin preguntar</em> (el nombre sale de la cabecera del bloque), selecciona el checkpoint nuevo y muestra el panel Código.
+      Los checkpoints no se editan y el editor siempre muestra uno, así que «abrir» un bloque es guardarlo y abrirlo.</li>
+  </ul>
+  <p>Los bloques largos arrancan plegados. Los enlaces de una respuesta se abren en el navegador del sistema.</p>
 
   <h2 id="ia-hermes--adjuntos">Adjuntos: imágenes y modelos 3D</h2>
   <figure class="shot"><img src="../docs/screenshots/es/chat-attachments.png" alt="Compositor del chat con dos chips con miniatura sobre el texto: la foto de un croquis y un modelo STL con su vista previa, que dice refs/soporte-pared.stl" loading="lazy"><figcaption>Dos adjuntos listos para enviar: una foto y un STL (se copió a <code>refs/</code>).</figcaption></figure>
@@ -1773,21 +1907,22 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   <ul>
     <li>Cada adjunto es un <strong>chip con su miniatura</strong> y un botón para quitarlo. El tipo lo decide el <strong>contenido</strong> del archivo, no su nombre.</li>
     <li><strong>Sin visión</strong>: si el modelo informó que no ve imágenes, el chip lo dice y <strong>Enviar</strong> espera a que quites la imagen o elijas otro modelo.
-      Un modelo 3D siempre se envía: sin visión, solo sus medidas. Un servidor que no informa si su modelo ve imágenes nunca te lo impide.</li>
+      Un modelo 3D siempre se envía: sin visión, solo sus medidas. Un proveedor que no informa si su modelo ve imágenes nunca te lo impide.</li>
     <li><code>import("refs/pieza.stl")</code> sirve para un STL u OBJ de una sola pieza; un 3MF se reconstruye con primitivas a partir de sus medidas, porque no todas las
       versiones de OpenSCAD lo importan.</li>
     <li>El historial guarda el nombre, la miniatura y el informe de cada adjunto, <strong>no el archivo</strong>. Quitar un chip antes de enviar borra la copia que hizo en <code>refs/</code>.</li>
   </ul>
 
   <h2 id="ia-hermes--conversaciones">Conversaciones, tokens y costo</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/chat-conversations.png" alt="Lista de conversaciones del proyecto abierta: la primera con sus botones de renombrar y borrar y la segunda en renombrado en línea, con el campo seleccionado" loading="lazy"><figcaption>La lista de conversaciones: renombrar en línea (<kbd>Enter</kbd> guarda, <kbd>Esc</kbd> cancela) y borrar.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-conversations.png" alt="La lista de conversaciones abierta con «tapa» en el buscador: la primera conversación con sus botones de renombrar y borrar y la palabra resaltada en su título; la segunda en renombrado en línea, con el campo seleccionado; y una tercera que aparece porque lo que se dijo en ella menciona «tapa», con el fragmento resaltado" loading="lazy"><figcaption>La lista de conversaciones con búsqueda por título <em>y contenido</em>; renombrar en línea (<kbd>Enter</kbd> guarda, <kbd>Esc</kbd> cancela) y borrar.</figcaption></figure>
   <ul>
-    <li>Las conversaciones se guardan <strong>por proyecto</strong>. Al abrir ScadLab retomas la última. Desde la lista puedes <strong>renombrar</strong> una (hasta 120 letras) y
+    <li>Las conversaciones se guardan <strong>por proyecto</strong>. Al abrir ScadLab retomas la última. El buscador de la lista mira el <strong>título y lo que se dijo</strong> (desde 2 letras, en las 60 conversaciones
+      más recientes) y resalta la coincidencia. Puedes <strong>renombrar</strong> una (hasta 120 letras; también con un clic en el título de la barra) y
       <strong>borrarla</strong>, con confirmación: los checkpoints que guardaste desde ella no se tocan.</li>
-    <li>Debajo de cada respuesta ves los <strong>tokens</strong> del turno (entrada y salida) y, si el proveedor publica precios, el <strong>costo</strong>. Si el servidor no lo
+    <li>Debajo de cada respuesta ves los <strong>tokens</strong> del turno (entrada y salida) y, si el proveedor publica precios, el <strong>costo</strong>. Si el proveedor no lo
       informa, no se muestra ningún costo: un costo ausente no es «gratis».</li>
     <li>Tras reabrir la app el modelo <strong>recuerda la conversación</strong> (lo que escribiste, lo que contestó y las referencias que adjuntaste), pero no el detalle de sus pasos
-      anteriores: eso está en los checkpoints.</li>
+      anteriores: eso está en los checkpoints. Un CLI retoma, además, la sesión que él mismo guardó.</li>
   </ul>
 
   <h2 id="ia-hermes--contexto">Qué sabe el modelo de tu workspace</h2>
@@ -1799,10 +1934,10 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   </ul>
   <p>Además lleva instrucciones propias sobre las reglas de checkpoints, el color por pieza y el diseño para FDM. No ve nada más: ni tus otros archivos ni el visor.</p>
 
-  <h2 id="ia-hermes--sin-proveedor">Si no hay servidores habilitados</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/chat-empty.png" alt="Panel Chat sin servidores: el aviso «No hay ningún servidor de modelos habilitado» con el botón Abrir Proveedores de IA" loading="lazy"><figcaption>Sin servidores habilitados, el chat lo avisa y te lleva a Configuración → Proveedores de IA.</figcaption></figure>
-  <p>El chat lo avisa con un botón que abre Configuración → Proveedores de IA. Agrega o enciende un servidor, vuelve al panel y pulsa
-  <strong>Ya lo agregué</strong>.</p>
+  <h2 id="ia-hermes--sin-proveedor">Si no hay ningún proveedor</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-no-providers.png" alt="Panel Chat sin proveedores: el aviso «No hay ningún proveedor de IA disponible», que explica que los CLIs instalados se detectan solos y que un servidor se agrega en Configuración, con los botones Abrir Proveedores de IA y Ya instalé uno" loading="lazy"><figcaption>Sin ningún CLI instalado ni servidor habilitado, el chat lo avisa y te lleva a Configuración → Proveedores de IA.</figcaption></figure>
+  <p>El chat lo avisa con un botón que abre Configuración → Proveedores de IA. Instala un CLI o agrega y enciende un servidor, vuelve al panel y pulsa
+  <strong>Ya instalé uno</strong> para que lo vuelva a buscar.</p>
 </article>
 
 <article class="topic" id="ia-prompts" data-title="Cómo pedirle un modelo a la IA">
@@ -2250,10 +2385,10 @@ color("Black") label();                                    // texto que llena el
   guardar.</p>
 
   <h2 id="config-materiales--proveedores">Pestaña Proveedores de IA</h2>
-  <p>Aquí se agregan, prueban y encienden o apagan los <a href="#ia-hermes--proveedores">servidores de modelos del chat</a>: Ollama (local o en otra máquina),
+  <p>Arriba, un bloque de solo lectura, <strong>CLIs detectados</strong>, lista los <a href="#ia-hermes--cli">CLIs que ScadLab encontró</a> (Claude Code, Codex, Antigravity, OpenCode) con su versión: se detectan solos y no hace falta configurarlos. Debajo se agregan, prueban y encienden o apagan los <a href="#ia-hermes--proveedores">servidores de modelos del chat</a>: Ollama (local o en otra máquina),
   cualquier servidor compatible con OpenAI (LM Studio, vLLM, OpenRouter, Google Gemini…) y Anthropic, con atajos que ya traen la dirección.
   <strong>Probar conexión</strong> comprueba el servidor antes de guardar. La clave de API se guarda <strong>cifrada</strong>, con tu <a href="#ia-hermes--llavero">contraseña maestra</a> (el panel de arriba muestra su estado y
-  deja cambiarla, olvidar este equipo o restablecerla), o indicas el nombre de la variable de entorno que la tiene.</p>
+  deja cambiarla, olvidar este equipo o restablecerla), o indicas el nombre de la variable de entorno que la tiene. <strong>Importar servidores de mini-tools</strong> <a href="#ia-hermes--importar">copia los que ya tienes allí</a>, sin sus claves.</p>
 
   <h2 id="config-materiales--estimacion">Datos de la estimación</h2>
   <p>En la pestaña <strong>Impresión</strong>, junto al relleno, están los valores con los que se estima el peso y el costo
@@ -2428,6 +2563,12 @@ color("Black") label();                                    // texto que llena el
     <tr><td><kbd>W</kbd></td><td><kbd>W</kbd></td><td>Wireframe</td></tr>
     <tr><td><kbd>E</kbd></td><td><kbd>E</kbd></td><td>Aristas</td></tr>
     <tr><td><kbd>O</kbd></td><td><kbd>O</kbd></td><td>Ortográfica / perspectiva</td></tr>
+    <tr class="sect"><td colspan="3">Modo Editar (con el foco dentro del modo Editar)</td></tr>
+    <tr><td><kbd>W</kbd> / <kbd>E</kbd> / <kbd>R</kbd></td><td><kbd>W</kbd> / <kbd>E</kbd> / <kbd>R</kbd></td><td>Herramienta del gizmo: Mover / Rotar / Escalar</td></tr>
+    <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> (o <kbd>Ctrl+Y</kbd>)</td><td>Deshacer / rehacer la operación</td></tr>
+    <tr><td><kbd>⌫</kbd> / <kbd>Supr</kbd></td><td><kbd>Supr</kbd></td><td>Quitar la pieza seleccionada</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>7</kbd> y <kbd>F</kbd></td><td><kbd>1</kbd>–<kbd>7</kbd> y <kbd>F</kbd></td><td>Vistas y encuadrar, como en el visor</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td><td>Cancelar «Cara»; si no, descartar la edición (con confirmación si hay cambios)</td></tr>
     <tr class="sect"><td colspan="3">Esta ayuda</td></tr>
     <tr><td><kbd>/</kbd></td><td><kbd>/</kbd></td><td>Ir al buscador</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>↵</kbd></td><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd></td><td>Elegir y abrir un resultado</td></tr>

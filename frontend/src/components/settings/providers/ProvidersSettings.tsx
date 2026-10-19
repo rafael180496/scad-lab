@@ -12,6 +12,8 @@ import {confirmDialog} from '../../ui/Dialog'
 import {Toggle} from '../../ui/Field'
 import {toast} from '../../ui/Toast'
 import {useVaultStatus} from '../../vault/useVaultStatus'
+import {DetectedCLIs} from './DetectedCLIs'
+import {ImportMiniTools} from './ImportMiniTools'
 import {ProbeResult, type Probe} from './ProbeResult'
 import {ServerForm} from './ServerForm'
 import {serverIcon} from './presetIcons'
@@ -105,6 +107,8 @@ export function ProvidersSettings() {
 
     return (
         <section data-testid="providers" className="flex flex-col gap-3">
+            <DetectedCLIs />
+
             <p className="text-ui-12 leading-relaxed text-muted">{p.intro}</p>
 
             <VaultPanel status={vault.status} error={vault.error} />
@@ -187,18 +191,20 @@ export function ProvidersSettings() {
             {editor ? <ServerForm key={editor.server?.id ?? 'new'} server={editor.server} vault={vault.status} onSaved={onSaved} onCancel={() => setEditor(null)} /> : null}
 
             {!editor ? (
-                <Button
-                    data-testid="server-add"
-                    className="self-start"
-                    title={p.addHint}
-                    onClick={() => {
-                        setEditor({server: null})
-                        setError('')
-                    }}
-                >
-                    <Plus className="icon-ui-14" />
-                    {p.add}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        data-testid="server-add"
+                        title={p.addHint}
+                        onClick={() => {
+                            setEditor({server: null})
+                            setError('')
+                        }}
+                    >
+                        <Plus className="icon-ui-14" />
+                        {p.add}
+                    </Button>
+                    <ImportMiniTools onImported={reload} />
+                </div>
             ) : null}
         </section>
     )

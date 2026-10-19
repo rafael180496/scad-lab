@@ -52,6 +52,9 @@ type Props = {
     saved?: store.ViewerState
     /** Se guardó el estado del visor: la configuración en memoria tiene que verlo. */
     onViewerSaved?: (v: store.ViewerState) => void
+    /** Entrar al modo «Editar» (S13); sin esto, la barra no ofrece el botón. */
+    onEdit?: () => void
+    editBusy?: boolean
 }
 
 // Espera antes de guardar el estado del visor: alternar alambre y aristas varias veces
@@ -60,7 +63,7 @@ const VIEWER_SAVE_DELAY_MS = 600
 
 // Viewer es el visor 3D (S2). Entra con React.lazy: three y R3F pesan más que
 // todo el resto de la interfaz y no hacen falta para abrir la app.
-export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSaved, overlay, initial, dimsCollapsed, onDimsCollapsed, saved, onViewerSaved}: Props) {
+export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSaved, overlay, initial, dimsCollapsed, onDimsCollapsed, saved, onViewerSaved, onEdit, editBusy}: Props) {
     const t = useT()
     const theme = useThemeColors()
     const [geometry, setGeometry] = useState<BufferGeometry | null>(() => (meshPath ? (cachedMesh(meshKey(meshPath)) ?? null) : null))
@@ -296,6 +299,8 @@ export default function Viewer({meshPath, fileName, bed, swatches, onSwatchesSav
                 }}
                 onEditColor={editColor}
                 onCapture={() => void captureFromToolbar()}
+                onEdit={onEdit}
+                editBusy={editBusy}
                 onSplit={() => {
                     setSplit((s) => !s)
                     setActive(0)

@@ -70,6 +70,12 @@ generan una vez con OpenSCAD desde las plantillas (comando en `uishot.tsx`),
 se versionan (excepción en `.gitignore`) y no entran en el build. Detalle:
 [claude/14-medicion.md](14-medicion.md).
 
+### Modo «Editar» (S13)
+
+El botón **Editar** de la barra del visor abre el editor 3D de un STL (gizmo, plano de corte, piezas, pila de operaciones):
+otro chunk con `React.lazy` y su propia escena, que reutiliza `Environment`, `Bed` y `Rig` de `ViewPane.tsx`. Detalle y
+reglas: [24-editor-3d.md](24-editor-3d.md).
+
 ### Árbol de checkpoints y diff (S3)
 
 El menú del nodo y sus atajos salen de un solo lugar

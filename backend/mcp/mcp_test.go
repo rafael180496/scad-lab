@@ -20,7 +20,7 @@ import (
 )
 
 var wantTools = []string{
-	"list_checkpoints", "read_checkpoint", "create_checkpoint", "render", "lint", "format",
+	"list_checkpoints", "read_checkpoint", "create_checkpoint", "import_mesh", "render", "lint", "format",
 	"measure", "preview", "printer_info", "export", "list_templates", "get_template",
 }
 
@@ -97,7 +97,7 @@ func TestToolsListHasEverythingWithSchema(t *testing.T) {
 		t.Errorf("hay %d herramientas, esperaba %d", len(got), len(wantTools))
 	}
 	// Las que exigen argumentos los declaran como required.
-	for name, req := range map[string][]string{"create_checkpoint": {"label", "source"}, "format": {"source"}, "get_template": {"name"}} {
+	for name, req := range map[string][]string{"create_checkpoint": {"label", "source"}, "format": {"source"}, "get_template": {"name"}, "import_mesh": {"file"}} {
 		schema := got[name]["inputSchema"].(map[string]any)
 		r, _ := schema["required"].([]any)
 		if len(r) != len(req) {

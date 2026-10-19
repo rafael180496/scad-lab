@@ -4,15 +4,9 @@ import {ChevronDown, ChevronUp, CircleCheck, TriangleAlert} from 'lucide-react'
 import {fmt, useT} from '../../i18n'
 import {num} from '../../lib/printFormat'
 import {getMeshInfo, infoFromGeometry, type MeshFacts} from '../../lib/meshInfo'
+import {Row} from './Row'
 
-export function Row({label, hint, children}: {label: string; hint: string; children: React.ReactNode}) {
-    return (
-        <div className="flex items-baseline justify-between gap-4" title={hint}>
-            <span className="font-mono text-ui-10 tracking-[0.1em] text-faint uppercase">{label}</span>
-            <span className="font-mono text-ui-11 text-fg tabular-nums">{children}</span>
-        </div>
-    )
-}
+export {Row}
 
 // Dimensions: medidas de la pieza en una esquina del visor. Vienen de Go
 // (GetMeshInfo); mientras tanto, o si falla, se muestra lo que sabe la

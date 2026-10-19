@@ -1,4 +1,4 @@
-import {lazy, Suspense, useEffect, useState} from 'react'
+import {lazy, Suspense, useEffect, useRef, useState} from 'react'
 import {
     ChevronDown,
     ChevronRight,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import type {render, store} from '../../../wailsjs/go/models'
 import {Button} from '../ui/Button'
+import {toast} from '../ui/Toast'
 import {DownloadControls} from './DownloadControls'
 import {WasmNotice} from './WasmNotice'
 import {useNarrow} from '../../hooks/useNarrow'
@@ -23,11 +24,16 @@ import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {renderTone, seconds, warnings, type RenderTone} from '../../lib/render'
 import {goToLine} from '../../lib/editorSession'
+import {errorText} from '../../lib/errors'
+import {endSession, prepareSession, useSession} from '../../lib/meshEditSession'
+import type {MeshEditShot} from '../meshedit/MeshEditor'
 import type {BedVolume} from '../viewer/ViewPane'
 import type {ViewerShot} from '../viewer/Viewer'
 
 // three + R3F van en su propio chunk: la app abre sin cargarlos.
 const Viewer = lazy(() => import('../viewer/Viewer'))
+// El modo «Editar» (S13) trae el gizmo, la escena de edición y sus paneles: otro chunk, que solo se pide al entrar.
+const MeshEditor = lazy(() => import('../meshedit/MeshEditor'))
 
 const toneText: Record<RenderTone, string> = {
     running: 'text-accent',
@@ -146,6 +152,7 @@ function Chip({icon, text, title}: {icon: React.ReactNode; text: string; title: 
 // arriba y, debajo, la pieza en el visor 3D si el render salió bien, o los
 // diagnósticos si falló.
 export function RenderPanel({
+    workspaceId,
     file,
     result,
     running,
@@ -160,7 +167,10 @@ export function RenderPanel({
     onRender,
     onCancel,
     onOpenSettings,
+    editShot,
+    onEditApplied,
 }: {
+    workspaceId: number | null
     file: string | null
     result: render.Result | undefined
     running: boolean
@@ -176,6 +186,10 @@ export function RenderPanel({
     onRender: () => void
     onCancel: () => void
     onOpenSettings: () => void
+    /** Banco de capturas: abre el modo «Editar» con unas operaciones ya hechas. */
+    editShot?: MeshEditShot
+    /** Se aplicó una edición: el checkpoint nuevo que dejó Go (hay que elegirlo). */
+    onEditApplied: (file: string) => void
 }) {
     const t = useT()
     const [logOpen, setLogOpen] = useState(false)
@@ -196,6 +210,35 @@ export function RenderPanel({
     // por un checkpoint roto y volver.
     const [viewerMounted, setViewerMounted] = useState(false)
     if (meshPath && !viewerMounted) setViewerMounted(true)
+
+    // Modo «Editar» (S13). La sesión es del proyecto y de un checkpoint: si el elegido ya no es ese (lo cambió
+    // algo que no pasó por la confirmación del árbol, p. ej. un checkpoint que salió a la papelera), se cierra.
+    const session = useSession(workspaceId)
+    const editing = !!session && session.file === file
+    const [preparing, setPreparing] = useState(false)
+    useEffect(() => {
+        if (workspaceId != null && session && session.file !== file) endSession(workspaceId)
+    }, [workspaceId, session, file])
+    const startEdit = async () => {
+        if (workspaceId == null || !file || preparing || editing) return
+        setPreparing(true)
+        try {
+            await prepareSession(workspaceId, file)
+        } catch (e) {
+            toast.error(fmt(t.meshEdit.prepareError, {msg: errorText(e)}))
+        } finally {
+            setPreparing(false)
+        }
+    }
+    // Banco de capturas: entra solo al modo «Editar» cuando el checkpoint ya tiene su malla.
+    const shotStarted = useRef(false)
+    const startEditRef = useRef(startEdit)
+    startEditRef.current = startEdit
+    useEffect(() => {
+        if (!editShot || shotStarted.current || !okMesh || !viewerMounted) return
+        shotStarted.current = true
+        void startEditRef.current()
+    }, [editShot, okMesh, viewerMounted])
 
     if (!file) {
         return (
@@ -264,7 +307,7 @@ export function RenderPanel({
                         </div>
                     }
                 >
-                    <div className={meshPath ? 'min-h-0 flex-1' : 'hidden'}>
+                    <div className={meshPath && !editing ? 'min-h-0 flex-1' : 'hidden'}>
                         <Viewer
                             meshPath={meshPath}
                             fileName={file}
@@ -277,12 +320,28 @@ export function RenderPanel({
                             saved={viewerSaved}
                             onViewerSaved={onViewerSaved}
                             overlay={showWarnings ? <WarningsOverlay diags={diags} /> : null}
+                            onEdit={okMesh && !running && workspaceId != null ? () => void startEdit() : undefined}
+                            editBusy={preparing}
                         />
                     </div>
                 </Suspense>
             ) : null}
 
-            {meshPath ? null : (
+            {editing && workspaceId != null ? (
+                <Suspense
+                    fallback={
+                        <div className="bed-grid flex min-h-0 flex-1 items-center justify-center">
+                            <Loader2 className="icon-ui-16 animate-spin text-accent" />
+                        </div>
+                    }
+                >
+                    <div className="min-h-0 flex-1">
+                        <MeshEditor workspaceId={workspaceId} bed={bed} swatches={swatches} shot={editShot} onApplied={onEditApplied} />
+                    </div>
+                </Suspense>
+            ) : null}
+
+            {meshPath || editing ? null : (
                 <div className="bed-grid flex min-h-0 flex-1 flex-col overflow-auto">
                     {tone === 'missing' ? (
                         <div className="m-4 flex flex-col items-start gap-3 rounded-lg border border-warn/50 bg-surface p-4">

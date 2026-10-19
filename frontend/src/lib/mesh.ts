@@ -93,6 +93,47 @@ function prepare(buf: ArrayBuffer): BufferGeometry {
     return shade(g)
 }
 
+// ── Malla CRUDA para el editor de STL (S13) ─────────────────────────────────
+//
+// El editor aplica la pose del modelo (`translate · rotate · scale · mirror`) ENCIMA de
+// la malla tal como está en el archivo, igual que `import()` de OpenSCAD. Por eso esta
+// carga NO la centra ni la apoya (lo que hace `prepare`): sus coordenadas son las del
+// STL. Comparte la caché LRU con las demás, bajo la clave `raw:<clave>`.
+
+export const rawCacheKey = (meshPath: string) => 'raw:' + meshKey(meshPath)
+
+export function cachedRawMesh(meshPath: string): BufferGeometry | undefined {
+    const e = cache.get(rawCacheKey(meshPath))
+    if (!e) return undefined
+    cache.delete(rawCacheKey(meshPath))
+    cache.set(rawCacheKey(meshPath), e)
+    return e.geometries[0]
+}
+
+export function loadRawMesh(meshPath: string): Promise<BufferGeometry> {
+    const key = rawCacheKey(meshPath)
+    const hit = cachedRawMesh(meshPath)
+    if (hit) return Promise.resolve(hit)
+    const pending = inflight.get(key)
+    if (pending) return pending
+    const p = fetch(meshUrl(meshPath))
+        .then((res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            return res.arrayBuffer()
+        })
+        .then((buf) => {
+            const geometry = shade(parse(buf))
+            const bytes = sizeOf(geometry)
+            cache.set(key, {geometries: [geometry], bytes})
+            totalBytes += bytes
+            evict()
+            return geometry
+        })
+        .finally(() => inflight.delete(key))
+    inflight.set(key, p)
+    return p
+}
+
 // cachedMesh devuelve la geometría si ya está en la caché (y la marca como
 // recién usada), sin pedir nada.
 export function cachedMesh(key: string): BufferGeometry | undefined {

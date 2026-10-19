@@ -1,9 +1,10 @@
-import {Code2, Copy, FolderSearch, GitBranch, GitCompare, History, ListCollapse, ListTree, Pencil, Trash2} from 'lucide-react'
+import {Code2, Copy, FolderSearch, GitBranch, GitCompare, History, ListCollapse, ListTree, Pencil, Trash2, WandSparkles} from 'lucide-react'
 import type {store} from '../../../wailsjs/go/models'
 import {ResumeCheckpointSession, RevealCheckpoint, SetActiveParent, TrashCheckpoint} from '../../../wailsjs/go/main/App'
 import {agentName, resumeKind} from '../../lib/checkpointInfo'
 import {countDescendants, type TreeNode} from '../../lib/checkpointTree'
 import {copyText} from '../../lib/clipboard'
+import {modifyWithAI} from '../../lib/meshEditAI'
 import {errorText} from '../../lib/errors'
 import {isMac, keys} from '../../lib/platform'
 import {openChat, terminalOpened} from '../../lib/sessionBridge'
@@ -98,6 +99,13 @@ export function useCheckpointActions(workspaceId: number) {
                 icon: <GitCompare className="icon-ui-14" />,
                 disabled: !canCompare,
                 onSelect: () => onCompare(file),
+            },
+            {
+                id: 'modify-ai',
+                label: m.modifyAI,
+                title: m.modifyAIHint,
+                icon: <WandSparkles className="icon-ui-14" />,
+                onSelect: () => void modifyWithAI(workspaceId, file, t),
             },
             {kind: 'separator'},
             {

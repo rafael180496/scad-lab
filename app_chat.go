@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"scadlab/backend/chat"
+	"scadlab/backend/clichat"
 	"scadlab/backend/hermes"
 	"scadlab/backend/i18n"
 	"scadlab/backend/llm"
@@ -267,14 +268,23 @@ func (a *App) GetChat(chatID int64) (ChatView, error) {
 }
 
 // NewChat abre un chat vacío en el workspace con el servidor de modelos
-// (providerID es un id de model_servers) y el modelo dados. Un modelo vacío
-// toma el predeterminado del servidor.
+// (providerID es un id de model_servers) o el CLI (`cli:<id>`, S12.b) y el
+// modelo dados. Un modelo vacío toma el predeterminado del servidor; con un CLI,
+// el que el CLI tenga configurado.
 func (a *App) NewChat(workspaceID int64, providerID, model string) (store.Chat, error) {
 	if err := a.ready(); err != nil {
 		return store.Chat{}, err
 	}
 	if _, err := a.store.GetWorkspace(workspaceID); err != nil {
 		return store.Chat{}, err
+	}
+	if clichat.IsProviderID(providerID) {
+		// Un CLI: el modelo vacío es válido (usa el que el CLI tenga configurado).
+		model = strings.TrimSpace(model)
+		if _, err := a.resolveCLI(providerID, model); err != nil {
+			return store.Chat{}, err
+		}
+		return a.store.CreateChat(workspaceID, providerID, model)
 	}
 	p, err := a.chatServer(providerID)
 	if err != nil {
@@ -315,6 +325,9 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
+	if clichat.IsProviderID(c.ProviderID) {
+		return a.sendCLIMessage(c, text, currentFile, attachmentIDs, opts)
+	}
 	p, err := a.chatServer(c.ProviderID)
 	if err != nil {
 		return store.ChatMessage{}, err
@@ -338,39 +351,11 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 		return store.ChatMessage{}, err
 	}
 
-	turn, err := a.chatSvc().mgr.Begin(a.appCtx(), chatID)
+	ot, err := a.openChatTurn(c, text, pending, attachmentIDs, caps.assumeVision())
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
-	// El historial se lee DESPUÉS de reservar el turno: si la respuesta anterior
-	// terminó justo ahora, ya guardó su mensaje y tiene que entrar.
-	stored, err := a.store.ListChatMessages(chatID)
-	if err != nil {
-		turn.End()
-		return store.ChatMessage{}, err
-	}
-	prepared, err := hermes.Prepare(text, pending, caps.assumeVision(), a.chatDir(chatID))
-	if err != nil {
-		turn.End()
-		return store.ChatMessage{}, err
-	}
-	um, err := a.store.AddChatMessageFull(chatID, store.NewChatMessage{
-		Role: "user", Content: text, Parts: hermes.EncodeParts(hermes.Parts{Attachments: prepared.Metas}),
-	})
-	if err != nil {
-		turn.End()
-		return store.ChatMessage{}, err
-	}
-	a.chatSvc().releaseAttachments(attachmentIDs)
-	if len(stored) == 0 {
-		title := text
-		if title == "" && len(prepared.Metas) > 0 {
-			title = prepared.Metas[0].Name
-		}
-		if err := a.store.SetChatTitle(chatID, chat.Title(title)); err != nil {
-			log.Printf("scadlab: título del chat %d: %v", chatID, err)
-		}
-	}
+	um, turn, stored, prepared := ot.user, ot.turn, ot.stored, ot.prepared
 
 	job := chatJob{
 		turn: turn, chat: c, server: p, client: client, workspace: w, caps: caps,
@@ -380,6 +365,57 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 	a.chatSvc().beginLive(chatID)
 	go a.runChatTurn(job)
 	return um, nil
+}
+
+// openedTurn es un turno ya reservado con el mensaje del usuario guardado: lo
+// que SendChatMessage y sendCLIMessage tienen en común.
+type openedTurn struct {
+	turn     *chat.Turn
+	stored   []store.ChatMessage // el historial ANTES de este mensaje
+	prepared hermes.Prepared
+	user     store.ChatMessage
+}
+
+// openChatTurn reserva el turno del chat, prepara los adjuntos, guarda el
+// mensaje del usuario y le pone título al chat si es el primero. vision dice si
+// la vista previa de un modelo de referencia viaja como imagen. Si algo falla
+// libera el turno y no queda nada a medias.
+func (a *App) openChatTurn(c store.Chat, text string, pending []*hermes.Pending, attachmentIDs []string, vision bool) (openedTurn, error) {
+	var ot openedTurn
+	turn, err := a.chatSvc().mgr.Begin(a.appCtx(), c.ID)
+	if err != nil {
+		return ot, err
+	}
+	// El historial se lee DESPUÉS de reservar el turno: si la respuesta anterior
+	// terminó justo ahora, ya guardó su mensaje y tiene que entrar.
+	stored, err := a.store.ListChatMessages(c.ID)
+	if err != nil {
+		turn.End()
+		return ot, err
+	}
+	prepared, err := hermes.Prepare(text, pending, vision, a.chatDir(c.ID))
+	if err != nil {
+		turn.End()
+		return ot, err
+	}
+	um, err := a.store.AddChatMessageFull(c.ID, store.NewChatMessage{
+		Role: "user", Content: text, Parts: hermes.EncodeParts(hermes.Parts{Attachments: prepared.Metas}),
+	})
+	if err != nil {
+		turn.End()
+		return ot, err
+	}
+	a.chatSvc().releaseAttachments(attachmentIDs)
+	if len(stored) == 0 {
+		title := text
+		if title == "" && len(prepared.Metas) > 0 {
+			title = prepared.Metas[0].Name
+		}
+		if err := a.store.SetChatTitle(c.ID, chat.Title(title)); err != nil {
+			log.Printf("scadlab: título del chat %d: %v", c.ID, err)
+		}
+	}
+	return openedTurn{turn: turn, stored: stored, prepared: prepared, user: um}, nil
 }
 
 // seedFrom arma el historial del modelo con las filas guardadas.
@@ -433,6 +469,9 @@ type chatJob struct {
 	maxSteps    int
 	history     []llm.Message
 	refs        []string
+	// cli es lo propio de un turno con un CLI agéntico (S12.b); nil en un turno
+	// con un servidor de modelos.
+	cli *cliJob
 }
 
 // runChatTurn corre la respuesta, la guarda y avisa a la pantalla. Un
@@ -443,6 +482,10 @@ func (a *App) runChatTurn(j chatJob) {
 	c, p := j.chat, j.server
 	svc := a.chatSvc()
 	defer svc.endLive(c.ID)
+	if j.cli != nil {
+		a.runCLITurn(j)
+		return
+	}
 
 	cfg := a.hermesConfig(j)
 	if cl, ok := cfg.Tools.(io.Closer); ok {
@@ -470,6 +513,17 @@ func (a *App) runChatTurn(j chatJob) {
 		svc.markNoTools(p.ID, c.Model)
 	}
 
+	errText := ""
+	if err != nil {
+		errText = chatErrorText(p, err)
+	}
+	a.concludeChatTurn(c, res, err, errText)
+}
+
+// concludeChatTurn guarda la respuesta del turno (con sus pasos, tokens y modelo)
+// y avisa a la pantalla: chat:done, o chat:error con errText si falló. Lo comparten
+// los turnos con un servidor y con un CLI.
+func (a *App) concludeChatTurn(c store.Chat, res hermes.Result, err error, errText string) {
 	var messageID int64
 	if strings.TrimSpace(res.Text) != "" || len(res.Steps) > 0 {
 		m, serr := a.store.AddChatMessageFull(c.ID, store.NewChatMessage{
@@ -487,7 +541,7 @@ func (a *App) runChatTurn(j chatJob) {
 		}
 	}
 	if err != nil {
-		a.emit(evChatError, ChatErrorEvent{ChatID: c.ID, Message: chatErrorText(p, err), MessageID: messageID})
+		a.emit(evChatError, ChatErrorEvent{ChatID: c.ID, Message: errText, MessageID: messageID})
 		return
 	}
 	a.emit(evChatDone, ChatDoneEvent{ChatID: c.ID, MessageID: messageID, Cancelled: res.Cancelled})
@@ -597,23 +651,34 @@ func (a *App) SetChatModel(chatID int64, serverID, model string) error {
 	if err != nil {
 		return err
 	}
-	srv, err := a.chatServer(strings.TrimSpace(serverID))
-	if err != nil {
-		return err
+	serverID, model = strings.TrimSpace(serverID), strings.TrimSpace(model)
+	var providerID string
+	if clichat.IsProviderID(serverID) {
+		// Un CLI: el modelo vacío es válido. Al cambiar de proveedor el store
+		// olvida la sesión del CLI anterior.
+		if _, err := a.resolveCLI(serverID, model); err != nil {
+			return err
+		}
+		providerID = serverID
+	} else {
+		srv, err := a.chatServer(serverID)
+		if err != nil {
+			return err
+		}
+		if model == "" {
+			model = srv.DefaultModel
+		}
+		if model == "" {
+			return i18n.New(i18n.Msg{ES: "elige un modelo para el chat", EN: "pick a model for the chat"})
+		}
+		providerID = srv.ID
 	}
-	model = strings.TrimSpace(model)
-	if model == "" {
-		model = srv.DefaultModel
-	}
-	if model == "" {
-		return i18n.New(i18n.Msg{ES: "elige un modelo para el chat", EN: "pick a model for the chat"})
-	}
-	if err := a.store.SetChatModel(chatID, srv.ID, model); err != nil {
+	if err := a.store.SetChatModel(chatID, providerID, model); err != nil {
 		return err
 	}
 	// La elección también es la última del proyecto (lo que arranca el próximo
 	// chat nuevo). No es crítico.
-	if err := a.store.SetLastModel(c.WorkspaceID, store.LastModel{ServerID: srv.ID, Model: model}); err != nil {
+	if err := a.store.SetLastModel(c.WorkspaceID, store.LastModel{ServerID: providerID, Model: model}); err != nil {
 		log.Printf("scadlab: recordar el modelo del chat %d: %v", chatID, err)
 	}
 	return nil

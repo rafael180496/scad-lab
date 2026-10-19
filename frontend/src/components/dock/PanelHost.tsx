@@ -15,6 +15,7 @@ import {RenderPanel} from '../render/RenderPanel'
 import {AgentTerminalTab} from '../terminal/AgentTerminalTab'
 import type {BedVolume} from '../viewer/ViewPane'
 import type {ViewerShot} from '../viewer/Viewer'
+import type {MeshEditShot} from '../meshedit/MeshEditor'
 import {dockState, panelStatus, showPanel} from './dock'
 import {panelHostEl} from './hosts'
 import {PANEL_IDS, type PanelId} from './panels'
@@ -42,6 +43,8 @@ export type PanelHostProps = {
     onSwatchesSaved: (colors: string[]) => void
     onViewerSaved: (v: store.ViewerState) => void
     viewerShot?: ViewerShot
+    /** Banco de capturas: el modo «Editar» (S13) con unas operaciones ya hechas. */
+    meshEditShot?: MeshEditShot
     editorShot?: EditorShot
     onRender: () => void
     onCancel: () => void
@@ -140,6 +143,7 @@ export function PanelHost(p: PanelHostProps) {
             case 'viewport':
                 return (
                     <RenderPanel
+                        workspaceId={p.workspaceId}
                         file={p.file}
                         result={p.result}
                         running={p.running}
@@ -154,6 +158,8 @@ export function PanelHost(p: PanelHostProps) {
                         onRender={p.onRender}
                         onCancel={p.onCancel}
                         onOpenSettings={p.onOpenSettings}
+                        editShot={p.meshEditShot}
+                        onEditApplied={p.onSaved}
                     />
                 )
             case 'source':

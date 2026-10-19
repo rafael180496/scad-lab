@@ -198,3 +198,17 @@ Plan: [.claude/specs/s12-hermes-proveedores.md](../.claude/specs/s12-hermes-prov
 | 12.9 | Integración, verificación y prueba de humo con servidor simulado (`wails dev` + CDP, `SCADLAB_FAKE_KEYRING=1`): starter renderizado, llavero, adjuntos, ciclo del agente, terminal sin `^[[?1;2c`; arreglado el chat en blanco al reabrir pasos guardados (`images: null`) | architect | ✅ |
 | 12.10 | Llavero propio: contraseña maestra (argon2id) pedida solo al guardar la primera clave, «Recordar en este equipo» (marcado por defecto) en el llavero del SO, sin recordar = una vez por sesión; cambiar, olvidar este equipo, restablecer. Detalle: [21-llavero.md](21-llavero.md) | FS | ✅ |
 | 12.11 | Probar en la ventana real con un proveedor real (clave propia) y el Keychain real de macOS: ¿pregunta «ScadLab quiere acceder…» tras cada build? Antigravity en la terminal sin `^[[?1;2c` | usuario | ⬜ |
+| 12.12 | **S12.b** ([spec](../.claude/specs/s12b-cli-chat-ux.md)): CLIs instalados (Claude Code, Codex, Antigravity, OpenCode) como proveedores del chat con el MCP de ScadLab, modos solo consulta / agente, importar servidores de mini-tools — backend | FS | ✅ |
+| 12.13 | S12.b: selector de proveedor y modelo propio (CLIs + servidores, estado, latencia, «Por defecto»), pase de UX del chat (barra compacta, estado vacío, composer, pasos, markdown, búsqueda), 320–1200 px. Detalle: [22-chat-ux.md](22-chat-ux.md) | FS | ✅ |
+| 12.14 | S12.b: integración y prueba de humo (`wails dev`, PATH solo con CLIs falsos y `SCADLAB_NO_EXTRA_DIRS=1`): 4 CLIs detectados sin configurar, turno de Claude falso conectado al MCP real (`render` ok), sesión continuada con `--resume`, flags por modo, importación de una base falsa de mini-tools sin claves ni escritura | architect | ✅ |
+
+## S13 — Editar un STL (editor 3D y con IA) ✅ (falta 13.4, prueba del usuario en la ventana real)
+
+Plan: [.claude/specs/s13-edicion-stl.md](../.claude/specs/s13-edicion-stl.md). No destructivo: cada edición es un checkpoint nuevo que hace `import("refs/<archivo>.stl")` y le aplica las operaciones; el STL queda intacto en `refs/`.
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 13.1 | Núcleo: importar STL/3MF/OBJ (conversión a STL, aviso de malla abierta, checkpoint base centrado y apoyado), congelar la malla de un checkpoint en `refs/`, generador de código de la escena (`backend/meshedit`), `import_mesh` por MCP, skill `openscad-stl-editing`. Detalle: [23-edicion-stl.md](23-edicion-stl.md) | OS | ✅ |
+| 13.2 | Interfaz: importar (barra lateral y arrastrar), modo «Editar» del visor (gizmo mover/rotar/escalar, espejar, centrar, apoyar, apoyar sobre una cara, cortar con plano, primitivas unión/agujero, color por pieza, deshacer/rehacer, aplicar/descartar), «Modificar con IA». Detalle: [24-editor-3d.md](24-editor-3d.md) | FS | ✅ |
+| 13.3 | Integración, verificación y prueba de humo (`wails dev`): importar un STL (centrado y apoyado), editar con agujero y corte en dos colores, render cerrado, 3MF con 2 partes, STL original intacto, «Modificar con IA» con servidor simulado; adjuntar un STL que ya está en `refs/` lo reutiliza (sin copia `-2`) | architect | ✅ |
+| 13.4 | Probar en la ventana real: arrastrar un archivo a la ventana (`OnFileDrop`), «Importar…» con el diálogo nativo y el gizmo con el ratón en WKWebView/WebView2 | usuario | ⬜ |

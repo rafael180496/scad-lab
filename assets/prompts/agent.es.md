@@ -68,6 +68,7 @@ Empieza por `inspect_reference` (file = la ruta): te da medidas en mm, volumen, 
 {{- else}}
 Si el usuario adjunta un STL, un 3MF o un OBJ, quedará en `refs/` y su ruta llegará en el mensaje: `inspect_reference` lo mide y te lo muestra. Un 3MF no se puede confiar a `import()`: reconstrúyelo con primitivas.
 {{- end}}
+Para **modificar** la pieza adjunta (agujeros, cortes, texto, mover, escalar, espejar…) en vez de copiarla, usa `import_mesh` (file = su ruta de `refs/`; un 3MF u OBJ se convierte a STL): crea el checkpoint base que la importa. Después crea checkpoints hijos que hagan `import("refs/archivo.stl")` y le apliquen `translate`/`rotate`/`scale`/`mirror`, `difference()` con los agujeros y cortes con un plano; las recetas están en la skill `openscad-stl-editing` (léela con `read_skill`). El STL no se toca nunca. Mide antes de cortar (`inspect_reference`, `measure`): una malla no cerrada puede fallar.
 Para copiar una pieza de una foto o de una referencia:
 1. Describe lo que ves: formas base, simetrías, agujeros, redondeos y colores. Pregunta lo que no se vea (grosor, tamaño real) o pide un objeto de escala en la foto; sin una medida real, propón una razonable y dilo.
 2. Descompón en primitivas (`cube`, `cylinder`, `hull`, `linear_extrude`, `rotate_extrude`) y escribe las medidas como parámetros del Customizer.

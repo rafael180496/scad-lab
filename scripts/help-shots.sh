@@ -34,8 +34,9 @@ settings-general    settings-general  1280  820
 settings-openscad   settings-openscad 1280  820
 settings-openscad-download settings-openscad-download 1280 1000
 settings-ai         settings-ai       1280  900
-settings-providers  settings-providers 1280 940
+settings-providers  settings-providers 1280 1560
 settings-providers-add settings-providers-add 1280 1500
+settings-import-minitools settings-import-minitools 1280 940
 vault-create        vault-create      1280  940
 vault-unlock        vault-unlock      1280  820
 settings-printing   settings-printing 1280  920
@@ -53,11 +54,15 @@ terminal-sessions   terminal-sessions 1440  900
 terminal-mcp        terminal-mcp      1440  900
 chat                chat              1440  900
 chat-empty          chat-empty        1440  900
-chat-new            chat-new          1440  900
+chat-no-providers   chat-no-providers 1440  900
+chat-providers      chat-providers    1440  900
 chat-models         chat-models       1440  900
+chat-cli-models     chat-cli-models   1440  900
 chat-agent-steps    chat-agent-steps  1440 1160
 chat-attachments    chat-attachments  1440  900
 chat-conversations  chat-conversations 1440 900
+chat-code           chat-code         1440 1160
+chat-narrow         chat-narrow        360  760
 settings-appearance settings-appearance 1280 980
 appearance-150      appearance-150    1440  900  150
 small-1024          small             1024  640
@@ -81,6 +86,11 @@ diff-parent         diff-parent       1440  900
 projects-tabs       projects-tabs     1440  900
 projects-plus-menu  projects-plus-menu 1440 900
 projects-narrow     projects-narrow   1024  640
+mesh-import         mesh-import       1280  860
+mesh-edit           mesh-edit         1440  900
+mesh-cut            mesh-cut          1440 1000
+mesh-hole           mesh-hole         1440  900
+mesh-ai             mesh-ai           1440  900
 '
 
 ONLY="${1:-}"
@@ -106,10 +116,14 @@ echo "$SHOTS" | while read -r file view w h scale; do
     [ -n "$ONLY" ] && [ "$ONLY" != "$file" ] && continue
     theme=dark
     case "$file" in *-light) theme=light ;; esac
+    # Los desplegables del chat se posicionan sobre una barra que el dock termina de acomodar al final: con el
+    # tiempo virtual por defecto (4000 ms) la foto sale antes y el desplegable queda unos píxeles más arriba.
+    budget=4000
+    case "$file" in chat|chat-*|settings-import-minitools|mesh-ai) budget=9000 ;; esac
     for lang in en es; do
         dir=docs/screenshots
         [ "$lang" = es ] && dir=docs/screenshots/es
-        UISHOT_PORT=$PORT UISHOT_SCALE="${scale:-100}" UISHOT_LANG=$lang UISHOT_THEME=$theme UISHOT_OUT="$ROOT/$dir/$file.png" \
+        UISHOT_PORT=$PORT UISHOT_BUDGET=$budget UISHOT_SCALE="${scale:-100}" UISHOT_LANG=$lang UISHOT_THEME=$theme UISHOT_OUT="$ROOT/$dir/$file.png" \
             ./scripts/uishot.sh "$view" "$w" "$h" >/dev/null
         echo "  $dir/$file.png"
     done

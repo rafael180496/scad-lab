@@ -14,6 +14,7 @@
 #   UISHOT_PLATFORM=windows ./scripts/uishot.sh main
 #   UISHOT_SCALE=150 ./scripts/uishot.sh main    # interfaz al 150 % (90|100|115|130|150)
 #   UISHOT_OUT=/ruta/x.png ./scripts/uishot.sh main
+#   UISHOT_CLICK='[data-testid="chat-more"]' ./scripts/uishot.sh chat-w480   # hace clic en ese elemento antes de fotografiar
 #
 # Vistas: las claves de VIEWS en frontend/src/uishot.tsx.
 set -euo pipefail
@@ -63,7 +64,7 @@ fi
     --window-size="$W,$H" \
     --virtual-time-budget="$BUDGET" \
     --screenshot="$OUT" \
-    "http://localhost:$PORT/uishot.html?view=$VIEW&lang=$LANG_UI&theme=$THEME&platform=$PLATFORM&scale=$SCALE" >/dev/null 2>&1
+    "http://localhost:$PORT/uishot.html?view=$VIEW&lang=$LANG_UI&theme=$THEME&platform=$PLATFORM&scale=$SCALE&vh=$H&click=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ.get("UISHOT_CLICK","")))')" >/dev/null 2>&1
 
 [ -s "$OUT" ] || { echo "La captura salió vacía. Log de vite:"; tail -5 "${TMPDIR:-/tmp}/uishot-vite.log"; exit 1; }
 echo "$OUT"

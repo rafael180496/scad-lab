@@ -245,9 +245,9 @@ Detalle: [19-hermes.md](19-hermes.md).
 | `SaveModelServer(s, token, clearToken)` | `store.ModelServer` | id vacío = alta; `token` vacío conserva la guardada. Con `token` y sin contraseña maestra falla con el error de código `vault-uninitialized`; con la app bloqueada, `vault-locked` (alternativa sin contraseña: `apiKeyEnv`) |
 | `DeleteModelServer(id)` | — | borra también la clave cifrada; los chats quedan legibles |
 | `TestModelServer(s, token)` | `ServerProbe{ok, status, message, models, modelIds[], latencyMs}` | sin guardar; un servidor caído **no** es error del binding (sí lo son `vault-locked` / `vault-uninitialized` si la clave guardada no se puede abrir) |
-| `ListServerModels(serverId, refresh)` | `[]ModelInfo{id, vision, visionKnown, tools, toolsKnown, contextTokens, promptPricePerM, completionPricePerM}` | caché de 5 min por servidor; `…Known=false` = «no se sabe» (no bloquea, solo avisa) |
-| `ListProviderModels(providerId)` | `[]string` | alias de S5: los ids de `ListServerModels` |
-| `SetLastModel(workspaceId, serverId, model)` / `GetLastModel(workspaceId)` | — / `LastModel{serverId, model}` | por proyecto y global; cae al global y a «ninguno» si el servidor ya no existe |
+| `ListServerModels(serverId, refresh)` | `[]ModelInfo{id, label, description, vision, visionKnown, tools, toolsKnown, contextTokens, promptPricePerM, completionPricePerM}` | caché de 5 min por servidor; `…Known=false` = «no se sabe» (no bloquea, solo avisa) |
+| `ListProviderModels(providerId)` | `[]string` | alias de S5: los ids de `ListServerModels` (o de los modelos del CLI si es `cli:*`) |
+| `SetLastModel(workspaceId, serverId, model)` / `GetLastModel(workspaceId)` | — / `LastModel{serverId, model}` | por proyecto y global; acepta `cli:*`; cae al global y a «ninguno» si el servidor ya no existe o el CLI ya no está instalado |
 
 ### Llavero propio — `app_vault.go` (S12, 12.10)
 
@@ -285,6 +285,47 @@ Tabla completa del chat (con `NewChat`, `ListChats`…) en [09-agents-ai.md](09-
 | `GetChat(chatId)` | `ChatView{chat, messages, running, partial, partialSeq, steps[], usage}` | `steps` y `usage` son los del turno en curso |
 
 `store.ChatMessage` ganó `parts` (JSON: adjuntos del usuario o pasos del asistente), `inputTokens`, `outputTokens` y `costUsd`.
+
+## CLIs como proveedores del chat — `app_chat_cli.go`, `app_servers_minitools.go` (S12.b, T5)
+
+Los CLIs (Claude Code, Codex, Antigravity, OpenCode) se **autodetectan** y son un proveedor más del chat; no hay filas en `model_servers`.
+Detalle, flags por modo y decisiones: [19-hermes.md](19-hermes.md#clis-como-proveedores-s12b).
+
+```go
+type ChatProvider struct { ID, Kind, Name, Vendor string; Installed bool; Path string; Remote, Enabled bool } // json camelCase
+// ID "cli:<id>" | id de model_servers; Kind cli|ollama|openai|anthropic; Vendor "" en un servidor
+type DetectedCLI struct { ID, Name, Vendor string; Installed bool; Path, Version string }             // ID corto: "claude"
+type ProviderHealthInfo struct { OK bool; LatencyMs int64; Error string }                              // ok, latencyMs, error
+type ModelCatalog struct { DefaultHint string; Models []ModelInfo }                                    // defaultHint, models
+type MiniToolsServer struct { Name, Kind, BaseURL, DefaultModel string; ContextTokens int; Exists bool; Error string }
+type MiniToolsImport struct { Found bool; Path string; Servers []MiniToolsServer; Imported int }
+
+ListChatProviders() ([]ChatProvider, error)             // CLIs instalados (primero) + servidores habilitados; sin --version; detección con caché de ~30 s
+RefreshChatProviders() ([]ChatProvider, error)          // lo mismo volviendo a detectar (al abrir el selector); extra del contrato
+ListDetectedCLIs() ([]DetectedCLI, error)               // los cuatro, instalados o no, con --version en paralelo y cacheado; solo lectura
+ProviderHealth(id string) (ProviderHealthInfo, error)   // servidor: sondeo de S12 cacheado 30 s con su latencia; CLI: ok si está instalado, latencia 0
+ChatModelCatalog(id string, refresh bool) (ModelCatalog, error) // CLI: modelos del propio CLI (sin «Por defecto»: la pone la UI con defaultHint)
+ImportMiniToolsServers(dryRun bool) (MiniToolsImport, error)    // dryRun=true no escribe; false crea los que no existen, sin clave
+```
+
+`NewChat`, `SendChatMessage`, `SetChatModel`, `SetLastModel`/`GetLastModel` y `ListProviderModels` aceptan ids `cli:*`. Con un CLI,
+`SendOptions.Agent` elige el modo (`false` = «Solo consulta») y `maxSteps` se ignora; los eventos son los de S12 (`chat:delta`,
+`chat:step`, `chat:usage`, `chat:done`, `chat:error`). `store.Chat` gana `cliSession` (el id de conversación del CLI).
+Un proveedor caído o un CLI ausente **no** son error de `ProviderHealth`: viajan con `ok=false` y el motivo en `error`.
+
+## Editar un STL — `app_meshedit.go` (S13)
+
+Notas y contrato de `Scene`: [23-edicion-stl.md](23-edicion-stl.md). Los tipos de `backend/meshedit` (`Scene`,
+`Transform`, `Primitive`, `Cut`) y `refmodel.Report` llevan etiquetas JSON en camelCase.
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `ChooseModelFile()` | `string` ("" si se cancela) | diálogo nativo con filtro STL/3MF/OBJ (extra del contrato: el diálogo solo se abre desde Go) |
+| `AnalyzeModelFile(path)` | `refmodel.Report{format, triangles, min, max, size, volumeMm3, areaMm2, watertight, parts[{name, color, triangles, size, volumeMm3}]}` | mide antes de importar; no copia nada |
+| `ImportModel(workspaceId, path, {centerOnBed, label})` | `ImportResult{file, ref, report, warnings[]}` | copia a `refs/` (sin pisar), convierte 3MF/OBJ a STL (el original queda), crea el checkpoint base **raíz** (`O_EXCL`); avisos: malla abierta, > 500 000 triángulos, 3MF multicolor, no cabe en la placa |
+| `PrepareMeshEdit(workspaceId, file)` | `EditBase{ref, parent, meshPath, report, fromImport, model, color}` | import base → su STL y su pose; si no, **congela** la malla renderizada en `refs/<checkpoint>.stl` (reutiliza por hash). `meshPath` = malla CRUDA de `ref`, servible por `/mesh/` |
+| `PreviewMeshEdit(workspaceId, scene)` | `string` (código) | no escribe nada |
+| `ApplyMeshEdit(workspaceId, parent, label, scene)` | `string` (checkpoint creado) | hijo de `parent` (`O_EXCL`, padre activo que avanza, no se vincula a una sesión); no renderiza: lo hace el watcher |
 
 ## Bindings documentados en su segmento
 

@@ -28,6 +28,10 @@ abrirlo no escribe nada.
 proyecto (`loadProject`) gana `shot.select` > `workspace.lastCheckpoint` (si el archivo
 existe) > el más nuevo. Un nombre guardado que ya no existe se ignora, sin limpiar nada.
 
+**Modo «Editar» del visor (S13)**: tampoco se recuerda. La edición vive en un store de módulo
+(`lib/meshEditSession.ts`), sobrevive al cambio de pestaña de proyecto y se descarta al cerrar el proyecto o la app; cambiar
+de checkpoint o cerrar la pestaña con cambios pregunta antes ([24](24-editor-3d.md)).
+
 **Modo enfoque**: `persistNow` no corre mientras dura, y `enterZen` cancela el guardado
 pendiente; por eso `enterZen` guarda **en ese momento** el diseño de antes (`zenSaved`):
 sin eso, un cambio hecho justo antes de entrar se perdía al cerrar en modo enfoque.

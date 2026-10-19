@@ -9,6 +9,9 @@ type Chat struct {
 	Title       string `json:"title"`
 	CreatedAt   int64  `json:"createdAt"`
 	UpdatedAt   int64  `json:"updatedAt"`
+	// CLISession es el id de conversación del CLI agéntico con que sigue el chat
+	// (provider_id `cli:*`); vacío si no hay o si el chat es de un servidor.
+	CLISession string `json:"cliSession"`
 }
 
 // ChatMessage es un mensaje del chat: role es "user" o "assistant". Los pasos de
@@ -41,11 +44,11 @@ type NewChatMessage struct {
 	CostUSD      float64
 }
 
-const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at`
+const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at, cli_session`
 
 func scanChat(sc interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
-	err := sc.Scan(&c.ID, &c.WorkspaceID, &c.ProviderID, &c.Model, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	err := sc.Scan(&c.ID, &c.WorkspaceID, &c.ProviderID, &c.Model, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.CLISession)
 	return c, err
 }
 
@@ -117,9 +120,25 @@ func (s *Store) RenameChat(id int64, title string) error {
 }
 
 // SetChatModel cambia el servidor y el modelo con que sigue el chat. No toca
-// updated_at: elegir otro modelo no es actividad de la conversación.
+// updated_at: elegir otro modelo no es actividad de la conversación. Si cambia el
+// proveedor, la sesión del CLI se olvida: su id solo vale para el CLI que lo dio.
 func (s *Store) SetChatModel(id int64, providerID, model string) error {
-	res, err := s.db.Exec(`UPDATE chats SET provider_id = ?, model = ? WHERE id = ?`, providerID, model, id)
+	res, err := s.db.Exec(`UPDATE chats SET provider_id = ?, model = ?,
+		cli_session = CASE WHEN provider_id = ? THEN cli_session ELSE '' END WHERE id = ?`, providerID, model, providerID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetChatCLISession guarda el id de conversación del CLI con que sigue el chat
+// ("" lo olvida: la próxima vez arranca una conversación nueva). No toca
+// updated_at.
+func (s *Store) SetChatCLISession(id int64, session string) error {
+	res, err := s.db.Exec(`UPDATE chats SET cli_session = ? WHERE id = ?`, session, id)
 	if err != nil {
 		return err
 	}

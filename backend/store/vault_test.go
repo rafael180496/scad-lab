@@ -40,8 +40,8 @@ func TestMigration7AddsVaultMetaKeepingRows(t *testing.T) {
 		if err != nil {
 			t.Fatalf("apertura %d: %v", i, err)
 		}
-		if v, _ := st.SchemaVersion(); v != 7 {
-			t.Fatalf("versión %d, esperaba 7", v)
+		if v, _ := st.SchemaVersion(); v < 7 {
+			t.Fatalf("versión %d, esperaba al menos 7", v)
 		}
 		if _, ok, err := st.GetVaultMeta(); ok || err != nil {
 			t.Fatalf("vault_meta debe nacer vacía: %v %v", ok, err)

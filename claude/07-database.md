@@ -13,7 +13,7 @@ conexión de escritura). Código en `backend/store/`.
 | `ai_providers` | claude, opencode, codex, antigravity (`agy`), ollama, openai-compatible, anthropic. Desde la migración 5 el chat no usa las tres últimas (usa `model_servers`); siguen ahí sin tocar |
 | `model_servers` | servidores de modelos del chat (migración 5): `kind` ollama/openai/anthropic, URL, `api_key_env`, `encrypted_token`+`token_nonce` (AES-256-GCM con la llave derivada de la contraseña maestra, que nunca está en la base; ver [21-llavero.md](21-llavero.md)), modelo por defecto, ventana de Ollama |
 | `vault_meta` | una fila (migración 7): `verifier`+`verifier_nonce` (un texto conocido cifrado con la llave derivada: si abre, la contraseña es la buena), `remember` (la llave está en el llavero del SO), `created_at`. El salt vive en `<datos>/vault.salt`, no acá |
-| `chats`, `chat_messages` | conversaciones del chat (migración 2); `chat_messages.parts` (JSON de adjuntos o pasos), `input_tokens`, `output_tokens` y `cost_usd` desde la migración 6 |
+| `chats`, `chat_messages` | conversaciones del chat (migración 2); `chat_messages.parts` (JSON de adjuntos o pasos), `input_tokens`, `output_tokens` y `cost_usd` desde la migración 6; `chats.cli_session` desde la 8 (el id de conversación del CLI con que sigue un chat `cli:*`) |
 | `materials` | densidad y costo/kg (PLA, PETG, ABS, ASA, TPU, PLA-CF) |
 
 ## Migraciones — reglas duras
@@ -35,3 +35,9 @@ conexión de escritura). Código en `backend/store/`.
 
 `parts` es un JSON opaco para `backend/store`; lo escribe y lee `backend/hermes` (`Parts`: `attachments`, `steps`, `model`, `stepLimit`).
 Las imágenes de un paso se guardan reducidas (JPEG ≤ 640 px) y los adjuntos solo como ficha y miniatura, nunca los bytes.
+
+## Migración de S12.b
+
+| Versión | Qué agrega |
+|---|---|
+| 8 | `chats.cli_session TEXT NOT NULL DEFAULT ''`: el id de conversación que devolvió el CLI (`--resume`, `resume <id>`…) de un chat con `provider_id = 'cli:*'`; el historial lo guarda el CLI. `SetChatModel` la olvida si cambia el proveedor. Prueba: `migration8_test.go` (base de la v7 con chats y mensajes) |

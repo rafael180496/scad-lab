@@ -21,6 +21,16 @@
 # contenido más ancho que su caja (scrollWidth > clientWidth: nombres cortados sin forma de
 # verlos), si el primer rótulo de la barra no está en su sitio (x = 12) o si, en macOS, el botón de
 # la barra lateral queda debajo de los semáforos (x < 76).
+#
+# Editor de STL (S13): vistas mesh-* y mesh-edit-w320…1100 (el editor solo, en un panel de ese ancho): ni la barra, ni el panel lateral,
+# ni el pie, ni el editor entero pueden tener contenido más ancho que su caja.
+#
+# Chat (S12.b): la barra superior es de una sola línea y falla si su contenido es más ancho que ella (un
+# control cortado o con scroll horizontal), lo mismo la lista de mensajes y el panel entero. Las vistas
+# chat-w320/480/720/1200 son el chat solo, en un panel de ese ancho (se fija en el contenedor: Chrome headless
+# no baja de ~500 px de ventana): con poke=1 abren el
+# selector de proveedor, el de modelo, el del modo, el menú «…» y la lista de conversaciones, y fallan si
+# alguno de esos desplegables se sale de la ventana.
 set -euo pipefail
 cd "$(dirname "$0")/../frontend"
 
@@ -46,11 +56,22 @@ if [ $# -ge 3 ]; then
     COMBOS="$1 $2 $3"
 else
     COMBOS=""
-    for v in main sidebar-long projects-tabs projects-plus-menu terminal chat chat-agent-steps chat-attachments chat-conversations vault-create vault-unlock problems settings-general empty dock-custom dock-hidden dock-view-menu dock-minimized dock-move-menu viewer-parts print-panel plate-overflow tree-menu tree-active-branch trash diff-parent; do
+    for v in main sidebar-long projects-tabs projects-plus-menu terminal chat chat-agent-steps chat-attachments chat-conversations vault-create vault-unlock problems settings-general empty dock-custom dock-hidden dock-view-menu dock-minimized dock-move-menu viewer-parts print-panel plate-overflow tree-menu tree-active-branch trash diff-parent mesh-import mesh-edit mesh-cut mesh-hole mesh-ai; do
         for s in "1920 1000" "1440 900" "1280 720" "1024 640"; do
             COMBOS="$COMBOS$v $s
 "
         done
+    done
+    # El chat solo, del ancho del panel más angosto (320) al más ancho (1200): ver arriba.
+    # (más los anchos justo a cada lado de los cortes de useChatTier: 480, 720 y 900)
+    # El editor de STL solo (S13), del ancho de un panel angosto (320) a uno ancho: la barra, el panel y el pie no desbordan.
+    for c in "mesh-edit-w320 520 700" "mesh-edit-w480 640 700" "mesh-edit-w639 760 700" "mesh-edit-w640 760 700" "mesh-edit-w720 900 760" "mesh-edit-w1100 1300 800"; do
+        COMBOS="$COMBOS$c
+"
+    done
+    for c in "chat-w320 520 700" "chat-w479 600 700" "chat-w480 640 700" "chat-narrow 520 760" "chat-w719 800 700" "chat-w720 900 760" "chat-w899 1000 760" "chat-w900 1000 760" "chat-w1200 1400 800"; do
+        COMBOS="$COMBOS$c
+"
     done
 fi
 
@@ -84,6 +105,16 @@ for i,b in enumerate(d.get("sideBoxes") or []):
     if b["sl"]: bad.append("lista %d de la barra lateral desplazada en horizontal (%d)"%(i,b["sl"]))
 if d.get("sideTitleLeft") not in (None,12): bad.append("el rótulo de la barra lateral está en x=%s (esperaba 12)"%d["sideTitleLeft"])
 if d.get("platform")=="darwin" and d.get("toggleLeft") is not None and d["toggleLeft"]<76: bad.append("el botón de la barra lateral (x=%d) queda bajo los semáforos"%d["toggleLeft"])
+for b in d.get("chatBoxes") or []:
+    if b["sw"]>b["cw"]: bad.append("chat: %s con contenido más ancho que su caja (%d > %d)"%(b["name"],b["sw"],b["cw"]))
+for b in d.get("meshBoxes") or []:
+    if b["sw"]>b["cw"]: bad.append("editor de STL: %s con contenido más ancho que su caja (%d > %d)"%(b["name"],b["sw"],b["cw"]))
+pr=d.get("popRects")
+if pr is not None:
+    if not pr.get("done"): bad.append("chat: el recorrido de desplegables no terminó (%s)"%list(pr.keys()))
+    for name,r in pr.items():
+        if name=="done" or r is None: continue
+        if r[0]<0 or r[1]<0 or r[2]>d["iw"] or r[3]>d["ih"]: bad.append("chat: el desplegable %s se sale de la ventana: %s en %dx%d"%(name,r,d["iw"],d["ih"]))
 if d["footerBottom"] not in (d["ih"],None): bad.append("barra de estado termina en %s (alto %d)"%(d["footerBottom"],d["ih"]))
 if d["footerRight"] not in (d["iw"],None): bad.append("barra de estado termina a la derecha en %s (ancho %d)"%(d["footerRight"],d["iw"]))
 print("OK     " if not bad else "FALLA  ", "; ".join(bad))

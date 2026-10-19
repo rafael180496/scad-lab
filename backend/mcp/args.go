@@ -19,6 +19,23 @@ func strArg(args map[string]any, key string) string {
 	return ""
 }
 
+// boolArg saca un booleano. Acepta true/false y los textos "true"/"false": los
+// modelos chicos mandan "true" entre comillas. Falta o tipo equivocado = def.
+func boolArg(args map[string]any, key string, def bool) bool {
+	switch v := args[key].(type) {
+	case bool:
+		return v
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "true", "yes", "1":
+			return true
+		case "false", "no", "0":
+			return false
+		}
+	}
+	return def
+}
+
 // intArg saca un entero. Acepta número y texto numérico: los modelos mandan
 // "640" con frecuencia.
 func intArg(args map[string]any, key string, def int) int {

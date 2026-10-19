@@ -16,8 +16,10 @@ import (
 	"scadlab/backend/exporter"
 	"scadlab/backend/i18n"
 	"scadlab/backend/mesh"
+	"scadlab/backend/meshedit"
 	"scadlab/backend/parts"
 	"scadlab/backend/printers"
+	"scadlab/backend/refmodel"
 	"scadlab/backend/render"
 	"scadlab/backend/scad"
 	"scadlab/backend/scadwasm"
@@ -71,6 +73,20 @@ func (e *env) tools() []Tool {
 			}, "label", "source"),
 			Annotations: annotations(annWrite),
 			handler:     e.createCheckpoint,
+		},
+		{
+			Name: "import_mesh",
+			Description: "Make a 3D model the user put in refs/ (STL, 3MF or OBJ) EDITABLE: creates a NEW root checkpoint NNN-slug.scad that does import(\"refs/x.stl\") inside color(). " +
+				"A 3MF or OBJ is first converted to an STL in refs/ (the original stays next to it; a 3MF loses its colors). The STL itself is never modified: to change the part, create child checkpoints " +
+				"(create_checkpoint with parent=<the file returned>) that import it and apply translate/rotate/scale/mirror, difference() for holes and half-space cuts, text, etc. (see the openscad-stl-editing skill). " +
+				"Returns the checkpoint, the STL it imports, the mesh size and warnings: an open mesh (Manifold may reject it, CGAL is slow), a very big one, or a model that does not fit the printer plate. " +
+				"Measure before cutting (inspect_reference, measure). Then render the new checkpoint.",
+			InputSchema: obj(map[string]any{
+				"file":          strProp("Model in refs/ (e.g. refs/bracket.stl or bracket.stl; also .3mf or .obj)."),
+				"center_on_bed": map[string]any{"type": "boolean", "description": "Center the model in X/Y and rest it on z=0 (a translate() in the new checkpoint; the STL does not change). Default false: it keeps the position it has in the file."},
+			}, "file"),
+			Annotations: annotations(annWrite),
+			handler:     e.importMesh,
 		},
 		{
 			Name: "render",
@@ -370,6 +386,49 @@ func (e *env) createCheckpoint(_ context.Context, args map[string]any) (*toolRes
 		"description":  strings.Join(strings.Fields(desc), " "),
 		"next":         msgf(i18n.Msg{ES: "Valídalo con render (file=%s).", EN: "Validate it with render (file=%s)."}, name),
 	})
+}
+
+// importMesh vuelve editable un modelo de refs/: el checkpoint base lo importa y
+// se edita con checkpoints hijos (S13). La ruta pasa por refmodel.ResolveRef, la
+// misma puerta de inspect_reference: un solo nombre de archivo de refs/.
+func (e *env) importMesh(_ context.Context, args map[string]any) (*toolResult, error) {
+	s := e.settings()
+	file := strings.TrimSpace(strArg(args, "file"))
+	if file == "" {
+		return nil, i18n.New(i18n.Msg{ES: "falta `file`: el modelo de refs/ (p. ej. refs/pieza.stl)", EN: "`file` is required: a model in refs/ (e.g. refs/part.stl)"})
+	}
+	center := boolArg(args, "center_on_bed", false)
+	o := meshedit.ImportOptions{CenterOnBed: center}
+	p := e.printer(s)
+	o.Plate, o.PlateName = p.BuildVolume, p.Name
+	got, err := meshedit.ImportRef(e.ws, file, o)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{
+		"file":          got.File,
+		"ref":           got.Ref,
+		"activeParent":  checkpoint.ActiveParent(e.ws),
+		"format":        got.Report.Format,
+		"converted":     got.Report.Format != refmodel.FormatSTL,
+		"centeredOnBed": center,
+		"mesh": map[string]any{
+			"sizeMm":     vec3{round(got.Report.Size[0], 2), round(got.Report.Size[1], 2), round(got.Report.Size[2], 2)},
+			"minMm":      vec3{round(got.Report.Min[0], 2), round(got.Report.Min[1], 2), round(got.Report.Min[2], 2)},
+			"maxMm":      vec3{round(got.Report.Max[0], 2), round(got.Report.Max[1], 2), round(got.Report.Max[2], 2)},
+			"triangles":  got.Report.Triangles,
+			"watertight": got.Report.Watertight,
+			"volumeMm3":  round(got.Report.VolumeMm3, 1),
+		},
+		"next": msgf(i18n.Msg{
+			ES: "Renderízalo con render (file=%s) y edítalo con checkpoints hijos (parent=%s) que importen %s.",
+			EN: "Render it with render (file=%s) and edit it with child checkpoints (parent=%s) that import %s.",
+		}, got.File, got.File, got.Ref),
+	}
+	if len(got.Warnings) > 0 {
+		out["warnings"] = got.Warnings
+	}
+	return jsonResult(out)
 }
 
 // --- render -----------------------------------------------------------------

@@ -48,6 +48,7 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 | `list_checkpoints` | — | árbol: archivo, padre, descripción, hijos, fecha, estado de render conocido; más `activeParent` ([claude/15](15-checkpoints.md)) |
 | `read_checkpoint` | `file` (def.: el más nuevo) | el código |
 | `create_checkpoint` | `label`, `source`, `parent` (def.: el padre activo, o el más nuevo; el primero no tiene), `description` | `{file, parent, activeParent, description}`; nunca pisa; avanza el activo ([claude/15](15-checkpoints.md)) |
+| `import_mesh` | `file` (de `refs/`), `center_on_bed` (def. `false`) | `{file, ref, converted, centeredOnBed, mesh{sizeMm, minMm, maxMm, triangles, watertight, volumeMm3}, warnings?, next}`: crea un checkpoint **raíz** que hace `import("refs/x.stl")`; 3MF/OBJ → STL en `refs/` (el original queda). Ver [claude/23](23-edicion-stl.md) |
 | `render` | `file` | estado, diagnósticos con línea y la línea de código, duración, caché, `engine` (`native`/`wasm`), `mesh`, `fitsBuildVolume`, avisos |
 | `lint` | `file` o `source` | diagnósticos de `scad.Lint` (OpenSCAD + SL001–SL009) y conteos |
 | `format` | `source` | el código formateado (texto) |
@@ -59,6 +60,11 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 
 Detalles que no son obvios:
 
+- **`import_mesh`** (S13) es de **escritura** (crea un checkpoint; en el chat con un CLI solo está en «Agente»). La ruta pasa por
+  `refmodel.ResolveRef`, la misma puerta de `inspect_reference`: un solo nombre de `refs/`, formato conocido, un enlace
+  simbólico solo si su destino sigue dentro de `refs/`. Avisa (`warnings`) de una malla abierta —importarla sola funciona,
+  pero cualquier booleano falla con «mesh is not closed»—, de más de 500 000 triángulos, de un 3MF con colores (se aplana) y
+  de un modelo que no cabe en la placa. No es idempotente: llamarlo dos veces crea dos checkpoints raíz.
 - **`render` con modelo roto es `isError: true`**, aunque el JSON es el mismo que
   el de un render bueno (con `status`, `diagnostics`, `message`): la herramienta
   no logró su propósito (una malla) y el agente tiene que corregir. `lint`, en

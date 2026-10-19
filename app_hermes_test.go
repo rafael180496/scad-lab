@@ -1070,3 +1070,33 @@ func TestHermesProviderErrorKeepsStepsAsPartial(t *testing.T) {
 }
 
 var _ llm.Client // el simulador se prueba contra el cliente real de backend/llm
+
+// «Modificar con IA» adjunta un STL que ya vive en refs/ (PrepareMeshEdit): se usa
+// tal cual, sin una copia -2, y quitar el chip no lo borra (el chat no lo creó).
+func TestAttachModelAlreadyInRefsIsReusedAndNotDeleted(t *testing.T) {
+	sim := newSim()
+	a, wsID, dir, _ := hermesApp(t, sim)
+	if err := os.MkdirAll(filepath.Join(dir, "refs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ref := filepath.Join(dir, "refs", "base.stl")
+	if err := os.WriteFile(ref, []byte(asciiSTL()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	att, err := a.AddChatAttachment(wsID, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if att.RefPath != "refs/base.stl" {
+		t.Fatalf("debía reutilizar refs/base.stl, no copiarlo: %q", att.RefPath)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "refs", "base-2.stl")); !os.IsNotExist(err) {
+		t.Error("no debía quedar una copia -2")
+	}
+	if err := a.RemoveChatAttachment(att.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(ref); err != nil {
+		t.Errorf("quitar el chip no debe borrar un archivo que ya estaba en refs/: %v", err)
+	}
+}

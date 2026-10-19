@@ -58,8 +58,13 @@ import {projectClosed} from './lib/sessionBridge'
 import {LAYOUT_DEFAULTS, LAYOUT_LIMITS, sidebarMaxFor, useLayout, useWindowWidth} from './hooks/useLayout'
 import {useAppearance} from './hooks/useAppearance'
 import {useExport} from './hooks/useExport'
+import {useModelImport} from './hooks/useModelImport'
+import {ImportDialog} from './components/meshedit/ImportDialog'
 import {isMac, isMod, setPlatform} from './lib/platform'
 import type {ViewerShot} from './components/viewer/Viewer'
+import type {MeshEditShot} from './components/meshedit/MeshEditor'
+import {confirmLeaveMeshEdit, isSessionDirty} from './lib/meshEditSession'
+import {modifyWithAI} from './lib/meshEditAI'
 
 // Los paneles acoplables (dockview, ~440 kB) van en su propio chunk: el núcleo de
 // la app (cabecera, barra lateral, estado) no lo arrastra.
@@ -90,6 +95,12 @@ export type ShotOptions = {
     trash?: boolean
     /** Abre la comparación de este checkpoint con su padre. */
     compare?: string
+    /** Entra al modo «Editar» del visor (S13) con unas operaciones ya hechas. */
+    meshEdit?: MeshEditShot
+    /** Abre el diálogo de importar un modelo 3D con este archivo (S13). */
+    meshImport?: {path: string}
+    /** Pulsa «Modificar con IA» sobre este checkpoint al abrir (S13). */
+    meshAI?: string
     /** Abre el menú «+» de las pestañas de proyecto. */
     projectsMenu?: ProjectTabsShot
     /** Marca estas pestañas con «cambios sin guardar» (no hay otra forma de tener un borrador de fondo). */
@@ -380,7 +391,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             if (!targets.length) return
             const losses = targets
                 .map((id) => {
-                    const unsaved = id === activeRef.current ? editorSession.get().dirty : !!projectsRef.current[id].editor?.dirty
+                    const unsaved = (id === activeRef.current ? editorSession.get().dirty : !!projectsRef.current[id].editor?.dirty) || isSessionDirty(id)
                     return {name: projectsRef.current[id].view.workspace.name, unsaved, agents: termsRef.current.alive[id] ?? 0}
                 })
                 .filter((l) => l.unsaved || l.agents > 0)
@@ -647,6 +658,26 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         bambuPath: boot?.settings.bambuStudioPath ?? '',
     })
 
+    // Importar un modelo 3D (S13): el botón de la barra lateral y el arrastre de un archivo a la ventana.
+    const modelImport = useModelImport(view?.workspace.id ?? null)
+
+    // Banco de capturas: abre el diálogo de importar con un archivo, y pulsa «Modificar con IA» sobre un checkpoint.
+    const shotImport = shot?.meshImport?.path
+    const shotImported = useRef(false)
+    const offerImport = modelImport.offer
+    useEffect(() => {
+        if (!shotImport || !view || shotImported.current) return
+        shotImported.current = true
+        offerImport(shotImport)
+    }, [shotImport, view, offerImport])
+    const shotAI = shot?.meshAI
+    const shotAIDone = useRef(false)
+    useEffect(() => {
+        if (!shotAI || !dockReady || !view || shotAIDone.current) return
+        shotAIDone.current = true
+        void modifyWithAI(view.workspace.id, shotAI, t)
+    }, [shotAI, dockReady, view, t])
+
     // Banco de capturas: abre el diálogo de exportación cuando hay render.
     const shotExport = !!shot?.exportDialog
     const exportReady = exp.why === ''
@@ -662,6 +693,8 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         if (file === selected) return true
         if (!(await confirmLeave(t, selected))) return false
         const id = view.workspace.id
+        // Una edición de STL abierta (S13) se cierra al cambiar de checkpoint; con cambios, antes se pregunta.
+        if (!(await confirmLeaveMeshEdit(t, id))) return false
         try {
             const src = await ReadCheckpoint(id, file)
             patchProject(id, {selected: file, source: src, editor: null})
@@ -739,6 +772,14 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         : renderedWith
           ? {version: renderedWith, missing: false, engine: versioned?.engine}
           : detectedOpenSCAD
+
+    // Un checkpoint que acaba de crear la propia app (guardar del editor o del chat, aplicar una edición, importar un
+    // modelo): el watcher lo renderiza (auto-render) al verlo aparecer, así que el efecto de «elegido sin resultado» no
+    // debe lanzar otro render del mismo archivo.
+    const adoptNewCheckpoint = (name: string) => {
+        if (view && boot?.settings.autoRender) autoTried.current.add(`${view.workspace.id}:${name}`)
+        void select(name)
+    }
 
     const toggle = async (cp: store.Checkpoint) => {
         if (!view) return
@@ -838,6 +879,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     selected={selected}
                     onOpen={(id) => void openTab(id)}
                     onNew={() => setNewOpen(true)}
+                    onImportModel={() => void modelImport.choose()}
                     onImport={async () => {
                         const dir = await ChooseDirectory(t.workspaces.import, '')
                         if (!dir) return
@@ -924,13 +966,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     terms={terms}
                     editorRestore={cur?.editor ?? null}
                     onEditorRestored={() => activeId != null && patchProject(activeId, (p) => (p.editor ? {editor: null} : {}))}
-                    onSaved={(name) => {
-                        // El watcher lo renderiza (auto-render) al verlo
-                        // aparecer: el efecto de «elegido sin resultado» no
-                        // debe lanzar otro render del mismo archivo.
-                        if (view && boot.settings.autoRender) autoTried.current.add(`${view.workspace.id}:${name}`)
-                        void select(name)
-                    }}
+                    onSaved={adoptNewCheckpoint}
                     onSwatchesSaved={(swatches) =>
                         // El diálogo de Configuración guarda la configuración
                         // entera: tiene que ver las muestras nuevas para no pisarlas.
@@ -942,6 +978,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                         setBoot((b) => (b ? ({...b, settings: {...b.settings, viewer}} as main.Bootstrap) : b))
                     }
                     viewerShot={shot?.viewer}
+                    meshEditShot={shot?.meshEdit}
                     editorShot={shot?.editor}
                     onRender={() => selected && void renderFile(selected)}
                     onCancel={renders.cancel}
@@ -974,6 +1011,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     await openTab(id)
                 }}
             />
+            <ImportDialog {...modelImport.dialog} bed={bed} onImported={adoptNewCheckpoint} />
             <ExportDialog
                 open={exp.dialog}
                 onClose={exp.closeDialog}

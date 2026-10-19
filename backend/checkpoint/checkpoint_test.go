@@ -79,6 +79,34 @@ func TestCreateNeverOverwritesAndRaces(t *testing.T) {
 	}
 }
 
+// CreateDetached agrega una raíz nueva a un árbol que ya existe (importar un
+// modelo) sin mover el padre activo.
+func TestCreateDetached(t *testing.T) {
+	dir := t.TempDir()
+	first, err := CreateRoot(dir, "Caja", "", "cube(3);")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SetActiveParent(dir, first); err != nil {
+		t.Fatal(err)
+	}
+	name, err := CreateDetached(dir, "Importado", "Importa x.stl", "cube(1);")
+	if err != nil || name != "002-importado.scad" {
+		t.Fatalf("CreateDetached: %q %v", name, err)
+	}
+	files, _ := workspace.Scan(dir)
+	byName := map[string]workspace.CheckpointFile{}
+	for _, f := range files {
+		byName[f.FileName] = f
+	}
+	if len(files) != 2 || byName[name].ParentFile != "" || byName[name].Description != "Importa x.stl" {
+		t.Errorf("Scan: %+v", files)
+	}
+	if got := ActiveParent(dir); got != first {
+		t.Errorf("no debe mover el padre activo: %q", got)
+	}
+}
+
 func TestCreateRoot(t *testing.T) {
 	dir := t.TempDir()
 	name, err := CreateRoot(dir, "Caja", "", "cube(3);")

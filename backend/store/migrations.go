@@ -262,6 +262,18 @@ CREATE TABLE IF NOT EXISTS vault_meta (
 );
 `,
 	},
+	{
+		version: 8,
+		desc:    "CLIs como proveedores del chat (S12.b): la sesión del CLI de cada chat",
+		sql: `
+-- Un chat con un CLI agéntico (provider_id = 'cli:claude', 'cli:codex'…) continúa
+-- con el id de conversación que el propio CLI devolvió (--resume, resume <id>…):
+-- el historial lo guarda el CLI y acá solo queda el puntero. Vacío = todavía no
+-- hay sesión (un chat nuevo, o uno que cambió de CLI). Los chats con un servidor
+-- de modelos no lo usan.
+ALTER TABLE chats ADD COLUMN cli_session TEXT NOT NULL DEFAULT '';
+`,
+	},
 }
 
 func (s *Store) migrate() error {

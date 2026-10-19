@@ -1,5 +1,7 @@
 import {memo, useMemo, type ReactNode} from 'react'
+import {Square, SquareCheck} from 'lucide-react'
 import {BrowserOpenURL} from '../../../wailsjs/runtime/runtime'
+import {useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {CodeBlock, type CodeActions} from './CodeBlock'
 import {parseInline, parseMarkdown, type Block, type Inline} from './markdownParse'
@@ -35,6 +37,12 @@ function Inlines({nodes}: {nodes: Inline[]}): ReactNode {
                         <Inlines nodes={n.children} />
                     </em>
                 )
+            case 'del':
+                return (
+                    <del key={i} className="text-muted decoration-faint">
+                        <Inlines nodes={n.children} />
+                    </del>
+                )
             case 'link':
                 return (
                     <a
@@ -56,16 +64,19 @@ function Inlines({nodes}: {nodes: Inline[]}): ReactNode {
 
 const Text = ({text}: {text: string}) => <Inlines nodes={parseInline(text)} />
 
+const ALIGN = {left: 'text-left', center: 'text-center', right: 'text-right'}
+
 // Relativos al cuerpo del chat (--chat-font-size): la jerarquía se conserva al cambiar la letra.
 const headingCls = ['', 'text-[1.15em]', 'text-[1.08em]', 'text-[1em]', 'text-[1em]', 'text-[0.96em]', 'text-[0.96em]']
 
 function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) {
+    const t = useT()
     switch (block.type) {
         case 'code':
             return <CodeBlock lang={block.lang} code={block.code} closed={block.closed} actions={actions} />
         case 'heading':
             return (
-                <p className={cn('mt-3 mb-1 font-semibold text-fg first:mt-0', headingCls[block.level])}>
+                <p role="heading" aria-level={block.level} className={cn('mt-3 mb-1 font-semibold text-fg first:mt-0', headingCls[block.level], block.level <= 2 && 'border-b border-line pb-1')}>
                     <Text text={block.text} />
                 </p>
             )
@@ -82,7 +93,13 @@ function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) 
                 <ul className="my-1.5 flex flex-col gap-0.5">
                     {block.items.map((it, i) => (
                         <li key={i} className="flex gap-2" style={{paddingLeft: it.depth * 16}}>
-                            <span className="w-4 shrink-0 text-right font-mono text-chat-sm text-faint">{it.marker}</span>
+                            {it.task ? (
+                                <span className="flex w-4 shrink-0 justify-end pt-[0.2em]" aria-label={it.task === 'done' ? t.chat.task.done : t.chat.task.open}>
+                                    {it.task === 'done' ? <SquareCheck className="icon-ui-14 text-ok" /> : <Square className="icon-ui-14 text-faint" />}
+                                </span>
+                            ) : (
+                                <span className="w-4 shrink-0 text-right font-mono text-chat-sm text-faint">{it.marker}</span>
+                            )}
                             <span className="min-w-0 flex-1">
                                 <Text text={it.text} />
                             </span>
@@ -94,10 +111,10 @@ function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) 
             return (
                 <div className="my-2 overflow-x-auto rounded-lg border border-line">
                     <table className="w-full border-collapse text-chat-sm">
-                        <thead className="bg-surface-2 text-left text-muted">
+                        <thead className="bg-surface-2 text-muted">
                             <tr>
                                 {block.head.map((h, i) => (
-                                    <th key={i} className="border-b border-line px-2.5 py-1 font-medium">
+                                    <th key={i} className={cn('border-b border-line px-2.5 py-1 font-medium', ALIGN[block.align[i] ?? 'left'])}>
                                         <Text text={h} />
                                     </th>
                                 ))}
@@ -107,7 +124,7 @@ function BlockViewImpl({block, actions}: {block: Block; actions?: CodeActions}) 
                             {block.rows.map((r, i) => (
                                 <tr key={i} className="border-b border-line last:border-0">
                                     {r.map((c, j) => (
-                                        <td key={j} className="px-2.5 py-1 align-top">
+                                        <td key={j} className={cn('px-2.5 py-1 align-top', ALIGN[block.align[j] ?? 'left'])}>
                                             <Text text={c} />
                                         </td>
                                     ))}

@@ -72,7 +72,7 @@ function onLayer1(o: Object3D | null) {
     o?.traverse((c) => c.layers.set(1))
 }
 
-function Environment() {
+export function Environment() {
     const gl = useThree((s) => s.gl)
     const scene = useThree((s) => s.scene)
     const invalidate = useThree((s) => s.invalidate)
@@ -115,7 +115,7 @@ function gridLines(x: number, y: number, step: number, every: number, major: boo
 // Bed: la placa de la impresora del workspace a escala, con cuadrícula de
 // 10 mm (más marcada cada 50) y la caja del volumen de impresión en líneas
 // tenues. Centrada en el origen, como la pieza.
-function Bed({bed, theme, overflow}: {bed: BedVolume; theme: ThemeColors; overflow: boolean}) {
+export function Bed({bed, theme, overflow}: {bed: BedVolume; theme: ThemeColors; overflow: boolean}) {
     const minor = useMemo(() => gridLines(bed.x, bed.y, 10, 5, false), [bed.x, bed.y])
     const major = useMemo(() => gridLines(bed.x, bed.y, 10, 5, true), [bed.x, bed.y])
     const volume = useMemo(() => {
@@ -187,7 +187,7 @@ function OverflowFrame({bed, color}: {bed: BedVolume; color: string}) {
 // edgeColor contrasta con la muestra: aristas claras sobre un filamento
 // oscuro y oscuras sobre uno claro. Sale del color elegido, no es un color
 // suelto.
-function edgeColor(hex: string): string {
+export function edgeColor(hex: string): string {
     const c = new Color(hex)
     const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
     return '#' + (lum < 0.3 ? c.lerp(new Color(1, 1, 1), 0.7) : c.lerp(new Color(0, 0, 0), 0.85)).getHexString()
@@ -324,7 +324,9 @@ function Parts({parts, swatch, wireframe, edges, accent}: {parts: PartsScene; sw
     )
 }
 
-function Rig({geometry, bed, ortho, initialView, handleRef}: Pick<SceneProps, 'geometry' | 'bed' | 'ortho' | 'initialView' | 'handleRef'>) {
+// `fitBox` es para quien no tiene una geometría que encuadrar (el editor de STL, que dibuja la pieza ya
+// transformada): se encuadra esa caja, una sola vez, en vez de la de `geometry`.
+export function Rig({geometry, bed, ortho, initialView, handleRef, fitBox}: Pick<SceneProps, 'geometry' | 'bed' | 'ortho' | 'initialView' | 'handleRef'> & {fitBox?: Box3}) {
     const set = useThree((s) => s.set)
     const size = useThree((s) => s.size)
     const gl = useThree((s) => s.gl)
@@ -357,10 +359,11 @@ function Rig({geometry, bed, ortho, initialView, handleRef}: Pick<SceneProps, 'g
     }, [cam, target])
 
     const box = useMemo(() => {
+        if (fitBox) return fitBox
         if (geometry?.boundingBox) return geometry.boundingBox
         // Sin pieza: se encuadra la placa.
         return new Box3(new Vector3(-bed.x / 2, -bed.y / 2, 0), new Vector3(bed.x / 2, bed.y / 2, 0))
-    }, [geometry, bed.x, bed.y])
+    }, [fitBox, geometry, bed.x, bed.y])
 
     // Primer encuadre: cuando llega la primera pieza y el panel ya tiene
     // tamaño. Al cambiar de checkpoint la cámara se queda donde estaba:
@@ -369,9 +372,9 @@ function Rig({geometry, bed, ortho, initialView, handleRef}: Pick<SceneProps, 'g
         if (fitted.current || size.width === 0 || size.height === 0) return
         fitView(cam, box, initialView, size.width, size.height, target)
         controls.current?.update()
-        if (geometry) fitted.current = true
+        if (geometry || fitBox) fitted.current = true
         invalidate()
-    }, [geometry, box, size.width, size.height, cam, initialView, target, invalidate])
+    }, [geometry, fitBox, box, size.width, size.height, cam, initialView, target, invalidate])
 
     useLayoutEffect(() => {
         const done = () => {
@@ -406,7 +409,9 @@ function Rig({geometry, bed, ortho, initialView, handleRef}: Pick<SceneProps, 'g
         }
     })
 
-    return <OrbitControls ref={controls} camera={cam} enableDamping dampingFactor={0.18} />
+    // makeDefault: los controles quedan en `state.controls`, que es lo que mira el gizmo del editor de STL
+    // (TransformControls de drei) para apagar la órbita mientras se arrastra una flecha.
+    return <OrbitControls ref={controls} camera={cam} makeDefault enableDamping dampingFactor={0.18} />
 }
 
 function Scene(p: SceneProps) {

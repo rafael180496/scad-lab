@@ -48,25 +48,29 @@ const (
 // Part es una parte de la referencia: un color de un 3MF, o la malla entera de
 // un STL u OBJ.
 type Part struct {
-	Name      string
-	Color     string // «#RRGGBB»; vacío en STL y OBJ, que no traen color
-	Triangles int
-	Size      [3]float64
-	VolumeMm3 float64
+	Name      string     `json:"name"`
+	Color     string     `json:"color"` // «#RRGGBB»; vacío en STL y OBJ, que no traen color
+	Triangles int        `json:"triangles"`
+	Size      [3]float64 `json:"size"`
+	VolumeMm3 float64    `json:"volumeMm3"`
 }
 
 // Report es lo que se sabe de una referencia. Las medidas están en las
 // unidades del archivo, que en STL y OBJ se leen como mm (lo que asume
 // OpenSCAD al importar).
+//
+// Las etiquetas JSON existen desde el editor de STL (S13): Report cruza Wails
+// en AnalyzeModelFile / ImportModel / PrepareMeshEdit.
 type Report struct {
-	Format     string
-	Triangles  int
-	Min, Max   [3]float64
-	Size       [3]float64
-	VolumeMm3  float64
-	AreaMm2    float64
-	Watertight bool
-	Parts      []Part // 3MF: una por color; STL y OBJ: una sola
+	Format     string     `json:"format"`
+	Triangles  int        `json:"triangles"`
+	Min        [3]float64 `json:"min"`
+	Max        [3]float64 `json:"max"`
+	Size       [3]float64 `json:"size"`
+	VolumeMm3  float64    `json:"volumeMm3"`
+	AreaMm2    float64    `json:"areaMm2"`
+	Watertight bool       `json:"watertight"`
+	Parts      []Part     `json:"parts"` // 3MF: una por color; STL y OBJ: una sola
 }
 
 var errNotRef = i18n.New(i18n.Msg{

@@ -14,8 +14,16 @@ export function AddChatAttachmentData(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddChatAttachmentData'](arg1, arg2, arg3);
 }
 
+export function AnalyzeModelFile(arg1) {
+  return window['go']['main']['App']['AnalyzeModelFile'](arg1);
+}
+
 export function AntigravityMCPStatus() {
   return window['go']['main']['App']['AntigravityMCPStatus']();
+}
+
+export function ApplyMeshEdit(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ApplyMeshEdit'](arg1, arg2, arg3, arg4);
 }
 
 export function CancelChat(arg1) {
@@ -42,6 +50,10 @@ export function ChatCheckpointParent(arg1, arg2) {
   return window['go']['main']['App']['ChatCheckpointParent'](arg1, arg2);
 }
 
+export function ChatModelCatalog(arg1, arg2) {
+  return window['go']['main']['App']['ChatModelCatalog'](arg1, arg2);
+}
+
 export function ChooseChatAttachment(arg1) {
   return window['go']['main']['App']['ChooseChatAttachment'](arg1);
 }
@@ -52,6 +64,10 @@ export function ChooseDirectory(arg1, arg2) {
 
 export function ChooseFile(arg1) {
   return window['go']['main']['App']['ChooseFile'](arg1);
+}
+
+export function ChooseModelFile() {
+  return window['go']['main']['App']['ChooseModelFile']();
 }
 
 export function CloseProject(arg1) {
@@ -178,6 +194,14 @@ export function GetSkillsFolder() {
   return window['go']['main']['App']['GetSkillsFolder']();
 }
 
+export function ImportMiniToolsServers(arg1) {
+  return window['go']['main']['App']['ImportMiniToolsServers'](arg1);
+}
+
+export function ImportModel(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportModel'](arg1, arg2, arg3);
+}
+
 export function ImportWorkspace(arg1, arg2) {
   return window['go']['main']['App']['ImportWorkspace'](arg1, arg2);
 }
@@ -194,8 +218,16 @@ export function ListAgentSessions(arg1, arg2) {
   return window['go']['main']['App']['ListAgentSessions'](arg1, arg2);
 }
 
+export function ListChatProviders() {
+  return window['go']['main']['App']['ListChatProviders']();
+}
+
 export function ListChats(arg1) {
   return window['go']['main']['App']['ListChats'](arg1);
+}
+
+export function ListDetectedCLIs() {
+  return window['go']['main']['App']['ListDetectedCLIs']();
 }
 
 export function ListMaterials() {
@@ -266,8 +298,16 @@ export function OpenWorkspace(arg1) {
   return window['go']['main']['App']['OpenWorkspace'](arg1);
 }
 
+export function PrepareMeshEdit(arg1, arg2) {
+  return window['go']['main']['App']['PrepareMeshEdit'](arg1, arg2);
+}
+
 export function PreviewExportParts(arg1, arg2) {
   return window['go']['main']['App']['PreviewExportParts'](arg1, arg2);
+}
+
+export function PreviewMeshEdit(arg1, arg2) {
+  return window['go']['main']['App']['PreviewMeshEdit'](arg1, arg2);
 }
 
 export function PreviewWorkspacePath(arg1, arg2) {
@@ -276,6 +316,10 @@ export function PreviewWorkspacePath(arg1, arg2) {
 
 export function ProjectActivity() {
   return window['go']['main']['App']['ProjectActivity']();
+}
+
+export function ProviderHealth(arg1) {
+  return window['go']['main']['App']['ProviderHealth'](arg1);
 }
 
 export function ReadCheckpoint(arg1, arg2) {
@@ -292,6 +336,10 @@ export function ReadSkillFile(arg1, arg2) {
 
 export function ReadTerminalBuffer(arg1) {
   return window['go']['main']['App']['ReadTerminalBuffer'](arg1);
+}
+
+export function RefreshChatProviders() {
+  return window['go']['main']['App']['RefreshChatProviders']();
 }
 
 export function RemoveAntigravityMCP() {

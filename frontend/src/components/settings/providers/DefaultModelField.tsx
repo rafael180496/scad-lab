@@ -1,6 +1,6 @@
 import {main} from '../../../../wailsjs/go/models'
 import {useT} from '../../../i18n'
-import {ModelCombobox} from '../../chat/ModelCombobox'
+import {ModelPicker} from '../../chat/ModelPicker'
 import {Input} from '../../ui/Field'
 
 // Campo «Modelo por defecto» de un servidor. Con la lista de modelos a mano (la
@@ -32,13 +32,16 @@ export function DefaultModelField({
         )
     }
     return (
-        <ModelCombobox
+        <ModelPicker
             models={modelIds.map((id) => main.ModelInfo.createFrom({id}))}
             value={value}
             onChange={onChange}
+            defaultHint={t.defaultModelEmpty}
             loading={false}
             error=""
-            align="left"
+            cli={false}
+            align="start"
+            className="w-full"
         />
     )
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"scadlab/backend/chat"
+	"scadlab/backend/clichat"
 	"scadlab/backend/i18n"
 	"scadlab/backend/llm"
 	"scadlab/backend/store"
@@ -59,7 +60,11 @@ const maxProbeModelIDs = 500
 // un «no» nunca bloquea, solo se avisa. Los precios (dólares por millón de
 // tokens) solo los publica OpenRouter; 0 = desconocido.
 type ModelInfo struct {
-	ID                  string  `json:"id"`
+	ID string `json:"id"`
+	// Label y Description los llenan los CLIs («Gemini 4 Argon (High)» + para qué
+	// sirve); un servidor no los trae y la interfaz muestra el id.
+	Label               string  `json:"label"`
+	Description         string  `json:"description"`
 	Vision              bool    `json:"vision"`
 	VisionKnown         bool    `json:"visionKnown"`
 	Tools               bool    `json:"tools"`
@@ -447,6 +452,13 @@ func (a *App) serverModelInfo(serverID, model string) (ModelInfo, bool) {
 
 // ListProviderModels es el alias de S5: los ids de los modelos de un servidor.
 func (a *App) ListProviderModels(providerID string) ([]string, error) {
+	if cliID, ok := clichat.ParseProviderID(providerID); ok {
+		ids := []string{}
+		for _, m := range clichat.Models(cliID, false) {
+			ids = append(ids, m.ID)
+		}
+		return ids, nil
+	}
 	list, err := a.ListServerModels(providerID, false)
 	if err != nil {
 		return nil, err
@@ -468,7 +480,16 @@ func (a *App) SetLastModel(workspaceID int64, serverID, model string) error {
 	if serverID == "" {
 		return i18n.New(i18n.Msg{ES: "falta el servidor", EN: "the server is missing"})
 	}
-	if _, err := a.store.GetModelServer(serverID); err != nil {
+	if clichat.IsProviderID(serverID) {
+		// Un CLI no es una fila de model_servers: basta con que exista en el
+		// catálogo (recordar la elección no exige que esté instalado ahora).
+		if _, ok := clichat.ParseProviderID(serverID); !ok {
+			return i18n.Errorf(i18n.Msg{ES: "el CLI %q no es compatible con el chat", EN: "the CLI %q is not supported by the chat"}, serverID)
+		}
+		if !clichat.ValidModel(model) {
+			return i18n.Errorf(i18n.Msg{ES: "el modelo %q no es un id válido", EN: "the model %q is not a valid id"}, model)
+		}
+	} else if _, err := a.store.GetModelServer(serverID); err != nil {
 		return err
 	}
 	return a.store.SetLastModel(workspaceID, store.LastModel{ServerID: serverID, Model: model})
@@ -485,7 +506,17 @@ func (a *App) GetLastModel(workspaceID int64) (LastModel, error) {
 	if err != nil || lm.ServerID == "" {
 		return LastModel{}, err
 	}
-	if _, err := a.store.GetModelServer(lm.ServerID); err != nil {
+	if clichat.IsProviderID(lm.ServerID) {
+		// Un CLI que ya no está instalado (o que dejó el catálogo) vale como
+		// «ninguna»: el chat cae a su valor por defecto.
+		id, ok := clichat.ParseProviderID(lm.ServerID)
+		if !ok {
+			return LastModel{}, nil
+		}
+		if d, found := clichat.Default.Get(id, false); !found || !d.Installed {
+			return LastModel{}, nil
+		}
+	} else if _, err := a.store.GetModelServer(lm.ServerID); err != nil {
 		return LastModel{}, nil
 	}
 	return LastModel{ServerID: lm.ServerID, Model: lm.Model}, nil
@@ -515,6 +546,9 @@ const (
 type modelHealthCache struct {
 	mu sync.Mutex
 	ok map[string]time.Time
+	// lat es la latencia (ms) del último chequeo que la midió: la píldora del
+	// selector de proveedor la muestra mientras el chequeo vale.
+	lat map[string]int64
 	// gen se incrementa al invalidar. Un chequeo que arrancó antes no puede
 	// guardar su resultado después: lo hizo con la configuración vieja (otra
 	// URL, otra clave) y daría por sano lo que ya no es lo mismo.
@@ -556,6 +590,25 @@ func (c *modelHealthCache) put(id string, gen uint64) {
 	c.ok[id] = c.clock()
 }
 
+// putLatency recuerda lo que tardó el chequeo, con la misma guarda de put.
+func (c *modelHealthCache) putLatency(id string, gen uint64, ms int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.gen[id] != gen {
+		return
+	}
+	if c.lat == nil {
+		c.lat = map[string]int64{}
+	}
+	c.lat[id] = ms
+}
+
+func (c *modelHealthCache) latency(id string) int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lat[id]
+}
+
 func (c *modelHealthCache) invalidateAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -566,12 +619,14 @@ func (c *modelHealthCache) invalidateAll() {
 		c.gen[id]++
 	}
 	c.ok = nil
+	c.lat = nil
 }
 
 func (c *modelHealthCache) invalidate(id string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.ok, id)
+	delete(c.lat, id)
 	if c.gen == nil {
 		c.gen = map[string]uint64{}
 	}
@@ -629,10 +684,12 @@ func (a *App) llmClientForTurn(s store.ModelServer) (llm.Client, error) {
 	if !svc.health.fresh(s.ID) {
 		ctx, cancel := context.WithTimeout(a.appCtx(), modelHealthTimeout)
 		defer cancel()
+		start := time.Now()
 		if err := runProbe(ctx, s.Kind, client); err != nil {
 			return nil, serverUnreachableError(s, err)
 		}
 		svc.health.put(s.ID, gen)
+		svc.health.putLatency(s.ID, gen, time.Since(start).Milliseconds())
 	}
 	return &healthTrackedClient{Client: client, id: s.ID, gen: gen, svc: svc}, nil
 }

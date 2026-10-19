@@ -48,7 +48,9 @@ Mismo catálogo que mini-tools.
   (prompt de `assets/prompts/system.{es,en}.md`, bloques de código con «Guardar como
   checkpoint»); con «Agente» es **Hermes**: el modelo usa las herramientas de ScadLab en
   proceso (`mcp.Toolbox`) con el prompt de `assets/prompts/agent.{es,en}.md`. Detalle,
-  adjuntos, conversaciones y la terminal: [19-hermes.md](19-hermes.md).
+  adjuntos, conversaciones y la terminal: [19-hermes.md](19-hermes.md). Desde S12.b los CLIs de esta
+  tabla también son proveedores del chat (`cli:claude`…, `backend/clichat`): se autodetectan, corren sin
+  interacción en la carpeta del workspace y con el MCP de ScadLab conectado.
 - **Servidor MCP** (S6): `ScadLab --mcp --workspace <dir>` (bloque 6.A,
   `backend/mcp`) le da al agente herramientas para renderizar, validar, medir y
   ver sus modelos. ScadLab lo deja configurado solo (bloque 6.B,

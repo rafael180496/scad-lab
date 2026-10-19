@@ -362,6 +362,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li><a href="#visor-modos">View modes and cameras</a></li>
     <li><a href="#visor-medir">Measuring a part: volume, weight and cost</a></li>
     <li><a href="#visor-color">Colors, capture and split view</a></li>
+    <li><a href="#editar-stl">Edit an STL</a></li>
   </ul>
 
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>Editor</button>
@@ -609,7 +610,7 @@ wails build            <span class="c"># binary in build/bin/</span></code></pre
 
   <h2 id="requisitos--agentes">AI agents (optional)</h2>
   <p>ScadLab does not ship its own model: it uses the CLIs you already have installed and signed in for the
-  <a href="#ia-agentes">terminal</a>, and the model servers you enable for the <a href="#ia-hermes">chat</a>.
+  <a href="#ia-agentes">terminal</a> and the <a href="#ia-hermes">chat</a> (they show up in the chat's provider picker on their own), and the model servers you enable for the chat.
   It detects any of these:</p>
   <div class="tablewrap"><table>
     <tr><th>Agent</th><th>What you need</th></tr>
@@ -1090,6 +1091,91 @@ color("SteelBlue") difference() {
   Iso on the left and Bottom on the right, to see the shape and the resting face at once. Click one of the
   two to activate it (it gets an orange frame): the bar and the keyboard act on the active one, and each has its
   own projection. The <strong>×</strong> on the right closes it.</p>
+</article>
+
+<article class="topic" id="editar-stl" data-title="Edit an STL">
+  <h1>Edit an STL <span class="badge ok">Available</span></h1>
+  <p class="lead">Bring in an STL, 3MF or OBJ model, move it, cut it and add pieces or holes —by hand or by asking the AI— without ever touching the original file.</p>
+
+  <h2 id="editar-stl--principio">The file is never touched: every edit is a checkpoint</h2>
+  <p>The STL stays intact in the workspace's <code>refs/</code> folder. Every change is <strong>OpenSCAD code in a new
+  checkpoint</strong> that does <code>import("refs/part.stl")</code> and applies the operations to it. That is why an edit
+  sits in the <a href="#checkpoints-arbol">tree</a> with its parent, is undone by going back to the previous checkpoint, is rendered
+  with OpenSCAD or the built-in engine and can be <a href="#imprimir-exportar">exported to STL or 3MF</a> like any other.</p>
+
+  <h2 id="editar-stl--importar">Import a model <span class="badge ok">Available</span></h2>
+  <p>There are two ways: the <strong>Import STL/3MF/OBJ…</strong> button in the sidebar (next to the checkpoint buttons) or
+  <strong>dragging the file onto the window</strong>. Before bringing it in, a dialog analyzes the file and shows its size,
+  triangles, volume, whether the mesh is <strong>closed</strong> and, for a 3MF, its colors. It also warns about what matters
+  for editing: an open mesh, one with more than 500,000 triangles, a 3MF with several colors (it is flattened into one mesh
+  and loses them) or a part that does not fit your printer's plate.</p>
+  <figure class="shot"><img src="docs/screenshots/mesh-import.png" alt="Import a 3D model dialog over the ScadLab window: the file soporte-abierto.stl with a size of 78 × 124 × 27.6 mm, 4,176 triangles, an amber Open label and a warning that cutting or drilling it will fail; the Center and rest on the plate box ticked and the Import button" loading="lazy"><figcaption>The import dialog: measurements, the <strong>open mesh</strong> warning and "Center and rest on the plate", ticked by default.</figcaption></figure>
+  <p>"Center and rest on the plate" (ticked by default) adds a <code>translate()</code> to the base checkpoint: the model ends
+  up in the middle of the plate resting on Z = 0, and the original file does not change. A 3MF or OBJ is converted to STL in
+  <code>refs/</code> (the original stays next to it). After importing, the new checkpoint is a <strong>root</strong> of the tree and
+  is selected.</p>
+
+  <h2 id="editar-stl--modo">Edit mode</h2>
+  <p>The <strong>Edit</strong> button on the viewer bar opens edit mode on the chosen checkpoint, whether it is an import or a
+  design of yours (for a design, its already rendered mesh is frozen; <strong>the colors of a multicolor checkpoint are
+  lost</strong> in that base, and you recolor per piece). The preview is immediate.</p>
+  <figure class="shot"><img src="docs/screenshots/mesh-edit.png" alt="Viewer in Edit mode: the toolbar on top (Move, Rotate, Scale, snapping, mirror X Y Z, Center, Rest, Face, Cut and pieces), the sample box with the move gizmo at its center and an orange block on top, the measures at the bottom left and, on the right, the model properties with the six-operation stack" loading="lazy"><figcaption>Edit mode: the <strong>Move</strong> gizmo on the model, its <strong>live measures</strong> and, on the right, the properties and the <strong>operation stack</strong>.</figcaption></figure>
+  <ul>
+    <li><strong>Move, Rotate and Scale</strong> (<kbd>W</kbd>, <kbd>E</kbd>, <kbd>R</kbd>): drag the gizmo's arrows or rings or type the values
+    in mm and degrees in <strong>Properties</strong>. The center cube of Scale scales evenly; the arrows scale per axis. The gizmo
+    works on the <strong>center of the model's box</strong>, not on the file's origin (which in an STL is often far from the part).</li>
+    <li><strong>Step snapping</strong> (the magnet): 1 mm, 15° and 0.1 by default; change them in Properties.</li>
+    <li><strong>Live measures</strong>: the box of the selection and of the whole set, and the height of the lowest point.</li>
+    <li><strong>Mirror</strong> on X, Y or Z (along the file's axes; the center of the box does not move),
+    <strong>Center</strong> on the plate, <strong>Rest</strong> on the plate (the lowest point goes to Z = 0) and
+    <strong>Face</strong>: click a face of the model and it turns until that face lies against the plate.</li>
+    <li><strong>Color</strong> of the model and of every piece you add.</li>
+  </ul>
+
+  <h2 id="editar-stl--cortar">Cut with a plane</h2>
+  <p>The <strong>Cut</strong> button creates a plane through the center of the model, with its own gizmo to move and tilt it (or with the
+  point and the normal typed in, with <em>Horizontal</em>, <em>Vertical X</em> and <em>Vertical Y</em> shortcuts). The plane's arrow marks the "above"
+  side. You choose <strong>what stays</strong>: the upper part, the lower part or <strong>Split</strong> in two, and then the two halves
+  <strong>as objects</strong> apart in X (to print them separately) or <strong>as colors</strong> in place (for a multicolor 3MF),
+  with a color picker per half.</p>
+  <figure class="shot"><img src="docs/screenshots/mesh-cut.png" alt="Edit mode with the cutting plane: the box split at mid-height into two colors, the upper half orange and the lower half blue, with the plane's arrow; on the right, the cutting plane properties with Split and Colors chosen and the color pickers for the two halves" loading="lazy"><figcaption>A cutting plane that <strong>splits the box into two colors</strong>: the preview clips what you see without touching the mesh.</figcaption></figure>
+
+  <h2 id="editar-stl--piezas">Cube, cylinder, sphere and text: addition or hole</h2>
+  <p>With <strong>Addition</strong> or <strong>Hole</strong> chosen, the cube, cylinder, sphere and text buttons add a piece at the center of the
+  model. Each one has its gizmo, its size (X·Y·Z, diameter and height, letter size and extrusion), its color and its mode,
+  which you can change afterwards. A <strong>hole</strong> is subtracted from everything it touches and is shown in the view as a
+  <strong>translucent red</strong> volume: it is a preview; the real result is the render when you apply.</p>
+  <figure class="shot"><img src="docs/screenshots/mesh-hole.png" alt="Edit mode with a cylinder as a hole: a translucent red volume passes through the box; on the right, the cylinder properties with Hole mode, a 14 mm diameter and 40 mm height" loading="lazy"><figcaption>A <strong>cylinder as a hole</strong>, in translucent red, with its diameter and height.</figcaption></figure>
+
+  <h2 id="editar-stl--pila">The operation stack and undo</h2>
+  <p>Everything you do lands on the <strong>stack</strong> with a readable label ("Move the model to (−24, −62, 0) mm",
+  "Add Cylinder 1 as a hole"…): those labels go as comments in the checkpoint code. Several consecutive moves of the same
+  object merge into one. <kbd>⌘Z</kbd> and <kbd>⇧⌘Z</kbd> (<kbd>Ctrl+Z</kbd> and <kbd>Ctrl+Shift+Z</kbd> on Windows) undo and redo, and a
+  click on a step goes back to it; struck-through steps can be redone. The shortcuts only act with focus inside Edit
+  mode, so they do not clash with the code editor's.</p>
+
+  <h2 id="editar-stl--aplicar">View code, Apply and Discard</h2>
+  <p><strong>View code</strong> shows the OpenSCAD that would be saved, writing nothing. <strong>Apply</strong> asks for an optional label and
+  creates the new checkpoint, a child of the one you were editing, and selects it so it renders. <strong>Discard</strong> (or
+  <kbd>Esc</kbd>) leaves without keeping anything, with a confirmation if you have made changes; changing checkpoint or closing the project
+  with an edit half-done asks too. Edit mode is <strong>not remembered</strong> when you close the app.</p>
+
+  <h2 id="editar-stl--abierta">Open meshes</h2>
+  <p>A mesh that is not closed can be moved, rotated, scaled and mirrored, but <strong>cutting or drilling it fails</strong> in
+  OpenSCAD ("mesh is not closed"). The viewer shows a notice while you edit and, if the edit cuts or drills, ScadLab asks before
+  applying. The simplest fix is to repair the mesh before bringing it in.</p>
+
+  <h2 id="editar-stl--ia">Modify with AI</h2>
+  <p>In a checkpoint's menu (right-click) and on the Edit-mode bar, <strong>Modify with AI</strong> opens the chat with the model
+  already attached —with its report and preview— and "Modify this model: " typed in the message box, for you to finish the
+  sentence. Whichever provider you have chosen answers, <a href="#ia-hermes">Hermes or a CLI</a>, using the
+  <code>import_mesh</code> tool and the <code>openscad-stl-editing</code> skill. What you have not applied in Edit mode does not travel: the
+  model is attached as it is saved.</p>
+  <figure class="shot"><img src="docs/screenshots/mesh-ai.png" alt="Chat panel with a new chat: the model rpi5-case.stl attached as a chip with its preview and the message box with the text Modify this model: and the cursor at the end" loading="lazy"><figcaption><strong>Modify with AI</strong>: the chat opens with the STL attached and a suggested text.</figcaption></figure>
+
+  <h2 id="editar-stl--panel">In a narrow panel</h2>
+  <p>The toolbar becomes icon-only and wraps onto several lines, the side panel turns into a drawer with tabs (Properties and
+  Stack) under the viewer and the measures shrink to that of the selection: nothing is cut off and there is no horizontal scrolling.</p>
 </article>
 
 <!-- ============================================================== EDITOR -->
@@ -1675,18 +1761,31 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
 
 <article class="topic" id="ia-hermes" data-title="Hermes: the chat with tools and AI providers">
   <h1>Hermes: the chat with tools and AI providers</h1>
-  <p class="lead">The <strong>Chat</strong> tab talks with a model of your choice —local or in the cloud— and, with
-  <strong>Agent</strong> on, that model uses ScadLab's own tools: it <strong>creates a checkpoint, renders it, looks at
-  it, measures it and fixes it by itself</strong> until the part is what you asked for. That agent is called Hermes.</p>
+  <p class="lead">The <strong>Chat</strong> tab talks with the provider of your choice —an <strong>AI CLI you already have installed</strong> (Claude Code, Codex,
+  Antigravity, OpenCode) or a <strong>model server</strong>, local or in the cloud— and, in <strong>Agent</strong> mode, that provider uses ScadLab's own tools:
+  it <strong>creates a checkpoint, renders it, looks at it, measures it and fixes it by itself</strong> until the part is what you asked for. With a model server, that agent is called Hermes.</p>
 
-  <figure class="shot"><img src="docs/screenshots/chat.png" alt="Chat panel with the OpenRouter server and the claude-sonnet model: the answer shows four step cards (create checkpoint, render, look at the model with its picture and measure), the final text and the tokens and cost below" loading="lazy"><figcaption>A Hermes turn: its steps as cards (the <em>Look at the model</em> one with the image it saw) and, below, the final answer with its tokens and cost.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/chat.png" alt="Chat panel over OpenRouter: the one-line bar with the conversation title, the provider with its 240 ms latency, the model and the Agent mode; below, four step cards (create checkpoint, render with the mesh data, look at the model with its picture and measure), each with the link to its checkpoint, and the context counter at the bottom" loading="lazy"><figcaption>A turn in Agent mode: the bar on top, the steps as cards —with the link to their checkpoint, the mesh data and the picture the model saw— and, under the box, the mode, the shortcuts and the context counter.</figcaption></figure>
 
-  <div class="note"><span class="lbl">Chat or terminal</span><p>Hermes works inside ScadLab: it creates checkpoints, renders and measures without
-  you copying anything. The <a href="#ia-agentes">agent in the terminal</a> (Claude Code, opencode, Codex, Antigravity)
+  <div class="note"><span class="lbl">Chat or terminal</span><p>The chat works inside ScadLab: it creates checkpoints, renders and measures without
+  you copying anything, and the conversation is saved per project. The <a href="#ia-agentes">agent in the terminal</a> (Claude Code, opencode, Codex, Antigravity)
   is still the way to get the full experience of a CLI; both use the same <a href="#ia-mcp">tools</a>.</p></div>
 
+  <h2 id="ia-hermes--cli">Your CLIs: detected on their own</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-providers.png" alt="Provider picker open over a new chat: the detected CLIs —Claude Code (picked, with its check), Codex CLI, Antigravity CLI and OpenCode— and below the MacOS · Ollama server with 18 ms; all with a green dot over their icon, and Add an AI provider… at the end" loading="lazy"><figcaption>The provider picker: the CLIs ScadLab detected, your servers with their latency and, at the end, the way to add one.</figcaption></figure>
+  <p>Claude Code, Codex, Antigravity and OpenCode <strong>show up by themselves</strong> in the picker if you have them installed: there is nothing to configure and no path to type.
+  ScadLab looks for them in the <code>PATH</code>, in the usual locations and, on macOS, in your login shell's <code>PATH</code> (a graphical app does not inherit the terminal's).
+  One that is <strong>not installed does not show up</strong>, and one you just installed appears when you open the picker, without restarting. Each CLI runs in the workspace folder with the
+  <a href="#ia-mcp">ScadLab tools</a> connected, and its steps reach the chat with the same cards Hermes uses; the conversation resumes with the CLI's own session.</p>
+  <ul>
+    <li><strong>Status dot</strong> over each icon: green means it responds (a CLI, that it is installed; a server, that it answers), red means it does not. Next to the picker, a
+      <strong>latency pill</strong> (<code>18 ms</code>) for servers, refreshed by itself every minute, when you switch provider and with a click; if the server goes down, a notice above the box says so and lets you retry.</li>
+    <li>It works from the keyboard: <kbd>↑</kbd> <kbd>↓</kbd> move, <kbd>Enter</kbd> picks and <kbd>Esc</kbd> closes.</li>
+    <li><strong>Add an AI provider…</strong> opens Settings → AI providers, where you also see the <strong>detected CLIs</strong>, read-only, with their version.</li>
+  </ul>
+
   <h2 id="ia-hermes--proveedores">AI providers: servers and keys</h2>
-  <figure class="shot"><img src="docs/screenshots/settings-providers.png" alt="Settings, AI providers tab: the Key vault panel (remembered on this device, with Change password, Forget this device and Reset buttons) above five servers (local Ollama, OpenRouter, Google Gemini, Anthropic and a LM Studio on the network), each with its switch, its Test button and the result of the test" loading="lazy"><figcaption>Settings → AI providers: the <a href="#ia-hermes--llavero">key vault</a> on top, then as many servers as you want, each with its test.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/settings-providers.png" alt="Settings, AI providers tab: the read-only Detected CLIs block with Claude Code, Codex CLI, Antigravity CLI and OpenCode and their version, the Key vault panel and five servers (MacOS · Ollama, OpenRouter, Google Gemini, Anthropic and a LM Studio on the network), each with its switch and Test button; at the bottom, Add server and Import servers from mini-tools" loading="lazy"><figcaption>Settings → AI providers: the <strong>detected CLIs</strong> (read-only), the <a href="#ia-hermes--llavero">key vault</a> and as many servers as you want, each with its test.</figcaption></figure>
   <p>In <strong>Settings → AI providers</strong> you add the servers the chat can talk to, several of each kind. <strong>Add server</strong>
   offers shortcuts that already bring the address: Ollama (local and remote), LM Studio, llama.cpp, vLLM, OpenAI,
   <strong>OpenRouter</strong>, <strong>Google Gemini</strong>, Anthropic, Groq, DeepSeek, Mistral, Together, xAI or any
@@ -1702,6 +1801,13 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
       from there (also if you defined it in <code>~/.zshrc</code>), with no password at all.</li>
     <li>The servers you already had from earlier versions are kept, and your old chats still open.</li>
   </ul>
+
+  <h2 id="ia-hermes--importar">Import your mini-tools servers</h2>
+  <figure class="shot"><img src="docs/screenshots/settings-import-minitools.png" alt="Import servers from mini-tools dialog over Settings: the path where mini-tools was found, the list of three servers —Studio Ollama and Groq marked as new, OpenRouter as already existing— and the notice that keys are not copied, with the Cancel and Import 2 buttons" loading="lazy"><figcaption>First the list of what is there, then the confirmation: <strong>keys are not copied</strong>.</figcaption></figure>
+  <p>If you already have servers in mini-tools, <strong>Import servers from mini-tools</strong> (next to <em>Add server</em>) brings them in three steps: it shows the list, asks for
+  confirmation and only then copies them —name, type, address and default model—. The ones that already exist in ScadLab (same name or same address) are skipped.
+  ScadLab only <strong>reads</strong> those fields and never opens anything encrypted: <strong>keys are not copied</strong>, so each server arrives without a key and you type it again.
+  If mini-tools is not on your computer, the dialog says so and does nothing.</p>
 
   <h2 id="ia-hermes--llavero">Master password: the key vault</h2>
   <p>The first time you save an API key, ScadLab asks you to <strong>create a master password</strong>. It is what encrypts your keys on this
@@ -1728,40 +1834,65 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
   create a new password.</p></div>
 
   <h2 id="ia-hermes--empezar">Starting a chat and choosing the model</h2>
-  <figure class="shot"><img src="docs/screenshots/chat-models.png" alt="Model picker open with a search box: OpenRouter models with an eye icon if they see images and a wrench if they use tools, plus their context window and price" loading="lazy"><figcaption>The model picker searches, and marks which models see images (eye) and which use tools (wrench).</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/chat-empty.png" alt="New chat with Claude Code in Ask only mode: the title “Think your design through with a model”, the chips for the provider, the model (Default) and the mode, the mode's explanation and four OpenSCAD suggestions in two columns" loading="lazy"><figcaption>A new chat says what you are about to talk to and suggests four requests; a click fills the message box.</figcaption></figure>
   <ol class="steps">
-    <li>Open the <strong>Chat</strong> tab and click <strong>New chat</strong>.</li>
-    <li>Choose the <strong>server</strong> and then the <strong>model</strong>: the list comes from the server, with a search box.
-      Each model shows whether it <strong>sees images</strong> and whether it <strong>uses tools</strong> —when the server says so—, its
-      context window and, with providers that publish prices (OpenRouter), what it costs per million tokens. If the server does
-      not list it, type the name by hand.</li>
-    <li>Type what you want and send with <kbd>Enter</kbd> (<kbd>Shift+Enter</kbd> adds a line).</li>
+    <li>Open the <strong>Chat</strong> tab and click <strong>New chat</strong>. You see the provider, the model and the mode you are going to talk to, and four suggestions
+      (<em>a snap-fit box with a lid for a Raspberry Pi 5</em>, <em>copy the part in this photo</em>…): a click fills the message box and you edit it before sending.</li>
+    <li>Pick the <strong>provider</strong> and then the <strong>model</strong>: the list comes from the provider, with a search box. On a server, each model shows whether it
+      <strong>sees images</strong> and whether it <strong>uses tools</strong> —when the server reports it—, its context window and, with providers that publish prices
+      (OpenRouter), what it costs per million tokens. If the provider does not list it, type the name by hand.</li>
+    <li>Type what you want and send with <kbd>Enter</kbd> (<kbd>Shift+Enter</kbd> adds a line; <kbd>⌘/Ctrl+Enter</kbd> also sends).</li>
   </ol>
-  <p>You can change the server and the model <strong>in the middle of a conversation</strong>: the history is kept and the next
-  message already uses the new one. ScadLab remembers the last one you chose per project.</p>
+  <figure class="shot"><img src="docs/screenshots/chat-cli-models.png" alt="Model picker open with Antigravity CLI: the Default option, checked, with the explanation “Whatever the CLI has configured”, and five models with their name —Gemini 4 Argon (High), Gemini 4 Argon (Low), Gemini 4 Flash, Claude Sonnet 5.5 (Thinking) and GPT-OSS 240B (Medium)— and their description" loading="lazy"><figcaption>A CLI's models are reported by the CLI itself. <strong>Default</strong> lets it use whichever it has configured.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/chat-models.png" alt="Model picker open with a search box: the Default option with the server's default model and the OpenRouter models with an eye if they see images and a wrench if they use tools, plus their context window and price" loading="lazy"><figcaption>On a server, the picker searches and marks which models see images (eye) and which use tools (wrench).</figcaption></figure>
+  <p>You can change provider and model <strong>in the middle of a conversation</strong>: the history is kept and the next message already
+  uses the new one. ScadLab remembers the last one you picked in each project.</p>
 
-  <h2 id="ia-hermes--agente">Agent mode: the tools loop</h2>
-  <figure class="shot"><img src="docs/screenshots/chat-agent-steps.png" alt="A turn with five steps: the render of the sliding lid fails and its card opens with line 14 and the offending code, the model fixes it in a new checkpoint, renders again and looks at the preview" loading="lazy"><figcaption>The render failed: the card opens with the line and the code, the model fixes it in a <em>new</em> checkpoint, renders again and looks at the picture.</figcaption></figure>
-  <p>With the <strong>Agent</strong> switch on, the model decides what to do: it looks at the checkpoints and the printer,
+  <h2 id="ia-hermes--panel">The chat bar and narrow panels</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-narrow.png" alt="The chat in a 360-pixel panel: the single-line bar with the conversation counter, the title, the provider icon with its green dot, the model icon and the “…” menu; below, a CLI's steps with their cards, which fit the width, and the message box with the mode and the context counter" loading="lazy"><figcaption>A 360 px panel: the bar stays on one line and a CLI's steps use the same cards.</figcaption></figure>
+  <p>The top bar always fits on <strong>one line</strong>: the conversation title (click it to rename), the provider with its latency, the model, the workspace and the mode.
+  When the panel shrinks, the secondary things fold: first the workspace chip and <em>New chat</em> move to the <strong>“…”</strong> menu; then the latency is hidden (the provider keeps its status dot) and the mode becomes just an icon; and in a very narrow panel
+  the provider and the model become icons with their description on hover and the mode moves to the menu too. There is no horizontal scroll or cut-off control from about 320 px up to a full window, and the dropdowns never leave the window.</p>
+  <ul>
+    <li><strong>Message box.</strong> The shortcuts are shown under the box: <kbd>Enter</kbd> sends, <kbd>Shift+Enter</kbd> adds a line and <kbd>⌘/Ctrl+Enter</kbd> also sends.
+      Pending attachments show above the box and <strong>Stop</strong> shows a clock.</li>
+    <li><strong>Context counter.</strong> Next to the shortcuts, the <em>estimated</em> tokens of the draft plus the conversation (4 characters ≈ 1 token) against the model's window, when the provider
+      reports it; it turns amber at 70 % and red at 90 %, and it is the cue to start a new chat. It does not count the system instructions or the attachments.</li>
+  </ul>
+
+  <h2 id="ia-hermes--agente">The modes: Ask only and Agent</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-agent-steps.png" alt="A turn with five steps: the render of the sliding lid fails and its card shows, without opening it, line 14 with the offending code; the model fixes it in a new checkpoint, renders again —with the size, the triangles and “closed”— and looks at the preview" loading="lazy"><figcaption>The render failed: the card shows the line and the code, the model fixes it in a <em>new</em> checkpoint, renders again and looks at the picture.</figcaption></figure>
+  <p>The mode is picked in the bar (and under the box you read what it allows). With a <strong>CLI</strong> it starts in <strong>Ask only</strong>; with a server, in <strong>Agent</strong>. ScadLab remembers the last one of each kind.</p>
+  <div class="tablewrap"><table>
+    <tr><th></th><th>Ask only</th><th>Agent</th></tr>
+    <tr><td><strong>With a CLI</strong></td><td>The CLI reads your project and uses the read tools (list and read checkpoints, check, render, measure, look). It does not create checkpoints or export.</td><td>It also creates new checkpoints and exports, and renders and looks at them for you.</td></tr>
+    <tr><td><strong>With a server</strong></td><td>The model only chats and proposes OpenSCAD code: you save it as a checkpoint.</td><td>The model uses the ScadLab tools in a loop until it solves the request (Hermes).</td></tr>
+  </table></div>
+  <p><strong>In neither mode does a CLI run shell commands</strong> or get permission to skip its own checks. In Agent mode, the model decides what to do: it looks at the checkpoints and the printer,
   creates a checkpoint with <strong>complete</strong> code, renders it, looks at it from a view, measures it and, if something fails, fixes it in
   <em>another</em> checkpoint (it never edits an existing one). It can also read the workspace skills and inspect the
   <a href="#ia-hermes--adjuntos">references</a> you attach. The checkpoints it creates show up in the tree like any other.</p>
   <ul>
-    <li><strong>Each step is a card</strong> with the tool, its arguments and its result; click it to fold or unfold the detail.
-      A failed render opens by itself with the <strong>line and the offending code</strong>. The picture the model looked at is shown
-      and can be enlarged with a click.</li>
+    <li><strong>Each step is a card</strong> with the tool and its status. Without opening it you see the <strong>checkpoint</strong> it refers to —a link that selects it in the tree and opens it in the editor and the viewer—,
+      the mesh data of a render or a measurement (size, triangles, whether it is closed, whether it fits the plate) and, if it fails, the <strong>line and the offending code</strong>. The picture the model looked at
+      is shown in the card and can be enlarged with a click; a click on the card unfolds the arguments and the raw response.</li>
     <li><strong>The model sees what it draws</strong> if it has vision; otherwise it only gets the measurements and ScadLab warns you.</li>
-    <li><strong>Steps</strong>: the limit of tool calls per message (1 to 30, 12 by default). When it is reached, the model summarizes what it
+    <li><strong>Steps</strong> (with a server): the limit of tool calls per message (1 to 30, 12 by default). When it is reached, the model summarizes what it
       achieved and stops; ask it to continue if something is missing.</li>
     <li><strong>Stop</strong> shows a clock and cuts at once, even in the middle of a tool: what was already done is kept.</li>
-    <li>If the model <strong>does not use tools</strong>, the switch turns itself off and explains why; if the server rejects them on the
+    <li>If the model <strong>does not use tools</strong>, “Agent” turns itself off and explains why; if the server rejects them on the
       first try, the chat continues as plain text with a notice.</li>
   </ul>
 
-  <h2 id="ia-hermes--texto">Text mode</h2>
-  <p>With <strong>Agent</strong> off, the chat only <strong>talks</strong> (as in earlier versions): each OpenSCAD block comes with
-  <strong>Copy</strong> and, once it has finished arriving, <strong>Save as checkpoint</strong>, which creates a child of the open file or, if none
-  is open, of the latest checkpoint. Long blocks start folded.</p>
+  <h2 id="ia-hermes--texto">Code in the answers: save it or open it</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-code.png" alt="A text answer in Ask only mode: a measurements table with aligned columns, a heading, a list with one checked box and one unchecked, a link and an OpenSCAD block with the Copy, Open in editor and Save as checkpoint buttons" loading="lazy"><figcaption>Answers with formatting —tables, lists, links— and each OpenSCAD block with its three buttons.</figcaption></figure>
+  <p>Each OpenSCAD block comes with <strong>Copy</strong> and, once it has finished arriving, two ways of bringing it into the project (in a narrow panel the buttons become icons with their description):</p>
+  <ul>
+    <li><strong>Save as checkpoint</strong> opens the dialog to name it and creates it as a child of the open file or, if none is open, of the latest checkpoint.</li>
+    <li><strong>Open in editor</strong> does the same <em>without asking</em> (the name comes from the block's header), selects the new checkpoint and shows the Code panel.
+      Checkpoints are not edited and the editor always shows one, so “opening” a block means saving it and opening it.</li>
+  </ul>
+  <p>Long blocks start folded. Links in an answer open in your system browser.</p>
 
   <h2 id="ia-hermes--adjuntos">Attachments: images and 3D models</h2>
   <figure class="shot"><img src="docs/screenshots/chat-attachments.png" alt="Chat composer with two chips with thumbnails above the text: a photo of a sketch and a STL model with its preview, which reads refs/soporte-pared.stl" loading="lazy"><figcaption>Two attachments ready to send: a photo and a STL (it was copied to <code>refs/</code>).</figcaption></figure>
@@ -1784,14 +1915,15 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
   </ul>
 
   <h2 id="ia-hermes--conversaciones">Conversations, tokens and cost</h2>
-  <figure class="shot"><img src="docs/screenshots/chat-conversations.png" alt="List of the project's conversations open: the first one with its rename and delete buttons and the second one being renamed in line, with its field selected" loading="lazy"><figcaption>The list of conversations: rename in line (<kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels) and delete.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/chat-conversations.png" alt="The conversation list open with “lid” in the search box: the first conversation with its rename and delete buttons and the word highlighted in its title; the second one being renamed in line, with its field selected; and a third one that shows up because something said in it mentions “lid”, with the fragment highlighted" loading="lazy"><figcaption>The conversation list, searchable by title <em>and content</em>; rename in line (<kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels) and delete.</figcaption></figure>
   <ul>
-    <li>The conversations are saved <strong>per project</strong>. When you open ScadLab again you resume the last one. From the list you can
-      <strong>rename</strong> one (up to 120 characters) and <strong>delete</strong> it, with a confirmation: the checkpoints you saved from it are not touched.</li>
+    <li>The conversations are saved <strong>per project</strong>. When you open ScadLab again you resume the last one. The list's search box looks at the <strong>title and what was said</strong>
+      (from 2 letters, in the 60 most recent conversations) and highlights the match. You can <strong>rename</strong> one (up to 120 characters; also by clicking the title in the bar) and
+      <strong>delete</strong> it, with a confirmation: the checkpoints you saved from it are not touched.</li>
     <li>Below each answer you see the <strong>tokens</strong> of the turn (input and output) and, if the provider publishes prices, the
       <strong>cost</strong>. If the server does not report it, no cost is shown: a missing cost is not “free”.</li>
     <li>After reopening the app the model <strong>remembers the conversation</strong> (what you wrote, what it answered and the references you attached), but not the
-      detail of its earlier steps: those are in the checkpoints.</li>
+      detail of its earlier steps: those are in the checkpoints. A CLI also resumes the session it kept itself.</li>
   </ul>
 
   <h2 id="ia-hermes--contexto">What the model knows about your workspace</h2>
@@ -1804,10 +1936,10 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
   <p>It also carries its own instructions about the checkpoint rules, one color per part and FDM design. It does not see anything else:
   not your other files or the viewer.</p>
 
-  <h2 id="ia-hermes--sin-proveedor">If no servers are enabled</h2>
-  <figure class="shot"><img src="docs/screenshots/chat-empty.png" alt="Chat panel with no servers: the notice “No model server is enabled” with the Open AI providers button" loading="lazy"><figcaption>With no servers enabled, the chat says so and takes you to Settings → AI providers.</figcaption></figure>
-  <p>The chat says so with a button that opens Settings → AI providers. Add or turn on a server, go back to the panel and click
-  <strong>I added one</strong>.</p>
+  <h2 id="ia-hermes--sin-proveedor">If there is no provider</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-no-providers.png" alt="Chat panel with no providers: the notice “No AI provider is available”, which explains that installed CLIs are detected on their own and that a server is added in Settings, with the Open AI providers and I installed one buttons" loading="lazy"><figcaption>With no CLI installed and no server enabled, the chat says so and takes you to Settings → AI providers.</figcaption></figure>
+  <p>The chat says so with a button that opens Settings → AI providers. Install a CLI or add and turn on a server, go back to the panel and click
+  <strong>I installed one</strong> so it looks again.</p>
 </article>
 
 <article class="topic" id="ia-prompts" data-title="How to ask the AI for a model">
@@ -2255,10 +2387,10 @@ color("Black") label();                                    // text that fills th
   save.</p>
 
   <h2 id="config-materiales--proveedores">AI providers tab</h2>
-  <p>This is where the <a href="#ia-hermes--proveedores">chat's model servers</a> are added, tested and turned on or off: Ollama (local or on another machine),
+  <p>At the top, a read-only <strong>Detected CLIs</strong> block lists the <a href="#ia-hermes--cli">CLIs ScadLab found</a> (Claude Code, Codex, Antigravity, OpenCode) with their version: they are detected on their own and there is nothing to configure. Below, this is where the <a href="#ia-hermes--proveedores">chat's model servers</a> are added, tested and turned on or off: Ollama (local or on another machine),
   any OpenAI-compatible server (LM Studio, vLLM, OpenRouter, Google Gemini…) and Anthropic, with shortcuts that already bring the address.
   <strong>Test connection</strong> checks the server before saving. The API key is saved <strong>encrypted</strong>, with your <a href="#ia-hermes--llavero">master password</a> (the panel at the top shows its state and
-  lets you change it, forget this device or reset it), or you can give the name of the environment variable that holds it.</p>
+  lets you change it, forget this device or reset it), or you can give the name of the environment variable that holds it. <strong>Import servers from mini-tools</strong> <a href="#ia-hermes--importar">copies the ones you already have there</a>, without their keys.</p>
 
   <h2 id="config-materiales--estimacion">Estimate data</h2>
   <p>On the <strong>Printing</strong> tab, next to infill, are the values used to estimate a part's weight and cost
@@ -2433,6 +2565,12 @@ color("Black") label();                                    // text that fills th
     <tr><td><kbd>W</kbd></td><td><kbd>W</kbd></td><td>Wireframe</td></tr>
     <tr><td><kbd>E</kbd></td><td><kbd>E</kbd></td><td>Edges</td></tr>
     <tr><td><kbd>O</kbd></td><td><kbd>O</kbd></td><td>Orthographic / perspective</td></tr>
+    <tr class="sect"><td colspan="3">Edit mode (with focus inside Edit mode)</td></tr>
+    <tr><td><kbd>W</kbd> / <kbd>E</kbd> / <kbd>R</kbd></td><td><kbd>W</kbd> / <kbd>E</kbd> / <kbd>R</kbd></td><td>Gizmo tool: Move / Rotate / Scale</td></tr>
+    <tr><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> (or <kbd>Ctrl+Y</kbd>)</td><td>Undo / redo the operation</td></tr>
+    <tr><td><kbd>⌫</kbd> / <kbd>Del</kbd></td><td><kbd>Del</kbd></td><td>Remove the selected piece</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>7</kbd> and <kbd>F</kbd></td><td><kbd>1</kbd>–<kbd>7</kbd> and <kbd>F</kbd></td><td>Views and fit, as in the viewer</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td><td>Cancel "Face"; otherwise discard the edit (with confirmation if there are changes)</td></tr>
     <tr class="sect"><td colspan="3">This help</td></tr>
     <tr><td><kbd>/</kbd></td><td><kbd>/</kbd></td><td>Go to the search box</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>↵</kbd></td><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd></td><td>Choose and open a result</td></tr>

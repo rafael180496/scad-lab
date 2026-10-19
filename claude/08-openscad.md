@@ -124,6 +124,7 @@ en `verify` de cada impresora. La impresora del workspace se escribe en
 | `openscad-3mf-multicolor` | multicolor AMS, formato 3MF |
 | `openscad-templates` | plantillas paramétricas listas |
 | `openscad-libraries` | BOSL2, MCAD, NopSCADlib |
+| `openscad-stl-editing` | editar un STL existente sin tocarlo (S13): `import()` en un checkpoint nuevo, recetas de agujeros, cortes, texto, escala, partir y espejar; límites de las mallas ([23-edicion-stl.md](23-edicion-stl.md)) |
 | `_skill-template` | base para crear skills propias (no se instala) |
 
 Agregar una skill incluida: carpeta nueva en `assets/skills/<nombre>/` con

@@ -1,0 +1,82 @@
+{
+ "info": {
+  "id": "ses_ebf3d5642ffesbIf6ikLOXZQDR",
+  "tokens": {
+   "input": 9259,
+   "output": 321
+  }
+ },
+ "messages": [
+  {
+   "id": "m1",
+   "type": "user",
+   "text": "antes"
+  },
+  {
+   "id": "m2",
+   "type": "assistant",
+   "model": {
+    "id": "viejo",
+    "providerID": "opencode"
+   },
+   "cost": 0,
+   "tokens": {
+    "input": 100,
+    "output": 10,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "m3",
+   "type": "user",
+   "text": "haz una caja"
+  },
+  {
+   "id": "m4",
+   "type": "assistant",
+   "model": {
+    "id": "nemotron-3.5-super-vl-free",
+    "providerID": "opencode"
+   },
+   "finish": "tool-calls",
+   "cost": 0,
+   "tokens": {
+    "input": 4160,
+    "output": 198,
+    "reasoning": 89,
+    "cache": {
+     "read": 4336,
+     "write": 0
+    }
+   }
+  },
+  {
+   "id": "m5",
+   "type": "assistant",
+   "model": {
+    "id": "nemotron-3.5-super-vl-free",
+    "providerID": "opencode"
+   },
+   "finish": "stop",
+   "cost": 0.002,
+   "tokens": {
+    "input": 4532,
+    "output": 110,
+    "reasoning": 17,
+    "cache": {
+     "read": 4336,
+     "write": 20
+    }
+   }
+  },
+  {
+   "id": "m6",
+   "type": "idle",
+   "outcome": "succeeded"
+  }
+ ]
+}

@@ -1,23 +1,30 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
-import {Bot, Settings as SettingsIcon, Sparkles} from 'lucide-react'
-import {CancelChat, ChatCheckpointParent, DeleteChat, GetChat, GetLastModel, ListChats, NewChat, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
+import {Bot, Settings as SettingsIcon} from 'lucide-react'
+import {CancelChat, ChatCheckpointParent, DeleteChat, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
+import {contextUsage, estimateTokens} from '../../lib/chatContext'
+import {useProviderHealth} from '../../lib/chatHealth'
+import {isCLI} from '../../lib/chatProviders'
 import {openProvidersSettings} from '../../lib/modelServers'
-import {onOpenChat, onProjectClosed, takePendingChat} from '../../lib/sessionBridge'
+import {onChatDraft, onOpenChat, onProjectClosed, takePendingChat, takePendingDraft, type ChatDraft} from '../../lib/sessionBridge'
 import type {VisionInfo} from '../../lib/chatAttachments'
 import {SaveCheckpointDialog} from '../editor/SaveCheckpointDialog'
+import {showPanel} from '../dock/dock'
 import {Button} from '../ui/Button'
 import {confirmDialog} from '../ui/Dialog'
 import {toast} from '../ui/Toast'
 import {DropOverlay} from './AttachmentChips'
 import {ChatHeader} from './ChatHeader'
 import {Composer, type AgentControl} from './Composer'
+import {EmptyChat} from './EmptyChat'
+import {HealthBanner} from './HealthIndicators'
 import {withVault} from '../../lib/vault'
 import {MessageList} from './Messages'
 import {clearStream, ensureChatEvents, startStream, syncStream, useStreamFinished, useStreamRunning, useStreamStartedAt} from './chatStreams'
 import {useChatAttachments} from './useChatAttachments'
+import {useChatTier} from './useChatTier'
 import {headerDescription} from './scadBlock'
 import {
     rememberAgent,
@@ -32,15 +39,16 @@ import {
     useProviderModels,
 } from './useChatProviders'
 
-// Panel «Chat» del panel inferior (S5, bloque 5.B): conversación de diseño con
-// un modelo (Ollama, un servidor compatible con OpenAI o la API de Anthropic).
-// Las props son el contrato con Workbench (ver .claude/specs/s5-agentes-ia.md);
-// las dos últimas son opcionales: sin `currentFile` el modelo no ve el código
-// abierto, y `onOpenSettings` solo es el respaldo del aviso de «sin servidores»,
-// que abre Configuración → Proveedores de IA por lib/modelServers.
+// Panel «Chat» del panel inferior: conversación de diseño con un proveedor de IA
+// —un CLI agéntico detectado (Claude Code, Codex, Antigravity, OpenCode) o un
+// servidor de modelos (Ollama, compatible con OpenAI, Anthropic)—. Las props son el
+// contrato con Workbench (ver .claude/specs/s5-agentes-ia.md); las dos últimas son
+// opcionales: sin `currentFile` el modelo no ve el código abierto, y
+// `onOpenSettings` solo es el respaldo de «Agregar proveedor de IA…», que abre
+// Configuración → Proveedores de IA por lib/modelServers.
 export type ChatPanelProps = {
     workspaceId: number | null
-    /** Abre un checkpoint recién creado desde el chat (lo selecciona en el árbol). */
+    /** Abre un checkpoint (recién creado o mencionado en un paso) en el árbol, el editor y el visor. */
     onCheckpointCreated: (fileName: string) => void
     /** Checkpoint abierto en el editor: su código entra al prompt del modelo y es el padre por defecto al guardar. */
     currentFile?: string | null
@@ -64,7 +72,7 @@ function NoProviders({onOpenSettings, onRefresh}: {onOpenSettings?: () => void; 
                 <p className="text-ui-13 font-medium text-fg">{t.chat.noProvidersTitle}</p>
                 <p className="mt-1 text-ui-12-5 leading-relaxed text-muted">{t.chat.noProvidersBody}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
                 {onOpenSettings ? (
                     <Button variant="primary" title={t.chat.openSettingsHint} onClick={onOpenSettings}>
                         <SettingsIcon className="icon-ui-14" />
@@ -79,36 +87,9 @@ function NoProviders({onOpenSettings, onRefresh}: {onOpenSettings?: () => void; 
     )
 }
 
-function EmptyChat({onPick}: {onPick: (text: string) => void}) {
-    const t = useT()
-    return (
-        <div className="m-auto flex max-w-[520px] flex-col items-center gap-3 py-4 text-center">
-            <span className="flex icon-ui-36 items-center justify-center rounded-full bg-accent-soft text-accent">
-                <Sparkles className="icon-ui-20" />
-            </span>
-            <div>
-                <p className="text-ui-13 font-medium text-fg">{t.chat.emptyTitle}</p>
-                <p className="mt-1 text-ui-12-5 leading-relaxed text-muted">{t.chat.emptyBody}</p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-1.5">
-                {t.chat.suggestions.map((s) => (
-                    <button
-                        key={s}
-                        type="button"
-                        title={t.chat.suggestionHint}
-                        onClick={() => onPick(s)}
-                        className="no-drag rounded-full border border-line px-2.5 py-1 text-ui-12 text-muted transition-colors hover:border-line-strong hover:bg-surface-2 hover:text-fg"
-                    >
-                        {s}
-                    </button>
-                ))}
-            </div>
-        </div>
-    )
-}
-
 export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile = null, onOpenSettings}: ChatPanelProps) {
     const t = useT()
+    const [tier, tierRef] = useChatTier()
     const {providers, loaded, refresh} = useChatProviders()
     const [chats, setChats] = useState<store.Chat[]>([])
     const [chatId, setChatIdRaw] = useState<number | null>(null)
@@ -123,12 +104,27 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     const [messages, setMessages] = useState<store.ChatMessage[]>([])
     const [text, setText] = useState('')
     const [saving, setSaving] = useState<{code: string; parent: string; busy: boolean} | null>(null)
+    // Nombre del workspace para el chip de la barra: el chat trabaja en su carpeta.
+    const [workspaceName, setWorkspaceName] = useState('')
+    useEffect(() => {
+        setWorkspaceName('')
+        if (workspaceId == null) return
+        let stale = false
+        ListWorkspaces()
+            .then((l) => !stale && setWorkspaceName((l ?? []).find((w) => w.id === workspaceId)?.name ?? ''))
+            .catch(() => {})
+        return () => {
+            stale = true
+        }
+    }, [workspaceId])
 
-    // Servidor y modelo del chat NUEVO (en uno abierto son fijos).
+    // Proveedor y modelo del chat NUEVO (en uno abierto son los del chat). Modelo ''
+    // = «Por defecto»: con un CLI es el que el CLI tenga configurado; con un servidor,
+    // su modelo predeterminado (el backend lo resuelve).
     const [providerId, setProviderId] = useState('')
     const [model, setModel] = useState('')
-    // El último modelo elegido en este proyecto (o, si no tiene, el global): de
-    // ahí arranca un chat nuevo. undefined = todavía no se leyó.
+    // La última elección de este proyecto (o, si no tiene, la global): de ahí
+    // arranca un chat nuevo. undefined = todavía no se leyó.
     const [last, setLast] = useState<{serverId: string; model: string} | null | undefined>(undefined)
     const lastRef = useRef(last)
     lastRef.current = last
@@ -140,18 +136,20 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     const finished = useStreamFinished(chatId)
     const startedAt = useStreamStartedAt(chatId)
     const current = useMemo(() => chats.find((c) => c.id === chatId) ?? null, [chats, chatId])
-    // Cambiar de servidor en un chat abierto: se elige primero el servidor y luego
-    // el modelo, y recién con el modelo se guarda (SetChatModel). Hasta entonces el
-    // chat sigue como estaba.
+    // Cambiar de proveedor en un chat abierto: si el nuevo no tiene un modelo que se
+    // pueda resolver solo (un servidor sin modelo predeterminado ni recordado), se
+    // elige primero el proveedor y luego el modelo, y recién con el modelo se guarda
+    // (SetChatModel). Hasta entonces el chat sigue como estaba.
     const [switching, setSwitching] = useState<string | null>(null)
     useEffect(() => setSwitching(null), [chatId])
-    // «Agente» y su tope de pasos: se recuerdan entre sesiones.
-    const [agentOn, setAgentOn] = useState(rememberedAgent)
+    // El modo se recuerda por tipo de proveedor (ver useChatProviders).
+    const [agentCli, setAgentCli] = useState(() => rememberedAgent(true))
+    const [agentServer, setAgentServer] = useState(() => rememberedAgent(false))
     const [maxSteps, setMaxSteps] = useState(rememberedSteps)
 
     useEffect(() => ensureChatEvents(), [])
 
-    // ── Servidor y modelo elegidos ──────────────────────────────────────────
+    // ── Proveedor y modelo elegidos ─────────────────────────────────────────
     useEffect(() => {
         setLast(undefined)
         if (workspaceId == null) return
@@ -171,16 +169,21 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         setProviderId(providers.find((p) => wanted.includes(p.id))?.id ?? providers[0].id)
     }, [providers, providerId, last])
 
-    // El servidor y el modelo que mira el selector: los del chat abierto (o el
-    // servidor al que se está pasando) o, sin chat, los del chat nuevo.
+    // El proveedor y el modelo que mira el selector: los del chat abierto (o el
+    // proveedor al que se está pasando) o, sin chat, los del chat nuevo.
     const pickerProviderId = current ? (switching ?? current.providerId) : providerId
     const pickerModel = current ? (switching ? '' : current.model) : model
     const provider = providers.find((p) => p.id === pickerProviderId)
+    const cli = isCLI(pickerProviderId)
     const configured = provider?.defaultModel ?? ''
-    const {models, loading: modelsLoading, error: modelsError, reload: reloadModels} = useProviderModels(pickerProviderId, configured)
-    // Lo que el servidor sabe del modelo con el que se va a escribir: si ve
-    // imágenes (los adjuntos) y si llama herramientas («Agente»).
-    const activeInfo = current && !switching ? models.find((m) => m.id === current.model) : !current ? models.find((m) => m.id === model) : undefined
+    const {models, defaultHint, loading: modelsLoading, error: modelsError, reload: reloadModels} = useProviderModels(pickerProviderId, configured)
+    const {health, refresh: recheckHealth} = useProviderHealth(pickerProviderId, workspaceId != null)
+    // El modelo con el que se va a escribir; con «Por defecto» de un servidor, el
+    // predeterminado del servidor (de un CLI no se sabe cuál es).
+    const effectiveModel = pickerModel || (cli ? '' : configured)
+    // Lo que se sabe del modelo: si ve imágenes (los adjuntos), si llama
+    // herramientas («Agente») y cuánto contexto tiene.
+    const activeInfo = effectiveModel && !switching ? models.find((m) => m.id === effectiveModel) : undefined
     const vision: VisionInfo = activeInfo ? {vision: activeInfo.vision, visionKnown: activeInfo.visionKnown} : null
     const noTools = !!activeInfo && activeInfo.toolsKnown && !activeInfo.tools
     const attach = useChatAttachments({workspaceId, vision})
@@ -190,58 +193,65 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         if (!providerId || !lastLoaded) return
         modelPicked.current = false
         const l = lastRef.current
-        const fromLast = l?.serverId === providerId ? l.model : ''
-        setModel(fromLast || configured || rememberedModel(providerId))
+        const fromLast = l?.serverId === providerId ? l.model : undefined
+        const remembered = rememberedModel(providerId)
+        setModel(isCLI(providerId) ? (fromLast ?? remembered) : fromLast || configured || remembered)
     }, [providerId, configured, lastLoaded])
 
-    // Si el modelo que se puso solo (recordado) ya no existe en el servidor, se
-    // pasa al primero; el que eligió o escribió el usuario se respeta.
+    // Si el modelo que se puso solo (recordado) ya no existe en la lista, se pasa al
+    // primero (servidor) o a «Por defecto» (CLI); el que eligió o escribió el
+    // usuario se respeta.
     useEffect(() => {
-        if (models.length === 0 || modelPicked.current) return
-        if (!model || !models.some((m) => m.id === model)) setModel(models[0].id)
-    }, [models, model])
+        if (models.length === 0 || modelPicked.current || current) return
+        if (cli) {
+            if (model && !models.some((m) => m.id === model)) setModel('')
+        } else if (!model || !models.some((m) => m.id === model)) setModel(models[0].id)
+    }, [models, model, cli, current])
 
     // Cada elección se recuerda por proyecto y como la global.
     const remember = useCallback(
         (serverId: string, m: string) => {
-            if (!serverId || !m.trim() || workspaceId == null) return
+            if (!serverId || workspaceId == null) return
+            if (!m.trim() && !isCLI(serverId)) return
             setLast({serverId, model: m.trim()})
             void SetLastModel(workspaceId, serverId, m.trim()).catch(() => {})
         },
         [workspaceId],
     )
 
-    const picker = {
-        providerId: pickerProviderId,
-        model: pickerModel,
-        models,
-        loading: modelsLoading,
-        error: modelsError,
-        onProvider: (id: string) => {
-            if (current) {
-                setSwitching(id === current.providerId ? null : id)
-                return
-            }
-            setProviderId(id)
-            rememberProvider(id)
-            // Un servidor nuevo arranca con su modelo por defecto o el que se usó
-            // con él la última vez, no con el del servidor anterior.
-            modelPicked.current = false
-            setModel(rememberedModel(id) || providers.find((p) => p.id === id)?.defaultModel || '')
-        },
-        onModel: (m: string) => {
-            if (current) {
-                void changeChatModel(current.id, pickerProviderId, m)
-                return
-            }
-            modelPicked.current = true
-            setModel(m)
-            if (providerId) {
-                rememberModel(providerId, m)
-                remember(providerId, m)
-            }
-        },
-        onReload: reloadModels,
+    // «Por defecto» en un servidor sin modelo predeterminado es «el primero que
+    // devuelva el servidor» (el texto que dice el catálogo): hay que dar uno.
+    const resolveModel = (id: string, m: string, list = models, def = configured) => (m === '' && !isCLI(id) ? def || list[0]?.id || '' : m)
+
+    const onProvider = (id: string) => {
+        if (id === pickerProviderId) return
+        rememberProvider(id)
+        const next = providers.find((p) => p.id === id)
+        if (current) {
+            // Con un modelo que se pueda resolver solo se cambia ya; si no, se espera la elección del modelo.
+            const known = isCLI(id) ? '' : next?.defaultModel || rememberedModel(id)
+            if (known !== '' || isCLI(id)) void changeChatModel(current.id, id, known)
+            else setSwitching(id === current.providerId ? null : id)
+            return
+        }
+        setProviderId(id)
+        // Un proveedor nuevo arranca con su modelo por defecto o el que se usó con él
+        // la última vez, no con el del proveedor anterior.
+        modelPicked.current = false
+        setModel(isCLI(id) ? rememberedModel(id) : rememberedModel(id) || next?.defaultModel || '')
+    }
+    const onModel = (m: string) => {
+        const resolved = resolveModel(pickerProviderId, m)
+        if (current) {
+            void changeChatModel(current.id, pickerProviderId, resolved)
+            return
+        }
+        modelPicked.current = true
+        setModel(resolved)
+        if (providerId) {
+            rememberModel(providerId, resolved)
+            remember(providerId, resolved)
+        }
     }
 
     // ── Chats del workspace ─────────────────────────────────────────────────
@@ -348,10 +358,22 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         }
     }, [finished, chatId, workspaceId, reloadChats])
 
-    // ── Enviar / detener ────────────────────────────────────────────────────
-    // «Agente» efectivo: el interruptor, salvo que el modelo no llame herramientas.
+    // ── Modo ────────────────────────────────────────────────────────────────
+    // «Agente» efectivo: el interruptor de este tipo de proveedor, salvo que el
+    // modelo no llame herramientas.
+    const agentOn = cli ? agentCli : agentServer
     const effectiveAgent = agentOn && !noTools
+    const setAgent = (v: boolean) => {
+        if (cli) setAgentCli(v)
+        else setAgentServer(v)
+        rememberAgent(cli, v)
+    }
 
+    // ── Contexto ────────────────────────────────────────────────────────────
+    const historyTokens = useMemo(() => messages.reduce((n, m) => n + estimateTokens(m.content), 0), [messages])
+    const context = contextUsage(historyTokens, text, activeInfo?.contextTokens ?? 0)
+
+    // ── Enviar / detener ────────────────────────────────────────────────────
     const send = async () => {
         const body = text.trim()
         const att = attach.takeReady()
@@ -359,7 +381,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         let id = chatId
         try {
             if (id == null) {
-                if (!providerId || !model.trim()) {
+                if (!providerId || (!isCLI(providerId) && !model.trim())) {
                     toast.error(t.chat.pickModelFirst)
                     return
                 }
@@ -392,7 +414,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
 
     const stop = () => chatId != null && void CancelChat(chatId)
 
-    // Cambiar a mitad de camino el servidor y el modelo de un chat abierto.
+    // Cambiar a mitad de camino el proveedor y el modelo de un chat abierto.
     const changeChatModel = async (id: number, serverId: string, m: string) => {
         if (workspaceId == null) return
         try {
@@ -433,7 +455,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         }
     }
 
-    // ── Guardar un bloque como checkpoint ───────────────────────────────────
+    // ── Guardar un bloque como checkpoint / abrirlo en el editor ────────────
     // El padre es el archivo abierto; si no hay, el último checkpoint; si el
     // workspace no tiene ninguno, el backend responde con un error claro.
     const askSave = async (code: string) => {
@@ -445,10 +467,39 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
             toast.error(errorText(e))
         }
     }
+    // «Abrir en el editor»: ScadLab no tiene un borrador sin archivo (el editor
+    // muestra siempre un checkpoint, y los checkpoints son inmutables), así que abrir
+    // el código ES guardarlo como checkpoint nuevo —sin diálogo, con el nombre sacado
+    // de su encabezado— y abrirlo: se selecciona en el árbol, el editor y el visor lo
+    // siguen, y el panel Código se muestra si estaba oculto.
+    const openInEditor = async (code: string) => {
+        if (workspaceId == null) return
+        try {
+            const parent = await ChatCheckpointParent(workspaceId, currentFile ?? '')
+            const desc = headerDescription(code)
+            const name = await SaveChatCheckpoint(workspaceId, chatId ?? 0, parent, (desc || t.chat.openLabel).slice(0, 80), desc, code)
+            toast.ok(fmt(t.chat.openedInEditor, {file: name}))
+            onCheckpointCreated(name)
+            showPanel('source')
+        } catch (e) {
+            toast.error(errorText(e))
+        }
+    }
     const askSaveRef = useRef(askSave)
     askSaveRef.current = askSave
+    const openRef = useRef(openInEditor)
+    openRef.current = openInEditor
+    const openCheckpointRef = useRef(onCheckpointCreated)
+    openCheckpointRef.current = onCheckpointCreated
     // Estable: los bloques ya pintados no se redibujan al cambiar el panel.
-    const actions = useMemo(() => ({onSave: (code: string) => void askSaveRef.current(code)}), [])
+    const actions = useMemo(
+        () => ({
+            onSave: (code: string) => void askSaveRef.current(code),
+            onOpen: (code: string) => void openRef.current(code),
+            onOpenCheckpoint: (file: string) => openCheckpointRef.current(file),
+        }),
+        [],
+    )
 
     const doSave = async (label: string, description: string) => {
         if (!saving || workspaceId == null) return
@@ -469,47 +520,89 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         setText('')
     }
 
+    // «Modificar con IA» (S13): un modelo ya adjuntado en Go y un texto sugerido. Es un tema nuevo, así que abre un chat
+    // nuevo (con el proveedor y el modelo que ya estaban elegidos) y deja el texto escrito para que la persona lo termine.
+    // El panel entra con lazy(): un borrador pedido antes de montarse queda pendiente (sessionBridge) y se toma acá.
+    const draftRef = useRef<(d: ChatDraft) => void>(() => {})
+    draftRef.current = (d) => {
+        if (d.workspaceId !== workspaceId) return
+        setChatId(null)
+        setText(d.text)
+        attach.addReady(d.attachment)
+        window.setTimeout(() => {
+            const box = document.querySelector<HTMLTextAreaElement>('[data-font-area="chat"] textarea')
+            box?.focus()
+            box?.setSelectionRange(box.value.length, box.value.length)
+        }, 80)
+    }
+    useEffect(() => {
+        // Con un respiro: en desarrollo React monta, desmonta y vuelve a montar el efecto de seguido, y el desmontaje
+        // suelta los adjuntos (useChatAttachments). Tomar el borrador en el segundo montaje evita perderlo.
+        const timer = window.setTimeout(() => {
+            const pending = takePendingDraft()
+            if (pending) draftRef.current(pending)
+        }, 0)
+        const off = onChatDraft((d) => draftRef.current(d))
+        return () => {
+            window.clearTimeout(timer)
+            off()
+        }
+    }, [])
+
     // ── Render ──────────────────────────────────────────────────────────────
     if (workspaceId == null) {
         return <p className="px-4 py-3 text-ui-12-5 text-faint">{t.chat.noWorkspace}</p>
     }
+    const openProviders = () => (openProvidersSettings() ? undefined : onOpenSettings?.())
     if (loaded && providers.length === 0) {
         return (
-            <div className="h-full" onPointerEnter={() => refresh()}>
-                <NoProviders onOpenSettings={() => (openProvidersSettings() ? undefined : onOpenSettings?.())} onRefresh={() => refresh(true)} />
+            <div ref={tierRef} className="h-full" onPointerEnter={() => refresh()}>
+                <NoProviders onOpenSettings={openProviders} onRefresh={() => refresh(true)} />
             </div>
         )
     }
 
     const desc = saving ? headerDescription(saving.code) : ''
-    const noModel = chatId == null && (!providerId || !model.trim())
+    const noModel = chatId == null && (!providerId || (!isCLI(providerId) && !model.trim()))
     const agent: AgentControl = {
         on: agentOn,
-        onChange: (v) => {
-            setAgentOn(v)
-            rememberAgent(v)
-        },
+        onChange: setAgent,
         unavailable: noTools ? t.chat.agent.noTools : '',
         steps: maxSteps,
         onSteps: (n) => {
             setMaxSteps(n)
             rememberSteps(n)
         },
+        kind: cli ? 'cli' : 'server',
     }
+    const modelLabel = pickerModel ? (models.find((m) => m.id === pickerModel)?.label || pickerModel) : cli ? t.chat.modelDefault : configured || t.chat.modelDefault
+    // Un chat con un proveedor que ya no está (CLI desinstalado, servidor apagado)
+    // se puede leer pero no seguir: el banner dice por qué.
+    const showBanner = !!pickerProviderId && health.status === 'error' && health.error !== ''
     return (
-        <div data-font-area="chat" className="relative flex h-full min-h-0 flex-col" onPointerEnter={() => refresh()} {...attach.dragProps}>
+        <div ref={tierRef} data-font-area="chat" className="relative flex h-full min-h-0 flex-col" onPointerEnter={() => refresh()} {...attach.dragProps}>
             <ChatHeader
+                tier={tier}
                 chats={chats}
                 current={current}
-                providers={providers}
-                picker={picker}
+                provider={{providers, id: pickerProviderId, onChange: onProvider, onAdd: openProviders, onOpen: () => refresh(true), health, onRecheck: recheckHealth}}
+                model={{value: pickerModel, models, defaultHint, loading: modelsLoading, error: modelsError, onChange: onModel, onReload: reloadModels}}
+                mode={{agent: agentOn, onChange: setAgent, unavailable: noTools ? t.chat.agent.noTools : '', kind: cli ? 'cli' : 'server', disabled: false}}
+                modeKind={cli ? 'cli' : 'server'}
+                workspaceName={workspaceName}
                 onSelect={setChatId}
                 onNew={newChat}
                 onRename={rename}
                 onDelete={remove}
                 running={running}
             />
-            <MessageList chatId={chatId} messages={messages} actions={actions} empty={<EmptyChat onPick={setText} />} />
+            <MessageList
+                chatId={chatId}
+                messages={messages}
+                actions={actions}
+                empty={<EmptyChat provider={provider} modelLabel={modelLabel} agent={effectiveAgent} onPick={setText} />}
+            />
+            {showBanner ? <HealthBanner health={health} name={provider?.name ?? pickerProviderId} onRetry={recheckHealth} /> : null}
             <Composer
                 value={text}
                 onChange={setText}
@@ -522,6 +615,8 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 attach={attach}
                 vision={vision}
                 agent={agent}
+                context={context}
+                tier={tier}
             />
             {attach.dragging ? <DropOverlay /> : null}
             <SaveCheckpointDialog

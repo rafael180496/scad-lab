@@ -91,6 +91,15 @@ func CreateRoot(dir, label, description, source string) (string, error) {
 	return create(dir, "", label, description, source)
 }
 
+// CreateDetached crea un checkpoint raíz (`parent=` vacío) en un workspace que
+// YA tiene otros: el árbol gana una raíz nueva. Es lo que hace importar un
+// modelo (S13): el STL no es hijo de ningún diseño. CreateRoot, en cambio,
+// existe para el primer checkpoint y falla si hay alguno, porque ahí una raíz
+// de más suele ser un padre olvidado. No toca el padre activo.
+func CreateDetached(dir, label, description, source string) (string, error) {
+	return create(dir, "", label, description, source)
+}
+
 func create(dir, parentFile, label, description, source string) (string, error) {
 	desc := strings.TrimSpace(description)
 	if desc == "" {

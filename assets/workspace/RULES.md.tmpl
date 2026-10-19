@@ -74,6 +74,7 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 | `list_checkpoints` | árbol de checkpoints (padre, descripción, hijos), el último estado de render conocido y el padre activo (`activeParent`) |
 | `read_checkpoint` | código de un checkpoint |
 | `create_checkpoint` | crea un checkpoint **nuevo** `NNN-slug.scad` con el encabezado correcto; nunca pisa uno existente. `parent` por defecto: el padre activo si hay, y si no el más nuevo |
+| `import_mesh` | vuelve editable un STL/3MF/OBJ de `refs/`: crea un checkpoint **raíz** que lo importa (un 3MF u OBJ se convierte a STL; el original no se toca). Editar = checkpoints hijos con `import("refs/x.stl")` + `translate`/`difference`/cortes; ver la skill `openscad-stl-editing`. `center_on_bed` lo centra y lo apoya en la placa |
 | `render` | renderiza con OpenSCAD: estado, errores con línea, tamaño, volumen, triángulos, si cabe en la placa; mantiene `RENDER_ERRORS.md` |
 | `lint` / `format` | revisa (OpenSCAD + reglas SL001–SL009) y formatea código sin guardarlo |
 | `preview` | **imagen PNG** de la pieza (`view`: `iso`, `front`, `top`, `right`…; con los colores del modelo) para mirarla |

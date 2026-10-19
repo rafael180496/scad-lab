@@ -432,6 +432,32 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ChatProvider {
+	    id: string;
+	    kind: string;
+	    name: string;
+	    vendor: string;
+	    installed: boolean;
+	    path: string;
+	    remote: boolean;
+	    enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatProvider(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.vendor = source["vendor"];
+	        this.installed = source["installed"];
+	        this.path = source["path"];
+	        this.remote = source["remote"];
+	        this.enabled = source["enabled"];
+	    }
+	}
 	export class ChatView {
 	    chat: store.Chat;
 	    messages: store.ChatMessage[];
@@ -528,6 +554,120 @@ export namespace main {
 	        this.syncError = source["syncError"];
 	    }
 	}
+	export class DetectedCLI {
+	    id: string;
+	    name: string;
+	    vendor: string;
+	    installed: boolean;
+	    path: string;
+	    version: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DetectedCLI(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.vendor = source["vendor"];
+	        this.installed = source["installed"];
+	        this.path = source["path"];
+	        this.version = source["version"];
+	    }
+	}
+	export class EditBase {
+	    ref: string;
+	    parent: string;
+	    meshPath: string;
+	    report: refmodel.Report;
+	    fromImport: boolean;
+	    model: meshedit.Transform;
+	    color: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new EditBase(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ref = source["ref"];
+	        this.parent = source["parent"];
+	        this.meshPath = source["meshPath"];
+	        this.report = this.convertValues(source["report"], refmodel.Report);
+	        this.fromImport = source["fromImport"];
+	        this.model = this.convertValues(source["model"], meshedit.Transform);
+	        this.color = source["color"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ImportOptions {
+	    centerOnBed: boolean;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.centerOnBed = source["centerOnBed"];
+	        this.label = source["label"];
+	    }
+	}
+	export class ImportResult {
+	    file: string;
+	    ref: string;
+	    report: refmodel.Report;
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.ref = source["ref"];
+	        this.report = this.convertValues(source["report"], refmodel.Report);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LastModel {
 	    serverId: string;
 	    model: string;
@@ -588,8 +728,71 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class MiniToolsServer {
+	    name: string;
+	    kind: string;
+	    baseUrl: string;
+	    defaultModel: string;
+	    contextTokens?: number;
+	    exists: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MiniToolsServer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.baseUrl = source["baseUrl"];
+	        this.defaultModel = source["defaultModel"];
+	        this.contextTokens = source["contextTokens"];
+	        this.exists = source["exists"];
+	        this.error = source["error"];
+	    }
+	}
+	export class MiniToolsImport {
+	    found: boolean;
+	    path: string;
+	    servers: MiniToolsServer[];
+	    imported: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MiniToolsImport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.found = source["found"];
+	        this.path = source["path"];
+	        this.servers = this.convertValues(source["servers"], MiniToolsServer);
+	        this.imported = source["imported"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ModelInfo {
 	    id: string;
+	    label: string;
+	    description: string;
 	    vision: boolean;
 	    visionKnown: boolean;
 	    tools: boolean;
@@ -605,6 +808,8 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.description = source["description"];
 	        this.vision = source["vision"];
 	        this.visionKnown = source["visionKnown"];
 	        this.tools = source["tools"];
@@ -614,6 +819,39 @@ export namespace main {
 	        this.completionPricePerM = source["completionPricePerM"];
 	    }
 	}
+	export class ModelCatalog {
+	    defaultHint: string;
+	    models: ModelInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelCatalog(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.defaultHint = source["defaultHint"];
+	        this.models = this.convertValues(source["models"], ModelInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class OpenProjectEntry {
 	    workspace: store.Workspace;
 	    missing: boolean;
@@ -722,6 +960,22 @@ export namespace main {
 	        this.lastRenderStatus = source["lastRenderStatus"];
 	        this.renderFailed = source["renderFailed"];
 	        this.agentsAlive = source["agentsAlive"];
+	    }
+	}
+	export class ProviderHealthInfo {
+	    ok: boolean;
+	    latencyMs: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderHealthInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.latencyMs = source["latencyMs"];
+	        this.error = source["error"];
 	    }
 	}
 	export class RenameSkillResult {
@@ -1085,6 +1339,147 @@ export namespace mesh {
 
 }
 
+export namespace meshedit {
+	
+	export class Bounds {
+	    min: number[];
+	    max: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Bounds(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.min = source["min"];
+	        this.max = source["max"];
+	    }
+	}
+	export class Cut {
+	    point: number[];
+	    normal: number[];
+	    keep: string;
+	    split: string;
+	    colors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Cut(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.point = source["point"];
+	        this.normal = source["normal"];
+	        this.keep = source["keep"];
+	        this.split = source["split"];
+	        this.colors = source["colors"];
+	    }
+	}
+	export class Transform {
+	    translate: number[];
+	    rotate: number[];
+	    scale: number[];
+	    mirror: boolean[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Transform(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.translate = source["translate"];
+	        this.rotate = source["rotate"];
+	        this.scale = source["scale"];
+	        this.mirror = source["mirror"];
+	    }
+	}
+	export class Primitive {
+	    id: string;
+	    shape: string;
+	    mode: string;
+	    size: number[];
+	    text: string;
+	    center: boolean;
+	    color: string;
+	    transform: Transform;
+	
+	    static createFrom(source: any = {}) {
+	        return new Primitive(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.shape = source["shape"];
+	        this.mode = source["mode"];
+	        this.size = source["size"];
+	        this.text = source["text"];
+	        this.center = source["center"];
+	        this.color = source["color"];
+	        this.transform = this.convertValues(source["transform"], Transform);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Scene {
+	    ref: string;
+	    model: Transform;
+	    color: string;
+	    parts: Primitive[];
+	    cut?: Cut;
+	    ops: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Scene(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ref = source["ref"];
+	        this.model = this.convertValues(source["model"], Transform);
+	        this.color = source["color"];
+	        this.parts = this.convertValues(source["parts"], Primitive);
+	        this.cut = this.convertValues(source["cut"], Cut);
+	        this.ops = source["ops"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace parts {
 	
 	export class Part {
@@ -1216,6 +1611,77 @@ export namespace printers {
 	        this.heated_chamber = source["heated_chamber"];
 	        this.notes = source["notes"];
 	        this.verify = source["verify"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace refmodel {
+	
+	export class Part {
+	    name: string;
+	    color: string;
+	    triangles: number;
+	    size: number[];
+	    volumeMm3: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Part(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.color = source["color"];
+	        this.triangles = source["triangles"];
+	        this.size = source["size"];
+	        this.volumeMm3 = source["volumeMm3"];
+	    }
+	}
+	export class Report {
+	    format: string;
+	    triangles: number;
+	    min: number[];
+	    max: number[];
+	    size: number[];
+	    volumeMm3: number;
+	    areaMm2: number;
+	    watertight: boolean;
+	    parts: Part[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Report(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.format = source["format"];
+	        this.triangles = source["triangles"];
+	        this.min = source["min"];
+	        this.max = source["max"];
+	        this.size = source["size"];
+	        this.volumeMm3 = source["volumeMm3"];
+	        this.areaMm2 = source["areaMm2"];
+	        this.watertight = source["watertight"];
+	        this.parts = this.convertValues(source["parts"], Part);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1554,6 +2020,7 @@ export namespace store {
 	    title: string;
 	    createdAt: number;
 	    updatedAt: number;
+	    cliSession: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -1568,6 +2035,7 @@ export namespace store {
 	        this.title = source["title"];
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
+	        this.cliSession = source["cliSession"];
 	    }
 	}
 	export class ChatMessage {

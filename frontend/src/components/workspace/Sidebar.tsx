@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react'
-import {FolderOpen, FolderPlus, Plus, RefreshCw, Sparkles, Trash2} from 'lucide-react'
+import {FileUp, FolderOpen, FolderPlus, Plus, RefreshCw, Sparkles, Trash2} from 'lucide-react'
 import type {main, render, store} from '../../../wailsjs/go/models'
 import {IconButton} from '../ui/Button'
 import {CheckpointTree} from './CheckpointTree'
@@ -31,6 +31,7 @@ export function Sidebar({
     onOpen,
     onNew,
     onImport,
+    onImportModel,
     onRescan,
     onSyncSkills,
     onReveal,
@@ -62,6 +63,8 @@ export function Sidebar({
     onOpen: (id: number) => void
     onNew: () => void
     onImport: () => void
+    /** Importar un STL, 3MF u OBJ como checkpoint nuevo (S13). */
+    onImportModel: () => void
     onRescan: () => void
     onSyncSkills: () => void
     onReveal: () => void
@@ -162,6 +165,11 @@ export function Sidebar({
                 actions={
                     view ? (
                         <>
+                            {view.missing ? null : (
+                                <IconButton title={t.meshEdit.import.hint} onClick={onImportModel} data-testid="import-model">
+                                    <FileUp className="icon-ui-14" />
+                                </IconButton>
+                            )}
                             {view.missing ? null : <TrashButton workspaceId={view.workspace.id} checkpoints={view.checkpoints} shotOpen={shot?.trash} />}
                             <IconButton title={t.workspaces.syncSkills} onClick={onSyncSkills}>
                                 <Sparkles className="icon-ui-14" />

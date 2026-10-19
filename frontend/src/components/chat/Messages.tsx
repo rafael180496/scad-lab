@@ -5,7 +5,7 @@ import {fmt, locale, useT} from '../../i18n'
 import {interleave, parseParts, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
 import {IconButton} from '../ui/Button'
 import {MessageAttachments} from './AttachmentChips'
-import type {CodeActions} from './CodeBlock'
+import type {ChatActions, CodeActions} from './CodeBlock'
 import {Markdown} from './Markdown'
 import {ToolCallCard} from './ToolCallCard'
 import {dismissError, useStreamError, useStreamMessageId, useStreamRunning, useStreamSteps, useStreamText, useStreamUsage} from './chatStreams'
@@ -40,7 +40,7 @@ function UsageLine({usage, model, stepLimit}: {usage: ChatUsage | null; model?: 
 // El turno del asistente: el texto con las tarjetas de paso intercaladas donde
 // ocurrieron. Mientras llega no se ofrece «Guardar como checkpoint» (el código
 // está a medias): `actions` viene undefined.
-function Turn({text, steps, actions}: {text: string; steps: ChatStep[]; actions?: CodeActions}) {
+function Turn({text, steps, actions, onOpenCheckpoint}: {text: string; steps: ChatStep[]; actions?: CodeActions; onOpenCheckpoint?: (file: string) => void}) {
     const items = useMemo(() => interleave(text, steps), [text, steps])
     return (
         <>
@@ -50,7 +50,7 @@ function Turn({text, steps, actions}: {text: string; steps: ChatStep[]; actions?
                 ) : (
                     <div key={i}>
                         {it.steps.map((s) => (
-                            <ToolCallCard key={s.id} step={s} />
+                            <ToolCallCard key={s.id} step={s} onOpenCheckpoint={onOpenCheckpoint} />
                         ))}
                     </div>
                 ),
@@ -61,7 +61,7 @@ function Turn({text, steps, actions}: {text: string; steps: ChatStep[]; actions?
 
 // Mensaje ya guardado. memo: terminada la respuesta, escribir en el cuadro de
 // abajo o recibir trozos de otra no vuelve a pintar el historial.
-const MessageBubble = memo(function MessageBubble({message, actions}: {message: store.ChatMessage; actions: CodeActions}) {
+const MessageBubble = memo(function MessageBubble({message, actions}: {message: store.ChatMessage; actions: ChatActions}) {
     const parts = useMemo(() => parseParts(message.parts), [message.parts])
     if (message.role === 'user') {
         return (
@@ -78,7 +78,7 @@ const MessageBubble = memo(function MessageBubble({message, actions}: {message: 
     const usage = message.inputTokens || message.outputTokens ? {inputTokens: message.inputTokens, outputTokens: message.outputTokens, costUsd: message.costUsd} : null
     return (
         <div>
-            <Turn text={message.content} steps={parts.steps ?? []} actions={actions} />
+            <Turn text={message.content} steps={parts.steps ?? []} actions={actions} onOpenCheckpoint={actions.onOpenCheckpoint} />
             <UsageLine usage={usage} model={parts.model} stepLimit={parts.stepLimit} />
         </div>
     )
@@ -87,7 +87,7 @@ const MessageBubble = memo(function MessageBubble({message, actions}: {message: 
 // La respuesta que está llegando. Es el único componente suscrito al texto en
 // vivo: cada trozo redibuja esta burbuja —y dentro de ella, solo el último
 // bloque— y nada más de la conversación.
-function StreamingBubble({chatId, actions}: {chatId: number; actions: CodeActions}) {
+function StreamingBubble({chatId, actions}: {chatId: number; actions: ChatActions}) {
     const t = useT()
     const text = useStreamText(chatId)
     const steps = useStreamSteps(chatId)
@@ -108,7 +108,7 @@ function StreamingBubble({chatId, actions}: {chatId: number; actions: CodeAction
     }
     return (
         <div>
-            <Turn text={text} steps={steps} actions={running ? undefined : actions} />
+            <Turn text={text} steps={steps} actions={running ? undefined : actions} onOpenCheckpoint={actions.onOpenCheckpoint} />
             {busy ? (
                 <p className="mt-1 flex items-center gap-2 text-ui-12 text-muted" role="status">
                     <Loader2 className="icon-ui-14 animate-spin" />
@@ -148,7 +148,7 @@ export function MessageList({
 }: {
     chatId: number | null
     messages: store.ChatMessage[]
-    actions: CodeActions
+    actions: ChatActions
     empty: React.ReactNode
 }) {
     const box = useRef<HTMLDivElement>(null)
@@ -159,10 +159,14 @@ export function MessageList({
     const steps = useStreamSteps(chatId)
     const streamMessageId = useStreamMessageId(chatId)
 
+    // Una conversación vacía muestra el estado vacío desde ARRIBA: pegarlo al fondo (como se hace con una
+    // respuesta que crece) dejaría cortado el título justo en un panel bajo.
+    const emptyRef = useRef(false)
+
     useEffect(() => {
         stick.current = true
         const el = box.current
-        if (el) el.scrollTop = el.scrollHeight
+        if (el) el.scrollTop = emptyRef.current ? 0 : el.scrollHeight
     }, [chatId])
 
     useEffect(() => {
@@ -170,7 +174,8 @@ export function MessageList({
         const content = inner.current
         if (!el || !content) return
         const ro = new ResizeObserver(() => {
-            if (stick.current) el.scrollTop = el.scrollHeight
+            if (emptyRef.current) el.scrollTop = 0
+            else if (stick.current) el.scrollTop = el.scrollHeight
         })
         ro.observe(content)
         return () => ro.disconnect()
@@ -180,10 +185,12 @@ export function MessageList({
     // recargando) o que quedaron sin guardar por un error: se siguen mostrando.
     const hasStream = text !== '' || steps.length > 0
     const showStream = chatId != null && (running || (hasStream && !messages.some((m) => m.id === streamMessageId)))
+    emptyRef.current = messages.length === 0 && !showStream
 
     return (
         <div
             ref={box}
+            data-chat-scroll
             onScroll={(e) => {
                 const el = e.currentTarget
                 stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48

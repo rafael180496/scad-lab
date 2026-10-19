@@ -203,6 +203,16 @@ export function useChatAttachments({workspaceId, vision}: {workspaceId: number |
 
     const dismissError = useCallback(() => setChooseError(''), [])
 
+    // Un adjunto que Go ya registró por su cuenta (S13, «Modificar con IA»): entra como un chip listo, sin pasar
+    // por el selector de archivos.
+    const addReady = useCallback(
+        (att: hermes.Attachment) => {
+            if (itemsRef.current.some((x) => x.id === att.id)) return
+            apply((prev) => [...prev, {...(fromGo(att) as AttachItem), key: `att-${++nextKey}`, status: 'ready'}])
+        },
+        [apply, fromGo],
+    )
+
     // Lo que viaja con el mensaje: los ids de Go. Tras enviar (Go los consumió) los
     // chips se sueltan SIN pedir borrarlos.
     const takeReady = useCallback(() => {
@@ -275,6 +285,7 @@ export function useChatAttachments({workspaceId, vision}: {workspaceId: number |
         addFiles,
         addFromTransfer,
         choose,
+        addReady,
         choosing,
         chooseError,
         dismissError,

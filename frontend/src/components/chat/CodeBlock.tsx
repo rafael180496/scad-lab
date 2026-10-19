@@ -1,13 +1,21 @@
 import {useRef, useState} from 'react'
-import {Check, ChevronDown, Copy, GitBranchPlus} from 'lucide-react'
+import {Check, ChevronDown, Copy, FileCode2, GitBranchPlus} from 'lucide-react'
 import {copyText} from '../../lib/clipboard'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {isScadBlock} from './scadBlock'
 
 export type CodeActions = {
-    /** Guardar este bloque como checkpoint; sin ella (o con `undefined`) no hay botón. */
+    /** Guardar este bloque como checkpoint (con el diálogo de nombre); sin ella (o con `undefined`) no hay botón. */
     onSave?: (code: string) => void
+    /** Abrir este bloque en el editor: lo guarda como checkpoint nuevo, sin diálogo, y lo abre. */
+    onOpen?: (code: string) => void
+}
+
+/** Lo que el chat deja hacer sobre lo que dice un modelo: sus bloques de código y los checkpoints que nombra. */
+export type ChatActions = CodeActions & {
+    /** Selecciona un checkpoint en el árbol y lo abre en el editor y el visor. */
+    onOpenCheckpoint?: (file: string) => void
 }
 
 // Un bloque más largo que esto arranca plegado: un archivo entero dentro de una
@@ -17,15 +25,17 @@ const COLLAPSE_LINES = 30
 const COLLAPSED_LINES = 14
 
 // Bloque de código de una respuesta. Los de OpenSCAD son los que importan:
-// llevan «Guardar como checkpoint» (solo cuando el cerco ya cerró —durante el
-// streaming el código está a medias y guardarlo crearía un checkpoint roto—) y
-// todos llevan «Copiar».
+// llevan «Guardar como checkpoint» y «Abrir en el editor» (solo cuando el cerco ya
+// cerró —durante el streaming el código está a medias y guardarlo crearía un
+// checkpoint roto—) y todos llevan «Copiar». Con el panel angosto los botones
+// pierden el rótulo y quedan como ícono con su `title`.
 export function CodeBlock({lang, code, closed, actions}: {lang: string; code: string; closed: boolean; actions?: CodeActions}) {
     const t = useT()
     const [copied, setCopied] = useState(false)
     const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
     const scad = isScadBlock(lang, code)
     const canSave = scad && closed && !!actions?.onSave && code.trim() !== ''
+    const canOpen = scad && closed && !!actions?.onOpen && code.trim() !== ''
     const [expanded, setExpanded] = useState(false)
     const lines = code.split('\n')
     // Mientras llega (closed=false) no se pliega: el bloque está creciendo.
@@ -40,7 +50,7 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
     }
 
     return (
-        <div className="my-2 overflow-hidden rounded-lg border border-line bg-bg">
+        <div className="@container my-2 overflow-hidden rounded-lg border border-line bg-bg">
             <div className="flex h-7 items-center gap-1 border-b border-line bg-surface-2 pr-1 pl-2.5">
                 <span className={cn('font-mono text-ui-10 tracking-[0.12em] uppercase', scad ? 'text-accent' : 'text-faint')}>
                     {scad ? 'OpenSCAD' : lang || t.chat.code}
@@ -54,17 +64,30 @@ export function CodeBlock({lang, code, closed, actions}: {lang: string; code: st
                         className="no-drag inline-flex h-5 items-center gap-1 rounded px-1.5 text-ui-11 text-muted transition-colors duration-100 hover:bg-raised hover:text-fg"
                     >
                         {copied ? <Check className="icon-ui-12 text-ok" /> : <Copy className="icon-ui-12" />}
-                        {copied ? t.chat.copied : t.chat.copy}
+                        <span className="hidden @min-[34rem]:inline">{copied ? t.chat.copied : t.chat.copy}</span>
                     </button>
+                    {canOpen ? (
+                        <button
+                            type="button"
+                            data-testid="code-open"
+                            title={t.chat.openHint}
+                            onClick={() => actions?.onOpen?.(code)}
+                            className="no-drag inline-flex h-5 items-center gap-1 rounded px-1.5 text-ui-11 text-muted transition-colors duration-100 hover:bg-raised hover:text-fg"
+                        >
+                            <FileCode2 className="icon-ui-12" />
+                            <span className="hidden @min-[34rem]:inline">{t.chat.open}</span>
+                        </button>
+                    ) : null}
                     {canSave ? (
                         <button
                             type="button"
+                            data-testid="code-save"
                             title={t.chat.saveHint}
                             onClick={() => actions?.onSave?.(code)}
                             className="no-drag inline-flex h-5 items-center gap-1 rounded bg-accent px-1.5 text-ui-11 font-medium text-accent-fg transition-[filter] duration-100 hover:brightness-110"
                         >
                             <GitBranchPlus className="icon-ui-12" />
-                            {t.chat.save}
+                            <span className="hidden @min-[34rem]:inline">{t.chat.save}</span>
                         </button>
                     ) : null}
                 </div>

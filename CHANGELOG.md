@@ -9,6 +9,103 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Edita un STL, con el editor 3D o con la IA.** Importa un **STL, 3MF u OBJ** con el
+  botón de la barra lateral (junto a los de checkpoints) o **arrastrando el archivo a la
+  ventana**: un diálogo te muestra antes las medidas, los triángulos, si la malla es
+  cerrada y los colores de un 3MF, te avisa de lo que pesa (una malla abierta, una pieza
+  que no cabe en tu placa) y trae marcado **Centrar y apoyar en la placa**. El archivo no
+  se toca nunca: se copia a `refs/` y cada cambio es **código OpenSCAD en un checkpoint
+  nuevo** que lo importa, así que queda en el árbol con su padre, se deshace volviendo
+  al anterior y se exporta a STL o 3MF como cualquier otro.
+  - **Un modo «Editar» en el visor** (botón **Editar** de su barra), sobre cualquier
+    checkpoint con render, sea una importación o un diseño tuyo. **Mover, rotar y
+    escalar** con el gizmo (el cubo central escala por igual, las flechas por eje) o
+    escribiendo los valores en mm y grados, con ajuste a pasos (1 mm, 15°, 0,1; los
+    cambias en Propiedades) y las medidas de la caja en vivo; **espejar** en X, Y o Z,
+    **centrar**, **apoyar en la placa** y **apoyar sobre una cara** (haces clic en la cara
+    y el modelo gira hasta dejarla contra la placa). El gizmo gira y escala el modelo
+    sobre el centro de su caja, no sobre el origen del archivo, que en un STL suele
+    caer lejos de la pieza.
+  - **Cortar con un plano** (lo mueves y lo inclinas con su gizmo): te quedas con lo de
+    arriba, con lo de abajo o **partes la pieza en dos**, como dos objetos separados
+    para imprimirlos aparte o como **dos colores** en su sitio para un 3MF multicolor.
+    **Cubo, cilindro, esfera y texto** como **unión** o como **agujero** (el agujero se
+    ve rojo y translúcido; el resultado real es el render al aplicar), cada uno con su
+    gizmo, sus medidas y su color; también se recolorea el modelo.
+  - **Una pila de operaciones** con etiquetas legibles (van como comentarios al código
+    del checkpoint), con **deshacer y rehacer** (⌘Z y ⌘⇧Z; Ctrl en Windows) y vuelta a
+    cualquier paso. **Ver código** muestra el OpenSCAD que se guardaría sin escribir
+    nada, **Aplicar** crea el checkpoint nuevo y lo elige, y **Descartar** (o Esc) sale
+    sin dejar nada, con confirmación si ya hiciste cambios. El modo Editar no se
+    recuerda al cerrar la app, a propósito.
+  - **Una malla abierta se avisa antes de aplicar:** se puede mover, rotar y escalar,
+    pero cortarla o perforarla falla en OpenSCAD, y el editor lo dice en el visor y te
+    pregunta antes de aplicar.
+  - **Modificar con IA.** En el menú de un checkpoint y en la barra del modo Editar:
+    abre el chat con el modelo ya adjunto y «Modifica este modelo: » escrito, para que
+    termines la frase. Responde el proveedor que tengas elegido, Hermes o un CLI; en
+    el chat, la herramienta nueva **Importar modelo** (`import_mesh`) tiene su tarjeta.
+  - **En un panel angosto** la barra de herramientas se pliega en varias líneas, el
+    panel lateral pasa a un cajón con pestañas bajo el visor y las medidas se reducen a
+    la de lo seleccionado, sin controles cortados.
+- **Tus CLIs de IA, en el mismo chat que tus servidores.** Claude Code, Codex,
+  Antigravity y OpenCode aparecen solos en el selector de proveedor del chat si los
+  tienes instalados: **no hay nada que configurar** (ScadLab los busca en el `PATH`, en
+  las rutas habituales y, en macOS, en el `PATH` de tu shell de login). Al elegir uno,
+  tus mensajes corren en ese CLI, en la carpeta del workspace y con las herramientas de
+  ScadLab conectadas; sus pasos —render, vista previa, medición, checkpoints— llegan al
+  chat con las mismas tarjetas que usa Hermes. La conversación se retoma con la sesión
+  del propio CLI, y cada CLI trae su lista de modelos («Gemini 4 Argon (High)»…).
+  - **Dos modos, y sin comandos de shell en ninguno.** **Solo consulta** (el de
+    arranque con un CLI) deja que el CLI lea el proyecto y use las herramientas de
+    lectura; **Agente** le deja además crear checkpoints y exportar. Cada modo explica
+    qué permite, en el selector y bajo la caja de mensaje.
+  - **Cuando un CLI no está instalado, no aparece.** Y uno recién instalado se ve al
+    abrir el selector, sin reiniciar. En Configuración → Proveedores de IA hay un
+    bloque **CLIs detectados**, de solo lectura, con la versión de cada uno.
+- **Un selector de proveedor y de modelo hechos para el chat.** El desplegable de
+  servidores se reemplazó por uno propio: los CLIs detectados primero y después tus
+  servidores, cada uno con su ícono, un **punto de estado** (verde responde, rojo no) y
+  un check en el elegido; al final, **Agregar proveedor de IA…** te lleva a
+  Configuración. Se maneja con el teclado (flechas, Enter y Esc). Junto a él, una
+  **píldora de latencia** (`18 ms`, o **Sin respuesta**) que se refresca sola cada
+  minuto, al cambiar de proveedor y con un clic. El selector de modelo suma la opción
+  **Por defecto**, con la explicación de cuál se usa (el que tenga configurado el CLI, o
+  el predeterminado del servidor), y conserva la búsqueda y las insignias de visión y
+  herramientas. Tu último proveedor y modelo se recuerdan por proyecto y vuelven al
+  abrirlo.
+- **El panel del chat, repensado para un panel angosto.** La barra de arriba es de **una
+  sola línea**: el título de la conversación (clic para renombrarlo), el proveedor, la
+  latencia, el modelo, el workspace y el modo **Solo consulta / Agente**. Cuando el panel
+  se achica, lo secundario —el workspace, la latencia, «Chat nuevo», el modo— se pliega en
+  un menú **«…»**; nunca hay scroll horizontal ni un control cortado, desde un panel de
+  320 px hasta uno de 1200, y los desplegables siempre quedan dentro de la ventana.
+  - **Un chat nuevo ya no es una pantalla en blanco.** Muestra con qué proveedor, modelo
+    y modo vas a hablar y cuatro pedidos de OpenSCAD para empezar (*una caja con tapa a
+    presión para un Raspberry Pi 5*, *copia la pieza de esta foto*…); un clic rellena la
+    caja de mensaje.
+  - **La caja de mensaje dice lo que importa.** Los atajos a la vista (**Enter** envía,
+    **Mayús+Enter** agrega una línea y **⌘/Ctrl+Enter** también envía), el modo con su
+    explicación y un **contador de contexto**: los tokens estimados del borrador más la
+    conversación, contra la ventana del modelo si el proveedor la informa, en ámbar al 70 %
+    y en rojo al 90 %.
+  - **Buscar en las conversaciones.** La lista de conversaciones tiene un buscador que
+    mira el título **y lo que se dijo**, con la coincidencia resaltada.
+- **Pasos más legibles y enlaces a tus checkpoints.** Cada tarjeta muestra, sin abrirla,
+  el checkpoint al que se refiere —un enlace que lo selecciona en el árbol y lo abre en el
+  editor y el visor—, los datos de la malla de un render o una medición (tamaño,
+  triángulos, si es cerrada, si cabe en la placa) y, si falla, la línea y el código del
+  error. Las respuestas con Markdown se leen mejor (tablas con su alineación, casillas
+  `[x]`, tachado y direcciones sueltas que se abren en el navegador), y cada bloque de
+  OpenSCAD trae **Abrir en el editor** además de **Guardar como checkpoint**: abrirlo lo
+  guarda como un checkpoint nuevo, sin pedir nombre, y lo abre (los checkpoints no se
+  editan, así que no hay un borrador suelto).
+- **Importar tus servidores de mini-tools.** En Configuración → Proveedores de IA, el
+  botón **Importar servidores de mini-tools** muestra primero la lista de lo que hay, te
+  pide confirmación y recién entonces los copia (nombre, tipo, dirección y modelo por
+  defecto). **Las claves no se copian**: están cifradas con la contraseña de mini-tools y
+  ScadLab nunca las lee, así que cada servidor llega sin clave y la escribes de nuevo. Si
+  mini-tools no está en tu equipo, lo dice.
 - **Hermes: un chat que diseña por ti.** Con el interruptor **Agente** encendido, el
   modelo del chat deja de solo conversar: usa las herramientas de ScadLab para crear
   un checkpoint, renderizarlo, mirarlo, medirlo y, si el render falla, leer la línea

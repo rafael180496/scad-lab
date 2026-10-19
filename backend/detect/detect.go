@@ -47,6 +47,12 @@ const (
 // el del usuario. La ruta fijada y el OpenSCAD descargado siguen valiendo.
 const NoSystemOpenSCADEnv = "SCADLAB_NO_SYSTEM_OPENSCAD"
 
+// NoExtraDirsEnv es otra variable SOLO para pruebas: con valor "1", Find mira
+// únicamente el PATH del proceso (ni rutas de instalación habituales ni el PATH
+// de la shell de login). Sirve para simular «este CLI no está instalado» en un
+// equipo donde sí lo está, con un PATH que solo tiene los CLIs de mentira.
+const NoExtraDirsEnv = "SCADLAB_NO_EXTRA_DIRS"
+
 // extraDirs son directorios de instalación habituales que no están en el PATH
 // de una app gráfica.
 func extraDirs() []string {
@@ -101,6 +107,9 @@ func Find(cmd string) string {
 	}
 	if p, err := exec.LookPath(cmd); err == nil {
 		return p
+	}
+	if os.Getenv(NoExtraDirsEnv) == "1" {
+		return ""
 	}
 	for _, d := range extraDirs() {
 		for _, n := range exeNames(cmd) {
@@ -210,6 +219,13 @@ func CLI(ctx context.Context, id, command string) Tool {
 	t.Found, t.Path = true, path
 	t.Version = version(ctx, path, "--version")
 	return t
+}
+
+// Version corre `<path> --version` con un plazo corto y devuelve el número, o ""
+// si el ejecutable no lo dice. Es lo que usa la lista de CLIs detectados: se
+// pide aparte de CLIPath porque arrancar un CLI de node tarda ~1 s.
+func Version(ctx context.Context, path string) string {
+	return version(ctx, path, "--version")
 }
 
 var versionRe = regexp.MustCompile(`\d+\.\d+(\.\d+)?([.-][0-9A-Za-z]+)*`)

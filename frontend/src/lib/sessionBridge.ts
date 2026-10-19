@@ -1,3 +1,4 @@
+import type {hermes} from '../../wailsjs/go/models'
 import {showPanel} from '../components/dock/dock'
 
 // Puente entre «Retomar sesión» (el árbol de checkpoints, en la barra lateral) y
@@ -53,4 +54,22 @@ const closedProjects = channel<number>()
 export const onProjectClosed = closedProjects.on
 export function projectClosed(workspaceId: number) {
     closedProjects.emit(workspaceId)
+}
+
+// Un borrador para el chat (S13, «Modificar con IA»): un modelo ya adjuntado en Go y un texto sugerido para el
+// compositor. El panel Chat entra con lazy(), así que el pedido queda pendiente hasta que se monta y lo toma
+// (igual que openChat).
+export type ChatDraft = {workspaceId: number; text: string; attachment: hermes.Attachment}
+const drafts = channel<ChatDraft>()
+let pendingDraft: ChatDraft | null = null
+export const onChatDraft = drafts.on
+export function takePendingDraft(): ChatDraft | null {
+    const d = pendingDraft
+    pendingDraft = null
+    return d
+}
+export function requestChatDraft(d: ChatDraft) {
+    pendingDraft = d
+    showPanel('chat')
+    if (drafts.emit(d)) pendingDraft = null
 }

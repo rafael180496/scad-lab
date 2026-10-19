@@ -1,5 +1,5 @@
 import {useRef} from 'react'
-import {Box, Camera, CircleHelp, Columns2, Grid3x3, Maximize, Shapes} from 'lucide-react'
+import {Box, Camera, CircleHelp, Columns2, Grid3x3, Loader2, Maximize, PencilRuler, Shapes} from 'lucide-react'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {VIEWS, type ViewName} from './camera'
@@ -54,6 +54,8 @@ export function ViewerToolbar({
     onEditColor,
     onCapture,
     onSplit,
+    onEdit,
+    editBusy,
 }: {
     wireframe: boolean
     edges: boolean
@@ -73,6 +75,9 @@ export function ViewerToolbar({
     onEditColor: (i: number, color: string) => void
     onCapture: () => void
     onSplit: () => void
+    /** Entra al modo «Editar» (S13). Sin esto, el botón no se ofrece (no hay una pieza renderizada). */
+    onEdit?: () => void
+    editBusy?: boolean
 }) {
     const t = useT()
     const picker = useRef<HTMLInputElement>(null)
@@ -178,6 +183,12 @@ export function ViewerToolbar({
                 />
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">
+                {onEdit ? (
+                    <Toggle on={false} title={t.viewer.editHint} onClick={onEdit}>
+                        {editBusy ? <Loader2 className="icon-ui-14 animate-spin text-accent" /> : <PencilRuler className="icon-ui-14" />}
+                        {t.viewer.edit}
+                    </Toggle>
+                ) : null}
                 <Toggle on={false} title={t.viewer.capture} onClick={onCapture}>
                     <Camera className="icon-ui-14" />
                 </Toggle>

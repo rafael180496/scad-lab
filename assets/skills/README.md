@@ -14,6 +14,7 @@ correctos, paramétricos e imprimibles en impresoras Bambu Lab.
 | [`openscad-3mf-multicolor`](openscad-3mf-multicolor/SKILL.md) | Modelos multicolor para AMS: una pieza por `color()`, export 3MF y formato del archivo 3MF. |
 | [`openscad-templates`](openscad-templates/SKILL.md) | Biblioteca de plantillas paramétricas listas para arrancar un proyecto (cajas, gabinetes, engranajes, Gridfinity…). |
 | [`openscad-libraries`](openscad-libraries/SKILL.md) | Cuándo y cómo usar BOSL2, MCAD y NopSCADlib desde la carpeta `lib/` del workspace. |
+| [`openscad-stl-editing`](openscad-stl-editing/SKILL.md) | Modificar un STL (o 3MF/OBJ) existente sin tocarlo: `import()` en un checkpoint nuevo y recetas de agujeros, avellanados, cortes con un plano, refuerzos, texto, escala, partir para la placa y espejar; límites de las mallas. |
 | [`_skill-template`](_skill-template/README.md) | Plantilla para que el usuario cree skills nuevas. No es una skill operativa. |
 
 ## Contrato con la app (resumen)
