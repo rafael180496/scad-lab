@@ -58,9 +58,19 @@ func TestAgentPromptDescribesTheLoop(t *testing.T) {
 			}
 		}
 		// El orden del bucle: orientarse, crear, renderizar, mirar, medir, parar.
+		// La regla de oro del rol nombra create_checkpoint antes que el bucle: el
+		// orden se comprueba dentro de la sección del bucle.
+		base := strings.Index(got, "## Cómo trabajas")
+		if lang == "en" {
+			base = strings.Index(got, "## How you work")
+		}
+		if base < 0 {
+			t.Fatalf("%s: falta la sección del bucle", lang)
+		}
+		loop := got[base:]
 		last := -1
 		for _, tool := range []string{"`printer_info`", "`create_checkpoint`", "`render`", "`preview`", "`measure`"} {
-			i := strings.Index(got, tool)
+			i := strings.Index(loop, tool)
 			if i < 0 || i < last {
 				t.Errorf("%s: %s fuera de orden (pos %d, anterior %d)", lang, tool, i, last)
 			}
@@ -257,6 +267,22 @@ func TestAgentPromptNoVoseo(t *testing.T) {
 	for _, w := range []string{" vos ", "podés", "tenés", "elegí", "creá ", "mirá", "usá ", "pedí ", "escribí", "revisá"} {
 		if strings.Contains(strings.ToLower(got), w) {
 			t.Errorf("voseo: %q", w)
+		}
+	}
+}
+
+// S12.c: el prompt con herramientas obliga a terminar en un checkpoint y, en un
+// workspace vacío, a crear el primero sin preguntar.
+func TestAgentPromptMandatesCheckpoint(t *testing.T) {
+	for lang, wants := range map[string][]string{
+		"es": {"nunca termina sin haber creado", "crea el primero de inmediato y no preguntes", "Créalo ya", "nómbralo por su archivo", "Pide aclaraciones solo si el pedido es imposible de interpretar"},
+		"en": {"never ends without having created", "create the first one right away and do not ask", "Create it now", "name it by its file", "Ask for clarification only if the request is impossible to interpret"},
+	} {
+		got := AgentSystemPrompt(AgentContext{Context: Context{Lang: lang}, Tools: true})
+		for _, w := range wants {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s vacío: falta %q", lang, w)
+			}
 		}
 	}
 }

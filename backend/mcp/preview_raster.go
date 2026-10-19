@@ -23,17 +23,18 @@ var defaultPartColor = [3]uint8{0xF9, 0xD7, 0x2C}
 // misma caché que `render`— y se dibuja con backend/raster (z-buffer por
 // software, sombreado plano), una parte por color, con las mismas vistas y el
 // mismo tamaño que el preview nativo.
-func (e *env) previewRaster(ctx context.Context, name, viewName string, v view, size int) (*toolResult, error) {
+func (e *env) previewRaster(ctx context.Context, name, viewName string, v view, size int) (shot, error) {
 	res, s, err := e.render(ctx, name)
 	if err != nil {
-		return nil, err
+		return shot{}, err
 	}
 	switch res.Status {
 	case render.StatusOK:
 	case render.StatusCancelled:
-		return nil, i18n.New(i18n.Msg{ES: "el preview se canceló", EN: "the preview was cancelled"})
+		return shot{}, i18n.New(i18n.Msg{ES: "el preview se canceló", EN: "the preview was cancelled"})
 	default:
-		return e.previewFailure(name, res.Log, nil)
+		_, ferr := e.previewFailure(name, res.Log, nil)
+		return shot{}, ferr
 	}
 
 	var rparts []raster.Part
@@ -47,7 +48,7 @@ func (e *env) previewRaster(ctx context.Context, name, viewName string, v view, 
 		// Sin partes (no se pudo repartir por color): la malla entera, sin color.
 		tris, err := raster.ReadSTL(res.MeshPath)
 		if err != nil {
-			return nil, i18n.Errorf(i18n.Msg{ES: "no se pudo leer la malla renderizada: %w", EN: "could not read the rendered mesh: %w"}, err)
+			return shot{}, i18n.Errorf(i18n.Msg{ES: "no se pudo leer la malla renderizada: %w", EN: "could not read the rendered mesh: %w"}, err)
 		}
 		rparts = []raster.Part{{Tris: tris, Color: defaultPartColor}}
 	}
@@ -57,15 +58,12 @@ func (e *env) previewRaster(ctx context.Context, name, viewName string, v view, 
 	}, size)
 	png, err := raster.EncodePNG(img)
 	if err != nil {
-		return nil, err
+		return shot{}, err
 	}
-	return &toolResult{Content: []map[string]any{
-		imageContent(png, "image/png"),
-		textContent(msgf(i18n.Msg{
-			ES: "Preview de %s, vista %s, %d×%d px. Dibujado por ScadLab con el motor integrado (OpenSCAD %s en WebAssembly, sin OpenGL): sombreado plano y el color de cada parte.",
-			EN: "Preview of %s, %s view, %d×%d px. Drawn by ScadLab with the built-in engine (OpenSCAD %s on WebAssembly, no OpenGL): flat shading and the color of each part.",
-		}, name, viewName, size, size, res.Version)),
-	}}, nil
+	return shot{png: png, note: msgf(i18n.Msg{
+		ES: "Preview de %s, vista %s, %d×%d px. Dibujado por ScadLab con el motor integrado (OpenSCAD %s en WebAssembly, sin OpenGL): sombreado plano y el color de cada parte.",
+		EN: "Preview of %s, %s view, %d×%d px. Drawn by ScadLab with the built-in engine (OpenSCAD %s on WebAssembly, no OpenGL): flat shading and the color of each part.",
+	}, name, viewName, size, size, res.Version)}, nil
 }
 
 // rasterParts lee los STL de cada parte desde la caché de partes (la misma que

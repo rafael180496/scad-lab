@@ -226,13 +226,23 @@ func opencodeUsageFromExport(raw []byte) *Usage {
 
 // opencodeConfig es la configuración de permisos de un turno (ver opencodeEnv).
 // «Solo consulta» le niega a OpenCode las herramientas del servidor MCP de
-// ScadLab que escriben (crear un checkpoint, exportar); OpenCode nombra una
-// herramienta MCP `<servidor>_<herramienta>`.
+// ScadLab que escriben (crear un checkpoint, importar un modelo, exportar);
+// «Agente» las permite todas de forma EXPLÍCITA (S12.c): un permiso global del
+// usuario en «ask» las dejaría esperando una respuesta que en headless nadie da.
+// OpenCode nombra una herramienta MCP `<servidor>_<herramienta>`. La shell se
+// niega siempre.
 func opencodeConfig(mode Mode, mcpOn bool) string {
 	perm := map[string]string{"bash": "deny"}
-	if mode != ModeEdit && mcpOn {
+	if mcpOn {
+		for _, tool := range readTools {
+			perm[mcpServerName+"_"+tool] = "allow"
+		}
 		for _, tool := range writeTools {
-			perm[mcpServerName+"_"+tool] = "deny"
+			if mode == ModeEdit {
+				perm[mcpServerName+"_"+tool] = "allow"
+			} else {
+				perm[mcpServerName+"_"+tool] = "deny"
+			}
 		}
 	}
 	raw, _ := json.Marshal(map[string]any{"permission": perm}) // un mapa de strings no falla
@@ -245,7 +255,8 @@ func opencodeConfig(mode Mode, mcpOn bool) string {
 //     Le quita la herramienta de comandos (`bash` en su configuración, `shell` en
 //     el stream) en TODOS los modos: sin esto su modo por defecto corre cualquier
 //     comando sin preguntar, y en headless no hay a quién preguntarle. «Solo
-//     consulta» además le niega las herramientas de ScadLab que escriben.
+//     consulta» además le niega las herramientas de ScadLab que escriben, y «Agente»
+//     las permite por su nombre.
 //     Requiere `--standalone`: el servicio en segundo plano de OpenCode ya arrancó
 //     con su propio entorno e ignora el de quien lo llama.
 //   - PWD: OpenCode toma el directorio de trabajo de esa variable y no del

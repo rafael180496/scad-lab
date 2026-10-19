@@ -52,6 +52,13 @@ color("Orange") body();
 Si no cabe: reduce, reorienta (diagonal no se considera), o parte la pieza con
 uniones (cola de milano, pasadores Ø de 4–5 mm con 0.2 de holgura, tornillos).
 
+Con las herramientas de ScadLab (MCP): `measure` dice si cabe (`fitsBuildVolume`,
+`overflowMm`) y `suggest_orientation` prueba las 6 caras hacia abajo (tamaño,
+si cabe, área en voladizo, contacto con la placa) con las `operations` listas
+para `edit_mesh`; si nada cabe, da la escala máxima y por dónde partir. Para el
+peso con otro material o relleno, `estimate_print` (materiales en
+`list_materials`).
+
 ## 3. Reglas de diseño FDM (boquilla 0.4)
 
 Detalle, tablas y snippets: [references/fdm-design-rules.md](references/fdm-design-rules.md).

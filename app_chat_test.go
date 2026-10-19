@@ -371,13 +371,53 @@ func TestChatCheckpointParent(t *testing.T) {
 			t.Errorf("%q → %q, %v", cur, got, err)
 		}
 	}
-	// Workspace vacío: error claro.
+	// Workspace vacío: no hay padre, y no es un error (S12.c): el bloque será la raíz.
 	empty, err := a.CreateWorkspace("Vacío", "bambu-a1-mini")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.ChatCheckpointParent(empty.ID, ""); err == nil || !strings.Contains(err.Error(), "checkpoint") {
-		t.Errorf("sin checkpoints: %v", err)
+	if got, err := a.ChatCheckpointParent(empty.ID, ""); err != nil || got != "" {
+		t.Errorf("sin checkpoints: %q, %v", got, err)
+	}
+}
+
+// Guardar un bloque del chat en un workspace vacío crea la raíz (sin padre) y
+// enlaza el chat; desde ahí cuelga lo siguiente. Antes fallaba con «no hay
+// checkpoint que sirva de padre».
+func TestSaveChatCheckpointCreatesTheRootInAnEmptyWorkspace(t *testing.T) {
+	a := newTestApp(t)
+	w, err := a.CreateWorkspace("Vacío", "bambu-a1-mini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := a.store.CreateChat(w.ID, "ollama", "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, err := a.ChatCheckpointParent(w.ID, "")
+	if err != nil || parent != "" {
+		t.Fatalf("padre: %q %v", parent, err)
+	}
+	name, err := a.SaveChatCheckpoint(w.ID, c.ID, parent, "Caja con tapa", "Caja con tapa para una Raspberry", "color(\"red\") cube(10);\n")
+	if err != nil || name != "001-caja-con-tapa.scad" {
+		t.Fatalf("raíz: %q %v", name, err)
+	}
+	got := readFile(t, filepath.Join(w.Path, name))
+	if !strings.HasPrefix(got, "// @checkpoint parent= desc=\"Caja con tapa para una Raspberry\"\n") {
+		t.Errorf("la raíz lleva `parent=` vacío: %q", got)
+	}
+	// Lo siguiente cuelga de ella.
+	parent, _ = a.ChatCheckpointParent(w.ID, "")
+	if parent != name {
+		t.Errorf("el padre pasa a ser la raíz: %q", parent)
+	}
+	next, err := a.SaveChatCheckpoint(w.ID, c.ID, parent, "Más alta", "", "color(\"red\") cube(12);\n")
+	if err != nil || next != "002-mas-alta.scad" || !strings.Contains(readFile(t, filepath.Join(w.Path, next)), "parent=001-caja-con-tapa.scad") {
+		t.Errorf("hijo: %q %v", next, err)
+	}
+	// Con checkpoints ya en el árbol, un padre vacío sigue siendo un olvido: no se crea una raíz de más.
+	if _, err := a.SaveAsCheckpoint(w.ID, "", "otra", "", "cube(1);"); err == nil {
+		t.Error("una segunda raíz por olvido del padre debe fallar")
 	}
 }
 

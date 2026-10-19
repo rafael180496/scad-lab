@@ -44,10 +44,38 @@ portó su código, se portó lo que hace.
 ## Modos
 
 `ModeControl` es «Solo consulta» (`agent=false`) / «Agente» (`agent=true`) para los dos tipos, con la
-explicación de cada uno según el tipo (`t.chat.mode.cli|server`). Se recuerda **por tipo**
-(`rememberedAgent(cli)`): con un CLI arranca en «Solo consulta» y con un servidor en «Agente». El tope de
-pasos solo aplica a Hermes (servidor + Agente). Si el modelo no llama herramientas, «Agente» se
-deshabilita y dice por qué.
+explicación de cada uno según el tipo (`t.chat.mode.cli|server`). **El modo es de cada conversación** (T12): vive en `chats.mode`
+(`Chat.mode`, `SetChatMode`) y **arranca en «Agente» con todo proveedor** (S12.c, «el chiste de esto es modificar y crear modelos»).
+Elegir «Solo consulta» vale solo para esa conversación: no cambia otra ni lo que arranca el chat nuevo. Sin chat abierto, el
+interruptor es un borrador (`draftAgent`, siempre «Agente» al abrir el panel, con «Chat nuevo» y al cambiar de proyecto) que se guarda
+en la conversación al crearla. `lib/chatMode.ts` tiene lo puro (`isAgentMode`, `chatModeValue`) y `clearLegacyChatMode()`, que `main.tsx`
+corre al arrancar para borrar las preferencias globales de antes (`scadlab.chat.agent`, `scadlab.chat.agent.cli`,
+`scadlab.chat.mode.cli|server`): ninguna deja en consulta una conversación que nadie eligió así. Ver
+[19-hermes.md](19-hermes.md#modo-por-conversación-y-escritura-por-defecto-s12c-t12). El tope de pasos solo aplica a Hermes
+(servidor + Agente). Si el modelo no llama herramientas, «Agente» se deshabilita y dice por qué.
+
+### «Solo consulta» y lo que nace en el chat (S12.c)
+
+- **«Crear checkpoint y renderizar»** (`CodeBlock`, `actions.onCreate`): solo se pasa en «Solo consulta» (en «Agente» lo hace
+  ScadLab con el guardado automático). Botón de acento que reemplaza a «Abrir en el editor»; «Guardar como checkpoint» pasa a
+  secundario. Guarda sin diálogo (`SaveChatCheckpoint`, padre `""` = raíz) y llama a `onCheckpointCreated`.
+- **Aviso «Cambiar a Agente»** (`SwitchAgentNotice`): sobre la caja, cuando `!effectiveAgent`, el modelo admite herramientas y
+  `asksToCreate` (`lib/chatIntent.ts`, heurística de palabras en es/en; una pregunta —«¿cómo…?»— no cuenta) ve el borrador o,
+  con la caja vacía, el último mensaje enviado. La X lo oculta para ese texto.
+- **Un bloque ya guardado no se ofrece otra vez**: si el turno tiene un paso que creó un checkpoint (`createdCheckpoint`,
+  `lib/chatSteps.ts`: `CREATING_TOOLS` = `create_checkpoint`, `import_mesh`, `set_parameters`, `create_from_template`, `edit_mesh` y
+  `autosave`, en `ok`; es el espejo de `EffectCheckpoint` en `backend/mcp/effects.go` y `chat-ux.test.mjs` lo cruza con ese
+  archivo. Para `set_parameters` y `edit_mesh` el argumento `file` es la **base**, no el checkpoint nuevo: solo cuenta el `file`
+  del resultado), `Turn` (`Messages.tsx`) no pasa acciones a sus
+  bloques de código.
+- **Selección automática**: `chatStreams.ts` avisa (`onChatCheckpoint`) cada vez que un `chat:step` termina bien y creó un
+  checkpoint; `App.tsx` lo abre en el visor y en Código (`adoptChatCheckpoint` = `adoptNewCheckpoint` + render aunque el
+  auto-render esté apagado) si es el proyecto activo y no hay cambios sin guardar ni una edición de STL sucia. El botón y los
+  pasos usan el mismo camino (`onCheckpointCreated` de `ChatPanel` → `PanelHost.onChatCheckpoint`).
+- **Antigravity**: `ChatPanel` llama `EnsureAntigravityMCP` al mostrar `cli:antigravity`; el toast sale del evento
+  `mcp:antigravity` en `App.tsx` (también cuando lo dispara el backend). Ver [13-mcp.md](13-mcp.md).
+- **«Crear un modelo de inicio»** (`components/workspace/StarterAction.tsx`): en el visor y en Código cuando el proyecto no
+  tiene ningún checkpoint (`emptyWorkspace`); `CreateStarterCheckpoint` lo escribe aunque la papelera tenga algo.
 
 ## Barra de una línea y escalones de ancho
 
@@ -102,6 +130,12 @@ lista sin buscar no cuesta nada. Si un día pesa, el camino es un `SearchChats` 
 
 ## Banco de capturas y pruebas
 
+- Vistas de S12.c: `chat-agent-creates` (workspace con un solo `001`, Claude Code con `create_checkpoint → render → preview` y la
+  pieza en el visor), `chat-autosave` (Ollama sin herramientas: el bloque y «Guardado automáticamente»), `chat-query-only`
+  (Codex en consulta con el botón destacado y el aviso) y `workspace-starter` (el modelo de inicio ya en el visor, con
+  `public/uishot/starter-{all,base,knob}.stl`, generados una vez con la geometría de `starter.scad.*.tmpl`). `chat-code` y `chat-query-only` ponen la
+  conversación abierta en `mode: 'ask'` (`hermesChatMode`; el banco ya no toca `localStorage`) y el chat 1 de la lista de ejemplo también
+  está en consulta, para que se vea que el modo es de cada conversación.
 - Vistas nuevas en `uishot.tsx`: `chat-providers`, `chat-cli-models`, `chat-empty`, `chat-no-providers`,
   `chat-code`, `settings-import-minitools`, y el chat solo en un panel de N px: `chat-narrow` (360) y
   `chat-wN` (cualquier N). El ancho se fija en el contenedor: Chrome headless no baja de ~500 px de ventana.

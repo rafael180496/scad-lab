@@ -69,6 +69,9 @@ suelto de la raíz), mantienen el índice de la base y emiten `checkpoints:chang
 | `ResumeCheckpointSession(id, file)` | `CheckpointResume{kind, terminalId, agentId, chatId}` | `kind: "terminal"` → abrió el CLI con `StartAgentTerminal` en modo `resume` (la UI reengancha `terminalId`); `"chat"` → la UI abre `chatId`. Falla sin vínculo, o con un agente sin id de sesión (Antigravity) |
 | `RevealCheckpoint(id, file)` | — | Finder / Explorador, sobre `RevealPath` |
 | `SaveChatCheckpoint(workspaceId, chatId, parent, label, desc, source)` | `string` | como `SaveAsCheckpoint`, y guarda `chat_id` si el chat es del workspace |
+| `ChatCheckpointParent(workspaceId, currentFile)` | `string` | el archivo abierto; si no, el último checkpoint; **`""` en un workspace sin checkpoints** (S12.c: ya no es un error, el bloque será la raíz). `SaveAsCheckpoint` / `SaveChatCheckpoint` con padre `""` usan `checkpoint.CreateRoot` (falla si ya hay checkpoints: un padre olvidado) |
+| `CreateStarterCheckpoint(id)` | `string` | «Crear un modelo de inicio» (visor y Código, S12.c): escribe `001-<nombre>.scad` aunque la papelera tenga algo; `""` si el workspace ya tiene un `.scad` |
+| `EnsureAntigravityMCP()` | `{added, state}` | registra `scadlab` en la configuración global de Antigravity si falta (ver [13-mcp.md](13-mcp.md)); lo llama el chat al mostrar `cli:antigravity`, y el backend al enviar un turno y al abrir su terminal |
 
 `WorkspaceView` ganó `activeParent` (`""` = ninguno explícito): lo llevan `OpenWorkspace`,
 `RescanWorkspace` y el evento `checkpoints:changed`. Cambiar el activo emite ese mismo evento
@@ -201,10 +204,11 @@ Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
 | `terminal:data` | `{id, data (base64), seq}` | PTY de una terminal de agente (S5) |
 | `terminal:exit` | `{id, code}` | el proceso de la terminal terminó |
 | `chat:delta` | `{chatId, text, seq}` | turno de chat en curso (deltas agrupados cada 40 ms) |
-| `chat:step` | `{chatId, step{id, index, tool, args, status, text, images[], durationMs, textAt}}` | Hermes: un paso de herramienta, dos veces con el mismo `id` (`status` `running` al arrancar; `ok` o `error` al terminar). `images` son data URL (PNG en vivo); `textAt` = texto visible previo en unidades UTF-16 |
+| `chat:step` | `{chatId, workspaceId, step{id, index, tool, args, status, text, images[], durationMs, textAt}}` | Hermes y los CLIs: un paso de herramienta, dos veces con el mismo `id` (`status` `running` al arrancar; `ok` o `error` al terminar). `images` son data URL (PNG en vivo); `textAt` = texto visible previo en unidades UTF-16. `workspaceId` (S12.c) deja que la UI abra el checkpoint que un paso acaba de crear (`create_checkpoint`, `import_mesh` o `autosave`) sin saber de qué chat vino. Los pasos `autosave` y `render` de la red de seguridad llegan una sola vez, ya terminados |
 | `chat:usage` | `{chatId, inputTokens, outputTokens, costUsd}` | uso acumulado del turno tras cada vuelta; `costUsd` 0 = «no informado» (solo hay costo con precios publicados) |
 | `chat:done` | `{chatId, messageId, cancelled}` | fin del turno (también al cancelar con texto parcial o pasos) |
 | `mcp:changed` | `{enabled}` | se apagó/encendió el servidor MCP o se resincronizó un workspace (`SetMCPEnabled`, `SyncWorkspaceMCP`) |
+| `mcp:antigravity` | `{added, error}` | `EnsureAntigravityMCP` (S12.c): ScadLab se registró en la configuración global de Antigravity (`added`, toast) o no pudo (`error` con el motivo y qué hacer) |
 | `chat:error` | `{chatId, message, messageId}` | error del proveedor; si había texto o pasos, se guardaron como respuesta parcial |
 
 Watcher (`backend/watch`): raíz del workspace abierto, no recursivo, solo
@@ -275,16 +279,17 @@ Tabla completa del chat (con `NewChat`, `ListChats`…) en [09-agents-ai.md](09-
 
 | Binding | Devuelve | Nota |
 |---|---|---|
-| `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent, maxSteps}` (`maxSteps` 1–30, 0 = 12; `agent=false` = modo texto de S5). Texto vacío solo con adjuntos. Falla **antes** de guardar nada si el servidor no responde o una imagen va a un modelo que informó no ver |
+| `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent?, maxSteps}` (`maxSteps` 1–30, 0 = 12). **El modo sale de la conversación** (`chat.mode`, ver `SetChatMode`); `agent` es un override opcional (`*bool`) **solo de ese turno** —`false` = modo texto de S5, `true` = herramientas— y no cambia lo guardado; la interfaz no lo manda salvo cuando el modelo no llama herramientas. Texto vacío solo con adjuntos. Falla **antes** de guardar nada si el servidor no responde o una imagen va a un modelo que informó no ver |
 | `AddChatAttachment(workspaceId, path)` | `hermes.Attachment{id, kind, name, mime, size, thumbDataUrl, refPath, summary}` | `kind` `image` (≤ 5 MB) o `model` (STL/3MF/OBJ ≤ 64 MB, copiado a `refs/` y analizado); por contenido |
 | `AddChatAttachmentData(workspaceId, name, dataBase64)` | `hermes.Attachment` | pegar / arrastrar; acepta data URL; `name` solo aporta nombre y extensión |
 | `ChooseChatAttachment(workspaceId)` | `[]hermes.Attachment` | diálogo nativo; si uno falla no queda ninguno de la tanda y el error nombra el archivo |
 | `RemoveChatAttachment(id)` | — | borra lo que se creó (la copia en `refs/` solo si la hizo el adjunto); no es error quitar uno que ya no está |
 | `RenameChat(chatId, title)` | — | recorta y colapsa espacios, máx. 120 letras, no vacío |
+| `SetChatMode(chatId, mode)` | — | `mode`: `"agent"` (también `""`) o `"ask"`; se guarda en `chats.mode` y vale **solo para esa conversación** (no cambia otra ni deja un predeterminado: toda conversación nueva nace en Agente). Un modo desconocido o un chat inexistente fallan sin tocar nada. Un turno en curso termina con el modo con que empezó |
 | `SetChatModel(chatId, serverId, model)` | — | cambia servidor y modelo a mitad de camino (modelo vacío = el del servidor); también es el último elegido del proyecto |
 | `GetChat(chatId)` | `ChatView{chat, messages, running, partial, partialSeq, steps[], usage}` | `steps` y `usage` son los del turno en curso |
 
-`store.ChatMessage` ganó `parts` (JSON: adjuntos del usuario o pasos del asistente), `inputTokens`, `outputTokens` y `costUsd`.
+`store.Chat` ganó `mode` (S12.c: `""` = Agente, `"ask"` = Solo consulta; viaja en `ListChats`, `GetChat` y `NewChat`). `store.ChatMessage` ganó `parts` (JSON: adjuntos del usuario o pasos del asistente), `inputTokens`, `outputTokens` y `costUsd`.
 
 ## CLIs como proveedores del chat — `app_chat_cli.go`, `app_servers_minitools.go` (S12.b, T5)
 
@@ -309,7 +314,7 @@ ImportMiniToolsServers(dryRun bool) (MiniToolsImport, error)    // dryRun=true n
 ```
 
 `NewChat`, `SendChatMessage`, `SetChatModel`, `SetLastModel`/`GetLastModel` y `ListProviderModels` aceptan ids `cli:*`. Con un CLI,
-`SendOptions.Agent` elige el modo (`false` = «Solo consulta») y `maxSteps` se ignora; los eventos son los de S12 (`chat:delta`,
+el modo es el de la conversación (`chat.mode`; `SendOptions.Agent`, si viene, lo fuerza en ese turno) y `maxSteps` se ignora; los eventos son los de S12 (`chat:delta`,
 `chat:step`, `chat:usage`, `chat:done`, `chat:error`). `store.Chat` gana `cliSession` (el id de conversación del CLI).
 Un proveedor caído o un CLI ausente **no** son error de `ProviderHealth`: viajan con `ok=false` y el motivo en `error`.
 

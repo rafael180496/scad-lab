@@ -75,9 +75,14 @@ nuevo.
 
 [claude/13-mcp.md](13-mcp.md): `create_checkpoint` sin `parent` usa
 `ActiveParent` y, si no hay, el más nuevo; devuelve `activeParent` tras crear.
-`list_checkpoints` informa `activeParent` (`""` si no hay). El MCP no expone
-papelera ni restaurar: son decisiones del usuario, desde la app. Las reglas del
-workspace (`assets/workspace/RULES.md.tmpl`) se lo explican al agente.
+`list_checkpoints` informa `activeParent` (`""` si no hay). Desde S12.c (T11) el MCP
+**sí** expone el árbol completo en «Agente»: `set_active_parent`, `rename_checkpoint` (el rótulo, no el archivo),
+`trash_checkpoint` (`branch=true` con su rama), `list_trash` y `restore_checkpoint`, con la misma lógica de
+`backend/checkpoint` que los bindings. «Borrar» sigue siendo mandar a `.scadlab/trash/`: ninguna herramienta borra. Como
+esas cuatro no crean un `.scad`, la app reescanea y emite `checkpoints:changed` tras un paso bueno
+([25-herramientas-ia.md](25-herramientas-ia.md#para-la-interfaz)); `restore_checkpoint` además marca el archivo como
+restaurado (`markRestored`) para que el watcher no lo trate como trabajo nuevo. Las reglas del workspace
+(`assets/workspace/RULES.md.tmpl`) se lo explican al agente.
 
 ## Pruebas
 
@@ -85,6 +90,19 @@ workspace (`assets/workspace/RULES.md.tmpl`) se lo explican al agente.
 y ocupado, ramas con nietos, activo que avanza / se mueve / queda colgado, nombres
 hostiles, enlaces simbólicos) y `TestActiveParentInMCP`. La hora del borrado se
 fija con la variable `now` del paquete.
+
+## Raíz sin padre y modelo de inicio al abrir (S12.c)
+
+- `ChatCheckpointParent` devuelve `""` en un workspace sin ningún checkpoint y
+  `SaveAsCheckpoint` / `SaveChatCheckpoint` con padre `""` usan `checkpoint.CreateRoot`
+  (`001-<slug>.scad`, `parent=` vacío; no fija el padre activo). Con checkpoints ya en el
+  árbol, un padre vacío sigue siendo un error: es casi siempre un padre olvidado.
+- `openWorkspaceView` (`OpenProject`) llama `ensureStarter` **antes** del reescaneo: si la
+  raíz no tiene ningún `.scad` **y** `checkpoint.TrashEmpty` (papelera sin nada) →
+  `workspace.WriteStarter` (`O_EXCL`, nunca pisa). Con la papelera con algo, hubo trabajo y se
+  lo mandó a la basura: no se resucita, y el visor y Código ofrecen «Crear un modelo de
+  inicio» (`CreateStarterCheckpoint`, que ignora la papelera porque el usuario lo pide).
+  Las reglas (`WriteRules`) ya se re-sincronizaban al abrir; hay una prueba que lo fija.
 
 ## Reglas del workspace: bloque marcado
 

@@ -86,7 +86,8 @@ func (a *App) GetScadCatalog() (scad.Catalog, error) { return scad.LoadCatalog()
 // de parentFile (los checkpoints son inmutables: guardar nunca sobrescribe).
 // Escribe el encabezado `// @checkpoint parent=… desc="…"` —reemplaza la
 // primera línea si el código ya trae uno— y devuelve el nombre creado. No
-// renderiza: lo hace el watcher al ver el archivo nuevo. La lógica vive en
+// renderiza: lo hace el watcher al ver el archivo nuevo. Con parentFile vacío
+// crea la raíz del workspace (`parent=` vacío). La lógica vive en
 // backend/checkpoint, que comparte con el servidor MCP.
 func (a *App) SaveAsCheckpoint(id int64, parentFile, label, description, source string) (string, error) {
 	if err := a.ready(); err != nil {
@@ -96,7 +97,15 @@ func (a *App) SaveAsCheckpoint(id int64, parentFile, label, description, source 
 	if err != nil {
 		return "", err
 	}
-	name, err := checkpoint.Create(w.Path, parentFile, label, description, source)
+	var name string
+	if parentFile == "" {
+		// El primer checkpoint del workspace no tiene padre (S12.c): una raíz.
+		// CreateRoot falla si ya hay alguno, y eso es lo correcto: una raíz de
+		// más en un árbol que existe es casi siempre un padre olvidado.
+		name, err = checkpoint.CreateRoot(w.Path, label, description, source)
+	} else {
+		name, err = checkpoint.Create(w.Path, parentFile, label, description, source)
+	}
 	if err != nil {
 		return "", err
 	}

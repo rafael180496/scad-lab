@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,14 @@ func intArg(args map[string]any, key string, def int) int {
 	switch v := args[key].(type) {
 	case float64:
 		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return int(f)
+		}
 	case string:
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
 			return n

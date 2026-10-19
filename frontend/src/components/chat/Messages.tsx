@@ -3,6 +3,7 @@ import {CircleAlert, Loader2, X} from 'lucide-react'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, locale, useT} from '../../i18n'
 import {interleave, parseParts, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
+import {createdCheckpoint} from '../../lib/chatSteps'
 import {IconButton} from '../ui/Button'
 import {MessageAttachments} from './AttachmentChips'
 import type {ChatActions, CodeActions} from './CodeBlock'
@@ -40,8 +41,14 @@ function UsageLine({usage, model, stepLimit}: {usage: ChatUsage | null; model?: 
 // El turno del asistente: el texto con las tarjetas de paso intercaladas donde
 // ocurrieron. Mientras llega no se ofrece «Guardar como checkpoint» (el código
 // está a medias): `actions` viene undefined.
+//
+// Si el turno ya dejó un checkpoint (una herramienta, o el «Guardado automáticamente» de ScadLab), el bloque de código que
+// repite el diseño no ofrece guardarlo otra vez: sería un duplicado a un clic.
+const ONLY_OPEN: CodeActions = {}
 function Turn({text, steps, actions, onOpenCheckpoint}: {text: string; steps: ChatStep[]; actions?: CodeActions; onOpenCheckpoint?: (file: string) => void}) {
     const items = useMemo(() => interleave(text, steps), [text, steps])
+    const created = useMemo(() => steps.some((s) => createdCheckpoint(s) !== ''), [steps])
+    if (created && actions) actions = ONLY_OPEN
     return (
         <>
             {items.map((it, i) =>

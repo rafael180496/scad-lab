@@ -62,6 +62,10 @@ chat-agent-steps    chat-agent-steps  1440 1160
 chat-attachments    chat-attachments  1440  900
 chat-conversations  chat-conversations 1440 900
 chat-code           chat-code         1440 1160
+chat-agent-creates  chat-agent-creates 1440 1280
+chat-autosave       chat-autosave     1440 1340
+chat-query-only     chat-query-only   1440 1100
+workspace-starter   workspace-starter 1440  900
 chat-narrow         chat-narrow        360  760
 settings-appearance settings-appearance 1280 980
 appearance-150      appearance-150    1440  900  150

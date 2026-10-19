@@ -33,15 +33,35 @@ func ModeFor(agent bool) Mode {
 }
 
 // Las herramientas del servidor MCP de ScadLab (backend/mcp) según lo que
-// hacen. Una prueba de la app comprueba que las dos listas juntas sean
-// exactamente el catálogo del servidor: una herramienta nueva sin clasificar no
-// puede quedar fuera de «Solo consulta» ni colarse en él por descuido.
+// hacen. Dos pruebas comprueban que las dos listas juntas sean exactamente el
+// catálogo del servidor (backend/mcp/modes_test.go y la de la app): una
+// herramienta nueva sin clasificar no puede quedar fuera de «Solo consulta» ni
+// colarse en él por descuido. La tabla con qué hace cada una está en
+// claude/25-herramientas-ia.md.
 var (
-	// readTools se permiten en los dos modos. render, measure y preview escriben
-	// su caché y RENDER_ERRORS.md, pero no tocan el diseño.
-	readTools = []string{"list_checkpoints", "read_checkpoint", "lint", "format", "render", "measure", "preview", "printer_info", "list_templates", "get_template"}
-	// writeTools solo en «Agente»: crean un checkpoint (create_checkpoint, import_mesh) o escriben en exports/.
-	writeTools = []string{"create_checkpoint", "import_mesh", "export"}
+	// readTools se permiten en los dos modos. render, measure, preview,
+	// estimate_print y suggest_orientation escriben su caché y RENDER_ERRORS.md,
+	// pero no tocan el diseño: ningún checkpoint, ningún archivo del proyecto.
+	readTools = []string{
+		// Workspace y archivos
+		"list_checkpoints", "read_checkpoint", "list_trash", "list_refs",
+		// Modelado
+		"lint", "format", "render", "preview", "measure", "get_parameters", "list_templates", "get_template", "list_libraries",
+		// Referencias 3D
+		"inspect_reference",
+		// Impresión
+		"printer_info", "estimate_print", "list_materials", "suggest_orientation",
+		// Contexto
+		"list_skills", "read_skill",
+	}
+	// writeTools solo en «Agente»: crean un checkpoint, cambian el estado del
+	// árbol (padre activo, rótulo, papelera), escriben en exports/ o en lib/
+	// (install_library descarga de internet) o dejan una malla congelada en refs/.
+	writeTools = []string{
+		"create_checkpoint", "set_parameters", "create_from_template", "import_mesh", "edit_mesh",
+		"set_active_parent", "rename_checkpoint", "trash_checkpoint", "restore_checkpoint",
+		"install_library", "export",
+	}
 )
 
 // ReadTools y WriteTools devuelven copias de las listas (para las pruebas).
@@ -78,15 +98,16 @@ func claudeDenied(mode Mode) string {
 	return strings.Join(tools, ",")
 }
 
-// codexEnabledTools es la lista blanca de herramientas del servidor MCP en
-// «Solo consulta» (`mcp_servers.scadlab.enabled_tools`). Vacía en «Agente»: ahí
-// valen todas.
+// codexEnabledTools es la lista blanca de herramientas del servidor MCP
+// (`mcp_servers.scadlab.enabled_tools`) que el modo permite: las de lectura en
+// «Solo consulta» y TODAS en «Agente». En «Agente» se nombran a propósito en vez
+// de dejar el valor sin tocar: un `config.toml` del usuario que restrinja el
+// servidor dejaría a Codex sin `create_checkpoint`, y en headless no hay quien
+// pueda aprobarlo después (S12.c).
 func codexEnabledTools(mode Mode) string {
-	if mode == ModeEdit {
-		return ""
-	}
-	quoted := make([]string, len(readTools))
-	for i, t := range readTools {
+	names := scadlabTools(mode)
+	quoted := make([]string, len(names))
+	for i, t := range names {
 		quoted[i] = `"` + t + `"`
 	}
 	return "[" + strings.Join(quoted, ",") + "]"

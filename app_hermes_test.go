@@ -299,7 +299,7 @@ func TestHermesAgentCycleWithRealToolbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.SendChatMessage(c.ID, "haz una caja de 40 mm", "001-base.scad", nil, SendOptions{Agent: true, MaxSteps: 8}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "haz una caja de 40 mm", "001-base.scad", nil, SendOptions{Agent: boolp(true), MaxSteps: 8}); err != nil {
 		t.Fatal(err)
 	}
 	d := ev.wait(t)
@@ -403,7 +403,7 @@ func TestHermesTextModeSendsNoTools(t *testing.T) {
 	a, wsID, _, ev := hermesApp(t, sim)
 	listModels(t, a)
 	c, _ := a.NewChat(wsID, "ollama", capsAgent)
-	if _, err := a.SendChatMessage(c.ID, "un cubo", "", nil, SendOptions{Agent: false}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "un cubo", "", nil, SendOptions{Agent: boolp(false)}); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t)
@@ -423,7 +423,7 @@ func TestHermesKnownNoToolsDowngradesWithNotice(t *testing.T) {
 	a, wsID, _, ev := hermesApp(t, sim)
 	listModels(t, a)
 	c, _ := a.NewChat(wsID, "ollama", capsPlain)
-	if _, err := a.SendChatMessage(c.ID, "un cubo", "", nil, SendOptions{Agent: true}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "un cubo", "", nil, SendOptions{Agent: boolp(true)}); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t)
@@ -446,7 +446,7 @@ func TestHermesToolsRejectedFallsBackAndIsRemembered(t *testing.T) {
 	c, _ := a.NewChat(wsID, "ollama", capsMute)
 	send := func(text string) {
 		t.Helper()
-		if _, err := a.SendChatMessage(c.ID, text, "", nil, SendOptions{Agent: true}); err != nil {
+		if _, err := a.SendChatMessage(c.ID, text, "", nil, SendOptions{Agent: boolp(true)}); err != nil {
 			t.Fatal(err)
 		}
 		ev.wait(t)
@@ -481,7 +481,7 @@ func TestHermesCancelMidToolKeepsTheStep(t *testing.T) {
 	}
 	t.Cleanup(func() { newChatToolset = prev })
 	c, _ := a.NewChat(wsID, "ollama", capsAgent)
-	if _, err := a.SendChatMessage(c.ID, "renderiza", "", nil, SendOptions{Agent: true}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "renderiza", "", nil, SendOptions{Agent: boolp(true)}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -536,7 +536,7 @@ func TestHermesStepLimitFromOptions(t *testing.T) {
 	a, wsID, _, ev := hermesApp(t, sim)
 	listModels(t, a)
 	c, _ := a.NewChat(wsID, "ollama", capsAgent)
-	if _, err := a.SendChatMessage(c.ID, "mira todo", "", nil, SendOptions{Agent: true, MaxSteps: 1}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "mira todo", "", nil, SendOptions{Agent: boolp(true), MaxSteps: 1}); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t)
@@ -570,7 +570,7 @@ func TestHermesSeedHistoryAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.SendChatMessage(c.ID, "mide esto", "", []string{att.ID}, SendOptions{Agent: false}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "mide esto", "", []string{att.ID}, SendOptions{Agent: boolp(false)}); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t)
@@ -580,7 +580,7 @@ func TestHermesSeedHistoryAfterRestart(t *testing.T) {
 	t.Cleanup(func() { chatServices.Delete(b) })
 	captureHermesEvents(b)
 	ev2 := captureHermesEvents(b)
-	if _, err := b.SendChatMessage(c.ID, "ahora hazle un agujero", "", nil, SendOptions{Agent: false}); err != nil {
+	if _, err := b.SendChatMessage(c.ID, "ahora hazle un agujero", "", nil, SendOptions{Agent: boolp(false)}); err != nil {
 		t.Fatal(err)
 	}
 	ev2.wait(t)
@@ -671,7 +671,7 @@ func TestAttachSTLCopiesToRefsAndSummaryEntersThePrompt(t *testing.T) {
 	}
 
 	c, _ := a.NewChat(wsID, "ollama", capsAgent)
-	um, err := a.SendChatMessage(c.ID, "haz un estante para esto", "", []string{att.ID}, SendOptions{Agent: false})
+	um, err := a.SendChatMessage(c.ID, "haz un estante para esto", "", []string{att.ID}, SendOptions{Agent: boolp(false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -716,7 +716,7 @@ func TestAgentPromptListsAttachedReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, _ := a.NewChat(wsID, "ollama", capsAgent)
-	if _, err := a.SendChatMessage(c.ID, "cópiala", "", []string{att.ID}, SendOptions{Agent: true}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "cópiala", "", []string{att.ID}, SendOptions{Agent: boolp(true)}); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t)
@@ -740,7 +740,7 @@ func TestImageWithBlindModelIsRejectedBeforeSending(t *testing.T) {
 		t.Fatalf("ficha: %+v", att)
 	}
 	c, _ := a.NewChat(wsID, "ollama", capsBlind)
-	_, err = a.SendChatMessage(c.ID, "copia esta foto", "", []string{att.ID}, SendOptions{Agent: true})
+	_, err = a.SendChatMessage(c.ID, "copia esta foto", "", []string{att.ID}, SendOptions{Agent: boolp(true)})
 	if err == nil || !strings.Contains(err.Error(), "cannot see images") || !strings.Contains(err.Error(), "foto.png") {
 		t.Fatalf("debía rechazarse: %v", err)
 	}
@@ -754,7 +754,7 @@ func TestImageWithBlindModelIsRejectedBeforeSending(t *testing.T) {
 	if err := a.SetChatModel(c.ID, "ollama", capsAgent); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.SendChatMessage(c.ID, "copia esta foto", "", []string{att.ID}, SendOptions{Agent: false}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "copia esta foto", "", []string{att.ID}, SendOptions{Agent: boolp(false)}); err != nil {
 		t.Fatalf("con visión debía enviarse: %v", err)
 	}
 }
@@ -1050,7 +1050,7 @@ func TestHermesProviderErrorKeepsStepsAsPartial(t *testing.T) {
 	a, wsID, _, ev := hermesApp(t, sim)
 	listModels(t, a)
 	c, _ := a.NewChat(wsID, "ollama", capsAgent)
-	if _, err := a.SendChatMessage(c.ID, "mira", "", nil, SendOptions{Agent: true}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "mira", "", nil, SendOptions{Agent: boolp(true)}); err != nil {
 		t.Fatal(err)
 	}
 	select {

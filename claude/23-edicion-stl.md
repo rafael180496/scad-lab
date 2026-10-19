@@ -139,10 +139,17 @@ Ver la tabla en [06-go-react-contract.md](06-go-react-contract.md). Tipos con et
 una sesión) y no renderiza: lo hace el watcher. `PreviewMeshEdit` no escribe nada. Sin etiqueta, el título es
 «Edición de STL».
 
-## MCP `import_mesh(file, center_on_bed?)`
+## MCP: `import_mesh` y `edit_mesh`
 
-Ver [13-mcp.md](13-mcp.md). Para Hermes, los CLIs (clasificada como herramienta de **escritura**: solo en «Agente») y
-`--mcp`. Misma puerta de rutas que `inspect_reference`. Por defecto **no** centra (conserva la posición del archivo).
+Ver [13-mcp.md](13-mcp.md) y [25-herramientas-ia.md](25-herramientas-ia.md). Para Hermes, los CLIs (clasificadas como herramientas de
+**escritura**: solo en «Agente») y `--mcp`. Misma puerta de rutas que `inspect_reference`.
+
+- **`import_mesh(file, center_on_bed?)`**: por defecto **no** centra (conserva la posición del archivo).
+- **`edit_mesh(file?, operations)`** (S12.c, T11): lo que hace el modo «Editar» del visor, en una llamada —`move rotate scale
+  resize mirror orient center to_bed color add hole cut`— y un checkpoint **hijo** (`Generate` de la escena, el mismo código que
+  `ApplyMeshEdit`). Elige la base con `meshedit.ResolveBase`, **la misma decisión** (import base o malla congelada en `refs/`)
+  que `PrepareMeshEdit` de la app, que solo le pone el render de la sesión y la caché de mallas del visor: hay una sola
+  definición de «desde qué se edita este checkpoint». `suggest_orientation` devuelve `operations` listas para `edit_mesh`.
 
 ## Skill `openscad-stl-editing`
 

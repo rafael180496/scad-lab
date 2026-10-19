@@ -435,3 +435,105 @@ func TestAntigravityMCPErrors(t *testing.T) {
 		t.Errorf("sin ejecutable: %v %q", err, f.calls)
 	}
 }
+
+// captureAgyEvents recoge los mcp:antigravity que emite la App.
+func captureAgyEvents(a *App) *[]AntigravityMCPEvent {
+	var got []AntigravityMCPEvent
+	a.emitter = func(name string, payload any) {
+		if e, ok := payload.(AntigravityMCPEvent); ok && name == evAntigravityMCP {
+			got = append(got, e)
+		}
+	}
+	return &got
+}
+
+// S12.c: elegir Antigravity registra ScadLab en su configuración global SOLO si
+// falta, con el argv exacto (sin --workspace), y avisa una vez. Con la entrada ya
+// puesta —aunque apunte a otra ScadLab o esté desactivada— no toca nada. agy es
+// siempre el doble: ninguna prueba modifica ~/.gemini.
+func TestEnsureAntigravityMCPAddsOnlyWhatIsMissing(t *testing.T) {
+	const bin = "/Applications/ScadLab"
+	withMCPBinary(t, bin)
+	a := newTestApp(t)
+	events := captureAgyEvents(a)
+	f := withFakeAgy(t, "/usr/local/bin/agy")
+
+	st, err := a.EnsureAntigravityMCP()
+	if err != nil || !st.Added || st.State != "ok" {
+		t.Fatalf("primera vez: %+v %v", st, err)
+	}
+	var adds [][]string
+	for _, c := range f.calls {
+		if c[2] == "add" {
+			adds = append(adds, c)
+		}
+	}
+	if want := [][]string{{"/usr/local/bin/agy", "mcp", "add", "--", "scadlab", bin, "--mcp"}}; !reflect.DeepEqual(adds, want) {
+		t.Errorf("add argv: %q", adds)
+	}
+	if len(*events) != 1 || !(*events)[0].Added || (*events)[0].Error != "" {
+		t.Errorf("un aviso: %+v", *events)
+	}
+
+	// Ya está: ni vuelve a agregar ni avisa.
+	f.calls = nil
+	if st, err := a.EnsureAntigravityMCP(); err != nil || st.Added || st.State != "ok" {
+		t.Fatalf("segunda vez: %+v %v", st, err)
+	}
+	for _, c := range f.calls {
+		if c[2] != "list" {
+			t.Errorf("solo lee: %q", c)
+		}
+	}
+	if len(*events) != 1 {
+		t.Errorf("sin avisos de más: %+v", *events)
+	}
+
+	// Una entrada con otro comando es del usuario: no se pisa.
+	f.servers["scadlab"] = "/Otra/ScadLab --mcp"
+	f.calls = nil
+	if st, err := a.EnsureAntigravityMCP(); err != nil || st.Added || st.State != "other" || f.servers["scadlab"] != "/Otra/ScadLab --mcp" {
+		t.Errorf("otra ruta: %+v %v %v", st, err, f.servers)
+	}
+}
+
+func TestEnsureAntigravityMCPEdgeCases(t *testing.T) {
+	withMCPBinary(t, "/Apps/ScadLab")
+
+	// Sin agy: nada que hacer, y no es un error.
+	a := newTestApp(t)
+	f := withFakeAgy(t, "")
+	if st, err := a.EnsureAntigravityMCP(); err != nil || st.Added || st.State != "not-installed" || len(f.calls) != 0 {
+		t.Errorf("sin agy: %+v %v %q", st, err, f.calls)
+	}
+
+	// Con el servidor MCP apagado en Configuración no se modifica nada global.
+	f = withFakeAgy(t, "/bin/agy")
+	if err := a.SetMCPEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := a.EnsureAntigravityMCP(); err != nil || st.Added || st.State != "off" || len(f.calls) != 0 {
+		t.Errorf("MCP apagado: %+v %v %q", st, err, f.calls)
+	}
+	if err := a.SetMCPEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+
+	// Si agy rechaza la entrada: error claro (qué pasó y qué hacer), aviso de error
+	// a la interfaz y nada agregado.
+	events := captureAgyEvents(a)
+	f.fail["add"], f.out["add"] = errors.New("exit status 1"), "Error: config file is read-only"
+	st, err := a.EnsureAntigravityMCP()
+	if err == nil || st.Added || !strings.Contains(err.Error(), "read-only") || !strings.Contains(err.Error(), "checkpoints") {
+		t.Fatalf("add falla: %+v %v", st, err)
+	}
+	if len(*events) != 1 || (*events)[0].Added || !strings.Contains((*events)[0].Error, "read-only") {
+		t.Errorf("aviso de error: %+v", *events)
+	}
+
+	// Si ni `mcp list` anda: también es un error con el motivo.
+	f.fail["list"], f.out["list"] = errors.New("exit status 2"), "boom"
+	if _, err := a.EnsureAntigravityMCP(); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("list falla: %v", err)
+	}
+}

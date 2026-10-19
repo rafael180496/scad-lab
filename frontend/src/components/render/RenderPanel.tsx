@@ -19,6 +19,7 @@ import {Button} from '../ui/Button'
 import {toast} from '../ui/Toast'
 import {DownloadControls} from './DownloadControls'
 import {WasmNotice} from './WasmNotice'
+import {StarterAction} from '../workspace/StarterAction'
 import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
@@ -169,6 +170,8 @@ export function RenderPanel({
     onOpenSettings,
     editShot,
     onEditApplied,
+    emptyWorkspace = false,
+    onStarter = () => {},
 }: {
     workspaceId: number | null
     file: string | null
@@ -190,6 +193,9 @@ export function RenderPanel({
     editShot?: MeshEditShot
     /** Se aplicó una edición: el checkpoint nuevo que dejó Go (hay que elegirlo). */
     onEditApplied: (file: string) => void
+    /** El proyecto no tiene ningún checkpoint: se ofrece «Crear un modelo de inicio». */
+    emptyWorkspace?: boolean
+    onStarter?: (file: string) => void
 }) {
     const t = useT()
     const [logOpen, setLogOpen] = useState(false)
@@ -243,7 +249,10 @@ export function RenderPanel({
     if (!file) {
         return (
             <div className="bed-grid flex h-full items-center justify-center">
-                <p className="mx-auto max-w-[420px] px-6 text-center text-ui-12-5 leading-relaxed text-muted">{t.render.noFile}</p>
+                <div className="flex flex-col items-center">
+                    <p className="mx-auto max-w-[420px] px-6 text-center text-ui-12-5 leading-relaxed text-muted">{t.render.noFile}</p>
+                    {emptyWorkspace ? <StarterAction workspaceId={workspaceId} onCreated={onStarter} /> : null}
+                </div>
             </div>
         )
     }

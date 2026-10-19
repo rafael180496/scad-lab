@@ -39,6 +39,7 @@ import {fmt, normalizeLang, setLanguage, useT} from './i18n'
 import {errorText} from './lib/errors'
 import {applyTheme} from './lib/theme'
 import {onEvent} from './lib/events'
+import {onChatCheckpoint} from './components/chat/chatStreams'
 import {useRenders} from './hooks/useRenders'
 import {openscadDownload, useOpenSCADDownloadSync} from './hooks/useOpenSCADDownload'
 import {useTerminals} from './hooks/useTerminals'
@@ -781,6 +782,38 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         void select(name)
     }
 
+    // Un checkpoint que nació en el chat (S12.c): el botón «Crear checkpoint y renderizar», una herramienta del modelo o
+    // de un CLI, o el «Guardado automáticamente» de ScadLab. El visor y Código lo seleccionan y lo renderizan solos; con
+    // el auto-render apagado se renderiza igual, porque en el chat el usuario acaba de pedir justamente ver la pieza.
+    const adoptChatCheckpoint = (name: string) => {
+        adoptNewCheckpoint(name)
+        if (view && !boot?.settings.autoRender) void renderFile(name)
+    }
+    const adoptChatRef = useRef(adoptChatCheckpoint)
+    adoptChatRef.current = adoptChatCheckpoint
+    // Lo que crea un paso del chat se abre solo en el proyecto del chat si es el que se está mirando. Con cambios sin
+    // guardar en el editor o en la edición de un STL no se cambia de archivo: es trabajo del usuario, y el checkpoint
+    // aparece igual en el árbol y en la tarjeta del paso.
+    useEffect(
+        () =>
+            onChatCheckpoint(({workspaceId, file}) => {
+                if (workspaceId !== activeRef.current) return
+                if (editorSession.get().dirty || isSessionDirty(workspaceId)) return
+                adoptChatRef.current(file)
+            }),
+        [],
+    )
+
+    // ScadLab se registró (o no pudo) en la configuración global de Antigravity al elegirlo en el chat o abrir su terminal.
+    useEffect(
+        () =>
+            onEvent('mcp:antigravity', (e) => {
+                if (e.error) toast.error(e.error)
+                else if (e.added) toast.ok(t.chat.antigravityAdded)
+            }),
+        [t],
+    )
+
     const toggle = async (cp: store.Checkpoint) => {
         if (!view) return
         const next = !cp.collapsed
@@ -967,6 +1000,8 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     editorRestore={cur?.editor ?? null}
                     onEditorRestored={() => activeId != null && patchProject(activeId, (p) => (p.editor ? {editor: null} : {}))}
                     onSaved={adoptNewCheckpoint}
+                    onChatCheckpoint={adoptChatCheckpoint}
+                    emptyWorkspace={!!view && !view.missing && view.checkpoints.length === 0}
                     onSwatchesSaved={(swatches) =>
                         // El diálogo de Configuración guarda la configuración
                         // entera: tiene que ver las muestras nuevas para no pisarlas.

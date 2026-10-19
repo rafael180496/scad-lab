@@ -41,3 +41,9 @@ Las imágenes de un paso se guardan reducidas (JPEG ≤ 640 px) y los adjuntos s
 | Versión | Qué agrega |
 |---|---|
 | 8 | `chats.cli_session TEXT NOT NULL DEFAULT ''`: el id de conversación que devolvió el CLI (`--resume`, `resume <id>`…) de un chat con `provider_id = 'cli:*'`; el historial lo guarda el CLI. `SetChatModel` la olvida si cambia el proveedor. Prueba: `migration8_test.go` (base de la v7 con chats y mensajes) |
+
+## Migración de S12.c
+
+| Versión | Qué agrega |
+|---|---|
+| 9 | `chats.mode TEXT NOT NULL DEFAULT ''`: el modo de escritura **de esa conversación**. `''` = «Agente» (el predeterminado, también de toda fila anterior y de toda conversación nueva); `'ask'` = «Solo consulta», elegido a mano. No hay otro valor: `store.ChatModeValue` normaliza lo que llega de la interfaz (`agent` → `''`, `ask` → `ask`) y rechaza el resto. Reemplaza a las preferencias globales por tipo de proveedor que guardaba `localStorage`. Prueba: `migration9_test.go` (base de la v8 con chats de un servidor y de un CLI, mensajes y una sesión de CLI: suben a la 9 en Agente, sin perder nada, y la apertura repetida no hace nada) |

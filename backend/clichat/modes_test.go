@@ -42,7 +42,8 @@ func TestClaudeAndCodexRules(t *testing.T) {
 	if got := claudeDenied(ModeEdit); got != "Bash,PowerShell" {
 		t.Errorf("la shell se niega siempre: %q", got)
 	}
-	if got := codexEnabledTools(ModeEdit); got != "" {
+	// «Agente» nombra TODAS las herramientas, las de escritura incluidas.
+	if got := codexEnabledTools(ModeEdit); !strings.Contains(got, `"create_checkpoint"`) || !strings.Contains(got, `"import_mesh"`) || !strings.Contains(got, `"render"`) {
 		t.Errorf("%q", got)
 	}
 	if got := codexEnabledTools(ModeAsk); !strings.HasPrefix(got, `["list_checkpoints"`) || strings.Contains(got, "export") {

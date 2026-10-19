@@ -13,6 +13,13 @@ apoyo en z=0, `assert` de parámetros y de tamaño de placa, y reglas FDM de
 
 ## Cómo usarlas
 
+Con las herramientas de ScadLab (MCP): `list_templates` y luego
+`create_from_template(name, parameters)`, que crea el checkpoint ya con los
+parámetros cambiados, `PLATE` ajustado a la impresora del workspace y la línea
+`@checkpoint` escrita (raíz en un workspace vacío; si no, hijo del padre
+activo). Los valores salen de `get_parameters` y se cambian después con
+`set_parameters`. A mano, los pasos son estos:
+
 1. Elige la plantilla más cercana al pedido (tabla de abajo).
 2. **Cópiala** al workspace como primer checkpoint: `001-<slug>.scad`
    (ej. `001-sensor-enclosure.scad`). Si el workspace ya tiene checkpoints,

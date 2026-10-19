@@ -108,16 +108,15 @@ func TestToolboxToolsAreTheServersTools(t *testing.T) {
 		}
 	}
 
+	// InApp ya no cambia el catálogo: la app y el servidor ofrecen lo mismo.
 	_, ws := toolboxEnv(t)
 	app, err := NewToolbox(ToolboxOptions{WorkspaceDir: ws, InApp: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer app.Close()
-	got = toolNames(app.Tools())
-	want := append(append([]string{}, wantTools...), "list_skills", "read_skill", "inspect_reference")
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("herramientas InApp:\n got %v\nwant %v", got, want)
+	if got = toolNames(app.Tools()); strings.Join(got, ",") != strings.Join(wantTools, ",") {
+		t.Errorf("herramientas InApp:\n got %v\nwant %v", got, wantTools)
 	}
 	byName := map[string]ToolSpec{}
 	for _, s := range app.Tools() {

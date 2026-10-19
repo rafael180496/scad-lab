@@ -59,6 +59,14 @@ const es = lang === 'es'
 // Tamaño de la interfaz en % (UISHOT_SCALE en scripts/uishot.sh).
 const scale = [90, 100, 115, 130, 150].includes(Number(q.get('scale'))) ? Number(q.get('scale')) : 100
 
+// S12.c. `workspace-starter`: un workspace recién abierto con SOLO el modelo de inicio (001) en el visor.
+// `chat-agent-creates` y `chat-autosave`: un workspace que acaba de recibir su primer checkpoint desde el chat (con una
+// herramienta, y con el guardado automático). `chat-query-only`: «Solo consulta» con «Crear checkpoint y renderizar» y el
+// aviso «Cambiar a Agente».
+const starterShot = view === 'workspace-starter'
+const createsShot = view === 'chat-agent-creates' || view === 'chat-autosave'
+const firstShot = starterShot || createsShot
+
 type Scenario = 'ok' | 'error' | 'missing' | 'empty' | 'wasm'
 const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     main: {scenario: 'ok'},
@@ -107,6 +115,15 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     // S12.b: una respuesta de texto en «Solo consulta» con Markdown (tabla, títulos, listas, enlace) y su bloque OpenSCAD con
     // «Abrir en el editor» y «Guardar como checkpoint».
     'chat-code': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    // S12.c: el chat termina siempre en un .scad renderizado. `chat-agent-creates`: un workspace vacío, el pedido y los pasos
+    // create_checkpoint → render → preview con el enlace al checkpoint y la pieza en el visor. `chat-autosave`: un modelo sin
+    // herramientas contesta con el bloque y ScadLab lo guarda («Guardado automáticamente»). `chat-query-only`: «Solo consulta»
+    // con «Crear checkpoint y renderizar» y el aviso «Cambiar a Agente». `workspace-starter`: un workspace recién abierto con
+    // el modelo de inicio (001) ya en el visor.
+    'chat-agent-creates': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-autosave': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-query-only': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'workspace-starter': {scenario: 'ok'},
     // S13 (editar un STL): el diálogo de importar con una malla abierta, el modo «Editar» con el gizmo de mover y la pila,
     // el plano de corte partiendo en dos colores, un cilindro como agujero (rojo translúcido) y «Modificar con IA» (el
     // chat con el modelo adjunto y el texto sugerido). `mesh-edit-w320/480/720` es el editor solo, en un panel de ese ancho.
@@ -353,7 +370,7 @@ const workspaces = (
     cfg.scenario === 'empty'
         ? []
         : [
-              {id: 1, name: sidebarLong ? (es ? 'Caja de la Raspberry Pi 5 con un nombre de workspace realmente largo para probar el recorte' : 'Raspberry Pi 5 case with a really long workspace name to test the clipping') : es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/rpi5-case`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
+              {id: 1, name: sidebarLong ? (es ? 'Caja de la Raspberry Pi 5 con un nombre de workspace realmente largo para probar el recorte' : 'Raspberry Pi 5 case with a really long workspace name to test the clipping') : starterShot ? (es ? 'Mi primer proyecto' : 'My first project') : es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/${starterShot ? 'my-first-project' : 'rpi5-case'}`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
               {id: 2, name: es ? 'Soporte de auriculares' : 'Headphone stand', path: `${home}/headphone-stand`, printerId: 'bambu-a1', description: '', lastOpened: 0, createdAt: 0},
               {id: 3, name: es ? 'Organizador Gridfinity' : 'Gridfinity organizer', path: `${home}/gridfinity`, printerId: 'bambu-p1s', description: '', lastOpened: 0, createdAt: 0},
               ...(projectsShot
@@ -399,7 +416,10 @@ const longNames = [
 const longCheckpoints = longNames.map((n, i) =>
     cp(i + 1, `${String(i + 1).padStart(3, '0')}-${n}.scad`, i === 0 ? '' : `${String(i).padStart(3, '0')}-${longNames[i - 1]}.scad`, `${es ? 'Paso' : 'Step'} ${i + 1}: ${n.replaceAll('-', ' ')}`),
 )
-const checkpoints = sidebarLong ? longCheckpoints : [
+// El primer checkpoint de un workspace sin nada más: el modelo de inicio, o el que creó el chat.
+const firstFile = starterShot ? `001-${slugify(workspaces[0]?.name ?? '')}.scad` : es ? '001-caja-rpi5.scad' : '001-rpi5-case.scad'
+const firstCheckpoints = [cp(1, firstFile, '', starterShot ? (workspaces[0]?.name ?? '') : es ? 'Caja con tapa a presión para una Raspberry Pi 5' : 'Snap-fit box for a Raspberry Pi 5')]
+const checkpoints = sidebarLong ? longCheckpoints : firstShot ? firstCheckpoints : [
     cp(1, '001-base-box.scad', '', es ? 'Caja base 92×64×32' : 'Base box 92×64×32'),
     cp(2, '002-sliding-lid.scad', '001-base-box.scad', es ? 'Tapa deslizante' : 'Sliding lid'),
     cp(3, '003-vent-slots.scad', '002-sliding-lid.scad', es ? 'Ranuras de ventilación' : 'Vent slots'),
@@ -426,9 +446,9 @@ const viewFor = (id: number) => ({
     missing: false,
     activeParent: id === 1 ? activeParent : '',
 })
-const selectedFile = sidebarLong ? checkpoints.at(-1)!.fileName : cfg.scenario === 'error' ? '004-usb-c-cutout.scad' : '006-two-color-logo.scad'
+const selectedFile = sidebarLong ? checkpoints.at(-1)!.fileName : firstShot ? firstFile : cfg.scenario === 'error' ? '004-usb-c-cutout.scad' : '006-two-color-logo.scad'
 
-const source = `// @checkpoint parent=005-snap-lid.scad desc="${es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS'}"
+const mainSource = `// @checkpoint parent=005-snap-lid.scad desc="${es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS'}"
 /* [${es ? 'Dimensiones' : 'Dimensions'}] */
 width  = 92;   // [60:1:160]
 depth  = 64;   // [40:1:120]
@@ -458,6 +478,41 @@ module rounded_box(size, r) {
         translate([x, y, 0]) cylinder(r = r, h = size.z);
 }
 `
+
+// El modelo de inicio (assets/workspace/starter.scad.*.tmpl, recortado) y el primer checkpoint que crea el chat.
+const starterSource = `// @checkpoint parent= desc="${es ? 'Mi primer proyecto' : 'My first project'}"
+// ${es ? 'Punto de partida de ScadLab: una base con chaflán y un pomo encima.' : "ScadLab's starting point: a chamfered base with a knob on top."}
+// ${es ? 'Cambia las medidas en el Customizer (panel de parámetros) o escribe tu propio\n// modelo: cada versión que guardes será un checkpoint nuevo, este no se edita.' : 'Change the sizes in the Customizer (parameters panel) or write your own\n// model: every version you save becomes a new checkpoint, this one is not edited.'}
+
+/* [Base] */
+base_width = 50;    // [20:1:150]
+base_depth = 50;    // [20:1:150]
+base_height = 6;    // [2:0.5:20]
+corner_radius = 6;  // [2:0.5:25]
+
+/* [${es ? 'Pomo' : 'Knob'}] */
+knob_diameter = 22; // [8:1:60]
+knob_height = 14;   // [6:1:40]
+
+/* [${es ? 'Colores' : 'Colors'}] */
+base_color = "#2F6FDE";
+knob_color = "#F2B134";
+
+color(base_color) base(base_width, base_depth, base_height, corner_radius);
+color(knob_color) translate([0, 0, base_height]) knob(knob_diameter, knob_height);
+`
+const createdSource = `// @checkpoint parent= desc="${es ? 'Caja con tapa a presión para una Raspberry Pi 5' : 'Snap-fit box for a Raspberry Pi 5'}"
+board_w = 85;   // [60:1:120]
+board_d = 56;   // [40:1:90]
+wall    = 2;    // [1.2:0.2:4]
+height  = 24;   // [16:1:48]
+
+color("#2b2f38") difference() {
+    cube([board_w + 2*wall, board_d + 2*wall, height]);
+    translate([wall, wall, wall]) cube([board_w, board_d, height]);
+}
+`
+const source = starterShot ? starterSource : createsShot ? createdSource : mainSource
 
 const brokenSource = `// @checkpoint parent=003-vent-slots.scad desc="${es ? 'Recorte USB-C y HDMI' : 'USB-C and HDMI cutouts'}"
 include <003-vent-slots.scad>
@@ -528,7 +583,9 @@ const missingResult = {
 const renderState: Record<string, unknown> =
     cfg.scenario === 'missing'
         ? {}
-        : sidebarLong
+        : firstShot
+          ? {[firstFile]: okResult(firstFile, starterShot ? 410 : 520, false)}
+          : sidebarLong
           ? Object.fromEntries(longCheckpoints.map((c) => [c.fileName, okResult(c.fileName, 400, true)]))
           : {
               '001-base-box.scad': okResult('001-base-box.scad', 380, true),
@@ -671,7 +728,22 @@ const enclosureModel: ShotModel = {
     info: sampleInfo,
     parts: [{name: 'Color 1 (#F9D72C)', color: '#F9D72C', uncolored: true, file: '/uishot/enclosure.stl', info: sampleInfo}],
 }
-const shotModel: ShotModel = view === 'plate-overflow' ? plateModel(true) : view === 'viewer-parts' || view === 'print-panel' || view === 'persist' || view.startsWith('projects-') ? plateModel(false) : enclosureModel
+// El modelo de inicio (workspace-starter): una base azul y un pomo ámbar, generados con la geometría de starter.scad.*.tmpl
+// (frontend/public/uishot/starter-*.stl, generados una vez con un script de Python a partir de esas medidas).
+const STARTER = {
+    all: {triangles: 1232, min: [-25, -25, 0], max: [25, 25, 20], size: [50, 50, 20], volumeMm3: 19415, areaMm2: 7563.6, watertight: true},
+    base: {triangles: 176, min: [-25, -25, 0], max: [25, 25, 6], size: [50, 50, 6], volumeMm3: 14811.8, areaMm2: 6075.2, watertight: true},
+    knob: {triangles: 1056, min: [-11, -11, 6], max: [11, 11, 20], size: [22, 22, 14], volumeMm3: 4603.2, areaMm2: 1488.3, watertight: true},
+}
+const starterModel: ShotModel = {
+    mesh: '/uishot/starter-all.stl',
+    info: STARTER.all,
+    parts: [
+        {name: 'Color 1 (#2F6FDE)', color: '#2F6FDE', uncolored: false, file: '/uishot/starter-base.stl', info: STARTER.base},
+        {name: 'Color 2 (#F2B134)', color: '#F2B134', uncolored: false, file: '/uishot/starter-knob.stl', info: STARTER.knob},
+    ],
+}
+const shotModel: ShotModel = starterShot ? starterModel : view === 'plate-overflow' ? plateModel(true) : view === 'viewer-parts' || view === 'print-panel' || view === 'persist' || view.startsWith('projects-') ? plateModel(false) : enclosureModel
 const partFiles = shotModel.parts.map((p) => p.file)
 const realFetch = window.fetch.bind(window)
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
@@ -761,9 +833,10 @@ const claudeSessions = [
 // Tres chats inventados; el más reciente trae una respuesta con un bloque
 // OpenSCAD (ese es el que muestra «Copiar» y «Guardar como checkpoint»).
 const chatItems = [
-    {id: 3, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000},
-    {id: 2, workspaceId: 1, providerId: 'ollama', model: 'llama3.2:3b', title: es ? 'Ranuras de ventilación' : 'Ventilation slots', createdAt: 1_789_900_000, updatedAt: 1_789_900_600},
-    {id: 1, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Cuántos milímetros de holgura para una tapa' : 'How much clearance for a lid', createdAt: 1_789_800_000, updatedAt: 1_789_800_400},
+    {id: 3, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000, cliSession: '', mode: ''},
+    {id: 2, workspaceId: 1, providerId: 'ollama', model: 'llama3.2:3b', title: es ? 'Ranuras de ventilación' : 'Ventilation slots', createdAt: 1_789_900_000, updatedAt: 1_789_900_600, cliSession: '', mode: ''},
+    // «Solo consulta» elegido a mano para ESTA conversación (S12.c, T12): las otras siguen en «Agente».
+    {id: 1, workspaceId: 1, providerId: 'ollama', model: 'qwen3-coder:30b', title: es ? 'Cuántos milímetros de holgura para una tapa' : 'How much clearance for a lid', createdAt: 1_789_800_000, updatedAt: 1_789_800_400, cliSession: '', mode: 'ask'},
 ]
 // ── Servidores de modelos (S12, bloque 12.1) ───────────────────────────────
 // Cinco servidores inventados (nada de claves reales: solo `hasToken`). OpenRouter
@@ -951,12 +1024,14 @@ const streamParts = es
 // Las imágenes del «preview» y las miniaturas se DIBUJAN aquí con un canvas
 // (cajas isométricas sombreadas): el banco no tiene OpenSCAD, y una captura
 // real traería el modelo y las carpetas de alguien. Todo es inventado.
-const hermesView = view === 'chat' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || chatHarness
+const hermesView = view === 'chat' || createsShot || view === 'chat-query-only' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || chatHarness
 // El chat del banco corre sobre OpenRouter; el panel angosto (chat-narrow, chat-w*), sobre un CLI: sus pasos usan las mismas tarjetas.
-// chat-code: el chat arranca en «Solo consulta» (el modo se recuerda en localStorage).
-if (view === 'chat-code') localStorage.setItem('scadlab.chat.agent', 'off')
-const hermesServerId = chatHarness ? 'cli:codex' : 'srv-4f1a9c2e7b30'
-const hermesModel = chatHarness ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
+// chat-code y chat-query-only: la conversación abierta está en «Solo consulta», elegido a mano. El modo es de cada
+// conversación (chats.mode, S12.c T12): ya no hay nada que fijar en localStorage, y el predeterminado es «Agente».
+const hermesChatMode = view === 'chat-code' || view === 'chat-query-only' ? 'ask' : ''
+// chat-agent-creates: Claude Code con el MCP de ScadLab; chat-autosave: un modelo local SIN herramientas (Ollama); chat-query-only: Codex en consulta.
+const hermesServerId = chatHarness ? 'cli:codex' : view === 'chat-agent-creates' ? 'cli:claude' : view === 'chat-autosave' ? 'ollama' : view === 'chat-query-only' ? 'cli:codex' : 'srv-4f1a9c2e7b30'
+const hermesModel = chatHarness ? 'gpt-5-codex' : view === 'chat-agent-creates' ? 'opus' : view === 'chat-autosave' ? 'llama3.2:3b' : view === 'chat-query-only' ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
 
 const shadeHex = (hex: string, f: number) => {
     const n = parseInt(hex.slice(1), 16)
@@ -1067,13 +1142,51 @@ const stepsAtt = [
     hermesStep(1, 'create_checkpoint', {parent: '006-two-color-logo.scad', label: es ? 'repisa de pared' : 'wall shelf', source: chatScad}, 'ok', `{"file":"${shelfFile}"}`, 40, ro.sentence.length),
     hermesStep(2, 'render', {file: shelfFile}, 'ok', `{"file":"${shelfFile}","status":"ok","durationMs":801}`, 830, ro.sentence.length),
 ]
-const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, cliSession: '', title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
+const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, cliSession: '', mode: hermesChatMode, title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
 const parts = (p: Record<string, unknown>) => JSON.stringify(p)
 const codeMd = es
     ? `Te dejo la caja de la **Raspberry Pi 5**. Estas son las medidas que usé:\n\n| Pieza | Medida | Nota |\n|:--|--:|:-:|\n| Placa | 85 × 56 mm | la de la Pi 5 |\n| Paredes | 2 mm | imprimen bien en la A1 mini |\n| Altura | 24 mm | deja sitio al ventilador |\n\n## Qué cambié\n\n- La tapa va en un checkpoint **aparte**, para imprimirla plana.\n- Los tornillos son \`M2.5\`; si quedan justos mira [la guía de tolerancias](https://example.com/tolerancias).\n- [x] Paredes de 2 mm\n- [ ] Ranuras de ventilación\n\n\`\`\`openscad\n${chatScad}\`\`\``
     : `Here is the **Raspberry Pi 5** case. These are the measurements I used:\n\n| Part | Size | Note |\n|:--|--:|:-:|\n| Board | 85 × 56 mm | the Pi 5's |\n| Walls | 2 mm | print well on the A1 mini |\n| Height | 24 mm | leaves room for the fan |\n\n## What I changed\n\n- The lid goes in its **own** checkpoint, so it prints flat.\n- The screws are \`M2.5\`; if they end up tight see [the tolerance guide](https://example.com/tolerances).\n- [x] 2 mm walls\n- [ ] Ventilation slots\n\n\`\`\`openscad\n${chatScad}\`\`\``
+// S12.c. El pedido de alguien que no sabe OpenSCAD, y lo que deja cada camino en un workspace SIN checkpoints.
+const firstAsk = es ? 'Una caja con tapa a presión para un Raspberry Pi 5' : 'A snap-fit box for a Raspberry Pi 5'
+const rc = es
+    ? {sentence: 'Voy a crear la primera versión de la caja y a comprobar que renderiza.', done: `Listo: creé el primer checkpoint, **${firstFile}**. Mide 89 × 60 × 24 mm, cabe en tu A1 mini y las paredes son de 2 mm. Se ve en el visor; dime si quieres ajustar la altura o sumar la tapa.`}
+    : {sentence: 'I will create the first version of the box and check that it renders.', done: `Done: I created the first checkpoint, **${firstFile}**. It measures 89 × 60 × 24 mm, fits your A1 mini and the walls are 2 mm. You can see it in the viewer; tell me if you want to adjust the height or add the lid.`}
+const renderOk = `{"file":"${firstFile}","status":"ok","durationMs":1180,"engine":"native","mesh":{"triangles":${sampleInfo.triangles},"watertight":true,"sizeMm":{"x":89,"y":60,"z":24}},"fitsBuildVolume":true,"printer":{"name":"Bambu Lab A1 mini"}}`
+const stepsCreate = [
+    hermesStep(1, 'create_checkpoint', {label: es ? 'caja rpi5' : 'rpi5 box', description: es ? 'Caja con tapa a presión para una Raspberry Pi 5' : 'Snap-fit box for a Raspberry Pi 5', source: createdSource}, 'ok', `{"file":"${firstFile}","parent":"","activeParent":"${firstFile}"}`, 41, rc.sentence.length),
+    hermesStep(2, 'render', {file: firstFile}, 'ok', renderOk, 1204, rc.sentence.length),
+    hermesStep(3, 'preview', {file: firstFile, view: 'iso'}, 'ok', `{"file":"${firstFile}","view":"iso","size":640}`, 2260, rc.sentence.length, [previewCase]),
+]
+const noToolsNotice = es
+    ? '_⚠ Este modelo no admite herramientas: sigo en modo texto. Si escribo el diseño completo en un bloque, ScadLab lo guarda y lo renderiza por mí._'
+    : '_⚠ This model does not support tools: continuing in text mode. If I write the complete design in a block, ScadLab saves and renders it for me._'
+const autoText = `${noToolsNotice}\n\n${es ? 'Aquí tienes la caja con tapa a presión para tu Raspberry Pi 5:' : 'Here is the snap-fit box for your Raspberry Pi 5:'}\n\n\`\`\`openscad\n${createdSource}\`\`\`\n`
+const autoSaved = es ? 'ScadLab guardó el bloque como ' : 'ScadLab saved the block as '
+const stepsAuto = [
+    hermesStep(1, 'autosave', {label: es ? 'Caja con tapa a presión para una Raspberry Pi 5' : 'Snap-fit box for a Raspberry Pi 5', parent: '', file: firstFile}, 'ok', `{"file":"${firstFile}","parent":"","message":"${autoSaved}${firstFile}"}`, 12, autoText.length),
+    hermesStep(2, 'render', {file: firstFile}, 'ok', renderOk, 1204, autoText.length),
+]
+const queryText = es
+    ? `Te propongo esta caja para la **Raspberry Pi 5**, con paredes de 2 mm:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- Si quieres la tapa a presión, la hago como otro checkpoint.`
+    : `Here is a box proposal for the **Raspberry Pi 5**, with 2 mm walls:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- If you want the snap-fit lid, I will make it as another checkpoint.`
 const hermesMessages =
-    view === 'chat-code'
+    view === 'chat-agent-creates'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: firstAsk, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rc.sentence}\n\n${rc.done}`, parts: parts({steps: stepsCreate, model: 'claude-opus-5'}), inputTokens: 9_820, outputTokens: 640, costUsd: 0.0612},
+          ]
+        : view === 'chat-autosave'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: firstAsk, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: autoText, parts: parts({steps: stepsAuto, model: 'llama3.2:3b'}), inputTokens: 1_210, outputTokens: 380, costUsd: 0},
+          ]
+        : view === 'chat-query-only'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: firstAsk, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: queryText, parts: parts({model: 'gpt-5-codex'}), inputTokens: 4_120, outputTokens: 520, costUsd: 0},
+          ]
+        : view === 'chat-code'
         ? [
               {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: es ? 'Haz una caja para una Raspberry Pi 5 con tapa deslizante.' : 'Make a box for a Raspberry Pi 5 with a sliding lid.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
               {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: codeMd, parts: parts({model: hermesModel}), inputTokens: 6_420, outputTokens: 910, costUsd: 0.0312},
@@ -1146,6 +1259,7 @@ const chatMocks = {
     CancelChat: (...a: unknown[]) => (calls('CancelChat', a), P(undefined)),
     DeleteChat: (...a: unknown[]) => (calls('DeleteChat', a), P(undefined)),
     RenameChat: (...a: unknown[]) => (calls('RenameChat', a), P(undefined)),
+    SetChatMode: (...a: unknown[]) => (calls('SetChatMode', a), P(undefined)),
     SetChatModel: (...a: unknown[]) => (calls('SetChatModel', a), P(undefined)),
     ChooseChatAttachment: () => P(pickedAttachments),
     AddChatAttachmentData: (_ws: number, name: string) => P({...pickedAttachments[1], name}),

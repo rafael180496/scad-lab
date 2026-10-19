@@ -8,6 +8,28 @@ muestra el árbol de versiones (**checkpoints**), mide y exporta a STL/3MF listo
 para Bambu Studio. Inspirado en ClawSCAD, con soporte para varios agentes y
 foco en impresoras Bambu Lab.
 
+## Visión y principios (palabras del usuario)
+
+> «La idea de este proyecto es hacer modelos sin saber modelaje 3D, al 100 % con
+> ayuda de la IA, así que la IA tiene que tener los tools necesarios para hacer
+> la creación y todo lo del proyecto: scad, stl, etc.»
+
+Consecuencias que rigen cualquier fase:
+
+1. **La IA puede hacer de punta a punta todo lo que el usuario hace con la UI**,
+   con cualquier proveedor (Hermes por tool calling; los CLIs por el MCP de
+   ScadLab). Cada funcionalidad nueva de la UI que crea o cambia algo lleva su
+   herramienta MCP (tabla en [13-mcp.md](13-mcp.md)). Única excepción a
+   propósito: «Abrir en Bambu Studio», que solo dispara el usuario.
+2. **El agente crea, renderiza, mira, mide y corrige**; nunca responde solo con
+   código cuando puede crearlo: el usuario no sabe modelar.
+3. **Escritura por defecto**: el modo «Agente» es el predeterminado en todos
+   lados; «Solo consulta» se elige a mano y vale solo para esa conversación.
+4. **Nada es destructivo**: todo cambio es un checkpoint nuevo; borrar es mover a
+   la papelera; un STL importado queda intacto en `refs/`.
+5. Un pedido en lenguaje natural en un workspace vacío termina en un modelo
+   renderizado, medido y exportable sin que el usuario toque código.
+
 ## Stack
 
 | Capa | Tecnología |

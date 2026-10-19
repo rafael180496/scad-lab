@@ -27,6 +27,9 @@ const (
 	FormatSTL         = "stl"
 	Format3MF         = "3mf"
 	FormatSTLPerColor = "stl-per-color"
+	// FormatPNG no pasa por Prepare: es la imagen del visor (o el preview de las
+	// herramientas MCP), que solo necesita nombre y extensión.
+	FormatPNG = "png"
 )
 
 // nearColorDistance: dos colores a menos de esta distancia RGB (de 441 posibles)
@@ -265,6 +268,8 @@ func Ext(format string) string {
 		return ".3mf"
 	case FormatSTLPerColor:
 		return ".zip"
+	case FormatPNG:
+		return ".png"
 	}
 	return ".stl"
 }

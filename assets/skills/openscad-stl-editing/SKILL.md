@@ -22,6 +22,17 @@ referencia, ese es otro caso: reconstrúyela con primitivas a partir de
 
 ## 2. Flujo
 
+> **Primero, la herramienta `edit_mesh`.** Para lo habitual —mover, girar,
+> escalar (`resize` a una medida), espejar, centrar, apoyar en la placa
+> (`center` + `to_bed`), poner una cara hacia abajo (`orient`), cortar con un
+> plano (`cut`), sumar formas (`add`) o perforar (`hole`: cubo, cilindro,
+> esfera, texto) y recolorear (`color`)— no escribas el `.scad`: `edit_mesh`
+> recibe la lista de pasos y crea el checkpoint hijo con el mismo motor que el
+> editor 3D de la app. `list_refs` muestra los modelos de `refs/`, `import_mesh`
+> los vuelve editables y `suggest_orientation` propone cómo ponerlos en la placa.
+> Las recetas de abajo son para lo que `edit_mesh` no hace (refuerzos con
+> `hull`, avellanados, varios cortes en el mismo archivo, formas propias).
+
 1. **Punto de partida.** Si el usuario importó el modelo desde la app ya hay un
    checkpoint base (`list_checkpoints`). Si el archivo solo está en `refs/`,
    `import_mesh(file, center_on_bed?)` crea ese checkpoint base (convierte un 3MF

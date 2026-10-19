@@ -89,3 +89,28 @@ func utf16Len(s string) int {
 	}
 	return n
 }
+
+// AutoStep es un paso que ScadLab hace POR el modelo (la red de seguridad de
+// S12.c): guardar su bloque como checkpoint y renderizarlo. Se anuncia como un
+// paso más del turno.
+type AutoStep struct {
+	Tool string
+	Args map[string]any
+	// Text es lo que muestra la tarjeta; Images, las imágenes como data URL.
+	Text   string
+	Images []string
+	Failed bool
+	// DurationMs es lo que tardó (el render suele ser lo largo).
+	DurationMs int64
+}
+
+// AutoSaveOutcome es lo que hizo la red de seguridad con el texto del turno.
+type AutoSaveOutcome struct {
+	Steps []AutoStep
+	// File es el checkpoint guardado ("" si no se pudo guardar).
+	File string
+	// Feedback es, si el render falló, lo que hay que devolverle al modelo para
+	// que corrija (los errores con su línea); vacío si renderizó bien o no se
+	// pudo renderizar por una causa que el modelo no arregla.
+	Feedback string
+}

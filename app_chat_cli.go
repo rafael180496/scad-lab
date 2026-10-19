@@ -17,6 +17,7 @@ import (
 	"scadlab/backend/clichat"
 	"scadlab/backend/hermes"
 	"scadlab/backend/i18n"
+	"scadlab/backend/mcpconf"
 	"scadlab/backend/store"
 )
 
@@ -299,6 +300,10 @@ type cliJob struct {
 	mcpOn   bool
 	mcp     []string
 	addDirs []string
+	// mcpNote es por qué ScadLab no pudo dejar registrado su servidor MCP en el
+	// CLI (hoy solo Antigravity, que lo lee de su configuración global). Vacío =
+	// todo bien. Cambia el prompt y explica el turno si no deja checkpoints.
+	mcpNote string
 }
 
 // cliHistoryChars acota lo que se resume de la conversación anterior cuando el
@@ -339,10 +344,11 @@ func (a *App) sendCLIMessage(c store.Chat, text, currentFile string, attachmentI
 	// Los flags del servidor MCP y de las carpetas de los otros proyectos son los
 	// de la terminal (app_terminal.go, app_mcp.go): una sola definición de la
 	// línea de comandos.
+	agent := opts.agentFor(c)
 	job := chatJob{
-		turn: ot.turn, chat: c, workspace: w, currentFile: currentFile, agent: opts.Agent,
+		turn: ot.turn, chat: c, workspace: w, currentFile: currentFile, agent: agent,
 		cli: &cliJob{
-			det: det, mode: clichat.ModeFor(opts.Agent),
+			det: det, mode: clichat.ModeFor(agent),
 			userText: ot.prepared.Text, images: ot.prepared.Images, stored: ot.stored, session: c.CLISession,
 			mcpOn: settings.MCPEnabled, mcp: a.mcpLaunchArgs(det.ID, w.Path), addDirs: a.addDirArgs(det.ID, w.ID),
 		},
@@ -363,13 +369,21 @@ func (a *App) cliPrompt(j chatJob, withHistory bool) string {
 		ES: "[ScadLab] Diseñas un modelo 3D en OpenSCAD en el proyecto «%s» (esta carpeta). Las reglas del proyecto están en CLAUDE.md y AGENTS.md. Usa las herramientas del servidor «scadlab» (render, preview, measure, lint…) para comprobar tu trabajo.",
 		EN: "[ScadLab] You are designing a 3D model in OpenSCAD in the project “%s” (this folder). The project rules are in CLAUDE.md and AGENTS.md. Use the tools of the “scadlab” server (render, preview, measure, lint…) to check your work.",
 	}, j.workspace.Name))
-	if j.cli.mode == clichat.ModeAsk {
-		b.WriteString(" " + i18n.T(i18n.Msg{
-			ES: "El modo de este turno es «Solo consulta»: puedes leer, razonar y comprobar, pero no crees checkpoints ni exportes; si hace falta cambiar algo, propón el código en un bloque.",
-			EN: "You are in “Query only” mode: you can read, reason and check, but do not create checkpoints or export; if something has to change, propose the code in a block.",
-		}))
-	}
 	pctx := chatPromptContext(j.workspace, j.currentFile)
+	switch j.cli.mode {
+	case clichat.ModeAsk:
+		// Solo consulta: una respuesta que se pueda guardar con un clic.
+		b.WriteString(" " + i18n.T(msgCLIPromptAsk))
+	default:
+		// Agente: el diseño lo crea el agente, de punta a punta.
+		b.WriteString(" " + i18n.T(msgCLIPromptAgent))
+		if len(pctx.Checkpoints) == 0 {
+			b.WriteString(" " + i18n.T(msgCLIPromptEmpty))
+		}
+		if j.cli.mcpNote != "" {
+			b.WriteString(" " + i18n.T(msgCLIPromptNoMCP))
+		}
+	}
 	if pctx.CurrentFile != "" {
 		b.WriteString("\n\n" + i18n.T(i18n.Msg{ES: "Checkpoint abierto en el editor: %s", EN: "Checkpoint open in the editor: %s"}, pctx.CurrentFile))
 		src := pctx.CurrentSource
@@ -410,6 +424,28 @@ func cliHistory(stored []store.ChatMessage) string {
 	return strings.TrimSpace(b.String())
 }
 
+// Las instrucciones de modo del prompt de un CLI (S12.c). Van en el prompt y no
+// solo en CLAUDE.md/AGENTS.md porque el prompt del turno es lo último que el
+// modelo lee antes de actuar, y los dos modos piden cosas opuestas.
+var (
+	msgCLIPromptAsk = i18n.Msg{
+		ES: "El modo de este turno es «Solo consulta»: puedes leer, razonar y comprobar (render, preview, measure, lint), pero no crees checkpoints ni exportes. Si hay que diseñar o cambiar algo, propón UN solo bloque ```openscad con el código COMPLETO y la cabecera `// @checkpoint parent=… desc=\"…\"`, listo para guardar: ScadLab le ofrece al usuario guardarlo y renderizarlo con un clic.",
+		EN: "This turn is in “Query only” mode: you can read, reason and check (render, preview, measure, lint), but do not create checkpoints or export. If something has to be designed or changed, propose ONE ```openscad block with the COMPLETE code and the header `// @checkpoint parent=… desc=\"…\"`, ready to save: ScadLab offers the user to save and render it with one click.",
+	}
+	msgCLIPromptAgent = i18n.Msg{
+		ES: "El modo de este turno es «Agente»: el diseño lo creas TÚ, no el usuario, y el turno no termina hasta que exista un checkpoint que renderice. Flujo obligatorio con las herramientas del servidor «scadlab»: 1) `create_checkpoint` con el código completo; 2) `render` para validarlo; 3) `preview` para mirarlo; 4) si falla o no se ve bien, corrige en un checkpoint NUEVO (`create_checkpoint` con `parent` = el que falló; nunca edites uno existente) y vuelve al paso 2. No pegues el código en la respuesta en lugar de crear el checkpoint, no pidas permiso para crearlo y no uses la shell.",
+		EN: "This turn is in “Agent” mode: YOU create the design, not the user, and the turn does not end until a checkpoint that renders exists. Mandatory flow with the tools of the “scadlab” server: 1) `create_checkpoint` with the complete code; 2) `render` to validate it; 3) `preview` to look at it; 4) if it fails or does not look right, fix it in a NEW checkpoint (`create_checkpoint` with `parent` = the one that failed; never edit an existing one) and go back to step 2. Do not paste the code in the answer instead of creating the checkpoint, do not ask permission to create it, and do not use the shell.",
+	}
+	msgCLIPromptEmpty = i18n.Msg{
+		ES: "El proyecto todavía no tiene checkpoints: crea el primero ya, sin preguntar nada (sin `parent`).",
+		EN: "The project has no checkpoints yet: create the first one right away, without asking anything (no `parent`).",
+	}
+	msgCLIPromptNoMCP = i18n.Msg{
+		ES: "Atención: el servidor «scadlab» NO está conectado en este turno, así que no puedes crear checkpoints. Entrega el diseño en UN bloque ```openscad con el código completo y la cabecera `// @checkpoint`: ScadLab lo guardará y lo renderizará por ti.",
+		EN: "Warning: the “scadlab” server is NOT connected in this turn, so you cannot create checkpoints. Deliver the design in ONE ```openscad block with the complete code and the `// @checkpoint` header: ScadLab will save and render it for you.",
+	}
+)
+
 // cliTurn arma el Turn de clichat para el prompt y la sesión dados.
 func (a *App) cliTurn(j chatJob, session, prompt string) clichat.Turn {
 	cwd := absDir(j.workspace.Path)
@@ -434,6 +470,10 @@ func (a *App) cliTurn(j chatJob, session, prompt string) clichat.Turn {
 // también.
 func (a *App) runCLITurn(j chatJob) {
 	c, svc := j.chat, a.chatSvc()
+	// Los .scad que ya existen: al terminar, uno nuevo que no vino de una
+	// herramienta (el CLI lo escribió él) también cuenta como un checkpoint creado.
+	before := workspaceScadSet(j.workspace.Path)
+	j.cli.mcpNote = a.prepareCLIMCP(j)
 	stream := j.turn.Stream(func(seq int, text string) {
 		a.emit(evChatDelta, ChatDeltaEvent{ChatID: c.ID, Text: text, Seq: seq})
 	})
@@ -455,8 +495,93 @@ func (a *App) runCLITurn(j chatJob) {
 		res, err = run("")
 	}
 	out := rec.finish(res, err)
+	if err == nil && !out.Cancelled {
+		// La red de seguridad (S12.c) y, si el turno no dejó nada, la explicación.
+		made := a.cliSafetyNet(j.turn.Context(), j, before, &out)
+		out.Text = a.cliTurnText(j, out, made)
+	}
 	svc.setUsage(c.ID, out.Usage)
 	a.concludeChatTurn(c, out, err, cliErrorText(j.cli.det, err))
+}
+
+// prepareCLIMCP deja listo el servidor MCP de ScadLab para el CLI del turno y
+// devuelve, si no quedó disponible, el motivo (vacío = todo bien). Antigravity
+// lo lee de su configuración global: se registra ahí si falta (ver
+// EnsureAntigravityMCP). Con el servidor apagado en Configuración → IA ningún CLI
+// lo tiene.
+func (a *App) prepareCLIMCP(j chatJob) string {
+	if !j.cli.mcpOn {
+		return i18n.T(msgCLIMCPOff)
+	}
+	if j.cli.det.ID != "antigravity" {
+		return ""
+	}
+	st, err := a.EnsureAntigravityMCP()
+	switch {
+	case err != nil:
+		return err.Error()
+	case st.State == mcpconf.AgyDisabled:
+		return i18n.T(msgCLIAgyDisabled)
+	}
+	return ""
+}
+
+var (
+	msgCLIMCPOff = i18n.Msg{
+		ES: "El servidor MCP de ScadLab está apagado (Configuración → IA): sin él, el CLI no puede crear ni renderizar checkpoints desde el chat.",
+		EN: "ScadLab's MCP server is turned off (Settings → AI): without it, the CLI cannot create or render checkpoints from the chat.",
+	}
+	msgCLIAgyDisabled = i18n.Msg{
+		ES: "Antigravity tiene el servidor «scadlab» desactivado (`agy mcp enable scadlab`): sin él no puede crear checkpoints desde el chat.",
+		EN: "Antigravity has the “scadlab” server disabled (`agy mcp enable scadlab`): without it, it cannot create checkpoints from the chat.",
+	}
+	msgCLIEmptyTurn = i18n.Msg{
+		ES: "%s terminó el turno sin responder nada.",
+		EN: "%s finished the turn without saying anything.",
+	}
+	msgCLIEmptyToolFailed = i18n.Msg{
+		ES: "Falló la herramienta «%s»: %s",
+		EN: "The tool “%s” failed: %s",
+	}
+	msgCLIEmptyHint = i18n.Msg{
+		ES: "No se creó ningún checkpoint. Vuelve a pedirlo, o elige otro proveedor en la barra del chat.",
+		EN: "No checkpoint was created. Ask again, or pick another provider in the chat bar.",
+	}
+)
+
+// cliTurnText devuelve el texto que se guarda del turno: el del CLI, y cuando no
+// dejó nada que ver, una explicación en vez de una respuesta vacía. made dice que
+// el turno dejó un checkpoint (por una herramienta, por la red de seguridad o
+// porque el CLI escribió un .scad).
+func (a *App) cliTurnText(j chatJob, res hermes.Result, made bool) string {
+	text := res.Text
+	if made {
+		return text
+	}
+	if strings.TrimSpace(text) == "" {
+		var b strings.Builder
+		b.WriteString("_" + i18n.T(msgCLIEmptyTurn, j.cli.det.Name) + "_")
+		shown := 0
+		for _, st := range res.Steps {
+			if st.Status != hermes.StepError || shown >= 3 {
+				continue
+			}
+			shown++
+			b.WriteString("\n\n" + i18n.T(msgCLIEmptyToolFailed, st.Tool, clipText(strings.TrimSpace(st.Text), 300)))
+		}
+		if j.agent {
+			if j.cli.mcpNote != "" {
+				b.WriteString("\n\n" + j.cli.mcpNote)
+			} else {
+				b.WriteString("\n\n" + i18n.T(msgCLIEmptyHint))
+			}
+		}
+		return b.String()
+	}
+	if j.agent && j.cli.mcpNote != "" {
+		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + j.cli.mcpNote + "_"
+	}
+	return text
 }
 
 // cliErrorText antepone el nombre del CLI al fallo y, si parece de autenticación,
@@ -527,7 +652,8 @@ func (r *cliRecorder) hadOutput() bool { return r.textLen > 0 || len(r.steps) > 
 
 func (r *cliRecorder) emitStep(st *hermes.Step) {
 	r.a.chatSvc().upsertStep(r.chat.ID, *st)
-	r.a.emit(evChatStep, ChatStepEvent{ChatID: r.chat.ID, Step: *st})
+	r.a.emit(evChatStep, ChatStepEvent{ChatID: r.chat.ID, WorkspaceID: r.chat.WorkspaceID, Step: *st})
+	r.a.refreshTreeAfterStep(r.chat.WorkspaceID, *st)
 }
 
 func (r *cliRecorder) handle(ev clichat.Event) {

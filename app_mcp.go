@@ -23,6 +23,17 @@ import (
 // bloque 6.A (backend/mcp); aquí solo se deja apuntando a él, con el comando
 // `<este ejecutable> --mcp --workspace <carpeta del workspace>`.
 
+// evAntigravityMCP avisa a la interfaz del resultado de registrar ScadLab en la
+// configuración global de Antigravity al elegirlo (S12.c): se agregó (toast) o
+// falló (toast de error). Payload: AntigravityMCPEvent.
+const evAntigravityMCP = "mcp:antigravity"
+
+// AntigravityMCPEvent es el payload de mcp:antigravity.
+type AntigravityMCPEvent struct {
+	Added bool   `json:"added"`
+	Error string `json:"error"`
+}
+
 // evMCPChanged avisa a la interfaz que cambió el interruptor del servidor MCP o
 // se resincronizó un workspace: el indicador de la terminal se vuelve a leer.
 const evMCPChanged = "mcp:changed"
@@ -351,4 +362,75 @@ func agyFailure(out string, err error) string {
 		return msg
 	}
 	return err.Error()
+}
+
+// ---- Antigravity: registro automático (S12.c) ----
+
+// AntigravityEnsure es el resultado de EnsureAntigravityMCP.
+type AntigravityEnsure struct {
+	// Added: la entrada se agregó AHORA a la configuración global de Antigravity.
+	Added bool `json:"added"`
+	// State: cómo quedó la entrada (AgyOK, AgyMissing, AgyOther, AgyDisabled,
+	// AgyNotInstalled) o "off" si el servidor MCP está apagado en Configuración.
+	State string `json:"state"`
+}
+
+// agyEnsureMu serializa el registro automático: elegir Antigravity dos veces
+// seguidas no debe agregar la entrada (ni avisar) dos veces.
+var agyEnsureMu sync.Mutex
+
+// EnsureAntigravityMCP deja ScadLab registrado en Antigravity cuando se lo elige
+// (en el chat o al abrir su terminal). Antigravity solo lee MCP de su
+// configuración GLOBAL —no hay por proyecto ni por flag—, y sin él no tiene
+// ninguna herramienta de ScadLab: intenta la shell, que está denegada, y el turno
+// no deja nada. Antes era un botón opcional (S6); el chat lo vuelve necesario.
+//
+// Solo AGREGA lo que falta: una entrada que ya existe —aunque apunte a otra
+// ScadLab o esté desactivada— es decisión del usuario y no se toca (el botón de
+// Configuración la reemplaza si él quiere). Con el servidor MCP apagado en
+// Configuración → IA no hace nada. Va por `agy mcp list` y `agy mcp add -- scadlab
+// <ScadLab> --mcp`, sin shell y sin `--workspace` (el servidor toma la carpeta
+// actual, que es la del workspace).
+//
+// Emite mcp:antigravity cuando agregó (toast «se agregó a su configuración
+// global») o falló (toast con el motivo). No tener `agy` no es un fallo.
+func (a *App) EnsureAntigravityMCP() (AntigravityEnsure, error) {
+	if err := a.ready(); err != nil {
+		return AntigravityEnsure{}, err
+	}
+	agyEnsureMu.Lock()
+	defer agyEnsureMu.Unlock()
+	s, err := a.store.GetSettings()
+	if err != nil {
+		return AntigravityEnsure{}, err
+	}
+	if !s.MCPEnabled {
+		return AntigravityEnsure{State: "off"}, nil
+	}
+	ctx := a.appCtx()
+	st := a.agyStatus(ctx)
+	switch st.State {
+	case mcpconf.AgyError:
+		err := i18n.Errorf(msgAgyEnsureFailed, st.Detail)
+		a.emit(evAntigravityMCP, AntigravityMCPEvent{Error: err.Error()})
+		return AntigravityEnsure{State: st.State}, err
+	case mcpconf.AgyMissing:
+	default:
+		return AntigravityEnsure{State: st.State}, nil
+	}
+	// AddAntigravityMCP toma agyMu por su cuenta y vuelve a leer el estado.
+	after, err := a.AddAntigravityMCP()
+	if err != nil {
+		err = i18n.Errorf(msgAgyEnsureFailed, err.Error())
+		a.emit(evAntigravityMCP, AntigravityMCPEvent{Error: err.Error()})
+		return AntigravityEnsure{State: after.State}, err
+	}
+	log.Printf("scadlab: ScadLab registrado en la configuración global de Antigravity (%s)", after.Command)
+	a.emit(evAntigravityMCP, AntigravityMCPEvent{Added: true})
+	return AntigravityEnsure{Added: true, State: after.State}, nil
+}
+
+var msgAgyEnsureFailed = i18n.Msg{
+	ES: "No se pudo agregar ScadLab a la configuración global de Antigravity: %s. Sin ese servidor, Antigravity no puede crear checkpoints desde el chat; agrégalo a mano en Configuración → IA → «Agregar a Antigravity».",
+	EN: "Could not add ScadLab to Antigravity's global configuration: %s. Without that server, Antigravity cannot create checkpoints from the chat; add it by hand in Settings → AI → “Add to Antigravity”.",
 }

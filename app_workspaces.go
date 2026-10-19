@@ -132,6 +132,47 @@ func (a *App) writeStarter(dir, name string) {
 	}
 }
 
+// ensureStarter escribe el checkpoint por defecto al ABRIR un workspace cuya raíz
+// no tiene ningún .scad (S12.c). Nunca pisa nada (WriteStarter crea con O_EXCL) y
+// no resucita el modelo en un workspace que alguien vació a propósito: si la
+// papelera (.scadlab/trash/) guarda algo, hubo trabajo y se lo mandó a la
+// basura — ahí la interfaz ofrece «Crear un modelo de inicio» (CreateStarterCheckpoint).
+func (a *App) ensureStarter(w store.Workspace) {
+	if skipStarter {
+		return
+	}
+	if st, err := os.Stat(w.Path); err != nil || !st.IsDir() {
+		return
+	}
+	files, err := workspace.Scan(w.Path)
+	if err != nil || len(files) > 0 || !checkpoint.TrashEmpty(w.Path) {
+		return
+	}
+	a.writeStarter(w.Path, w.Name)
+}
+
+// CreateStarterCheckpoint es el botón «Crear un modelo de inicio» del visor y
+// del panel Código: escribe el checkpoint por defecto en un workspace sin ningún
+// .scad, también cuando la papelera tiene algo (el usuario lo pide). Devuelve su
+// nombre. Con modelos en la carpeta no hace nada y devuelve "".
+func (a *App) CreateStarterCheckpoint(id int64) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	w, err := a.store.GetWorkspace(id)
+	if err != nil {
+		return "", err
+	}
+	name, err := workspace.WriteStarter(w.Path, w.Name, i18n.Lang())
+	if err != nil {
+		return "", err
+	}
+	if name != "" {
+		a.checkpoints().markOwn(w.ID, name)
+	}
+	return name, nil
+}
+
 // UpdateWorkspace cambia nombre, impresora o descripción. Si cambió la
 // impresora reescribe CLAUDE.md/AGENTS.md/printer.json: el volumen de
 // impresión que lee la IA tiene que ser el nuevo.
@@ -176,6 +217,9 @@ func (a *App) OpenWorkspace(id int64) (WorkspaceView, error) { return a.OpenProj
 // quien decide si hay lugar.
 func (a *App) openWorkspaceView(w store.Workspace) (WorkspaceView, error) {
 	_ = a.store.TouchWorkspace(w.ID)
+	// Un workspace sin ningún modelo (anterior a S12, o vaciado) abre con el
+	// checkpoint por defecto, ANTES del reescaneo para que el árbol ya lo traiga.
+	a.ensureStarter(w)
 	v, err := a.rescan(w)
 	if err != nil {
 		return v, err

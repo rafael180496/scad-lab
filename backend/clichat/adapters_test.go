@@ -286,3 +286,53 @@ func TestJSONRawStringEscapes(t *testing.T) {
 		t.Error("no es una cadena")
 	}
 }
+
+// Un run_command que falla muestra el detalle real, no «Sin resultado» (S12.c): el
+// error puede venir como cadena, como objeto con `message` o en un campo que no
+// conocemos, y siempre hay algo que leer.
+func TestAntigravityToolErrorCarriesTheRealDetail(t *testing.T) {
+	adapt, _, _ := adapterFor("antigravity")
+	evs := feed(t, adapt, "antigravity-error.jsonl")
+	res := find(evs, KindToolResult)
+	if len(res) != 1 || !res[0].Tool.IsError || res[0].Tool.ID != "step-2" || res[0].Tool.Result != "command denied: run_command is not allowed in this session" {
+		t.Fatalf("resultado: %+v", res)
+	}
+	if tools := find(evs, KindTool); len(tools) != 1 || tools[0].Tool.Name != "run_command" || tools[0].Tool.Args["command"] != "openscad -o caja.stl caja.scad" {
+		t.Errorf("la llamada: %+v", tools)
+	}
+	if len(find(evs, KindText)) != 0 || len(find(evs, KindDone)) != 1 {
+		t.Errorf("sin texto y con cierre: %v", kinds(evs))
+	}
+
+	for name, line := range map[string]string{
+		"cadena":      `{"event":"step_update","step_update":{"step_index":4,"state":"ERROR","step_type":"run_command","error":"boom"}}`,
+		"output":      `{"event":"step_update","step_update":{"step_index":4,"state":"FAILED","step_type":"run_command","output":"boom"}}`,
+		"campo nuevo": `{"event":"step_update","step_update":{"step_index":4,"state":"ERROR","step_type":"run_command","exit_status":"boom","duration_seconds":0.1}}`,
+	} {
+		got := antigravityAdapter([]byte(line))
+		if len(got) != 1 || !got[0].Tool.IsError || !strings.Contains(got[0].Tool.Result, "boom") {
+			t.Errorf("%s: %+v", name, got)
+		}
+	}
+	// Sin ningún detalle: un texto que lo dice, nunca vacío.
+	got := antigravityAdapter([]byte(`{"event":"step_update","step_update":{"step_index":4,"state":"ERROR","step_type":"run_command"}}`))
+	if len(got) != 1 || !got[0].Tool.IsError || got[0].Tool.Result == "" {
+		t.Errorf("sin detalle: %+v", got)
+	}
+}
+
+// Si el CLI cierra con `result.response` y nunca mandó los trozos, esa respuesta
+// sale como texto (un turno por turno: el estado se reinicia).
+func TestAntigravityResponseOnlyTurnStillShowsTheAnswer(t *testing.T) {
+	adapt, _, _ := adapterFor("antigravity")
+	evs := feed(t, adapt, "antigravity-response-only.jsonl")
+	if got := text(evs); !strings.Contains(got, "cube(10);") {
+		t.Fatalf("texto: %q", got)
+	}
+	// Con los trozos ya enviados, la respuesta final NO se repite.
+	adapt2, _, _ := adapterFor("antigravity")
+	evs = feed(t, adapt2, "antigravity-stream.jsonl")
+	if got := text(evs); got != "La caja está bien." {
+		t.Errorf("no se duplica: %q", got)
+	}
+}

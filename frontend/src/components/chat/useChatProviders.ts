@@ -29,11 +29,8 @@ export const rememberProvider = (id: string) => write('scadlab.chat.provider', i
 export const rememberedModel = (providerId: string) => read(`scadlab.chat.model.${providerId}`)
 export const rememberModel = (providerId: string, model: string) => write(`scadlab.chat.model.${providerId}`, model)
 
-// El modo se recuerda por TIPO de proveedor: con un CLI arranca en «Solo consulta»
-// (como mini-tools: lo que se enciende a mano no se hereda de un servidor) y con un
-// servidor en «Agente» (el default de S12). Cada uno guarda lo último que se eligió.
-export const rememberedAgent = (cli: boolean) => (cli ? read('scadlab.chat.agent.cli') === 'on' : read('scadlab.chat.agent') !== 'off')
-export const rememberAgent = (cli: boolean, on: boolean) => write(cli ? 'scadlab.chat.agent.cli' : 'scadlab.chat.agent', on ? 'on' : 'off')
+// El modo («Agente» por defecto, «Solo consulta» si se eligió) es de cada conversación
+// (`chats.mode`, lib/chatMode.ts): ya no se recuerda en el navegador.
 export function rememberedSteps(): number {
     const n = Number(read('scadlab.chat.maxSteps'))
     return Number.isInteger(n) && n >= 1 && n <= 30 ? n : 12

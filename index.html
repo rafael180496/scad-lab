@@ -642,6 +642,10 @@ wails build            <span class="c"># binary in build/bin/</span></code></pre
     alone and tells you which one it is.</li>
     <li>ScadLab creates the structure and copies the <a href="#ia-skills">skills</a> for every CLI.</li>
   </ol>
+  <figure class="shot"><img src="docs/screenshots/workspace-starter.png" alt="A freshly opened workspace, “My first project”: the tree with a single checkpoint 001-my-first-project, the viewer with a blue base and an amber knob already rendered and, on the right, its code with the Customizer parameters" loading="lazy"><figcaption>A new workspace already comes with a starter model: there is something to look at and to start from.</figcaption></figure>
+  <p>The workspace <strong>is never opened empty</strong>: it comes with <code>001-&lt;name&gt;.scad</code>, a base with a knob, with Customizer parameters and two colors. A workspace you open that has no
+  <code>.scad</code> at all (one from before this version, for example) gets it too. If <em>you</em> emptied it —sent its checkpoints to the <a href="#checkpoints-arbol">trash</a>— it does not come back on its own: the viewer and the Code panel show
+  <strong>Create a starter model</strong> when the project has no checkpoint, and write it when you ask. It never overwrites anything.</p>
 
   <h2 id="primer-proyecto--pedir">2. Ask the agent for the model <span class="badge ok">Available</span></h2>
   <p>Open the <a href="#ia-agentes">Agent</a> panel, pick your agent, click <strong>New</strong> and describe the part with measurements:</p>
@@ -1555,7 +1559,7 @@ color("SteelBlue") difference() {
   <p class="lead">An MCP server that gives the agent tools to <strong>render, validate, measure and see</strong>
   its models with the same OpenSCAD and the same engine the app uses. ScadLab leaves it configured automatically in each
   workspace for Claude Code and opencode, and passes it to Codex through flags; <strong>Antigravity</strong> only has a
-  global configuration, so it is added with a button and your permission.</p>
+  global configuration, so it is added with a button and your permission. From this version the AI can do with its tools everything you do with the interface —change measures, create from templates, edit an STL, estimate and orient the print, install libraries and use the trash—: see <a href="#ia-mcp--herramientas">the full list</a>.</p>
 
   <figure class="shot"><img src="docs/screenshots/settings-mcp.png" alt="Settings, AI tab, ScadLab MCP server block: the switch on, the command the agents use with the Copy button and the list of workspace files (Claude Code, opencode and legacy Gemini CLI configured, Codex through flags) with the Sync again button, and the Antigravity row with the Add to Antigravity and Remove from Antigravity buttons" loading="lazy"><figcaption>Settings → AI: the switch, the command the agents use, the state of the open workspace's files and the Antigravity row (global configuration) with its buttons.</figcaption></figure>
 
@@ -1571,33 +1575,47 @@ color("SteelBlue") difference() {
 
   <h2 id="ia-mcp--herramientas">Which tools it has</h2>
   <div class="tablewrap"><table>
-    <tr><th>Tool</th><th>What it does</th></tr>
-    <tr><td><code>list_checkpoints</code></td><td>The workspace tree: file, parent, description and last known render status.</td></tr>
-    <tr><td><code>read_checkpoint</code></td><td>Returns a checkpoint's code.</td></tr>
-    <tr><td><code>create_checkpoint</code></td><td>Creates a new checkpoint (<code>NNN-slug.scad</code>, with its header) from a parent. It <strong>never overwrites</strong> an existing one.</td></tr>
-    <tr><td><code>render</code></td><td>Renders a checkpoint (by default, the newest) and returns the status, the diagnostics with their line, the duration, the size, the volume, the triangles, whether it is watertight and whether it fits on the plate. It writes or deletes <code>RENDER_ERRORS.md</code> with the same rule as the app.</td></tr>
-    <tr><td><code>lint</code></td><td>The linter diagnostics (OpenSCAD and the SL001–SL009 rules) of a file or a loose snippet of code.</td></tr>
-    <tr><td><code>format</code></td><td>Returns the formatted code; it does not write files.</td></tr>
-    <tr><td><code>measure</code></td><td>Part measurements, the printer's volume, whether it fits and the estimated weight with the default material (100 % solid).</td></tr>
-    <tr><td><code>preview</code></td><td>A <strong>PNG image</strong> of the part (isometric, front, top, right…) rendered with OpenSCAD, so the agent sees what it modeled.</td></tr>
-    <tr><td><code>printer_info</code></td><td>The workspace's printer: volume, nozzle, AMS slots and key rules.</td></tr>
-    <tr><td><code>export</code></td><td>Exports to STL, 3MF or one STL per color into the workspace's <code>exports/</code> folder, with the parts and the warnings.</td></tr>
-    <tr><td><code>list_templates</code> / <code>get_template</code></td><td>Lists and reads the <code>openscad-templates</code> templates.</td></tr>
+    <tr><th>Tool</th><th>What it does</th><th>Mode</th></tr>
+    <tr><td><code>list_checkpoints</code></td><td>The workspace tree: file, parent, description, your label, children and last known render status; also the active parent.</td><td>Query</td></tr>
+    <tr><td><code>read_checkpoint</code></td><td>Returns a checkpoint's code.</td><td>Query</td></tr>
+    <tr><td><code>create_checkpoint</code></td><td>Creates a new checkpoint (<code>NNN-slug.scad</code>, with its header) from a parent. It <strong>never overwrites</strong> an existing one.</td><td>Agent</td></tr>
+    <tr><td><code>set_active_parent</code></td><td>Chooses which checkpoint the next one branches from (your “Branch from here”) or clears it.</td><td>Agent</td></tr>
+    <tr><td><code>rename_checkpoint</code></td><td>Changes the label the tree shows for a checkpoint. The file and its header do not change.</td><td>Agent</td></tr>
+    <tr><td><code>trash_checkpoint</code></td><td>Moves a checkpoint (or its whole branch) to the trash. <strong>It never deletes anything.</strong></td><td>Agent</td></tr>
+    <tr><td><code>list_trash</code> / <code>restore_checkpoint</code></td><td>Lists the trash / brings a checkpoint back, with its label. It never overwrites an existing one.</td><td>Query / Agent</td></tr>
+    <tr><td><code>list_refs</code></td><td>The STL, 3MF and OBJ files in <code>refs/</code>: name, format, size and date.</td><td>Query</td></tr>
+    <tr><td><code>render</code></td><td>Renders a checkpoint (by default, the newest) and returns the status, the diagnostics with their line, the duration, the size, the volume, the triangles, whether it is watertight and whether it fits on the plate. It writes or deletes <code>RENDER_ERRORS.md</code> with the same rule as the app.</td><td>Query</td></tr>
+    <tr><td><code>lint</code></td><td>The linter diagnostics (OpenSCAD and the SL001–SL009 rules) of a file or a loose snippet of code.</td><td>Query</td></tr>
+    <tr><td><code>format</code></td><td>Returns the formatted code; it does not write files.</td><td>Query</td></tr>
+    <tr><td><code>preview</code></td><td>A <strong>PNG image</strong> of the part (eight named views or a free angle) rendered with OpenSCAD, so the agent sees what it modeled.</td><td>Query</td></tr>
+    <tr><td><code>measure</code></td><td>Part measurements, the printer's volume, whether it fits and the estimated weight with the default material (100 % solid).</td><td>Query</td></tr>
+    <tr><td><code>get_parameters</code> / <code>set_parameters</code></td><td>Reads the Customizer parameters (type, value, range, options) / saves a <strong>child</strong> checkpoint with new values without rewriting the model.</td><td>Query / Agent</td></tr>
+    <tr><td><code>list_templates</code> / <code>get_template</code></td><td>Lists and reads the <code>openscad-templates</code> templates.</td><td>Query</td></tr>
+    <tr><td><code>create_from_template</code></td><td>Creates a checkpoint from a template, with your measures already set and your printer's plate.</td><td>Agent</td></tr>
+    <tr><td><code>list_libraries</code> / <code>install_library</code></td><td>Says which libraries you have (BOSL2, MCAD, NopSCADlib) and the exact <code>include</code> line / downloads one into <code>lib/</code>, a fixed and verified version. It never replaces an installed one.</td><td>Query / Agent</td></tr>
+    <tr><td><code>list_skills</code> / <code>read_skill</code></td><td>Lists the workspace's skills and reads their <code>SKILL.md</code>.</td><td>Query</td></tr>
+    <tr><td><code>inspect_reference</code></td><td>Measures a model in <code>refs/</code> (size, volume, parts by color) and returns a picture.</td><td>Query</td></tr>
+    <tr><td><code>import_mesh</code></td><td>Makes an STL, 3MF or OBJ in <code>refs/</code> editable: creates a root checkpoint that imports it.</td><td>Agent</td></tr>
+    <tr><td><code>edit_mesh</code></td><td>Edits a 3D model like the viewer's Edit mode (move, rotate, scale, mirror, center, rest on the plate, recolor, add pieces, drill and cut) and leaves a child checkpoint.</td><td>Agent</td></tr>
+    <tr><td><code>printer_info</code></td><td>The workspace's printer: volume, nozzle, AMS slots and key rules.</td><td>Query</td></tr>
+    <tr><td><code>estimate_print</code> / <code>list_materials</code></td><td>Weight, meters and cost with the requested material and infill / the available materials.</td><td>Query</td></tr>
+    <tr><td><code>suggest_orientation</code></td><td>Tries the six faces down: which fits the plate, how much overhang it leaves and how tall it is; returns the operations to apply it.</td><td>Query</td></tr>
+    <tr><td><code>export</code></td><td>Exports to STL, 3MF, one STL per color or PNG into the workspace's <code>exports/</code> folder, with the parts and the warnings.</td><td>Agent</td></tr>
   </table></div>
-  <p>All paths are resolved <strong>inside the workspace</strong>, a checkpoint is never overwritten or
-  deleted, and the only thing written outside it is the mesh cache.</p>
+  <p>The <strong>Query</strong> ones are available in “Query only” and in “Agent”; the <strong>Agent</strong> ones change the project (a checkpoint, the tree, <code>exports/</code>, <code>lib/</code>) and only exist in “Agent”. All paths are resolved <strong>inside the workspace</strong> and a checkpoint is never overwritten or deleted (“deleting” is moving it to the trash). Outside it, only the mesh cache is written.</p>
+  <p>What the AI can do is what you do with the interface: change measures without rewriting the model, create from a template, edit an STL, estimate the print and suggest how to place it on the plate, install BOSL2 and send versions to the trash. Each step shows up in the chat with its card, and the tree and the trash update right away.</p>
 
   <h2 id="ia-mcp--config">How it is configured in each CLI</h2>
   <p>When you create, import or open a workspace, ScadLab writes the <code>scadlab</code> entry in the
   <strong>project</strong> configuration file each CLI reads. It never touches your user's global configuration on
-  its own; the only exception is Antigravity, and only when you ask for it (see below).</p>
+  its own; the only exception is Antigravity, which only reads global configuration, and only when you pick it in the chat or open its terminal (see below).</p>
   <div class="tablewrap"><table>
     <tr><th>CLI</th><th>File in the workspace</th><th>Entry</th></tr>
     <tr><td>Claude Code</td><td><code>.mcp.json</code></td><td><code>mcpServers.scadlab</code></td></tr>
     <tr><td>opencode</td><td><code>opencode.json</code></td><td><code>mcp.scadlab</code></td></tr>
     <tr><td>Gemini CLI (legacy)</td><td><code>.gemini/settings.json</code></td><td><code>mcpServers.scadlab</code></td></tr>
     <tr><td>Codex</td><td>— (does not read project configuration)</td><td>flags at launch, see below</td></tr>
-    <tr><td>Antigravity</td><td>— (global configuration only; see below)</td><td><strong>Add to Antigravity</strong> button</td></tr>
+    <tr><td>Antigravity</td><td>— (global configuration only; see below)</td><td>automatic when you pick it in the chat or open its terminal; the <strong>Add to Antigravity</strong> button repeats it by hand</td></tr>
   </table></div>
   <div class="note"><span class="lbl">Heads up</span><p><code>.gemini/settings.json</code> is the file of the <strong>legacy Gemini
   CLI</strong> (<code>gemini</code>), the one Antigravity replaced. <strong>Antigravity (<code>agy</code>) does not read
@@ -1627,11 +1645,15 @@ color("SteelBlue") difference() {
   (<code>mcp_servers.scadlab.command</code> and <code>mcp_servers.scadlab.args</code>). It only applies to the Codex you
   open from ScadLab; if you launch it yourself in another terminal, it will not see the server.</p>
 
-  <h3 id="ia-mcp--antigravity">Antigravity: global configuration, with your permission</h3>
+  <h3 id="ia-mcp--antigravity">Antigravity: global configuration, added when you pick it</h3>
   <p>Antigravity does not read project configuration or accept being handed a server at launch: its only MCP server
   configuration is <strong>global</strong> (the <code>~/.gemini</code> folder) and is managed with the
-  <code>agy mcp</code> command. That is why ScadLab does not touch it on its own. In <strong>Settings → AI → ScadLab MCP
-  server</strong> there is an <strong>Antigravity</strong> row with its state and two buttons:</p>
+  <code>agy mcp</code> command. And without the server it has none of ScadLab's tools: it tries the shell, which is denied, and the turn leaves nothing. That is why, <strong>when you pick Antigravity in the chat or open its terminal</strong>,
+  if <code>agy mcp list</code> does not list <code>scadlab</code>, ScadLab registers it on its own with <code>agy mcp add -- scadlab &lt;ScadLab&gt; --mcp</code> and <strong>tells you with a message</strong> that it added it to its
+  global configuration. It only <em>adds what is missing</em>: an entry that already exists —even if it points to another path or is disabled— is your decision and is left alone. With the MCP server turned off in Settings → AI it does nothing.
+  If <code>agy</code> does not let it add it, the error says why and the chat explains that <strong>without that server Antigravity cannot create checkpoints</strong>; you can still ask it for the design in a block and ScadLab saves it
+  with the <a href="#ia-hermes--autoguardado">automatic save</a>. In <strong>Settings → AI → ScadLab MCP
+  server</strong> there is an <strong>Antigravity</strong> row with its state and two buttons to do it by hand:</p>
   <ul>
     <li><strong>Add to Antigravity</strong>: before doing anything it warns you that it will <strong>modify Antigravity's
       global configuration</strong>, that is, that of <strong>all</strong> your projects and not just this
@@ -1709,7 +1731,7 @@ color("SteelBlue") difference() {
     <li><strong>You opened the CLI with the app closed.</strong> It works all the same (the server is the app itself launched without a
       window), but the path the file names has to still exist.</li>
     <li><strong>Codex does not see it.</strong> Open it from ScadLab's terminal: only there does it receive the flags.</li>
-    <li><strong>Antigravity does not see it.</strong> Click <strong>Add to Antigravity</strong> in Settings → AI: the
+    <li><strong>Antigravity does not see it.</strong> ScadLab adds it by itself when you pick it in the chat; if it could not, or you removed it, click <strong>Add to Antigravity</strong> in Settings → AI: the
       workspace file is not enough. If it says <em>agy not installed</em>, install Antigravity or check that the
       <code>agy</code> command exists on your machine.</li>
     <li><strong>The tools fail when rendering.</strong> Check that ScadLab finds OpenSCAD (the OpenSCAD tab of
@@ -1834,7 +1856,7 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
   create a new password.</p></div>
 
   <h2 id="ia-hermes--empezar">Starting a chat and choosing the model</h2>
-  <figure class="shot"><img src="docs/screenshots/chat-empty.png" alt="New chat with Claude Code in Ask only mode: the title “Think your design through with a model”, the chips for the provider, the model (Default) and the mode, the mode's explanation and four OpenSCAD suggestions in two columns" loading="lazy"><figcaption>A new chat says what you are about to talk to and suggests four requests; a click fills the message box.</figcaption></figure>
+  <figure class="shot"><img src="docs/screenshots/chat-empty.png" alt="New chat with Claude Code in Agent mode: the title “Think your design through with a model”, the chips for the provider, the model (Default) and the mode, the mode's explanation and four OpenSCAD suggestions in two columns" loading="lazy"><figcaption>A new chat says what you are about to talk to and suggests four requests; a click fills the message box.</figcaption></figure>
   <ol class="steps">
     <li>Open the <strong>Chat</strong> tab and click <strong>New chat</strong>. You see the provider, the model and the mode you are going to talk to, and four suggestions
       (<em>a snap-fit box with a lid for a Raspberry Pi 5</em>, <em>copy the part in this photo</em>…): a click fills the message box and you edit it before sending.</li>
@@ -1862,13 +1884,19 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
 
   <h2 id="ia-hermes--agente">The modes: Ask only and Agent</h2>
   <figure class="shot"><img src="docs/screenshots/chat-agent-steps.png" alt="A turn with five steps: the render of the sliding lid fails and its card shows, without opening it, line 14 with the offending code; the model fixes it in a new checkpoint, renders again —with the size, the triangles and “closed”— and looks at the preview" loading="lazy"><figcaption>The render failed: the card shows the line and the code, the model fixes it in a <em>new</em> checkpoint, renders again and looks at the picture.</figcaption></figure>
-  <p>The mode is picked in the bar (and under the box you read what it allows). With a <strong>CLI</strong> it starts in <strong>Ask only</strong>; with a server, in <strong>Agent</strong>. ScadLab remembers the last one of each kind.</p>
+  <p>The mode is picked in the bar (and under the box you read what it allows). <strong>Every new chat starts in Agent</strong>, with any provider: asking for a part has to end in a
+  <code>.scad</code> that is created, rendered and visible in the viewer, and that only happens if the provider can create. <strong>Ask only</strong> is your choice and it belongs to <strong>that conversation</strong>: the other chats stay
+  as they were and the next new chat starts in Agent again, even if you left another one in Ask only. The mode is saved with the conversation, so it is still there when you reopen it
+  (the <em>Switch to Agent</em> notice saves it there too).</p>
   <div class="tablewrap"><table>
     <tr><th></th><th>Ask only</th><th>Agent</th></tr>
     <tr><td><strong>With a CLI</strong></td><td>The CLI reads your project and uses the read tools (list and read checkpoints, check, render, measure, look). It does not create checkpoints or export.</td><td>It also creates new checkpoints and exports, and renders and looks at them for you.</td></tr>
     <tr><td><strong>With a server</strong></td><td>The model only chats and proposes OpenSCAD code: you save it as a checkpoint.</td><td>The model uses the ScadLab tools in a loop until it solves the request (Hermes).</td></tr>
   </table></div>
-  <p><strong>In neither mode does a CLI run shell commands</strong> or get permission to skip its own checks. In Agent mode, the model decides what to do: it looks at the checkpoints and the printer,
+  <p><strong>The terminal has no mode.</strong> The CLIs you open from the ScadLab terminal (Claude Code, Codex, Antigravity, OpenCode) are not restricted by ScadLab: they get the ScadLab server, the folders of your
+  other open projects and the session you resume, and nothing that puts them in plan or read-only mode, or that skips permissions —there you approve in your own terminal—. The same goes for <code>ScadLab --mcp</code>:
+  it offers the writing tools by default.</p>
+  <p><strong>In neither chat mode does a CLI run shell commands</strong> or get permission to skip its own checks. In Agent mode, the model decides what to do: it looks at the checkpoints and the printer,
   creates a checkpoint with <strong>complete</strong> code, renders it, looks at it from a view, measures it and, if something fails, fixes it in
   <em>another</em> checkpoint (it never edits an existing one). It can also read the workspace skills and inspect the
   <a href="#ia-hermes--adjuntos">references</a> you attach. The checkpoints it creates show up in the tree like any other.</p>
@@ -1881,17 +1909,37 @@ Fix the error in a NEW checkpoint with parent=004-add-hinge.scad.</code></pre></
       achieved and stops; ask it to continue if something is missing.</li>
     <li><strong>Stop</strong> shows a clock and cuts at once, even in the middle of a tool: what was already done is kept.</li>
     <li>If the model <strong>does not use tools</strong>, “Agent” turns itself off and explains why; if the server rejects them on the
-      first try, the chat continues as plain text with a notice.</li>
+      first try, the chat continues as plain text with a notice (and ScadLab saves the code it writes for it: see below).</li>
   </ul>
 
+  <h3 id="ia-hermes--termina">It always ends in a part</h3>
+  <figure class="shot"><img src="docs/screenshots/chat-agent-creates.png" alt="A workspace that only has the checkpoint 001-rpi5-case: the viewer on top with the box and its lid, its code on the right, and the chat below with Claude Code in Agent mode: the request “A snap-fit box for a Raspberry Pi 5” and three cards —create checkpoint, render with 89 × 60 × 24 mm, 4176 triangles, closed and “fits the plate”, and look at the model with its picture—, each with the link to the checkpoint" loading="lazy"><figcaption>A workspace with no checkpoints, a one-sentence request: the agent creates the first one, renders it and looks at it, and the part is already in the viewer.</figcaption></figure>
+  <p>In Agent mode the request of someone who does not know OpenSCAD has a single possible ending: <strong>a <code>.scad</code> that is created, rendered and visible</strong>. The provider follows the flow
+  <em>create checkpoint → render → look → fix in a new one</em>, and in a workspace with no checkpoint at all it <strong>creates the first one without asking</strong> (it becomes the root of the tree, with no parent).
+  Every checkpoint born in the chat —from a tool, from the automatic save or from a button— <strong>is selected on its own in the tree, in Code and in the viewer, and rendered</strong>, even if you have
+  auto-render off. If you are in the middle of an unsaved change in the editor, ScadLab does not switch your file: the checkpoint shows up in the tree and in the step card.</p>
+
+  <h3 id="ia-hermes--autoguardado">If the model answers with code: it is saved for you</h3>
+  <figure class="shot"><img src="docs/screenshots/chat-autosave.png" alt="Chat with a local Ollama model that does not support tools: the notice that it continues in text mode, its OpenSCAD block with only the Copy button, and below two cards: “Saved automatically” with the link to 001-rpi5-case.scad and “Render” with the measurements and “closed”; above, the viewer already shows the part" loading="lazy"><figcaption>The model has no tools and answered with the code: ScadLab saved it as a checkpoint and rendered it.</figcaption></figure>
+  <p>Some models cannot call tools (a small local model, for example) and some CLIs never got the MCP server: they answer with the design in a block and nothing else.
+  In Agent mode, <strong>if the turn ends without having created any checkpoint and its text carries a complete OpenSCAD block</strong> —the design one: the last complete block, if there are several—, ScadLab saves it <strong>for you</strong>:
+  as the root if the workspace is empty and, if not, as a child of the open file (or of the <a href="#checkpoints-arbol">active parent</a>), with its <code>@checkpoint</code> header. It renders it and shows it as one more step,
+  <strong>“Saved automatically”</strong>, with the link to the checkpoint. If the provider already created one with a tool, or wrote the <code>.scad</code> on its own, no duplicate is saved.</p>
+  <p>With a model server there is also a <strong>fallback loop</strong>: if the render fails and steps are left (the <em>Steps</em> limit), the model receives the errors <strong>with their line</strong> and sends the fixed block,
+  which is saved as a child of the one that failed. With a CLI it is a single attempt: the render card shows the error with its line and you ask for the fix in the next message.</p>
+
   <h2 id="ia-hermes--texto">Code in the answers: save it or open it</h2>
-  <figure class="shot"><img src="docs/screenshots/chat-code.png" alt="A text answer in Ask only mode: a measurements table with aligned columns, a heading, a list with one checked box and one unchecked, a link and an OpenSCAD block with the Copy, Open in editor and Save as checkpoint buttons" loading="lazy"><figcaption>Answers with formatting —tables, lists, links— and each OpenSCAD block with its three buttons.</figcaption></figure>
-  <p>Each OpenSCAD block comes with <strong>Copy</strong> and, once it has finished arriving, two ways of bringing it into the project (in a narrow panel the buttons become icons with their description):</p>
+  <figure class="shot"><img src="docs/screenshots/chat-code.png" alt="A text answer in Ask only mode: a measurements table with aligned columns, a heading, a list with one checked box and one unchecked, a link and an OpenSCAD block with the Copy, Create checkpoint and render —highlighted— and Save as checkpoint buttons, and the Switch to Agent notice above the message box" loading="lazy"><figcaption>Answers with formatting —tables, lists, links— and each OpenSCAD block with its buttons.</figcaption></figure>
+  <p>Each OpenSCAD block comes with <strong>Copy</strong> and, once it has finished arriving, ways of bringing it into the project (in a narrow panel the buttons become icons with their description):</p>
   <ul>
-    <li><strong>Save as checkpoint</strong> opens the dialog to name it and creates it as a child of the open file or, if none is open, of the latest checkpoint.</li>
-    <li><strong>Open in editor</strong> does the same <em>without asking</em> (the name comes from the block's header), selects the new checkpoint and shows the Code panel.
-      Checkpoints are not edited and the editor always shows one, so “opening” a block means saving it and opening it.</li>
+    <li><strong>Create checkpoint and render</strong> (in <em>Ask only</em>, highlighted): saves the code as a checkpoint <em>without asking</em> (the name comes from the block's header), selects it in the tree, in Code and in the viewer,
+      and renders it. In a workspace with no checkpoint at all it is the <strong>root</strong>: you no longer have to ask an agent for “the first one” beforehand.</li>
+    <li><strong>Save as checkpoint</strong> opens the dialog to name it and creates it as a child of the open file or, if none is open, of the latest checkpoint (or as the root, if the workspace is empty).</li>
+    <li><strong>Open in editor</strong> (in <em>Agent</em>) does the same as creating <em>without asking</em>, selects the new checkpoint and shows the Code panel.
+      Checkpoints are not edited and the editor always shows one, so “opening” a block means saving it and opening it. If the turn already created a checkpoint, the blocks that repeat the code do not offer to save it again.</li>
   </ul>
+  <figure class="shot"><img src="docs/screenshots/chat-query-only.png" alt="Chat with Codex CLI in Ask only mode: the request “A snap-fit box for a Raspberry Pi 5”, the proposal with an OpenSCAD block that has the highlighted Create checkpoint and render button, and above the message box the notice “In Ask only the model only proposes code: it creates nothing” with the Switch to Agent button" loading="lazy"><figcaption>In Ask only the block turns into a part with one click; and if you asked to create something, the notice lets you switch to Agent.</figcaption></figure>
+  <p><strong>Switch to Agent.</strong> If in <em>Ask only</em> what you type (or what you last sent) asks to create or change a part, a notice shows up above the box that says so and lets you switch to <strong>Agent</strong> with one click; the X hides it for that message.</p>
   <p>Long blocks start folded. Links in an answer open in your system browser.</p>
 
   <h2 id="ia-hermes--adjuntos">Attachments: images and 3D models</h2>

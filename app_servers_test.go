@@ -412,13 +412,14 @@ func TestChatPrecheckStopsTheTurnWhenServerIsDown(t *testing.T) {
 	ev := captureChatEvents(a)
 	wsID := mustWorkspace(t, a)
 	c, _ := a.NewChat(wsID, saved.ID, "m")
+	// Modo texto en los tres envíos: «Agente» también pide las capacidades del modelo (/models) y falsearía el conteo.
 
 	// Con el servidor arriba: un turno, y el siguiente reutiliza el chequeo.
-	if _, err := a.SendChatMessage(c.ID, "uno", "", nil, SendOptions{}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "uno", "", nil, SendOptions{Agent: boolp(false)}); err != nil {
 		t.Fatal(err)
 	}
 	waitDone(t, ev)
-	if _, err := a.SendChatMessage(c.ID, "dos", "", nil, SendOptions{}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "dos", "", nil, SendOptions{Agent: boolp(false)}); err != nil {
 		t.Fatal(err)
 	}
 	waitDone(t, ev)
@@ -429,7 +430,7 @@ func TestChatPrecheckStopsTheTurnWhenServerIsDown(t *testing.T) {
 	// Se cae el servidor y se invalida el chequeo (como pasa al editarlo).
 	srv.Close()
 	a.serverSvc().health.invalidate(saved.ID)
-	_, err = a.SendChatMessage(c.ID, "tres", "", nil, SendOptions{})
+	_, err = a.SendChatMessage(c.ID, "tres", "", nil, SendOptions{Agent: boolp(false)})
 	if err == nil || !strings.Contains(err.Error(), "Mi nube") {
 		t.Fatalf("debía fallar nombrando el servidor: %v", err)
 	}

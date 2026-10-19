@@ -90,6 +90,10 @@ export function CreateSkillFile(arg1, arg2) {
   return window['go']['main']['App']['CreateSkillFile'](arg1, arg2);
 }
 
+export function CreateStarterCheckpoint(arg1) {
+  return window['go']['main']['App']['CreateStarterCheckpoint'](arg1);
+}
+
 export function CreateWorkspace(arg1, arg2) {
   return window['go']['main']['App']['CreateWorkspace'](arg1, arg2);
 }
@@ -128,6 +132,10 @@ export function DownloadOpenSCAD() {
 
 export function EffectiveWorkspacesRoot() {
   return window['go']['main']['App']['EffectiveWorkspacesRoot']();
+}
+
+export function EnsureAntigravityMCP() {
+  return window['go']['main']['App']['EnsureAntigravityMCP']();
 }
 
 export function EstimatePrint(arg1, arg2, arg3) {
@@ -484,6 +492,10 @@ export function SetActiveProject(arg1) {
 
 export function SetAutoIterate(arg1) {
   return window['go']['main']['App']['SetAutoIterate'](arg1);
+}
+
+export function SetChatMode(arg1, arg2) {
+  return window['go']['main']['App']['SetChatMode'](arg1, arg2);
 }
 
 export function SetChatModel(arg1, arg2, arg3) {

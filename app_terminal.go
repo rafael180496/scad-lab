@@ -264,6 +264,14 @@ func (a *App) StartAgentTerminal(workspaceId int64, agentId, mode, sessionId str
 		return "", i18n.Errorf(i18n.Msg{ES: "no se encontró %s en este equipo; indica su comando en Configuración → IA", EN: "%s was not found on this computer; set its command in Settings → AI"}, p.Name)
 	}
 	args = a.agentLaunchArgs(p.ID, w, args)
+	if p.ID == agentsessions.Antigravity {
+		// Antigravity lee el MCP de su configuración global y lo hace al arrancar:
+		// se registra antes de lanzarlo. Un fallo ya avisó a la interfaz (toast) y
+		// no impide abrir la terminal: el usuario puede querer usarlo sin ScadLab.
+		if _, err := a.EnsureAntigravityMCP(); err != nil {
+			log.Printf("scadlab: Antigravity sin el MCP de ScadLab: %v", err)
+		}
+	}
 	return a.terminals().startAgent(w, p, exe, mode, args, cols, rows)
 }
 

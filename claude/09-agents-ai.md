@@ -28,7 +28,10 @@ Mismo catálogo que mini-tools.
   `backend/detect` y `TERM=xterm-256color`. Máximo 2 terminales de agente **por proyecto** (S8; antes
   eran 2 en total).
   Cerrar mata el grupo de procesos (Setsid / `taskkill /T`) para no dejar
-  servidores MCP huérfanos.
+  servidores MCP huérfanos. **Ningún CLI arranca restringido** (S12.c, T12): el argv que arma
+  ScadLab es solo MCP, `--add-dir` y la sesión; no lleva modo plan, sandbox, listas de herramientas
+  ni ningún flag que salte permisos (ahí la persona aprueba en su terminal). Tabla en
+  [19-hermes.md](19-hermes.md#la-terminal-de-agentes-y---mcp-no-arrancan-en-solo-lectura-t12).
 - **Sesiones** (`backend/agentsessions`), verificadas contra archivos reales:
 
   | CLI | Dónde | Retomar / última |
@@ -97,8 +100,9 @@ Mismo catálogo que mini-tools.
 | Binding | Devuelve | Nota |
 |---|---|---|
 | `ListChats(workspaceId)` / `GetChat(chatId)` | `[]store.Chat` / `ChatView{chat, messages, running, partial, partialSeq, steps, usage}` | `GetChat` permite retomar un turno en curso (texto, pasos y uso hasta ahí) |
-| `NewChat(workspaceId, providerId, model)` | `store.Chat` | `providerId` es un id de `model_servers`; modelo vacío = el del servidor |
-| `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent, maxSteps}`; respuesta por eventos `chat:delta/step/usage/done/error`. `agent=false`: prompt de `prompts.SystemPrompt` (S5); `agent=true`: `prompts.AgentSystemPrompt` + `mcp.Toolbox` |
+| `NewChat(workspaceId, providerId, model)` | `store.Chat` | `providerId` es un id de `model_servers` (o `cli:*`); modelo vacío = el del servidor. Nace en modo **Agente** (`mode: ""`) |
+| `SetChatMode(chatId, mode)` | — | `"agent"` \| `"ask"`; el modo es **de la conversación** (`chats.mode`), no una preferencia global |
+| `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent?, maxSteps}`; respuesta por eventos `chat:delta/step/usage/done/error`. Sin `agent` manda el modo de la conversación; modo texto (Solo consulta): prompt de `prompts.SystemPrompt` (S5); Agente: `prompts.AgentSystemPrompt` + `mcp.Toolbox`. `agent` es un override de ese turno |
 | `CancelChat(chatId)` / `DeleteChat(chatId)` | — | cancelar conserva el texto y los pasos; borrar también quita las imágenes del chat |
 | `RenameChat(chatId, title)` / `SetChatModel(chatId, serverId, model)` | — | renombrar (≤ 120 letras) y cambiar de servidor/modelo a mitad |
 | `AddChatAttachment` / `AddChatAttachmentData` / `ChooseChatAttachment` / `RemoveChatAttachment` | ver [06](06-go-react-contract.md#chat-con-hermes--app_chatgo-app_chat_attachgo-s12-124126) | adjuntos: imágenes y modelos STL/3MF/OBJ |

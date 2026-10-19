@@ -90,6 +90,14 @@ type Config struct {
 	ImageDir string
 	MaxSteps int
 	Price    Price
+	// AutoSave es la red de seguridad de S12.c, solo en modo «Agente»: cuando el
+	// turno termina SIN que el modelo haya creado ningún checkpoint y su texto trae
+	// un bloque OpenSCAD completo, quien llama lo guarda y lo renderiza (devuelve
+	// nil si no hay nada que guardar). El bucle anuncia sus pasos como los de
+	// cualquier herramienta y, si el render falló y quedan pasos, le devuelve al
+	// modelo los errores para otra vuelta: el bucle de respaldo de un modelo sin
+	// tool calling.
+	AutoSave func(ctx context.Context, text string) *AutoSaveOutcome
 }
 
 // Hooks son los avisos del turno. Todos son opcionales.
@@ -125,7 +133,7 @@ type Result struct {
 }
 
 var (
-	msgNoToolsNotice   = i18n.Msg{ES: "_⚠ Este modelo no admite herramientas: sigo en modo texto, sin crear ni renderizar checkpoints por mi cuenta._", EN: "_⚠ This model does not support tools: continuing in text mode, without creating or rendering checkpoints on my own._"}
+	msgNoToolsNotice   = i18n.Msg{ES: "_⚠ Este modelo no admite herramientas: sigo en modo texto. Si escribo el diseño completo en un bloque, ScadLab lo guarda y lo renderiza por mí._", EN: "_⚠ This model does not support tools: continuing in text mode. If I write the complete design in a block, ScadLab saves and renders it for me._"}
 	msgStepLimitNotRun = i18n.Msg{ES: "se alcanzó el tope de pasos del turno: esta llamada no se ejecutó", EN: "the step limit of the turn was reached: this call was not run"}
 	msgStepLimitNudge  = i18n.Msg{ES: "Llegaste al tope de %d pasos de este turno: no llames más herramientas. Resume en pocas líneas qué hiciste, cuál es el último checkpoint que renderiza y qué queda pendiente.", EN: "You reached the limit of %d steps for this turn: do not call more tools. Summarize in a few lines what you did, which is the last checkpoint that renders and what is still pending."}
 	msgStepLimitNotice = i18n.Msg{ES: "_⚠ Se alcanzó el tope de %d pasos del turno. Lo que ya hizo quedó hecho; pídele que siga si falta algo._", EN: "_⚠ The turn reached its limit of %d steps. What it already did stays done; ask it to continue if anything is missing._"}
@@ -139,6 +147,10 @@ var (
 	msgImageNote       = i18n.Msg{ES: "Imagen devuelta por la herramienta %s (paso %d):", EN: "Image returned by the %s tool (step %d):"}
 	msgOldResult       = i18n.Msg{ES: "[resultado anterior recortado para ahorrar contexto]", EN: "[earlier result trimmed to save context]"}
 	msgCancelledStep   = i18n.Msg{ES: "cancelado", EN: "cancelled"}
+	msgAutoFix         = i18n.Msg{
+		ES: "ScadLab guardó tu bloque como %s, pero no renderiza:\n\n%s\n\nCorrígelo y devuelve el bloque ```openscad COMPLETO otra vez, con su cabecera `// @checkpoint`.",
+		EN: "ScadLab saved your block as %s, but it does not render:\n\n%s\n\nFix it and return the COMPLETE ```openscad block again, with its `// @checkpoint` header.",
+	}
 )
 
 type runner struct {
@@ -158,6 +170,11 @@ type runner struct {
 	toolsOn  bool
 	specs    map[string]bool
 	maxSteps int
+
+	// autoDone: la red de seguridad ya guardó algo que renderiza (o no hay más
+	// que hacer); autoFile, el último checkpoint que guardó.
+	autoDone bool
+	autoFile string
 }
 
 // Run corre un turno completo. Devuelve un error solo por un fallo real del
@@ -222,6 +239,9 @@ func (r *runner) run(ctx context.Context) (Result, error) {
 
 		calls := res.Message.ToolCalls
 		if len(calls) == 0 || !r.toolsOn {
+			if r.autoSave(ctx) {
+				continue // el render falló y el modelo corrige en otra vuelta
+			}
 			if strings.TrimSpace(r.visible.String()) == "" && len(r.steps) == 0 {
 				return r.finish(ctx, i18n.New(msgNoText))
 			}
@@ -236,6 +256,58 @@ func (r *runner) run(ctx context.Context) (Result, error) {
 			return r.summarize(ctx)
 		}
 	}
+}
+
+// createdCheckpoint dice si el modelo mismo creó un checkpoint en este turno (una
+// herramienta que lo hace, terminada bien): con eso la red de seguridad no tiene
+// nada que hacer. Qué herramientas lo hacen lo dice mcp.CreatesCheckpoint, la única
+// definición (no una lista local que se desactualice con el catálogo).
+func (r *runner) createdCheckpoint() bool {
+	for _, st := range r.steps {
+		if st.Status == StepOK && mcp.CreatesCheckpoint(st.Tool) {
+			return true
+		}
+	}
+	return false
+}
+
+// autoSave es la red de seguridad (ver Config.AutoSave). Devuelve true si el
+// render falló, quedan pasos y se le pidió al modelo que corrija: el bucle sigue
+// con otra vuelta.
+func (r *runner) autoSave(ctx context.Context) (retry bool) {
+	if r.cfg.AutoSave == nil || r.autoDone || ctx.Err() != nil || r.createdCheckpoint() || r.ran >= r.maxSteps {
+		return false
+	}
+	out := r.cfg.AutoSave(ctx, r.visible.String())
+	if out == nil || len(out.Steps) == 0 {
+		return false
+	}
+	if r.h.Flush != nil {
+		r.h.Flush()
+	}
+	for _, as := range out.Steps {
+		r.ran++
+		step := Step{
+			ID: newStepID(), Index: r.ran, Tool: as.Tool, Args: capArgs(as.Args), Status: StepOK,
+			Text: clipRunes(as.Text, maxStepTextRunes), Images: append([]string{}, as.Images...), DurationMs: as.DurationMs, TextAt: r.textLen,
+		}
+		if as.Failed {
+			step.Status = StepError
+		}
+		r.steps = append(r.steps, step)
+		r.emitStep(step)
+	}
+	if out.File != "" {
+		r.autoFile = out.File
+	}
+	// Con el render bien (o sin nada que el modelo pueda corregir) se terminó.
+	// Con un error y pasos disponibles, otra vuelta: cada intento cuenta sus pasos.
+	if out.Feedback == "" || ctx.Err() != nil || r.ran+len(out.Steps) > r.maxSteps {
+		r.autoDone = out.Feedback == ""
+		return false
+	}
+	r.msgs = append(r.msgs, llm.Message{Role: llm.RoleUser, Content: i18n.T(msgAutoFix, out.File, clipRunes(out.Feedback, maxToolResultRunes))})
+	return true
 }
 
 // onDelta arma el receptor del texto de una vuelta. Entre dos vueltas el texto

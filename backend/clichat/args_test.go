@@ -79,10 +79,20 @@ func TestBuildArgsAskVersusEdit(t *testing.T) {
 		if !strings.Contains(enabled, `"render"`) || strings.Contains(enabled, "create_checkpoint") {
 			t.Errorf("«Solo consulta» limita las herramientas MCP a las de lectura: %q", enabled)
 		}
-		for _, a := range edit {
-			if strings.Contains(a, "enabled_tools") {
-				t.Errorf("«Agente» no limita las herramientas: %v", edit)
+		// «Agente» nombra TODAS (S12.c): con create_checkpoint, import_mesh y render permitidas.
+		enabledEdit := ""
+		for i, a := range edit {
+			if a == "-c" && strings.HasPrefix(edit[i+1], "mcp_servers.scadlab.enabled_tools=") {
+				enabledEdit = edit[i+1]
 			}
+		}
+		for _, tool := range append(ReadTools(), WriteTools()...) {
+			if !strings.Contains(enabledEdit, `"`+tool+`"`) {
+				t.Errorf("«Agente» debe permitir %s en Codex: %q", tool, enabledEdit)
+			}
+		}
+		if hasArg(edit, "--dangerously-bypass-approvals-and-sandbox") || hasArg(edit, "--full-auto") {
+			t.Errorf("nunca se saltea el sandbox: %v", edit)
 		}
 	})
 
@@ -105,11 +115,18 @@ func TestBuildArgsAskVersusEdit(t *testing.T) {
 				t.Errorf("la shell se deniega siempre: %s", cfg)
 			}
 		}
-		if !strings.Contains(askEnv, `"scadlab_create_checkpoint":"deny"`) || !strings.Contains(askEnv, `"scadlab_export":"deny"`) {
-			t.Errorf("«Solo consulta» niega las herramientas de ScadLab que escriben: %s", askEnv)
+		for _, tool := range WriteTools() {
+			if !strings.Contains(askEnv, `"scadlab_`+tool+`":"deny"`) {
+				t.Errorf("«Solo consulta» niega %s: %s", tool, askEnv)
+			}
+			if !strings.Contains(editEnv, `"scadlab_`+tool+`":"allow"`) || strings.Contains(editEnv, `"scadlab_`+tool+`":"deny"`) {
+				t.Errorf("«Agente» permite %s por su nombre: %s", tool, editEnv)
+			}
 		}
-		if strings.Contains(editEnv, "scadlab_") {
-			t.Errorf("«Agente» no niega nada de ScadLab: %s", editEnv)
+		for _, tool := range ReadTools() {
+			if !strings.Contains(askEnv, `"scadlab_`+tool+`":"allow"`) {
+				t.Errorf("la lectura se permite en los dos modos (%s): %s", tool, askEnv)
+			}
 		}
 		if strings.Contains(opencodeConfig(ModeAsk, false), "scadlab_") {
 			t.Error("sin MCP no hay nada que negar")

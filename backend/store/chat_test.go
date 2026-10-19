@@ -139,8 +139,8 @@ func TestMigration2IsAdditive(t *testing.T) {
 	w := chatWorkspace(t, s)
 	// Simula una base de antes del chat: sin las tablas ni las migraciones que
 	// las crearon o les agregaron columnas (2: tablas; 6: partes y tokens de los
-	// mensajes; 8: la sesión del CLI de los chats).
-	for _, q := range []string{`DROP TABLE chat_messages`, `DROP TABLE chats`, `DELETE FROM schema_migrations WHERE version IN (2, 6, 8)`} {
+	// mensajes; 8: la sesión del CLI de los chats; 9: el modo de cada chat).
+	for _, q := range []string{`DROP TABLE chat_messages`, `DROP TABLE chats`, `DELETE FROM schema_migrations WHERE version IN (2, 6, 8, 9)`} {
 		if _, err := s.db.Exec(q); err != nil {
 			t.Fatal(err)
 		}
@@ -159,5 +159,72 @@ func TestMigration2IsAdditive(t *testing.T) {
 	}
 	if _, err := s.CreateChat(w.ID, "ollama", "m"); err != nil {
 		t.Error(err)
+	}
+}
+
+// Una conversación nueva nace en «Agente»; elegir «Solo consulta» afecta solo a
+// esa conversación, se puede volver, no mueve el orden del listado y un modo que
+// no existe no cambia nada.
+func TestSetChatModeIsPerConversation(t *testing.T) {
+	s := openTemp(t)
+	w := chatWorkspace(t, s)
+	a, err := s.CreateChat(w.ID, "ollama", "qwen3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.CreateChat(w.ID, "cli:claude", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.Agent() || !b.Agent() || a.Mode != "" || b.Mode != "" {
+		t.Fatalf("un chat nuevo nace en Agente: %+v %+v", a, b)
+	}
+	before, _ := s.GetChat(a.ID)
+
+	if err := s.SetChatMode(a.ID, "ask"); err != nil {
+		t.Fatal(err)
+	}
+	ga, _ := s.GetChat(a.ID)
+	gb, _ := s.GetChat(b.ID)
+	if ga.Agent() || ga.Mode != ChatModeAsk || !gb.Agent() {
+		t.Errorf("elegir consulta en uno no cambia el otro: a=%+v b=%+v", ga, gb)
+	}
+	if ga.UpdatedAt != before.UpdatedAt {
+		t.Error("cambiar de modo no es actividad del chat: no toca updated_at")
+	}
+	list, _ := s.ListChats(w.ID)
+	modes := map[int64]string{}
+	for _, c := range list {
+		modes[c.ID] = c.Mode
+	}
+	if modes[a.ID] != ChatModeAsk || modes[b.ID] != "" {
+		t.Errorf("ListChats trae el modo de cada uno: %v", modes)
+	}
+
+	// Volver a Agente: "agent" y "" se guardan como la columna vacía.
+	if err := s.SetChatMode(a.ID, "agent"); err != nil {
+		t.Fatal(err)
+	}
+	if ga, _ := s.GetChat(a.ID); ga.Mode != "" || !ga.Agent() {
+		t.Errorf("de vuelta a Agente: %+v", ga)
+	}
+	_ = s.SetChatMode(a.ID, "ask")
+	if err := s.SetChatMode(a.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if ga, _ := s.GetChat(a.ID); !ga.Agent() {
+		t.Errorf("la cadena vacía también es Agente: %+v", ga)
+	}
+
+	// Un modo inventado no se guarda; un chat inexistente es ErrNotFound.
+	_ = s.SetChatMode(a.ID, "ask")
+	if err := s.SetChatMode(a.ID, "plan"); err == nil {
+		t.Error("un modo desconocido debía fallar")
+	}
+	if ga, _ := s.GetChat(a.ID); ga.Mode != ChatModeAsk {
+		t.Errorf("un modo inválido no cambia el guardado: %+v", ga)
+	}
+	if err := s.SetChatMode(999, "ask"); err != ErrNotFound {
+		t.Errorf("chat inexistente: %v", err)
 	}
 }

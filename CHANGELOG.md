@@ -9,6 +9,101 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Agregado
 
+- **Pedir una pieza en el chat termina siempre en un `.scad` renderizado y a la vista.**
+  La prueba real —«una caja con tapa a presión para un Raspberry Pi 5» en un workspace
+  sin nada— dejaba un diseño en texto con Codex y Claude, una tarjeta de error sin
+  explicación con Antigravity y un bloque suelto con un modelo de Ollama sin
+  herramientas. Ahora, con cualquier proveedor:
+  - **El chat arranca en «Agente».** Con CLIs y con servidores. «Solo consulta» es una
+    elección tuya, **conversación por conversación** (ver el punto siguiente). Al CLI se le ordena el flujo *crear checkpoint →
+    renderizar → mirar → corregir en uno nuevo*, y en un workspace sin checkpoints, **crear
+    el primero sin preguntar**; en «Solo consulta» se le pide **un** bloque completo.
+    Los permisos de cada CLI en «Agente» dejan las herramientas de escritura de ScadLab
+    permitidas de forma explícita (Claude Code, Codex y OpenCode), y la shell sigue denegada.
+  - **El primer checkpoint no necesita padre.** «Guardar como checkpoint», «Abrir en el
+    editor» y el botón nuevo crean la **raíz** del árbol en un workspace vacío, en vez de
+    decir «no hay checkpoint que sirva de padre».
+  - **Un workspace nunca abre vacío.** Al abrir uno sin ningún `.scad` (uno anterior a
+    esta versión, por ejemplo) se escribe el modelo de inicio. Si lo vaciaste tú —con
+    la papelera con algo adentro— no vuelve solo: el visor y Código ofrecen **Crear un
+    modelo de inicio**. Las reglas de `CLAUDE.md` y `AGENTS.md` se vuelven a sincronizar al
+    abrir si cambiaron.
+  - **Guardado automático.** Si en «Agente» el turno termina sin haber creado ningún
+    checkpoint pero trae un bloque OpenSCAD completo (un modelo sin herramientas, un CLI al
+    que no le llegó el servidor), ScadLab lo guarda por ti —raíz si el workspace está
+    vacío, hijo del archivo abierto si no— y lo renderiza, y lo muestra como un paso:
+    **«Guardado automáticamente»**, con el enlace al checkpoint. Con un servidor de modelos,
+    si el render falla y quedan pasos, el modelo recibe los errores **con su línea** y
+    corrige en otra vuelta. Si el proveedor ya creó el checkpoint, no se duplica.
+  - **Antigravity se registra solo.** Antigravity solo lee MCP de su configuración global,
+    y sin ScadLab ahí intentaba la shell (denegada) y no dejaba nada. Al elegirlo en el
+    chat o abrir su terminal, si `agy mcp list` no lista `scadlab`, ScadLab lo agrega con
+    `agy mcp add -- scadlab <ScadLab> --mcp` y te avisa. Solo agrega lo que falta; si
+    `agy` no lo acepta, el error dice por qué y el chat explica que sin ese servidor no
+    puede crear checkpoints. Un turno sin texto termina con una explicación en vez de un
+    mensaje vacío.
+  - **En «Solo consulta»,** los bloques de código traen un botón destacado **Crear
+    checkpoint y renderizar**, y si lo que escribes pide crear o cambiar algo aparece un aviso
+    con **Cambiar a Agente** de un clic.
+  - **Lo que nace en el chat se abre solo.** Venga de una herramienta, del guardado
+    automático o de un botón, el checkpoint se selecciona en el árbol, en Código y en el
+    visor, y se renderiza aunque tengas apagado el auto-render. Si hay cambios sin guardar
+    en el editor, no te cambia de archivo.
+
+- **Agente por defecto en todos lados; «Solo consulta» se elige por conversación.** ScadLab
+  existe para crear y modificar modelos, así que el modo con escritura ya no es una
+  preferencia que se arrastra de un chat a otro: **cada conversación tiene el suyo**.
+  - **Toda conversación nueva nace en «Agente»**, con cualquier proveedor. Si eliges
+    «Solo consulta», vale **solo para esa conversación**: las demás siguen como estaban y la
+    siguiente que abras vuelve a empezar en «Agente». Puedes cambiarlo cuando quieras en el
+    selector de modo del chat, y el aviso «Cambiar a Agente» lo guarda en esa conversación.
+  - **Las conversaciones que ya tenías quedan en «Agente».** Antes ScadLab recordaba un
+    único modo por tipo de proveedor (CLIs por un lado, servidores por otro), y una elección
+    —o un valor de una versión anterior que no se distinguía de un default— dejaba en
+    consulta chats que nadie había puesto así. Esas preferencias viejas se descartan al
+    abrir la app, sin tocar tus conversaciones ni tus mensajes.
+  - **La terminal de agentes y el servidor MCP no arrancan en solo lectura.** Revisado: los
+    CLIs que abres desde la terminal de ScadLab (Claude Code, Codex, Antigravity, OpenCode)
+    reciben solo el servidor de ScadLab, las carpetas de tus otros proyectos y la sesión que
+    retomas; ningún modo plan ni sandbox de lectura, y tampoco ningún flag que se salte los
+    permisos —ahí apruebas tú, en tu terminal—. `ScadLab --mcp` declara las herramientas de
+    escritura por defecto; no existe un modo de solo lectura.
+
+- **La IA ahora puede hacer todo lo que haces tú con la interfaz.** ScadLab existe para
+  hacer modelos sin saber modelado 3D, así que la IA tiene las mismas herramientas que tú,
+  con cualquier proveedor (Hermes o un CLI). Se sumaron quince; tu chat las muestra con su
+  tarjeta, y las que cambian algo van con el color de acento.
+  - **Cambiar medidas sin reescribir el modelo.** *Leer parámetros* y *Cambiar parámetros*
+    trabajan sobre las variables del Customizer: la IA lee el ancho, el alto o la tapa con
+    su rango y sus opciones, y guarda un checkpoint **hijo** con los valores nuevos; el
+    resto del archivo queda tal cual. Si pide algo fuera de rango, lo avisa.
+  - **Crear piezas desde las plantillas.** *Crear desde plantilla* arranca de una de las
+    plantillas de ScadLab (la perilla, la caja con tapa, el clip de cables…) con tus
+    medidas ya puestas y la placa de tu impresora.
+  - **Editar un STL.** *Editar el modelo 3D* hace lo que el modo Editar del visor: mover,
+    rotar, escalar, espejar, centrar, apoyar en la placa, recolorear, agregar piezas,
+    perforar y cortar con un plano. Parte de cualquier checkpoint y deja otro nuevo.
+  - **Saber si cabe y cómo ponerla.** *Estimar la impresión* da el peso, los metros y el
+    costo con el material y el relleno que prefieras, *Ver materiales* lista los que tienes
+    y *Sugerir orientación* prueba las seis caras hacia abajo: cuál cabe en tu placa, cuál
+    pide menos soporte y cuál queda más baja, con las operaciones listas para aplicarlas.
+  - **Instalar BOSL2 y otras librerías.** *Ver librerías* dice cuáles tienes y la línea
+    `include` exacta; *Instalar librería* baja BOSL2, MCAD o NopSCADlib a `lib/` de tu
+    workspace, de una versión fija y comprobada con su huella SHA-256. Nunca reemplaza una
+    librería que ya tienes.
+  - **Ordenar el árbol, con papelera.** La IA puede *elegir el padre* («ramificar desde
+    aquí»), *renombrar* un checkpoint (cambia el rótulo, no el archivo), *mandarlo a la
+    papelera* —nunca borra— y *restaurarlo*; también *ver la papelera* y *ver las
+    referencias* de `refs/`. Tras cualquiera de esas acciones el árbol, la papelera, los
+    rótulos y el padre activo se actualizan al instante, sin esperar al vigilante de
+    archivos.
+  - **Cada checkpoint que nace del chat se abre solo.** Cambiar parámetros, crear desde
+    una plantilla y editar un modelo dejan un checkpoint nuevo, y el chat lo trata como
+    los demás: la tarjeta enlaza a él, se selecciona en el árbol, en Código y en el
+    visor, y la red de seguridad del guardado automático no guarda un bloque de más.
+  - En «Solo consulta» siguen disponibles todas las de lectura; las que cambian el
+    proyecto, solo en «Agente».
+
 - **Edita un STL, con el editor 3D o con la IA.** Importa un **STL, 3MF u OBJ** con el
   botón de la barra lateral (junto a los de checkpoints) o **arrastrando el archivo a la
   ventana**: un diálogo te muestra antes las medidas, los triángulos, si la malla es
@@ -56,9 +151,9 @@ empaquetarla (ver `.claude/specs/releases.md`).
   ScadLab conectadas; sus pasos —render, vista previa, medición, checkpoints— llegan al
   chat con las mismas tarjetas que usa Hermes. La conversación se retoma con la sesión
   del propio CLI, y cada CLI trae su lista de modelos («Gemini 4 Argon (High)»…).
-  - **Dos modos, y sin comandos de shell en ninguno.** **Solo consulta** (el de
-    arranque con un CLI) deja que el CLI lea el proyecto y use las herramientas de
-    lectura; **Agente** le deja además crear checkpoints y exportar. Cada modo explica
+  - **Dos modos, y sin comandos de shell en ninguno.** **Solo consulta** deja que el CLI
+    lea el proyecto y use las herramientas de lectura; **Agente** (el de arranque) le deja
+    además crear checkpoints y exportar. Cada modo explica
     qué permite, en el selector y bajo la caja de mensaje.
   - **Cuando un CLI no está instalado, no aparece.** Y uno recién instalado se ve al
     abrir el selector, sin reiniciar. En Configuración → Proveedores de IA hay un
@@ -220,6 +315,11 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Corregido
 
+- **Antigravity mostraba «Sin resultado» cuando una herramienta fallaba.** La tarjeta del
+  paso ahora trae el detalle real del error que informa Antigravity, y una respuesta que
+  llega solo en el cierre del turno (sin los trozos en vivo) también se muestra.
+- **«Guardar como checkpoint» fallaba en un workspace sin checkpoints** con «no hay
+  checkpoint que sirva de padre»: ahora crea la raíz.
 - **Un `^[[?1;2c` aparecía en la primera línea de Antigravity al volver a una terminal.**
   Al reenganchar una terminal, ScadLab vuelve a dibujar lo que ya había pasado, y la
   terminal volvía a contestar la pregunta «¿qué terminal eres?» que el agente hizo al

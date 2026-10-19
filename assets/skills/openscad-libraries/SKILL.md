@@ -28,6 +28,16 @@ insertos y engranajes rectos.
 
 ## 2. Instalar en `lib/` del workspace
 
+**Con las herramientas de ScadLab (MCP) —lo normal, porque no tienes shell—:**
+`list_libraries` dice qué hay (BOSL2, MCAD y NopSCADlib, con versión, licencia y
+la línea `include` exacta) y qué está instalado; `install_library(name)` la
+descarga a `lib/<nombre>/` (necesita internet: avisa al usuario). Baja un
+commit fijo y comprueba su SHA-256 antes de extraer, es todo o nada, anota la
+instalación en `lib/LIBRARIES.txt` y **nunca reemplaza** una librería ya
+instalada. Si no hay internet, dilo en vez de inventar el código de la librería.
+
+Si trabajas con shell (git), el equivalente manual es:
+
 Las librerías viven **dentro del workspace**, en `lib/`, nunca en una ruta
 global: así el workspace es portable y la app puede renderizarlo igual en otra
 máquina.

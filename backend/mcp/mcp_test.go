@@ -22,6 +22,12 @@ import (
 var wantTools = []string{
 	"list_checkpoints", "read_checkpoint", "create_checkpoint", "import_mesh", "render", "lint", "format",
 	"measure", "preview", "printer_info", "export", "list_templates", "get_template",
+	"set_active_parent", "rename_checkpoint", "trash_checkpoint", "list_trash", "restore_checkpoint", "list_refs",
+	"get_parameters", "set_parameters", "create_from_template",
+	"list_libraries", "install_library",
+	"edit_mesh",
+	"estimate_print", "list_materials", "suggest_orientation",
+	"list_skills", "read_skill", "inspect_reference",
 }
 
 func TestInitializeNegotiatesVersion(t *testing.T) {
@@ -861,5 +867,18 @@ func TestCancelledNotificationStopsRender(t *testing.T) {
 	}
 	if c.exists("RENDER_ERRORS.md") {
 		t.Error("un render cancelado no debe dejar RENDER_ERRORS.md")
+	}
+}
+
+// S12.c: las instrucciones del servidor dicen el flujo obligatorio.
+func TestServerInstructionsMandateFlow(t *testing.T) {
+	for _, want := range []string{"create_checkpoint", "render", "preview", "measure", "without asking", "never write .scad files through the shell", "color()",
+		"create_from_template", "set_parameters", "edit_mesh", "suggest_orientation", "install_library", "trash_checkpoint"} {
+		if !strings.Contains(serverInstructions, want) {
+			t.Errorf("serverInstructions sin %q", want)
+		}
+	}
+	if len(serverInstructions) > 2200 {
+		t.Errorf("serverInstructions demasiado larga (%d): deben ser pocas líneas", len(serverInstructions))
 	}
 }

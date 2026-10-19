@@ -150,50 +150,34 @@ func (a *App) PrepareMeshEdit(workspaceId int64, file string) (EditBase, error) 
 		return EditBase{}, err
 	}
 
-	if base, ok := meshedit.BaseOf(string(raw)); ok {
-		if abs, rel, rerr := refmodel.ResolveRef(w.Path, base.Ref); rerr == nil {
-			if report, aerr := refmodel.Analyze(abs); aerr == nil {
-				return EditBase{
-					Ref: rel, Parent: file, MeshPath: a.viewerMesh(abs), Report: report,
-					FromImport: true, Model: normalizedModel(base.Model), Color: base.Color,
-				}, nil
-			}
+	// La decisión (import base o malla congelada) es meshedit.ResolveBase, la misma
+	// que usa la herramienta edit_mesh del MCP: una sola definición. Aquí solo se
+	// pone el render (que vive en la sesión de la app) y la caché de mallas del visor.
+	frozenMesh := ""
+	base, err := meshedit.ResolveBase(w.Path, file, string(raw), func() (string, error) {
+		res, err := a.okRender(workspaceId, file)
+		frozenMesh = res.MeshPath
+		return res.MeshPath, err
+	})
+	if err != nil {
+		return EditBase{}, err
+	}
+	out := EditBase{
+		Ref: base.Ref, Parent: file, Report: base.Report,
+		FromImport: base.FromImport, Model: base.Model, Color: base.Color,
+	}
+	if base.FromImport {
+		abs, _, err := refmodel.ResolveRef(w.Path, base.Ref)
+		if err != nil {
+			return EditBase{}, err
 		}
-		// El STL ya no está o no se puede leer: se cae al camino general, que
-		// renderiza el checkpoint y dice por qué no se puede (o lo congela si ese
-		// render vive en la caché).
-	}
-
-	res, err := a.okRender(workspaceId, file)
-	if err != nil {
-		return EditBase{}, err
-	}
-	rel, _, err := refmodel.FreezeMesh(w.Path, res.MeshPath, strings.TrimSuffix(file, filepath.Ext(file)))
-	if err != nil {
-		return EditBase{}, err
-	}
-	abs, _, err := refmodel.ResolveRef(w.Path, rel)
-	if err != nil {
-		return EditBase{}, err
-	}
-	report, err := refmodel.Analyze(abs)
-	if err != nil {
-		return EditBase{}, err
+		out.MeshPath = a.viewerMesh(abs)
+		return out, nil
 	}
 	// La copia congelada es idéntica byte a byte a la malla del render, que ya
 	// está en la caché del visor: se usa esa.
-	return EditBase{Ref: rel, Parent: file, MeshPath: res.MeshPath, Report: report, Model: normalizedModel(meshedit.Transform{})}, nil
-}
-
-// normalizedModel escribe la escala neutra como 1 (el contrato dice 0 = 1, pero
-// el frontend prefiere un valor explícito para multiplicar).
-func normalizedModel(t meshedit.Transform) meshedit.Transform {
-	for i, s := range t.Scale {
-		if s == 0 {
-			t.Scale[i] = 1
-		}
-	}
-	return t
+	out.MeshPath = frozenMesh
+	return out, nil
 }
 
 // okRender devuelve el último render correcto del checkpoint en esta sesión —si

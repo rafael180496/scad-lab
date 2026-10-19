@@ -44,10 +44,10 @@ const fileHelp = "Checkpoint file name in the workspace root (e.g. 003-add-hinge
 
 // tools es el catálogo, en el orden en que se muestra al agente.
 func (e *env) tools() []Tool {
-	return []Tool{
+	tools := []Tool{
 		{
 			Name: "list_checkpoints",
-			Description: "List the workspace's checkpoints (immutable NNN-slug.scad files) as a tree: parent, description, children, modification time and the last known render status. " +
+			Description: "List the workspace's checkpoints (immutable NNN-slug.scad files) as a tree: parent, description, the display name (`label`) if the user gave one, children, modification time and the last known render status; `tree` draws it as text. " +
 				"Also reports `activeParent`: the checkpoint the user chose to branch from (empty if none), which create_checkpoint uses as the default parent. Start here to see where the design stands.",
 			InputSchema: obj(map[string]any{}),
 			Annotations: annotations(annReadOnly),
@@ -64,7 +64,7 @@ func (e *env) tools() []Tool {
 			Name: "create_checkpoint",
 			Description: "Create a NEW checkpoint file NNN-slug.scad from the given source. Never overwrites or edits an existing checkpoint: to change anything, create a new one. " +
 				"The @checkpoint header line is written for you (an existing first-line header in source is replaced). " +
-				"Every top-level part must use color(). Then call render to validate it.",
+				"Every top-level part must use color(). Then call render to validate it. Use root=true to start a new, unrelated design as a root checkpoint in a workspace that already has others.",
 			InputSchema: obj(map[string]any{
 				"parent":      strProp("Checkpoint this one derives from (e.g. 003-base-box.scad). Omit to use the workspace's active parent (see `activeParent` in list_checkpoints; it advances to each new child by itself) or, if there is none, the newest checkpoint; the very first checkpoint of a workspace has no parent."),
 				"label":       strProp("Short title; becomes the slug of the file name (e.g. \"add hinge\" -> 004-add-hinge.scad)."),
@@ -128,9 +128,11 @@ func (e *env) tools() []Tool {
 			Description: "Render a PNG picture of a checkpoint with OpenSCAD so you can SEE the part (colors from color() are kept). " +
 				"Views: iso (default), iso-back, front (seen from -Y), back, right (seen from +X), left, top, bottom. Look at it after rendering to catch shapes that are valid but wrong.",
 			InputSchema: obj(map[string]any{
-				"file": strProp(fileHelp),
-				"view": enumProp("Camera view. Default iso.", viewNames...),
-				"size": map[string]any{"type": "integer", "description": "Image side in pixels, 256-1024. Default 640.", "minimum": minPreviewSize, "maximum": maxPreviewSize},
+				"file":   strProp(fileHelp),
+				"view":   enumProp("Camera view. Default iso.", viewNames...),
+				"rotate": map[string]any{"type": "array", "description": "Free camera instead of `view`: three angles [rx, ry, rz] in degrees (OpenSCAD's --camera rotation; [60,0,30] is a high three-quarter view, [90,0,0] looks from the front). Overrides `view`.", "items": map[string]any{"type": "number"}, "minItems": 3, "maxItems": 3},
+				"ortho":  map[string]any{"type": "boolean", "description": "Orthogonal projection (no perspective). The named views top/bottom/front/back/left/right are already orthogonal; default false for a free `rotate`."},
+				"size":   map[string]any{"type": "integer", "description": "Image side in pixels, 256-1024. Default 640.", "minimum": minPreviewSize, "maximum": maxPreviewSize},
 			}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.previewTool,
@@ -144,11 +146,15 @@ func (e *env) tools() []Tool {
 		},
 		{
 			Name: "export",
-			Description: "Export a checkpoint into <workspace>/exports/: stl (one mesh), 3mf (multicolor 3MF for Bambu Studio, one part per color with its extruder) or stl-per-color (zip with one STL per color). " +
-				"Returns the file path, the parts and warnings (e.g. more colors than AMS slots). Overwrites a previous export of the same checkpoint and format.",
+			Description: "Export a checkpoint into <workspace>/exports/: stl (one mesh), 3mf (multicolor 3MF for Bambu Studio, one part per color with its extruder), stl-per-color (zip with one STL per color) or png (the preview picture; `view`, `rotate`, `ortho` and `size` as in preview, and the view goes in the file name). " +
+				"Returns the file path, the parts and warnings (e.g. more colors than AMS slots). Overwrites a previous export of the same checkpoint, format and view. Opening it in Bambu Studio is the user's decision, not a tool.",
 			InputSchema: obj(map[string]any{
 				"file":   strProp(fileHelp),
-				"format": enumProp("Export format. Default 3mf.", exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor),
+				"format": enumProp("Export format. Default 3mf.", exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor, exporter.FormatPNG),
+				"view":   enumProp("png only: camera view. Default iso.", viewNames...),
+				"rotate": map[string]any{"type": "array", "description": "png only: free camera [rx, ry, rz] in degrees, overrides `view`.", "items": map[string]any{"type": "number"}, "minItems": 3, "maxItems": 3},
+				"ortho":  map[string]any{"type": "boolean", "description": "png only: orthogonal projection."},
+				"size":   map[string]any{"type": "integer", "description": "png only: image side in pixels, 256-1024. Default 640.", "minimum": minPreviewSize, "maximum": maxPreviewSize},
 			}),
 			Annotations: annotations(annWrite),
 			handler:     e.exportTool,
@@ -162,12 +168,17 @@ func (e *env) tools() []Tool {
 		},
 		{
 			Name:        "get_template",
-			Description: "Return the source of a template (see list_templates). Adjust its parameters and pass it to create_checkpoint: the header line is rewritten for you.",
+			Description: "Return the source of a template (see list_templates). To start from one, prefer create_from_template (it sets the parameters and the plate for you); get_template is for reading it or adapting its code.",
 			InputSchema: obj(map[string]any{"name": strProp("Template name from list_templates, e.g. knob or knob.scad.")}, "name"),
 			Annotations: annotations(annReadOnly),
 			handler:     e.getTemplate,
 		},
 	}
+	// El resto del catálogo, por área: cada grupo vive en su archivo.
+	for _, g := range [][]Tool{e.workspaceTools(), e.parameterTools(), e.libraryTools(), e.meshTools(), e.printTools(), e.contextTools()} {
+		tools = append(tools, g...)
+	}
+	return tools
 }
 
 // --- utilidades de salida ---------------------------------------------------
@@ -264,6 +275,7 @@ type checkpointOut struct {
 	File        string   `json:"file"`
 	Parent      string   `json:"parent"`
 	Description string   `json:"description"`
+	Label       string   `json:"label,omitempty"` // el nombre que le dio el usuario en la app
 	Children    []string `json:"children"`
 	Modified    string   `json:"modified"`
 	Render      string   `json:"render"` // "ok" | "error" | "unknown": lo último que se sabe
@@ -295,6 +307,7 @@ func (e *env) listCheckpoints(_ context.Context, _ map[string]any) (*toolResult,
 	}
 	e.mu.Unlock()
 
+	labels := e.labels()
 	out := make([]checkpointOut, 0, len(files))
 	for _, f := range files {
 		state := "unknown"
@@ -313,16 +326,73 @@ func (e *env) listCheckpoints(_ context.Context, _ map[string]any) (*toolResult,
 			kids = []string{}
 		}
 		out = append(out, checkpointOut{
-			File: f.FileName, Parent: f.ParentFile, Description: f.Description, Children: kids,
+			File: f.FileName, Parent: f.ParentFile, Description: f.Description, Label: labels[f.FileName], Children: kids,
 			Modified: time.Unix(f.Mtime, 0).UTC().Format(time.RFC3339), Render: state,
 		})
 	}
+	active := checkpoint.ActiveParent(e.ws)
 	return jsonResult(map[string]any{
 		"workspace":    e.ws,
 		"latest":       checkpoint.Latest(e.ws),
-		"activeParent": checkpoint.ActiveParent(e.ws),
+		"activeParent": active,
+		"tree":         checkpointTree(out, active),
 		"checkpoints":  out,
 	})
+}
+
+// checkpointTree dibuja el árbol como texto: lo que un modelo lee de un vistazo.
+// Un checkpoint cuyo padre ya no está (papelera) se muestra como raíz.
+func checkpointTree(list []checkpointOut, active string) string {
+	byName := make(map[string]checkpointOut, len(list))
+	for _, c := range list {
+		byName[c.File] = c
+	}
+	var roots []string
+	for _, c := range list {
+		if _, ok := byName[c.Parent]; c.Parent == "" || !ok {
+			roots = append(roots, c.File)
+		}
+	}
+	var b strings.Builder
+	var walk func(name, prefix string, last, root bool)
+	walk = func(name, prefix string, last, root bool) {
+		c := byName[name]
+		branch, next := "", prefix
+		if !root {
+			branch, next = "├─ ", prefix+"│  "
+			if last {
+				branch, next = "└─ ", prefix+"   "
+			}
+		}
+		title := c.Description
+		if c.Label != "" {
+			title = c.Label
+		}
+		mark := ""
+		switch c.Render {
+		case "ok":
+			mark = " [render ok]"
+		case "error":
+			mark = " [render ERROR]"
+		}
+		if name == active {
+			mark += " <- active parent"
+		}
+		b.WriteString(prefix + branch + name)
+		if title != "" {
+			b.WriteString(" — " + title)
+		}
+		b.WriteString(mark + "\n")
+		for i, kid := range c.Children {
+			if _, ok := byName[kid]; ok {
+				walk(kid, next, i == len(c.Children)-1, false)
+			}
+		}
+	}
+	for _, r := range roots {
+		walk(r, "", true, true)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (e *env) readCheckpoint(_ context.Context, args map[string]any) (*toolResult, error) {
@@ -357,20 +427,25 @@ func (e *env) createCheckpoint(_ context.Context, args map[string]any) (*toolRes
 	parent := strArg(args, "parent")
 	var name string
 	var err error
-	if parent == "" {
-		// Sin padre se continúa desde el padre activo —el que el usuario eligió
-		// con «Ramificar desde aquí», que avanza con cada hijo— y, si no hay,
-		// desde el checkpoint más nuevo; el primero de un workspace nace sin
-		// padre. checkpoint.Create avanza el activo cuando el padre lo era.
-		parent = checkpoint.ActiveParent(e.ws)
+	switch {
+	case boolArg(args, "root", false):
+		// Un diseño nuevo sin relación con los anteriores: raíz aparte. No toca el
+		// padre activo.
+		parent = ""
+		name, err = checkpoint.CreateDetached(e.ws, label, strArg(args, "description"), source)
+	default:
 		if parent == "" {
-			parent = checkpoint.Latest(e.ws)
+			// Sin padre se continúa desde el padre activo —el que el usuario eligió
+			// con «Ramificar desde aquí», que avanza con cada hijo— y, si no hay,
+			// desde el checkpoint más nuevo; el primero de un workspace nace sin
+			// padre. checkpoint.Create avanza el activo cuando el padre lo era.
+			parent = e.defaultParent()
 		}
-	}
-	if parent == "" {
-		name, err = checkpoint.CreateRoot(e.ws, label, strArg(args, "description"), source)
-	} else {
-		name, err = checkpoint.Create(e.ws, parent, label, strArg(args, "description"), source)
+		if parent == "" {
+			name, err = checkpoint.CreateRoot(e.ws, label, strArg(args, "description"), source)
+		} else {
+			name, err = checkpoint.Create(e.ws, parent, label, strArg(args, "description"), source)
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -696,36 +771,11 @@ func (e *env) measureTool(ctx context.Context, args map[string]any) (*toolResult
 	}
 	pr := e.printer(s)
 	ok, over := fits(info.Size, pr.BuildVolume)
-	mat := e.material(s)
-
-	// Partes por color (las mismas que ve el visor) y estimación de impresión.
-	// Si no se pueden repartir, se estima el modelo entero como una sola parte
-	// y se avisa: medir no debe fallar porque el 3MF no salió.
-	var warns []string
-	partList, perr := e.modelParts(ctx, s, name, res.MeshPath, info)
-	if perr != nil {
-		warns = append(warns, msgf(i18n.Msg{
-			ES: "No se pudieron separar las partes por color (%v): la estimación trata el modelo como una sola parte.",
-			EN: "The parts by color could not be separated (%v): the estimate treats the model as a single part.",
-		}, perr))
-		partList = []parts.Part{{Index: 0, Name: "Default", Color: "#F9D72C", Uncolored: true, Info: info}}
-	}
-	opts := estimate.OptionsFromSettings(s)
-	mats := e.estimateMaterials()
-	if !hasMaterial(mats, opts.DefaultMaterialID) {
-		// El material por defecto ya no existe (se borró de la base): se estima
-		// con el mismo respaldo de siempre (material()) y se avisa.
-		mats = append(mats, estimate.Material{ID: mat.ID, Name: mat.Name, DensityGCm3: mat.DensityGCm3})
-		warns = append(warns, msgf(i18n.Msg{
-			ES: "El material por defecto %q no existe: la estimación usa %s.",
-			EN: "The default material %q does not exist: the estimate uses %s.",
-		}, opts.DefaultMaterialID, mat.Name))
-		opts.DefaultMaterialID = mat.ID
-	}
-	est, err := estimate.Estimate(estimate.ClosedAsWhole(estimateParts(partList), info.Watertight), mats, opts)
+	pe, err := e.estimateModel(ctx, s, name, res.MeshPath, info, estimateOverrides{})
 	if err != nil {
 		return nil, err
 	}
+	mat, partList, est, opts, warns := pe.mat, pe.parts, pe.est, pe.opts, pe.warns
 
 	out := map[string]any{
 		"file":             name,
@@ -900,9 +950,12 @@ func (e *env) exportTool(ctx context.Context, args map[string]any) (*toolResult,
 		format = exporter.Format3MF
 	}
 	switch format {
-	case exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor:
+	case exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor, exporter.FormatPNG:
 	default:
-		return nil, i18n.Errorf(i18n.Msg{ES: "formato de exportación desconocido: %q (usa stl, 3mf o stl-per-color)", EN: "unknown export format: %q (use stl, 3mf or stl-per-color)"}, format)
+		return nil, i18n.Errorf(i18n.Msg{ES: "formato de exportación desconocido: %q (usa stl, 3mf, stl-per-color o png)", EN: "unknown export format: %q (use stl, 3mf, stl-per-color or png)"}, format)
+	}
+	if format == exporter.FormatPNG {
+		return e.exportPNG(ctx, name, args)
 	}
 	s := e.settings()
 	if e.engine == nil {
@@ -956,4 +1009,63 @@ func (e *env) exportsDir() (string, error) {
 		return "", i18n.New(i18n.Msg{ES: "la carpeta exports apunta fuera del workspace", EN: "the exports folder points outside the workspace"})
 	}
 	return real, nil
+}
+
+// exportPNG guarda en exports/ la misma imagen que dibuja preview. El nombre lleva
+// la vista, para que dos ángulos del mismo checkpoint no se pisen.
+func (e *env) exportPNG(ctx context.Context, name string, args map[string]any) (*toolResult, error) {
+	label, v, err := viewFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	size := intArg(args, "size", defaultPreviewSize)
+	size = max(minPreviewSize, min(maxPreviewSize, size))
+	sh, err := e.shoot(ctx, name, label, v, size)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := e.exportsDir()
+	if err != nil {
+		return nil, err
+	}
+	slug := workspace.Slug(e.wsName())
+	if slug == "" {
+		slug = "workspace"
+	}
+	base := strings.TrimSuffix(exporter.SuggestedName(slug, name, exporter.FormatPNG), exporter.Ext(exporter.FormatPNG))
+	dest := filepath.Join(dir, base+"-"+label+exporter.Ext(exporter.FormatPNG))
+	if err := writeFileAtomic(dest, sh.png); err != nil {
+		return nil, i18n.Errorf(i18n.Msg{ES: "no se pudo guardar la exportación: %w", EN: "could not save the export: %w"}, err)
+	}
+	rel, _ := filepath.Rel(e.ws, dest)
+	return jsonResult(map[string]any{
+		"file":         name,
+		"format":       exporter.FormatPNG,
+		"view":         label,
+		"sizePx":       size,
+		"bytes":        len(sh.png),
+		"path":         dest,
+		"relativePath": filepath.ToSlash(rel),
+		"note":         sh.note,
+	})
+}
+
+// writeFileAtomic escribe data en dest con un temporal en la misma carpeta y un
+// rename: una exportación cortada no deja un archivo roto ni pisa a medias uno
+// bueno.
+func writeFileAtomic(dest string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".scadlab-*.tmp")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, dest)
 }

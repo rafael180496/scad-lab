@@ -17,6 +17,7 @@ import {errorText} from '../../lib/errors'
 import {isMod, withKeys} from '../../lib/platform'
 import {fmt, useT, type Dict} from '../../i18n'
 import {cn} from '../../lib/cn'
+import {StarterAction} from '../workspace/StarterAction'
 
 // EditorShot: estado inicial para el banco de capturas (src/uishot.tsx).
 export type EditorShot = {mode: 'edit' | 'search' | 'save'; label?: string; description?: string}
@@ -61,6 +62,7 @@ export function EditorPane({
     renderDiags,
     settings,
     onSaved,
+    emptyWorkspace = false,
     restore,
     onRestored,
     shot,
@@ -71,6 +73,8 @@ export function EditorPane({
     renderDiags: render.Diagnostic[] | undefined
     settings: store.Settings
     onSaved: (fileName: string) => void
+    /** El proyecto no tiene ningún checkpoint: se ofrece «Crear un modelo de inicio». */
+    emptyWorkspace?: boolean
     /** Estado que dejó este proyecto al irse a segundo plano (se aplica al volver y se consume). */
     restore?: EditorSnap | null
     onRestored?: () => void
@@ -403,8 +407,9 @@ export function EditorPane({
                 </Suspense>
                 </EditorBoundary>
             ) : (
-                <div className="flex h-full items-center">
+                <div className="flex h-full flex-col items-center justify-center">
                     <Placeholder text={t.panes.editorBody} />
+                    {emptyWorkspace ? <StarterAction workspaceId={workspaceId} onCreated={onSaved} /> : null}
                 </div>
             )}
             </div>

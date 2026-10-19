@@ -1,11 +1,13 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Bot, Settings as SettingsIcon} from 'lucide-react'
-import {CancelChat, ChatCheckpointParent, DeleteChat, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
+import {CancelChat, ChatCheckpointParent, DeleteChat, EnsureAntigravityMCP, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatMode, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
 import {contextUsage, estimateTokens} from '../../lib/chatContext'
+import {asksToCreate} from '../../lib/chatIntent'
 import {useProviderHealth} from '../../lib/chatHealth'
+import {chatModeValue, isAgentMode} from '../../lib/chatMode'
 import {isCLI} from '../../lib/chatProviders'
 import {openProvidersSettings} from '../../lib/modelServers'
 import {onChatDraft, onOpenChat, onProjectClosed, takePendingChat, takePendingDraft, type ChatDraft} from '../../lib/sessionBridge'
@@ -22,16 +24,15 @@ import {EmptyChat} from './EmptyChat'
 import {HealthBanner} from './HealthIndicators'
 import {withVault} from '../../lib/vault'
 import {MessageList} from './Messages'
+import {SwitchAgentNotice} from './SwitchAgentNotice'
 import {clearStream, ensureChatEvents, startStream, syncStream, useStreamFinished, useStreamRunning, useStreamStartedAt} from './chatStreams'
 import {useChatAttachments} from './useChatAttachments'
 import {useChatTier} from './useChatTier'
 import {headerDescription} from './scadBlock'
 import {
-    rememberAgent,
     rememberModel,
     rememberProvider,
     rememberSteps,
-    rememberedAgent,
     rememberedModel,
     rememberedProvider,
     rememberedSteps,
@@ -142,9 +143,12 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     // (SetChatModel). Hasta entonces el chat sigue como estaba.
     const [switching, setSwitching] = useState<string | null>(null)
     useEffect(() => setSwitching(null), [chatId])
-    // El modo se recuerda por tipo de proveedor (ver useChatProviders).
-    const [agentCli, setAgentCli] = useState(() => rememberedAgent(true))
-    const [agentServer, setAgentServer] = useState(() => rememberedAgent(false))
+    // El modo es de cada conversación (chats.mode). Mientras no hay chat abierto, `draftAgent` es el de la
+    // conversación que se va a crear: siempre arranca en «Agente» y solo pasa a consulta si se elige a mano.
+    const [draftAgent, setDraftAgent] = useState(true)
+    useEffect(() => setDraftAgent(true), [chatId, workspaceId])
+    // El guardado en curso del último cambio de modo: un envío inmediato espera a que termine.
+    const modeSaving = useRef<Promise<unknown>>(Promise.resolve())
     const [maxSteps, setMaxSteps] = useState(rememberedSteps)
 
     useEffect(() => ensureChatEvents(), [])
@@ -359,14 +363,23 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     }, [finished, chatId, workspaceId, reloadChats])
 
     // ── Modo ────────────────────────────────────────────────────────────────
-    // «Agente» efectivo: el interruptor de este tipo de proveedor, salvo que el
-    // modelo no llame herramientas.
-    const agentOn = cli ? agentCli : agentServer
+    // «Agente» de la conversación abierta (o de la que se va a crear). Elegir «Solo consulta» vale solo para esta
+    // conversación: no cambia otra ni lo que arranca la próxima. «Agente» efectivo: el de la conversación, salvo que
+    // el modelo no llame herramientas.
+    const agentOn = current ? isAgentMode(current.mode) : draftAgent
     const effectiveAgent = agentOn && !noTools
     const setAgent = (v: boolean) => {
-        if (cli) setAgentCli(v)
-        else setAgentServer(v)
-        rememberAgent(cli, v)
+        if (!current) {
+            setDraftAgent(v)
+            return
+        }
+        const id = current.id
+        // Se refleja ya en la lista (el interruptor no espera al disco) y, si no se pudo guardar, se vuelve a leer.
+        setChats((prev) => prev.map((c) => (c.id === id ? {...c, mode: v ? '' : 'ask'} : c)))
+        modeSaving.current = SetChatMode(id, chatModeValue(v)).catch((e) => {
+            toast.error(errorText(e))
+            if (workspaceId != null) void reloadChats(workspaceId)
+        })
     }
 
     // ── Contexto ────────────────────────────────────────────────────────────
@@ -380,12 +393,18 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         if ((!body && att.ids.length === 0) || workspaceId == null || running || attach.sendBlocked) return
         let id = chatId
         try {
+            await modeSaving.current
             if (id == null) {
                 if (!providerId || (!isCLI(providerId) && !model.trim())) {
                     toast.error(t.chat.pickModelFirst)
                     return
                 }
-                const c = await NewChat(workspaceId, providerId, model.trim())
+                let c = await NewChat(workspaceId, providerId, model.trim())
+                // La conversación nace en «Agente»; si en el panel vacío se eligió «Solo consulta», se guarda ya para ESTA.
+                if (!draftAgent) {
+                    await SetChatMode(c.id, chatModeValue(false))
+                    c = {...c, mode: 'ask'}
+                }
                 remember(providerId, model)
                 id = c.id
                 justCreated.current = id
@@ -400,7 +419,8 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
             // responde con un error de código y withVault abre el diálogo y reintenta
             // una vez (lib/vault.ts). Cancelarlo deja el error y conserva lo escrito.
             const sendId = id
-            const um = await withVault(() => SendChatMessage(sendId, body, currentFile ?? '', att.ids, {agent: effectiveAgent, maxSteps}))
+            // Sin `agent` el backend usa el modo de la conversación; solo se fuerza cuando el modelo no llama herramientas.
+            const um = await withVault(() => SendChatMessage(sendId, body, currentFile ?? '', att.ids, effectiveAgent === agentOn ? {maxSteps} : {agent: effectiveAgent, maxSteps}))
             // Go ya tomó los adjuntos: los chips se sueltan sin pedir borrarlos.
             attach.consume(att.keys)
             setMessages((prev) => (prev.some((m) => m.id === um.id) ? prev : [...prev, um]))
@@ -485,20 +505,40 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
             toast.error(errorText(e))
         }
     }
+    // «Crear checkpoint y renderizar» (S12.c, «Solo consulta»): lo mismo que «Abrir en el editor» y, además, el visor lo
+    // renderiza aunque el auto-render esté apagado (ver adoptChatCheckpoint en App). Con el workspace vacío el
+    // padre es '' y el código queda como la raíz del árbol.
+    const createAndRender = async (code: string) => {
+        if (workspaceId == null) return
+        try {
+            const parent = await ChatCheckpointParent(workspaceId, currentFile ?? '')
+            const desc = headerDescription(code)
+            const name = await SaveChatCheckpoint(workspaceId, chatId ?? 0, parent, (desc || t.chat.openLabel).slice(0, 80), desc, code)
+            toast.ok(fmt(t.chat.createdRendering, {file: name}))
+            onCheckpointCreated(name)
+        } catch (e) {
+            toast.error(errorText(e))
+        }
+    }
     const askSaveRef = useRef(askSave)
     askSaveRef.current = askSave
     const openRef = useRef(openInEditor)
     openRef.current = openInEditor
+    const createRef = useRef(createAndRender)
+    createRef.current = createAndRender
     const openCheckpointRef = useRef(onCheckpointCreated)
     openCheckpointRef.current = onCheckpointCreated
-    // Estable: los bloques ya pintados no se redibujan al cambiar el panel.
+    // «Crear checkpoint y renderizar» solo se ofrece en «Solo consulta»: en «Agente» lo hace ScadLab solo.
+    const offerCreate = !effectiveAgent
+    // Estable: los bloques ya pintados no se redibujan al cambiar el panel (solo al cambiar de modo).
     const actions = useMemo(
         () => ({
             onSave: (code: string) => void askSaveRef.current(code),
             onOpen: (code: string) => void openRef.current(code),
+            onCreate: offerCreate ? (code: string) => void createRef.current(code) : undefined,
             onOpenCheckpoint: (file: string) => openCheckpointRef.current(file),
         }),
-        [],
+        [offerCreate],
     )
 
     const doSave = async (label: string, description: string) => {
@@ -517,6 +557,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
 
     const newChat = () => {
         setChatId(null)
+        setDraftAgent(true) // una conversación nueva es siempre «Agente»
         setText('')
     }
 
@@ -527,6 +568,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     draftRef.current = (d) => {
         if (d.workspaceId !== workspaceId) return
         setChatId(null)
+        setDraftAgent(true)
         setText(d.text)
         attach.addReady(d.attachment)
         window.setTimeout(() => {
@@ -548,6 +590,22 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
             off()
         }
     }, [])
+
+    // ── Antigravity: ScadLab en su configuración global ─────────────────────
+    // Antigravity solo lee MCP de su configuración global: al elegirlo (o abrir un chat suyo) el backend registra a
+    // ScadLab si falta y avisa por el evento mcp:antigravity (App lo muestra como toast). Sin esa entrada no tiene
+    // ninguna herramienta de ScadLab y el turno no deja nada.
+    useEffect(() => {
+        if (pickerProviderId !== 'cli:antigravity') return
+        void EnsureAntigravityMCP().catch(() => {})
+    }, [pickerProviderId])
+
+    // ── Aviso «Cambiar a Agente» (S12.c) ────────────────────────────────────
+    // En «Solo consulta», si lo que se escribe (o, con la caja vacía, lo último que se envió) pide crear o cambiar algo.
+    const lastUser = useMemo(() => [...messages].reverse().find((m) => m.role === 'user')?.content ?? '', [messages])
+    const [noticeDismissed, setNoticeDismissed] = useState('')
+    const askText = text.trim() !== '' ? text : lastUser
+    const showSwitch = !effectiveAgent && !noTools && !running && workspaceId != null && asksToCreate(askText) && noticeDismissed !== askText
 
     // ── Render ──────────────────────────────────────────────────────────────
     if (workspaceId == null) {
@@ -603,6 +661,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 empty={<EmptyChat provider={provider} modelLabel={modelLabel} agent={effectiveAgent} onPick={setText} />}
             />
             {showBanner ? <HealthBanner health={health} name={provider?.name ?? pickerProviderId} onRetry={recheckHealth} /> : null}
+            {showSwitch ? <SwitchAgentNotice onSwitch={() => setAgent(true)} onDismiss={() => setNoticeDismissed(askText)} /> : null}
             <Composer
                 value={text}
                 onChange={setText}

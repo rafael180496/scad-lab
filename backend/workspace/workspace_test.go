@@ -162,3 +162,28 @@ func TestCreateValidatesLocation(t *testing.T) {
 		t.Error("padre que es un archivo")
 	}
 }
+
+// S12.c: las reglas para todos los CLIs traen el flujo obligatorio con el MCP.
+func TestRulesMandateCheckpointFlow(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteRules(dir, "Caja", "bambu-a1-mini"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	for _, want := range []string{
+		"Flujo obligatorio", "`create_checkpoint`", "`render`", "`preview`", "`measure`",
+		"sin preguntar", "Nunca termines solo con código en el texto", "No uses la shell para escribir `.scad`",
+		"Nunca sobrescribir ni borrar", "No hacer commits",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("falta %q en las reglas", want)
+		}
+	}
+	if i, j := strings.Index(got, "`create_checkpoint`"), strings.Index(got, "`openscad -o"); i < 0 || j < 0 || i > j {
+		t.Error("el MCP debe preferirse antes que la CLI de OpenSCAD")
+	}
+}

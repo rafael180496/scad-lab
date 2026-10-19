@@ -46,6 +46,7 @@ if [ -f "$d/hang.$n" ]; then
   wait
   exit 0
 fi
+if [ -f "$d/write.$n" ]; then cp "$d/write.$n" "./002-escrito-por-el-cli.scad"; fi
 [ -f "$d/stream.$n" ] && cat "$d/stream.$n"
 exit 0
 `
@@ -443,7 +444,7 @@ func TestCLIChatTurnStreamsStepsUsageAndSavesTheSession(t *testing.T) {
 	if err != nil || c.ProviderID != "cli:claude" || c.Model != "opus" {
 		t.Fatalf("NewChat: %+v %v", c, err)
 	}
-	um, err := a.SendChatMessage(c.ID, "haz una caja de 40 mm", "001-base.scad", nil, SendOptions{Agent: true})
+	um, err := a.SendChatMessage(c.ID, "haz una caja de 40 mm", "001-base.scad", nil, SendOptions{Agent: boolp(true)})
 	if err != nil || um.Role != "user" {
 		t.Fatalf("Send: %+v %v", um, err)
 	}
@@ -531,15 +532,18 @@ func TestCLIChatTurnStreamsStepsUsageAndSavesTheSession(t *testing.T) {
 	}
 }
 
-// «Solo consulta» (Agent=false) es el modo por defecto: no acepta ediciones, no
-// puede crear checkpoints, y el prompt se lo dice. Y un segundo mensaje continúa
-// con la sesión guardada, sin reenviar el historial.
+// «Solo consulta», elegido para la conversación (SetChatMode): no acepta
+// ediciones, no puede crear checkpoints, y el prompt se lo dice. Y un segundo
+// mensaje continúa con la sesión guardada, sin reenviar el historial.
 func TestCLIChatAskModeAndContinuingWithTheSession(t *testing.T) {
 	a, wsID, _, ev, f := cliApp(t)
 	f.install("claude", "claude-stream.jsonl")
 	c, _ := a.NewChat(wsID, "cli:claude", "")
 	if c.Model != "" {
 		t.Fatalf("un CLI admite el modelo vacío (el que tenga configurado): %+v", c)
+	}
+	if err := a.SetChatMode(c.ID, "ask"); err != nil {
+		t.Fatal(err)
 	}
 
 	if _, err := a.SendChatMessage(c.ID, "¿cabe en la placa?", "", nil, SendOptions{}); err != nil {
@@ -656,7 +660,7 @@ func TestCLIChatCancelMidTurnKeepsPartialAndKillsTheTree(t *testing.T) {
 	f.put("stream.claude", strings.Join(lines[:4], "\n")+"\n") // init, rate limit, texto, tool_use(render)
 
 	c, _ := a.NewChat(wsID, "cli:claude", "")
-	if _, err := a.SendChatMessage(c.ID, "haz una caja", "", nil, SendOptions{Agent: true}); err != nil {
+	if _, err := a.SendChatMessage(c.ID, "haz una caja", "", nil, SendOptions{Agent: boolp(true)}); err != nil {
 		t.Fatal(err)
 	}
 	waitForSteps(t, ev, 1)
@@ -764,6 +768,9 @@ func TestCLIChatPassesTheTerminalsMCPAndAddDirFlags(t *testing.T) {
 	f.put("export.opencode", "{}")
 
 	cx, _ := a.NewChat(wsID, "cli:codex", "")
+	if err := a.SetChatMode(cx.ID, "ask"); err != nil { // el sandbox de solo lectura es el de «Solo consulta»
+		t.Fatal(err)
+	}
 	if _, err := a.SendChatMessage(cx.ID, "mide la pieza", "", nil, SendOptions{}); err != nil {
 		t.Fatal(err)
 	}
@@ -807,7 +814,7 @@ func TestCLIChatPassesTheTerminalsMCPAndAddDirFlags(t *testing.T) {
 	// OpenCode lee su configuración de proyecto: no recibe flags MCP, pero sí el
 	// agente del modo y la lista de permisos por entorno.
 	oc, _ := a.NewChat(wsID, "cli:opencode", "")
-	if _, err := a.SendChatMessage(oc.ID, "hola", "", nil, SendOptions{Agent: true}); err != nil {
+	if _, err := a.SendChatMessage(oc.ID, "hola", "", nil, SendOptions{Agent: boolp(true)}); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t)
@@ -910,7 +917,7 @@ func TestModeToolListsMatchTheMCPCatalog(t *testing.T) {
 		got[n] = true
 	}
 	for n := range want {
-		if !got[n] && !strings.HasPrefix(n, "inspect_") {
+		if !got[n] {
 			t.Errorf("la herramienta %q del servidor MCP no está clasificada como lectura o escritura", n)
 		}
 	}

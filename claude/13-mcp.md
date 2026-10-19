@@ -43,20 +43,14 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 
 ## Herramientas
 
-| Herramienta | Entrada | Salida |
-|---|---|---|
-| `list_checkpoints` | — | árbol: archivo, padre, descripción, hijos, fecha, estado de render conocido; más `activeParent` ([claude/15](15-checkpoints.md)) |
-| `read_checkpoint` | `file` (def.: el más nuevo) | el código |
-| `create_checkpoint` | `label`, `source`, `parent` (def.: el padre activo, o el más nuevo; el primero no tiene), `description` | `{file, parent, activeParent, description}`; nunca pisa; avanza el activo ([claude/15](15-checkpoints.md)) |
-| `import_mesh` | `file` (de `refs/`), `center_on_bed` (def. `false`) | `{file, ref, converted, centeredOnBed, mesh{sizeMm, minMm, maxMm, triangles, watertight, volumeMm3}, warnings?, next}`: crea un checkpoint **raíz** que hace `import("refs/x.stl")`; 3MF/OBJ → STL en `refs/` (el original queda). Ver [claude/23](23-edicion-stl.md) |
-| `render` | `file` | estado, diagnósticos con línea y la línea de código, duración, caché, `engine` (`native`/`wasm`), `mesh`, `fitsBuildVolume`, avisos |
-| `lint` | `file` o `source` | diagnósticos de `scad.Lint` (OpenSCAD + SL001–SL009) y conteos |
-| `format` | `source` | el código formateado (texto) |
-| `measure` | `file` | `mesh`, impresora, `fitsBuildVolume`, `parts` (una por color) y `estimate` (peso, metros y costo con sus supuestos; ver [claude/14](14-medicion.md)) |
-| `preview` | `file`, `view`, `size` | **imagen PNG** (`{type:"image", data:base64, mimeType:"image/png"}`) + una línea de texto (con el motor integrado, dice que lo dibujó ScadLab) |
-| `printer_info` | — | impresora del workspace, reglas FDM, material por defecto, OpenSCAD detectado (`openscad.engine`: `native` o `wasm` si usa el motor integrado) |
-| `export` | `file`, `format` (`stl`/`3mf`/`stl-per-color`) | ruta en `<ws>/exports/`, partes, avisos |
-| `list_templates` / `get_template` | `name` | plantillas de `openscad-templates` (embebidas) |
+El catálogo completo —cada herramienta, qué hace, si es de lectura o de escritura y en qué superficie está— vive en
+[25-herramientas-ia.md](25-herramientas-ia.md). Resumen: workspace y árbol (`list_checkpoints`, `read_checkpoint`,
+`create_checkpoint`, `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `list_trash`, `restore_checkpoint`,
+`list_refs`), modelado (`render`, `lint`, `format`, `preview`, `measure`, `get_parameters`, `set_parameters`,
+`list_templates`, `get_template`, `create_from_template`, `list_libraries`, `install_library`, `list_skills`, `read_skill`),
+STL/3MF/OBJ (`inspect_reference`, `import_mesh`, `edit_mesh`) e impresión (`printer_info`, `estimate_print`,
+`list_materials`, `suggest_orientation`, `export`). El servidor `--mcp` y la caja en proceso de Hermes ofrecen **el mismo
+catálogo**.
 
 Detalles que no son obvios:
 
@@ -86,7 +80,8 @@ Detalles que no son obvios:
   (verificadas con una pieza asimétrica): `iso` y `iso-back` en perspectiva;
   `front` (desde −Y), `back`, `right` (desde **+X**), `left`, `top`, `bottom`
   ortogonales. Ojo: «Right» en la GUI de OpenSCAD (`90,0,270`) mira desde −X, la
-  convención contraria; aquí `right` es la de los planos. El PNG va a un temporal
+  convención contraria; aquí `right` es la de los planos. `rotate: [rx, ry, rz]` (grados enteros) da un ángulo libre, con `ortho`
+  opcional; el nativo y el rasterizador lo reciben igual. El PNG va a un temporal
   en `<ws>/.scadlab/preview/` (ignorado por git, el watcher no es recursivo) y se
   borra siempre.
 - **`measure`**: la malla, las **partes por color** y una **estimación de
@@ -120,8 +115,11 @@ Detalles que no son obvios:
   `../`, rutas absolutas, subcarpetas, NUL y un enlace a un archivo externo.
 - `exports/` se comprueba igual: si es un enlace hacia afuera, no se escribe.
 - Los checkpoints son inmutables: `create_checkpoint` usa `O_EXCL` y avanza el
-  número si el nombre se ocupó entre medio; no existe ninguna herramienta que
-  edite o borre un `.scad`.
+  número si el nombre se ocupó entre medio; ninguna herramienta edita o borra un
+  `.scad` (`trash_checkpoint` lo **mueve** a `.scadlab/trash/` y `restore_checkpoint` lo trae de vuelta, sin pisar).
+  `rename_checkpoint`, `trash_checkpoint` y `set_active_parent` exigen `file` (vacío no es «el más nuevo»).
+- `refs/` y `lib/` se comprueban como `exports/` (una carpeta que sale del workspace no se usa); `install_library` solo baja
+  lo del catálogo fijo, con SHA-256 y sin `..` ni enlaces ([25](25-herramientas-ia.md)).
 - Nada se escribe fuera de `<ws>` salvo la caché de mallas y de exportaciones de
   `<datos>/cache/` (la misma de la app). `get_template` busca el nombre en la
   lista embebida, no arma una ruta con lo recibido.
@@ -154,19 +152,25 @@ con código 1 y el error en stderr.
 - `main_mcp_test.go` — `runMCP` en proceso (códigos de salida, stderr) y, con
   `SCADLAB_MCP_SMOKE=1`, el binario real compilado y lanzado con `--mcp`.
 - `backend/checkpoint` — crear, carrera con el agente, raíz, encabezado.
+- Herramientas de T11 ([25](25-herramientas-ia.md)): `tools_workspace_test.go` (árbol, padre activo, rótulos, papelera y
+  restaurar con rutas hostiles, `list_refs`, y que `readTools`/`writeTools` cubran el catálogo), `tools_params_test.go`
+  (`set_parameters` y `create_from_template` renderizan, nativo y WASM), `libraries_test.go` (zip falso: SHA-256, zip slip, enlaces,
+  red caída; `SCADLAB_REAL_DOWNLOAD=1` baja las tres de verdad), `tools_mesh_test.go` (`edit_mesh` = `meshedit.Generate`,
+  `suggest_orientation`, `estimate_print`, `preview` con `rotate`, `export` png, todo por `--mcp`) y `backend/scad/params_test.go`.
 - **Prueba con un CLI real** (`claude mcp list` en un workspace temporal) la hace
   el architect; los tests del repo no lanzan agentes ni slicers (regla 9).
 
 ## Agregar una herramienta
 
-1. Entrada nueva en `env.tools()` (`tools.go`): `Name`, `Description` en inglés,
-   `InputSchema` con `obj(...)`, `Annotations` (`annReadOnly`/`annWrite`) y el
-   `handler`.
+1. Entrada nueva en `env.tools()` o en el grupo de su área (`tools_workspace.go`, `tools_params.go`, `libraries.go`,
+   `tools_mesh.go`, `tools_print.go`): `Name`, `Description` en inglés, `InputSchema` con `obj(...)`, `Annotations`
+   (`annReadOnly`/`annWrite`) y el `handler`.
 2. El handler resuelve cualquier archivo con `e.checkpointFile` y devuelve
    `jsonResult(...)`/`textResult(...)`; un error del dominio es un `error` (sale
    como `isError`). Mensajes con `i18n.Msg`.
-3. Agregarla a `wantTools` en `mcp_test.go` y probarla (caso feliz, error, ruta
-   inválida), a la tabla de arriba y a la de `assets/workspace/RULES.md.tmpl`.
+3. Clasificarla en `readTools`/`writeTools` de `backend/clichat/modes.go`, agregarla a `wantTools` en `mcp_test.go` y
+   probarla (caso feliz, error, ruta inválida, en proceso y por `--mcp`), a la tabla de
+   [25](25-herramientas-ia.md) y a la de `assets/workspace/RULES.md.tmpl`.
 
 ## Verificado con los CLIs reales (architect, S6)
 
@@ -180,7 +184,7 @@ y un workspace temporal:
 | opencode 2.0 | `✓ scadlab connected` **solo en un repo git** | fuera de git `opencode mcp list` dice «No MCP servers configured», pero `opencode debug config` muestra la entrada cargada (`opencode.json` del workspace). No se inicializa git en los workspaces por esto (decisión del usuario). |
 | Antigravity 1.3.6 (`agy`) | **`.gemini/settings.json` de proyecto NO se lee** | con ese archivo, `agy mcp list` dice «No MCP servers configured». Era del **Gemini CLI anterior** (rótulo «Gemini CLI (anterior)» en `mcpconf` y la UI; se sigue escribiendo para quien usa `gemini`). `agy` solo tiene configuración **global** y no tiene flags al arrancar para pasarle un servidor. Ver «Antigravity» abajo. |
 
-## Antigravity: configuración global con consentimiento
+## Antigravity: configuración global, registrada al elegirlo
 
 Código: `backend/mcpconf/antigravity.go` (argv, parseo de `agy mcp list`, estados),
 `app_mcp.go` (`AntigravityMCPStatus`, `AddAntigravityMCP`, `RemoveAntigravityMCP`,
@@ -191,10 +195,22 @@ variables de paquete `agyExec` y `agyPath` inyectables en tests) y
   `agy mcp list`, con argv (sin shell), `hideWindow` en Windows, plazo de 15 s
   (`agyTimeout`) y `agy` resuelto con `detect.Find("agy")` (no `gemini`). `add` es un
   upsert: sirve para corregir una ruta vieja. Nunca se edita el archivo de agy a mano.
-- **Consentimiento.** Los botones «Agregar a Antigravity» / «Quitar de Antigravity»
+- **Consentimiento (los botones).** «Agregar a Antigravity» / «Quitar de Antigravity»
   piden `confirmDialog` diciendo que se modifica la configuración global (`~/.gemini`),
   la de todos los proyectos. El interruptor del MCP y «Volver a sincronizar» **no** la
   tocan.
+- **Registro automático (S12.c).** Sin su servidor, `agy` no tiene herramientas de ScadLab:
+  intenta la shell (denegada) y el turno del chat no deja nada. `App.EnsureAntigravityMCP`
+  (`app_mcp.go`) corre `agy mcp list` y, **solo si `scadlab` falta** (`AgyMissing`), llama a
+  `AddAntigravityMCP` — mismo argv, sin `--workspace`—. Una entrada que ya existe (otra
+  ruta, desactivada) es del usuario y no se toca; con el MCP apagado en Configuración no hace
+  nada; sin `agy` tampoco. Lo disparan: la UI al mostrar `cli:antigravity` (`ChatPanel`),
+  `prepareCLIMCP` al empezar un turno y `StartAgentTerminal` antes de lanzarlo. Emite
+  `mcp:antigravity {added, error}` (toast en `App.tsx`); un `agy` que no lo acepta devuelve
+  `msgAgyEnsureFailed` con la salida de `agy`, y el turno lo repite en el prompt (el CLI debe
+  entregar un bloque) y, si no dejó nada, en su respuesta. `agyMu` serializa los add/remove y
+  `agyEnsureMu` el registro (dos clics no avisan dos veces). **Las pruebas nunca lanzan el `agy`
+  real**: `TestMain` deja `agyExec` en un doble que solo contesta `mcp list` y rechaza lo demás.
 - **Entrada sin `--workspace`.** `scadlab` → `<bin> --mcp`: el servidor usa el cwd
   (`mcp.Options.WorkspaceDir` vacío → `os.Getwd()`, ver `main_mcp.go`), y `agy` lo
   lanza en la carpeta del proyecto, así que una entrada sirve a todos los workspaces.
@@ -218,8 +234,9 @@ variables de paquete `agyExec` y `agyPath` inyectables en tests) y
 
 ## La misma caja, en proceso (Hermes, S12)
 
-`mcp.NewToolbox(mcp.ToolboxOptions{WorkspaceDir, Store, Engine, WASM, Parts, InApp: true})` expone **las mismas herramientas** sin lanzar un
+`mcp.NewToolbox(mcp.ToolboxOptions{WorkspaceDir, Store, Engine, WASM, Parts})` expone **las mismas herramientas** sin lanzar un
 subproceso `--mcp`: el chat de la app (Hermes, [19-hermes.md](19-hermes.md)) las llama como funciones (`Tools()`, `Call(ctx, name, args)` →
 `ToolOutput{Text, Images, IsError}`), con la base, el motor de render, el WebAssembly y la caché de partes **de la app** inyectados (no abre
-una segunda base ni un segundo motor; `Close()` no cierra lo inyectado). `InApp` suma `list_skills`, `read_skill` e `inspect_reference`,
-que el servidor `--mcp` no ofrece (el agente externo ya lee las skills del disco). Una herramienta nueva se agrega una sola vez y llega a los dos.
+una segunda base ni un segundo motor; `Close()` no cierra lo inyectado). Desde T11 el catálogo es idéntico al del servidor:
+`list_skills`, `read_skill` e `inspect_reference` también están en `--mcp` (`InApp` se conserva sin efecto). Una herramienta nueva se
+agrega una sola vez y llega a los dos.

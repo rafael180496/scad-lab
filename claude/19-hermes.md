@@ -123,16 +123,17 @@ Proveedores solo los muestra, de solo lectura, en «CLIs detectados» (`ListDete
   `installed:false` para Configuración. En pruebas, `SCADLAB_NO_EXTRA_DIRS=1` limita `Find` al PATH.
 - **Modos** (`modes.go`): «Solo consulta» = el `ask` de mini-tools, «Agente» = su `edit`. En ninguno corre la shell ni se
   pasan `--dangerously-*`/`--auto`/`bypassPermissions`. Las herramientas de ScadLab se clasifican en lectura (`list_checkpoints`,
-  `read_checkpoint`, `lint`, `format`, `render`, `measure`, `preview`, `printer_info`, `list_templates`, `get_template`) y escritura
-  (`create_checkpoint`, `import_mesh`, `export`, solo en «Agente»); una prueba las cruza con el catálogo del servidor MCP.
+  `read_checkpoint`, `lint`, `format`, `render`, `measure`, `preview`, `printer_info`, `list_templates`, `get_template`…) y escritura
+  (`create_checkpoint`, `import_mesh`, `edit_mesh`, `export`… solo en «Agente»); la lista completa está en
+  [25-herramientas-ia.md](25-herramientas-ia.md) y una prueba las cruza con el catálogo del servidor MCP.
 - **Flags** (`session.go`, `BuildArgs`; el prompt es lo primero salvo en Codex/OpenCode, que lo llevan tras `--`):
 
 | CLI | Base | «Solo consulta» / «Agente» | Sesión |
 |---|---|---|---|
 | Claude Code | `-p <prompt> --output-format stream-json --verbose --append-system-prompt <idioma>` + `--mcp-config` + `--add-dir`* | sin `--permission-mode` / `--permission-mode acceptEdits`; `--disallowedTools Bash,PowerShell` (+ `Edit,Write,MultiEdit,NotebookEdit` en consulta); `--allowedTools mcp__scadlab__<lectura>` / `+ create_checkpoint,export` | `--resume <id>` |
-| Codex | `exec` + `-c mcp_servers.scadlab.*` + `--add-dir`* + `--json --skip-git-repo-check` | `--sandbox read-only` y `-c mcp_servers.scadlab.enabled_tools=[lectura]` / `--sandbox workspace-write`; imágenes `-i`, prompt tras `--` | `resume <id>` (antes de las banderas de `exec`: `resume` no repite `--sandbox`) |
+| Codex | `exec` + `-c mcp_servers.scadlab.*` + `--add-dir`* + `--json --skip-git-repo-check` | `--sandbox read-only` y `-c mcp_servers.scadlab.enabled_tools=[lectura]` / `--sandbox workspace-write` y `enabled_tools=[todas]`; imágenes `-i`, prompt tras `--` | `resume <id>` (antes de las banderas de `exec`: `resume` no repite `--sandbox`) |
 | Antigravity | `--print <prompt> --output-format stream-json` + `--add-dir`* | sin `--mode` / `--mode accept-edits` | `--conversation <id>` |
-| OpenCode | `run --format json --standalone` + `--model` + `-- <prompt>` | `--agent plan` y `OPENCODE_CONFIG_CONTENT={"permission":{"bash":"deny","scadlab_create_checkpoint":"deny","scadlab_export":"deny"}}` / `--agent build` (solo `bash` denegado) | `--session <id>` |
+| OpenCode | `run --format json --standalone` + `--model` + `-- <prompt>` | `--agent plan` y `OPENCODE_CONFIG_CONTENT={"permission":{"bash":"deny","scadlab_<lectura>":"allow","scadlab_<escritura>":"deny"}}` / `--agent build` (`bash` denegado y todas las `scadlab_*` en `allow`) | `--session <id>` |
 
   `*` = los flags que ya arma la terminal (`mcpLaunchArgs`, `addDirArgs` de `app_terminal.go`/`app_mcp.go`): una sola
   definición. OpenCode lee el MCP de `<ws>/opencode.json`; Antigravity solo del `agy mcp add` global. Las imágenes adjuntas se
@@ -162,6 +163,97 @@ Proveedores solo los muestra, de solo lectura, en «CLIs detectados» (`ListDete
 - **Pruebas**: CLIs falsos (scripts `sh` en un PATH temporal con el NDJSON de `backend/clichat/testdata`); ninguna abre un CLI real.
   **Sin verificar con sesiones reales**: el JSON de `mcp_tool_call` de Codex, `enabled_tools` de Codex y los permisos
   `scadlab_*` de OpenCode se basan en el formato documentado/inspeccionado, no en una corrida.
+
+## Red de seguridad: el chat termina siempre en un `.scad` (S12.c)
+
+Spec: [.claude/specs/s12c-chat-crea-checkpoints.md](../.claude/specs/s12c-chat-crea-checkpoints.md). Un turno en **«Agente»** que
+termina **sin** haber creado un checkpoint y cuyo texto trae un bloque OpenSCAD completo se guarda solo (`app_chat_autosave.go`):
+
+- **Qué guarda.** `designBlock` (sobre `prompts.ScadBlocks`) toma el último bloque cerrado que no sea un fragmento al lado de uno
+  más del doble de largo. Padre: el de un intento anterior del turno; si no, el archivo abierto, el padre activo, el más nuevo;
+  `""` (workspace vacío) = **raíz**. Pasa por `SaveChatCheckpoint` (cabecera con `desc=` del bloque, vínculo con el chat) y se
+  renderiza con la caja `newChatToolset` (`render`, la misma que usa el modelo: malla, diagnósticos con línea,
+  `RENDER_ERRORS.md`). Salen **dos pasos** ya terminados: `autosave` («Guardado automáticamente», su `file` es el enlace de la
+  tarjeta) y `render`. Un bloque idéntico a uno ya intentado no se vuelve a guardar.
+- **Hermes** (`Config.AutoSave`, `runner.autoSave`): corre al final de la vuelta que no pide herramientas, con o sin tool calling
+  (un modelo con herramientas que contesta con el código también cae ahí). Si el modelo ya creó un checkpoint (`createdCheckpoint`:
+  una herramienta con `mcp.CreatesCheckpoint` —`create_checkpoint`, `import_mesh`, `set_parameters`, `create_from_template`,
+  `edit_mesh`— en `ok`) no hace nada. **Bucle de respaldo**: si el render falló, `AutoSaveOutcome.Feedback`
+  (el error con su línea) vuelve al modelo como mensaje de usuario (`msgAutoFix`) y se da otra vuelta, mientras quepan sus dos
+  pasos en `MaxSteps`; la corrección cuelga del que falló. El aviso de «sin herramientas» ahora dice que ScadLab guardará el bloque.
+- **CLIs** (`cliSafetyNet`, en `runCLITurn` tras `rec.finish`): **un solo intento**, sin segunda vuelta (el CLI tiene su sesión). No
+  actúa si hay un paso `mcp.CreatesCheckpoint(tool)` o `autosave` en `ok`, ni si apareció un `.scad` que no estaba al empezar el
+  turno (Claude con `Write`, Codex editando): `workspaceScadSet` lo compara. Los pasos van por `chat:step` con `workspaceId`.
+- **Turno vacío**: `cliTurnText` reemplaza una respuesta sin texto ni checkpoint por una explicación (qué herramienta falló y con qué
+  detalle, y por qué no se creó nada); con `mcpNote` (el MCP apagado, Antigravity sin registrar o desactivado) la repite también
+  tras un texto sin checkpoint.
+- **Antigravity** (`antigravityAdapter`, ahora con estado por turno): una herramienta que falla lleva el **detalle real** del paso
+  (`error`, `output`… y, si el campo es nuevo, lo que traiga) en vez de «Sin resultado», y un `result.response` sin trozos previos
+  sale como texto. `agyEvents` y los tests con `antigravity-error.jsonl` / `antigravity-response-only.jsonl` documentan la forma;
+  el NDJSON real de un error **no está documentado** y se lee por nombres probables.
+- **Modo y permisos** (`backend/clichat`): «Agente» por defecto, y **por conversación** (ver la sección de T12 abajo). En «Agente», Claude Code ya traía
+  `--allowedTools mcp__scadlab__<todas>`; **Codex** pasa `mcp_servers.scadlab.enabled_tools=[todas]` y **OpenCode**
+  `permission.scadlab_<herramienta>="allow"` (en consulta, `deny` a las de escritura); Antigravity sigue con `--mode accept-edits`
+  (sin flag para listar herramientas, y `--dangerously-skip-permissions` no se pasa nunca). La shell sigue denegada en todos.
+  El prompt de turno (`cliPrompt`) ordena en «Agente» *crear → renderizar → mirar → corregir en uno nuevo* y, sin checkpoints,
+  crear el primero sin preguntar; en «Solo consulta» pide **un** bloque completo con la cabecera.
+- **Sin verificar con sesiones reales**: que `agy` en `--mode accept-edits` aprueba solo las herramientas MCP, y que Codex no pide
+  aprobación por herramienta MCP en `exec`; ambos se prueban con CLIs falsos (argv y NDJSON), no con una corrida.
+
+## Modo por conversación y escritura por defecto (S12.c, T12)
+
+Visión del usuario: «por defecto debe ser escritura, ya que el chiste de esto es modificar y crear modelos». T9 dejó el modo en
+Agente pero lo recordaba en `localStorage` **por tipo de proveedor**: elegir «Solo consulta» en una conversación lo volvía el modo de
+todas las de ese tipo. Ahora es de cada conversación.
+
+- **Dónde vive.** `chats.mode` (migración 9, ver [07-database.md](07-database.md)): `''` = «Agente» (el predeterminado, de toda fila
+  anterior y de toda conversación nueva) y `'ask'` = «Solo consulta», elegido a mano **para esa conversación**. `store.Chat.Mode`
+  viaja en `ListChats`, `GetChat` y `NewChat`; `Chat.Agent()` es `Mode != "ask"`.
+- **`SetChatMode(chatId, mode)`** (`"agent"` | `"ask"`): guarda el modo de esa conversación y de ninguna otra; no deja un predeterminado
+  ni toca `updated_at`. Un turno en curso termina con el modo con que empezó.
+- **`SendChatMessage` usa el modo de la conversación.** `SendOptions.Agent` pasó de `bool` a `*bool` y es un **override explícito solo de
+  ese turno**: `nil` (lo normal) = el modo guardado; `true`/`false` lo fuerza sin cambiar lo guardado (`SendOptions.agentFor`). Se
+  conserva porque hay un caso real: un modelo que informó no llamar herramientas no puede correr en «Agente» aunque la conversación lo
+  esté, y la interfaz (que en ese caso deshabilita el interruptor y ofrece «Crear checkpoint y renderizar») manda `agent:false` solo
+  para ese turno. Un `bool` sin más habría convertido el «no mandé nada» de los clientes viejos en «Solo consulta».
+- **Hermes (servidores).** El modo Agente es el interruptor de herramientas: una conversación nueva viaja con las herramientas
+  declaradas y el prompt de Hermes; en consulta, sin ellas y con el prompt de texto de S5. Prueba: `TestHermesSendUsesTheConversationMode`
+  (pedido 0 con `tools`, el de la conversación en consulta sin ellas, la otra conversación con ellas, y los dos overrides).
+- **CLIs.** El argv sale de `clichat.ModeFor(agent)` con el modo de la conversación. Prueba: `TestCLISendUsesTheConversationMode` (CLI
+  falso: `--permission-mode acceptEdits` y `create_checkpoint` en `--allowedTools` vs. `--disallowedTools Edit…` y solo lectura).
+- **Frontend** (`ChatPanel.tsx`, `lib/chatMode.ts`): el interruptor lee `current.mode` del chat abierto; sin chat abierto es un borrador
+  (`draftAgent`) que **siempre arranca en Agente** y se reinicia con «Chat nuevo», con «Modificar con IA» y al cambiar de proyecto. Si
+  en el panel vacío se elige consulta, se guarda en la conversación recién creada (`NewChat` → `SetChatMode`) antes de enviar. Cambiar
+  el interruptor en un chat abierto se refleja ya en la lista y llama a `SetChatMode` (un envío inmediato espera ese guardado; si falla,
+  se relee la lista). El aviso «Cambiar a Agente» pasa por el mismo camino, así que queda guardado en esa conversación.
+- **Migración de `localStorage`.** `main.tsx` llama una vez a `clearLegacyChatMode()`, que borra `scadlab.chat.agent`,
+  `scadlab.chat.agent.cli` (S12/S12.b) y `scadlab.chat.mode.cli|server` (T9). **No se migran a ninguna conversación**: las de S12.b no
+  se distinguían de un default y las de T9 eran por tipo, no por conversación; migrarlas habría dejado en consulta chats que nadie eligió
+  así. Toda conversación existente con la columna vacía queda en Agente. Prueba: `cd frontend && pnpm test` (`chat-ux.test.mjs`).
+
+### La terminal de agentes y `--mcp` no arrancan en solo lectura (T12)
+
+**Terminal** (`app_terminal.go`, `agentLaunchArgs`). Revisado: el argv que arma ScadLab son solo tres grupos —el MCP (`--mcp-config` en
+Claude, `-c mcp_servers.scadlab.*` en Codex), `--add-dir` con los otros proyectos abiertos y los de la sesión (`--resume`, `-c`,
+`resume --last`…)—. **Ningún CLI arranca restringido por un flag de ScadLab, y no se agregó ninguno**; en particular no hay
+`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox` ni equivalentes: en la terminal la persona aprueba en su
+propia terminal. Cada CLI arranca en su modo habitual:
+
+| CLI | Qué le pasa ScadLab | Cómo queda |
+|---|---|---|
+| Claude Code | `--mcp-config <json>` + `--add-dir` + sesión; sin `--permission-mode`, `--allowedTools` ni `--disallowedTools` | modo de permisos habitual de Claude Code: puede editar y crear, pidiendo aprobación en la terminal (incluida cada herramienta de ScadLab la primera vez) |
+| Codex | `-c mcp_servers.scadlab.command/args` + `--add-dir` + sesión; sin `--sandbox` ni `enabled_tools` | sandbox y aprobaciones de su propia configuración; ve **todas** las herramientas de ScadLab (`enabled_tools` solo lo pone el chat) |
+| Antigravity | `--add-dir` + sesión; sin `--mode`; el MCP está en su configuración global (`agy mcp add`, ScadLab lo registra al abrirlo) | modo habitual de `agy`, no `plan` |
+| OpenCode | solo la sesión; el MCP va en `<workspace>/opencode.json` | agente por defecto (`build`), no `plan` |
+
+La prueba `TestAgentTerminalArgsAreNeverReadOnlyNorBypassPermissions` recorre los cuatro CLIs, con el MCP encendido y apagado y en los
+modos nuevo/continuar, y falla si aparece cualquiera de esos flags. Los modos de «Solo consulta» y «Agente» de arriba son **solo del
+chat**: la terminal no tiene modo.
+
+**`--mcp`** (`main_mcp.go`, `backend/mcp`). Su único flag es `--workspace`; no hay `--read-only`, ni variable de entorno, ni setting que
+oculte herramientas. Sin nada más declara las de escritura (`create_checkpoint`, `import_mesh`, `export`…) junto con las de lectura:
+`TestMCPServerIsWritableByDefault` lo comprueba por `tools/list` y que `--read-only` sea un flag desconocido. «Solo consulta» no es un
+modo del servidor: lo implementa el chat al armar la lista de herramientas permitidas de cada CLI (`backend/clichat`).
 
 ## Terminal (12.7)
 

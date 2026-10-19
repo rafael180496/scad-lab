@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"scadlab/backend/checkpoint"
 	"scadlab/backend/i18n"
 	"scadlab/backend/render"
 	"scadlab/backend/store"
@@ -418,5 +419,117 @@ func TestStarterFailureDoesNotFailImport(t *testing.T) {
 	}
 	if !exists(filepath.Join(dir, "001-caja.scad")) {
 		t.Error("se perdió lo que había")
+	}
+}
+
+// S12.c: un workspace SIN ningún .scad (anterior a S12, o cuyo starter nunca se
+// escribió) abre con el checkpoint por defecto: el árbol ya lo trae y el visor
+// tiene algo que mostrar. Sale en el idioma de la app y no pisa nada.
+func TestOpenProjectWritesTheStarterIntoAnEmptyWorkspace(t *testing.T) {
+	a := newTestApp(t)
+	i18n.SetLang("es")
+	t.Cleanup(func() { i18n.SetLang("en") })
+	w, err := a.CreateWorkspace("Caja Pi", "bambu-a1-mini") // con skipStarter: queda vacío
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.Glob(filepath.Join(w.Path, "*.scad")); len(got) != 0 {
+		t.Fatalf("el workspace de partida debía estar vacío: %v", got)
+	}
+	withStarter(t)
+	v, err := a.OpenProject(w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.stopWatcher)
+	if len(v.Checkpoints) != 1 || v.Checkpoints[0].FileName != "001-caja-pi.scad" || v.Checkpoints[0].ParentFile != "" {
+		t.Fatalf("árbol al abrir: %+v", v.Checkpoints)
+	}
+	raw := readFile(t, filepath.Join(w.Path, "001-caja-pi.scad"))
+	if !strings.HasPrefix(raw, `// @checkpoint parent= desc="Caja Pi"`) || !strings.Contains(strings.ToLower(raw), "pomo") {
+		t.Errorf("starter:\n%s", raw)
+	}
+	// Abrir otra vez no escribe un segundo: ya hay un .scad.
+	if _, err := a.OpenProject(w.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.Glob(filepath.Join(w.Path, "*.scad")); len(got) != 1 {
+		t.Errorf("segunda apertura: %v", got)
+	}
+}
+
+// Con modelos propios no se toca nada; y un workspace que el usuario VACIÓ (su
+// papelera guarda algo) no resucita el starter: ahí el visor ofrece «Crear un
+// modelo de inicio», que sí lo escribe cuando el usuario lo pide.
+func TestOpenProjectLeavesAVaciedWorkspaceAlone(t *testing.T) {
+	a := newTestApp(t)
+	w, err := a.CreateWorkspace("Taller", "bambu-a1-mini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(w.Path, "001-mia.scad"), []byte("// @checkpoint parent= desc=\"mía\"\ncube(5);\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withStarter(t)
+	if _, err := a.OpenProject(w.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.stopWatcher)
+	if got, _ := filepath.Glob(filepath.Join(w.Path, "*.scad")); len(got) != 1 {
+		t.Fatalf("con modelos no se agrega nada: %v", got)
+	}
+
+	// El usuario manda su único checkpoint a la papelera y vuelve a abrir.
+	if _, err := checkpoint.Trash(w.Path, "001-mia.scad"); err != nil {
+		t.Fatal(err)
+	}
+	v, err := a.OpenProject(w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.Glob(filepath.Join(w.Path, "*.scad")); len(got) != 0 || len(v.Checkpoints) != 0 {
+		t.Fatalf("no se resucita el starter: %v %+v", got, v.Checkpoints)
+	}
+	name, err := a.CreateStarterCheckpoint(w.ID)
+	if err != nil || name != "001-taller.scad" {
+		t.Fatalf("CreateStarterCheckpoint: %q %v", name, err)
+	}
+	// Con un modelo ya en la carpeta el botón no escribe nada.
+	if again, err := a.CreateStarterCheckpoint(w.ID); err != nil || again != "" {
+		t.Errorf("segunda vez: %q %v", again, err)
+	}
+}
+
+// Las reglas de los agentes (CLAUDE.md / AGENTS.md) se re-sincronizan al abrir: el
+// texto de la plantilla cambia entre versiones y los workspaces viejos tienen que
+// recibirlo. Solo se toca el bloque gestionado; lo que escribió el usuario queda.
+func TestOpenProjectResyncsTheManagedRulesBlock(t *testing.T) {
+	a := newTestApp(t)
+	w, err := a.CreateWorkspace("Reglas", "bambu-a1-mini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(w.Path, "CLAUDE.md")
+	fresh := readFile(t, path)
+	begin := strings.Index(fresh, "<!-- scadlab:rules:begin")
+	end := strings.Index(fresh, "<!-- scadlab:rules:end -->")
+	if begin < 0 || end < begin {
+		t.Fatalf("faltan las marcas del bloque:\n%s", fresh)
+	}
+	// Un workspace viejo: el bloque trae reglas de una versión anterior y el usuario agregó lo suyo debajo.
+	stale := fresh[:begin] + "<!-- scadlab:rules:begin — ScadLab actualiza este bloque solo; escribe lo tuyo fuera de él -->\nREGLAS VIEJAS\n" + fresh[end:] + "\nNota mía: no toques el taladro.\n"
+	if err := os.WriteFile(path, []byte(stale), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.OpenProject(w.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.stopWatcher)
+	got := readFile(t, path)
+	if strings.Contains(got, "REGLAS VIEJAS") || !strings.Contains(got, "Nota mía: no toques el taladro.") {
+		t.Errorf("el bloque se actualiza y lo del usuario se conserva:\n%s", got)
+	}
+	if got != fresh+"\nNota mía: no toques el taladro.\n" {
+		t.Errorf("el bloque no volvió a la versión vigente:\n%s", got)
 	}
 }

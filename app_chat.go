@@ -55,8 +55,12 @@ type ChatDeltaEvent struct {
 // ChatStepEvent anuncia un paso de herramienta: una vez al arrancar (status
 // running) y otra al terminar (ok o error) con el mismo Step.ID.
 type ChatStepEvent struct {
-	ChatID int64       `json:"chatId"`
-	Step   hermes.Step `json:"step"`
+	ChatID int64 `json:"chatId"`
+	// WorkspaceID es el proyecto del chat: la interfaz abre en el visor y en
+	// Código el checkpoint que un paso acaba de crear (S12.c) sin tener que saber
+	// de qué chat vino.
+	WorkspaceID int64       `json:"workspaceId"`
+	Step        hermes.Step `json:"step"`
 }
 
 // ChatUsageEvent es el uso acumulado del turno hasta ahora. CostUSD es 0 cuando
@@ -99,13 +103,28 @@ type ChatView struct {
 	Usage hermes.Usage  `json:"usage"`
 }
 
-// SendOptions son las opciones de un envío. Agent=false es el modo texto de S5
-// (bloques de código y «Guardar como checkpoint»); Agent=true, Hermes con
-// herramientas. MaxSteps es el tope de llamadas a herramientas del turno
-// (1–30; 0 = 12).
+// SendOptions son las opciones de un envío. MaxSteps es el tope de llamadas a
+// herramientas del turno (1–30; 0 = 12).
+//
+// Agent es un override explícito SOLO de este turno y casi nunca viene: nil (lo
+// normal) usa el modo de la conversación (chats.mode, ver SetChatMode), que es
+// «Agente» salvo que la persona haya elegido «Solo consulta» para ESA conversación.
+// La interfaz solo lo manda cuando el modelo no llama herramientas y por eso el
+// turno no puede ser «Agente» aunque la conversación lo sea; no cambia lo guardado.
+// false = modo texto de S5 (bloques de código y «Guardar como checkpoint»);
+// true = Hermes con herramientas, o el CLI con las de escritura.
 type SendOptions struct {
-	Agent    bool `json:"agent"`
-	MaxSteps int  `json:"maxSteps"`
+	Agent    *bool `json:"agent,omitempty"`
+	MaxSteps int   `json:"maxSteps"`
+}
+
+// agentFor resuelve si el turno de la conversación c corre en «Agente»: el
+// override del envío si lo hay; si no, el modo guardado de la conversación.
+func (o SendOptions) agentFor(c store.Chat) bool {
+	if o.Agent != nil {
+		return *o.Agent
+	}
+	return c.Agent()
 }
 
 // maxChatTextBytes acota un mensaje: pegar un archivo entero por error no debe
@@ -305,7 +324,8 @@ func (a *App) NewChat(workspaceID int64, providerID, model string) (store.Chat, 
 // currentFile es el checkpoint abierto en el editor ("" si ninguno): su código
 // entra al prompt de sistema. attachmentIDs son los adjuntos elegidos (imágenes
 // y modelos de referencia, ver app_chat_attach.go); con ellos el texto puede ir
-// vacío. opts.Agent enciende las herramientas. Devuelve el mensaje guardado.
+// vacío. El modo (herramientas o solo consulta) es el de la conversación, salvo
+// que opts.Agent lo fuerce para este turno. Devuelve el mensaje guardado.
 //
 // Todo lo que puede fallar antes de empezar (el servidor no responde, un adjunto
 // que el modelo no admite, el chat ocupado) falla ANTES de guardar nada: no
@@ -346,7 +366,8 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
-	caps := a.modelCapabilities(p, client, c.Model, opts.Agent || len(pending) > 0)
+	agent := opts.agentFor(c)
+	caps := a.modelCapabilities(p, client, c.Model, agent || len(pending) > 0)
 	if err := hermes.CheckVision(pending, caps.Vision, caps.VisionKnown, p.Name+" · "+c.Model); err != nil {
 		return store.ChatMessage{}, err
 	}
@@ -359,7 +380,7 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 
 	job := chatJob{
 		turn: turn, chat: c, server: p, client: client, workspace: w, caps: caps,
-		currentFile: currentFile, user: hermes.UserMessage(prepared), agent: opts.Agent,
+		currentFile: currentFile, user: hermes.UserMessage(prepared), agent: agent,
 		maxSteps: hermes.ClampSteps(opts.MaxSteps), history: seedFrom(stored, p.Kind), refs: referencePaths(stored, prepared.Metas),
 	}
 	a.chatSvc().beginLive(chatID)
@@ -487,7 +508,7 @@ func (a *App) runChatTurn(j chatJob) {
 		return
 	}
 
-	cfg := a.hermesConfig(j)
+	cfg := a.withAutoSave(j, a.hermesConfig(j))
 	if cl, ok := cfg.Tools.(io.Closer); ok {
 		// La caja se cierra al terminar el turno; lo inyectado (base, motor,
 		// WebAssembly, caché de partes) es de la app y no se cierra.
@@ -501,7 +522,8 @@ func (a *App) runChatTurn(j chatJob) {
 		Flush: stream.Flush,
 		Step: func(st hermes.Step) {
 			svc.upsertStep(c.ID, st)
-			a.emit(evChatStep, ChatStepEvent{ChatID: c.ID, Step: st})
+			a.emit(evChatStep, ChatStepEvent{ChatID: c.ID, WorkspaceID: c.WorkspaceID, Step: st})
+			a.refreshTreeAfterStep(c.WorkspaceID, st)
 		},
 		Usage: func(u hermes.Usage) {
 			svc.setUsage(c.ID, u)
@@ -591,6 +613,19 @@ func (a *App) hermesConfig(j chatJob) hermes.Config {
 	return cfg
 }
 
+// withAutoSave le pone a cfg la red de seguridad (ver app_chat_autosave.go): solo
+// en modo «Agente». Va también cuando el modelo NO tiene herramientas —es el caso
+// para el que existe— y cuando las tiene pero contestó con el código en vez de
+// llamarlas.
+func (a *App) withAutoSave(j chatJob, cfg hermes.Config) hermes.Config {
+	if !j.agent {
+		return cfg
+	}
+	saver := a.newAutoSaver(j.workspace, j.chat.ID, j.currentFile)
+	cfg.AutoSave = saver.run
+	return cfg
+}
+
 // newChatToolset abre la caja de herramientas del workspace para un turno, con la
 // base, el motor de render, el WebAssembly y la caché de partes DE LA APP
 // inyectados: Hermes no abre una segunda base ni un segundo motor. Es una
@@ -638,6 +673,18 @@ func (a *App) RenameChat(chatID int64, title string) error {
 		return i18n.New(i18n.Msg{ES: "el nombre de la conversación no puede estar vacío", EN: "the conversation name cannot be empty"})
 	}
 	return a.store.RenameChat(chatID, title)
+}
+
+// SetChatMode fija el modo de ESA conversación: "agent" (el predeterminado: el
+// asistente crea y cambia modelos) o "ask" («Solo consulta»: solo lee y explica).
+// Se guarda en chats.mode y vale para todos sus turnos siguientes; no cambia el
+// modo de ninguna otra conversación ni deja un nuevo predeterminado. Un turno en
+// curso termina con el modo con que empezó.
+func (a *App) SetChatMode(chatID int64, mode string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	return a.store.SetChatMode(chatID, mode)
 }
 
 // SetChatModel cambia el servidor y el modelo con que sigue una conversación (a
@@ -704,7 +751,8 @@ func (a *App) SaveChatCheckpoint(workspaceID, chatID int64, parentFile, label, d
 
 // ChatCheckpointParent resuelve el padre con el que se guarda un bloque del
 // chat como checkpoint: el archivo abierto; si no hay (o ya no existe), el
-// último checkpoint; si el workspace no tiene ninguno, un error claro.
+// último checkpoint; si el workspace no tiene ninguno devuelve "" —no es un
+// error—: el bloque será el primero, la raíz del árbol (S12.c).
 func (a *App) ChatCheckpointParent(workspaceID int64, currentFile string) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
@@ -713,22 +761,18 @@ func (a *App) ChatCheckpointParent(workspaceID int64, currentFile string) (strin
 	if err != nil {
 		return "", err
 	}
-	return chatParent(w.Path, currentFile)
+	return chatParent(w.Path, currentFile), nil
 }
 
-func chatParent(dir, currentFile string) (string, error) {
+// chatParent es el padre con el que se guarda un bloque del chat; "" en un
+// workspace sin ningún checkpoint (checkpoint.CreateRoot lo crea sin padre).
+func chatParent(dir, currentFile string) string {
 	if currentFile != "" && validCheckpointName(currentFile) == nil {
 		if st, err := os.Stat(filepath.Join(dir, currentFile)); err == nil && !st.IsDir() {
-			return currentFile, nil
+			return currentFile
 		}
 	}
-	if last := latestCheckpoint(dir); last != "" {
-		return last, nil
-	}
-	return "", i18n.New(i18n.Msg{
-		ES: "este workspace todavía no tiene ningún checkpoint que sirva de padre: pídele a un agente el primero (o crea el .scad a mano) y vuelve a guardar",
-		EN: "this workspace has no checkpoint yet to be the parent: ask an agent for the first one (or create the .scad by hand) and save again",
-	})
+	return latestCheckpoint(dir)
 }
 
 // chatPromptContext reúne lo que el prompt de sistema sabe del workspace: la

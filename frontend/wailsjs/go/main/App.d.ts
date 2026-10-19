@@ -62,6 +62,8 @@ export function CreateSkill(arg1:string):Promise<string>;
 
 export function CreateSkillFile(arg1:string,arg2:string):Promise<void>;
 
+export function CreateStarterCheckpoint(arg1:number):Promise<string>;
+
 export function CreateWorkspace(arg1:string,arg2:string):Promise<store.Workspace>;
 
 export function CreateWorkspaceIn(arg1:string,arg2:string,arg3:string):Promise<store.Workspace>;
@@ -81,6 +83,8 @@ export function DetectTools():Promise<Array<detect.Tool>>;
 export function DownloadOpenSCAD():Promise<main.OpenSCADDownload>;
 
 export function EffectiveWorkspacesRoot():Promise<string>;
+
+export function EnsureAntigravityMCP():Promise<main.AntigravityEnsure>;
 
 export function EstimatePrint(arg1:number,arg2:string,arg3:estimate.Options):Promise<estimate.Result>;
 
@@ -259,6 +263,8 @@ export function SetActiveParent(arg1:number,arg2:string):Promise<void>;
 export function SetActiveProject(arg1:number):Promise<void>;
 
 export function SetAutoIterate(arg1:boolean):Promise<void>;
+
+export function SetChatMode(arg1:number,arg2:string):Promise<void>;
 
 export function SetChatModel(arg1:number,arg2:string,arg3:string):Promise<void>;
 

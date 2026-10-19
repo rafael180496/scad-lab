@@ -404,3 +404,33 @@ func TestMoveNoReplace(t *testing.T) {
 		t.Error("el movimiento no se hizo")
 	}
 }
+
+// TrashEmpty: sin papelera o con la carpeta vacía es true; con cualquier cosa
+// adentro (aunque no tenga el formato de papelera) es false, porque quien lo usa
+// decide si resucitar el starter y ante la duda no se hace.
+func TestTrashEmpty(t *testing.T) {
+	fixNow(t)
+	dir := tree(t)
+	if !TrashEmpty(dir) {
+		t.Error("sin papelera está vacía")
+	}
+	if _, err := Trash(dir, "004-lado.scad"); err != nil {
+		t.Fatal(err)
+	}
+	if TrashEmpty(dir) {
+		t.Error("con un checkpoint adentro no está vacía")
+	}
+	empty := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(empty, ".scadlab", "trash"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !TrashEmpty(empty) {
+		t.Error("la carpeta existe y no tiene nada")
+	}
+	if err := os.WriteFile(filepath.Join(empty, ".scadlab", "trash", "raro.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if TrashEmpty(empty) {
+		t.Error("algo a mano también cuenta")
+	}
+}

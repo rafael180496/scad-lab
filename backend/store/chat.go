@@ -1,5 +1,7 @@
 package store
 
+import "scadlab/backend/i18n"
+
 // Chat es una conversación con un modelo, dentro de un workspace.
 type Chat struct {
 	ID          int64  `json:"id"`
@@ -12,6 +14,31 @@ type Chat struct {
 	// CLISession es el id de conversación del CLI agéntico con que sigue el chat
 	// (provider_id `cli:*`); vacío si no hay o si el chat es de un servidor.
 	CLISession string `json:"cliSession"`
+	// Mode es el modo de escritura de ESTA conversación: "" = «Agente» (el
+	// predeterminado, también de las filas anteriores a la migración 9) y
+	// ChatModeAsk = «Solo consulta», elegido a mano. Ver Agent().
+	Mode string `json:"mode"`
+}
+
+// ChatModeAsk es el valor de Chat.Mode de «Solo consulta». Cualquier otro valor
+// (en la práctica, "") es «Agente».
+const ChatModeAsk = "ask"
+
+// Agent dice si la conversación está en modo «Agente» (puede crear y cambiar
+// checkpoints). Es el default: solo un «Solo consulta» guardado lo apaga.
+func (c Chat) Agent() bool { return c.Mode != ChatModeAsk }
+
+// ChatModeValue convierte el modo que llega de la interfaz ("agent" | "ask", y
+// "" como sinónimo de «Agente») al valor que se guarda en chats.mode. ok=false si
+// no es ninguno: no se guarda un texto cualquiera en la columna.
+func ChatModeValue(mode string) (stored string, ok bool) {
+	switch mode {
+	case "", "agent":
+		return "", true
+	case ChatModeAsk:
+		return ChatModeAsk, true
+	}
+	return "", false
 }
 
 // ChatMessage es un mensaje del chat: role es "user" o "assistant". Los pasos de
@@ -44,11 +71,11 @@ type NewChatMessage struct {
 	CostUSD      float64
 }
 
-const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at, cli_session`
+const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at, cli_session, mode`
 
 func scanChat(sc interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
-	err := sc.Scan(&c.ID, &c.WorkspaceID, &c.ProviderID, &c.Model, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.CLISession)
+	err := sc.Scan(&c.ID, &c.WorkspaceID, &c.ProviderID, &c.Model, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.CLISession, &c.Mode)
 	return c, err
 }
 
@@ -139,6 +166,25 @@ func (s *Store) SetChatModel(id int64, providerID, model string) error {
 // updated_at.
 func (s *Store) SetChatCLISession(id int64, session string) error {
 	res, err := s.db.Exec(`UPDATE chats SET cli_session = ? WHERE id = ?`, session, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetChatMode guarda el modo de la conversación ("agent" | "ask"; "" también es
+// «Agente»). No toca updated_at: cambiar de modo no es actividad del chat. Solo
+// afecta a esa conversación. ErrNotFound si el chat no existe; un modo desconocido
+// es un error y no cambia nada.
+func (s *Store) SetChatMode(id int64, mode string) error {
+	stored, ok := ChatModeValue(mode)
+	if !ok {
+		return i18n.Errorf(i18n.Msg{ES: "modo de conversación desconocido: %q (usa «agent» o «ask»)", EN: "unknown conversation mode: %q (use “agent” or “ask”)"}, mode)
+	}
+	res, err := s.db.Exec(`UPDATE chats SET mode = ? WHERE id = ?`, stored, id)
 	if err != nil {
 		return err
 	}

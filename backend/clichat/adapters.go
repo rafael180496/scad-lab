@@ -2,6 +2,7 @@ package clichat
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -182,6 +183,9 @@ type agyLine struct {
 		Status         string    `json:"status"`
 		Response       string    `json:"response"`
 		Usage          *agyUsage `json:"usage"`
+		// Con un estado distinto de SUCCESS el CLI suele explicar por qué.
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
 	} `json:"result"`
 }
 
@@ -200,7 +204,97 @@ func (u *agyUsage) common() *Usage {
 	return &Usage{Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, Thinking: u.Thinking, Total: u.Total}
 }
 
-func antigravityAdapter(line []byte) []Event {
+// antigravityAdapter traduce UNA línea de Antigravity sin recordar nada. El turno
+// real usa newAntigravityTurn (ver abajo), que además sabe si ya salió texto.
+func antigravityAdapter(line []byte) []Event { return agyEvents(line, nil) }
+
+// agyTurn es el estado de un turno de Antigravity: lo único que hace falta saber
+// entre líneas es si la respuesta ya llegó en trozos.
+type agyTurn struct{ sawText bool }
+
+// newAntigravityTurn es el adaptador de un turno: igual que antigravityAdapter y,
+// además, si el CLI cierra con `result.response` y nunca mandó los trozos
+// (`text_delta`), esa respuesta sale como texto — sin esto el turno quedaba vacío
+// aunque el CLI sí hubiera contestado.
+func newAntigravityTurn() (adapter, finisher) {
+	st := &agyTurn{}
+	return func(line []byte) []Event { return agyEvents(line, st) }, nil
+}
+
+// agyStepDetailKeys son, en orden de preferencia, los campos de un paso donde
+// Antigravity puede dejar el detalle de una herramienta que falló (o su salida).
+// El formato no está documentado: se prueban los nombres que usa y, si ninguno
+// aparece, agyExtraDetail junta lo que haya.
+var agyStepDetailKeys = []string{"error", "error_message", "error_text", "message", "stderr", "output", "tool_output", "result", "stdout", "detail", "details", "status_message", "reason"}
+
+// agyStepKnownKeys son los campos de un paso que NO son detalle.
+var agyStepKnownKeys = map[string]bool{
+	"conversation_id": true, "step_index": true, "step_type": true, "state": true, "tool_name": true,
+	"tool_input": true, "usage": true, "text_delta": true, "duration_seconds": true,
+}
+
+// agyStepDetail saca de un paso (JSON crudo) el texto que explica por qué falló,
+// o lo que devolvió. Vacío si el CLI no dijo nada.
+func agyStepDetail(raw map[string]json.RawMessage, failed bool) string {
+	for _, k := range agyStepDetailKeys {
+		if v, ok := raw[k]; ok {
+			if t := strings.TrimSpace(agyValueText(v)); t != "" {
+				return t
+			}
+		}
+	}
+	if !failed {
+		return ""
+	}
+	// Ningún nombre conocido: lo que haya en el paso, clave por clave, antes que
+	// «sin resultado» — un campo nuevo del CLI no puede esconder el motivo.
+	var parts []string
+	for k, v := range raw {
+		if agyStepKnownKeys[k] {
+			continue
+		}
+		if t := strings.TrimSpace(agyValueText(v)); t != "" {
+			parts = append(parts, k+": "+t)
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\n")
+}
+
+// agyValueText vuelve texto un valor JSON: una cadena tal cual; un objeto con
+// `message` / `text` / `output`, ese campo; cualquier otra cosa, su JSON.
+func agyValueText(raw json.RawMessage) string {
+	raw = json.RawMessage(strings.TrimSpace(string(raw)))
+	if len(raw) == 0 || string(raw) == "null" || string(raw) == "false" || string(raw) == "true" {
+		return ""
+	}
+	switch raw[0] {
+	case '"':
+		var s string
+		if json.Unmarshal(raw, &s) == nil {
+			return s
+		}
+	case '{':
+		var obj map[string]json.RawMessage
+		if json.Unmarshal(raw, &obj) == nil {
+			for _, k := range []string{"message", "text", "output", "error", "stderr", "stdout"} {
+				if v, ok := obj[k]; ok {
+					if t := strings.TrimSpace(agyValueText(v)); t != "" {
+						return t
+					}
+				}
+			}
+		}
+	}
+	return string(raw)
+}
+
+var msgAgyToolFailedNoDetail = i18n.Msg{
+	ES: "la herramienta falló y Antigravity no dio más detalle",
+	EN: "the tool failed and Antigravity gave no further detail",
+}
+
+func agyEvents(line []byte, st *agyTurn) []Event {
 	var l agyLine
 	if err := json.Unmarshal(line, &l); err != nil {
 		return nil
@@ -218,6 +312,9 @@ func antigravityAdapter(line []byte) []Event {
 		switch s.StepType {
 		case "agent_response":
 			if delta := jsonRawString(s.TextDelta); delta != "" {
+				if st != nil {
+					st.sawText = true
+				}
 				return []Event{{Kind: KindText, Text: delta}}
 			}
 		case "user_input", "checkpoint", "unknown":
@@ -234,9 +331,16 @@ func antigravityAdapter(line []byte) []Event {
 				name := firstNonEmpty(s.ToolName, s.StepType)
 				return []Event{{Kind: KindTool, Tool: newToolCall(id, name, rawJSON(s.ToolInput))}}
 			case "DONE":
-				return []Event{{Kind: KindToolResult, Tool: &ToolCall{ID: id}}}
+				return []Event{{Kind: KindToolResult, Tool: &ToolCall{ID: id, Result: agyDetailOf(line, false)}}}
 			case "ERROR", "FAILED", "CANCELLED":
-				return []Event{{Kind: KindToolResult, Tool: &ToolCall{ID: id, IsError: true}}}
+				// El detalle real del fallo (ORA, permiso denegado, comando no
+				// permitido…): sin él la tarjeta decía «Sin resultado» y no había
+				// forma de saber qué pasó.
+				detail := agyDetailOf(line, true)
+				if detail == "" {
+					detail = i18n.T(msgAgyToolFailedNoDetail)
+				}
+				return []Event{{Kind: KindToolResult, Tool: &ToolCall{ID: id, IsError: true, Result: detail}}}
 			}
 		}
 		return nil
@@ -244,11 +348,44 @@ func antigravityAdapter(line []byte) []Event {
 	case l.Result != nil:
 		u := l.Result.Usage.common()
 		if l.Result.Status != "" && l.Result.Status != "SUCCESS" {
-			return []Event{{Kind: KindError, Error: i18n.T(i18n.Msg{ES: "el agente terminó con estado %s", EN: "the agent finished with status %s"}, l.Result.Status), Usage: u, ConversationID: l.Result.ConversationID}}
+			msg := i18n.T(i18n.Msg{ES: "el agente terminó con estado %s", EN: "the agent finished with status %s"}, l.Result.Status)
+			if why := strings.TrimSpace(firstNonEmpty(agyValueText(l.Result.Error), l.Result.Message)); why != "" {
+				msg += ": " + why
+			}
+			return []Event{{Kind: KindError, Error: msg, Usage: u, ConversationID: l.Result.ConversationID}}
 		}
-		return []Event{{Kind: KindDone, Usage: u, ConversationID: l.Result.ConversationID}}
+		var out []Event
+		if st != nil && !st.sawText && strings.TrimSpace(l.Result.Response) != "" {
+			out = append(out, Event{Kind: KindText, Text: l.Result.Response})
+		}
+		return append(out, Event{Kind: KindDone, Usage: u, ConversationID: l.Result.ConversationID})
 	}
 	return nil
+}
+
+// agyDetailOf lee el detalle (error o salida) del `step_update` de una línea.
+func agyDetailOf(line []byte, failed bool) string {
+	var env struct {
+		StepUpdate map[string]json.RawMessage `json:"step_update"`
+	}
+	if json.Unmarshal(line, &env) != nil {
+		return ""
+	}
+	return trimResult(agyStepDetail(env.StepUpdate, failed))
+}
+
+// trimResult acota el detalle de una herramienta: se muestra en la tarjeta y se guarda.
+func trimResult(s string) string {
+	s = strings.TrimSpace(s)
+	const max = 4000
+	if len(s) > max {
+		cut := max
+		for cut > 0 && !isRuneStart(s[cut]) {
+			cut--
+		}
+		return s[:cut] + "…"
+	}
+	return s
 }
 
 // --- Codex ----------------------------------------------------------------
@@ -391,9 +528,8 @@ var msgAgentFailed = i18n.Msg{ES: "el agente terminó con error", EN: "the agent
 
 // adapters son los CLIs con adaptador de una sola línea.
 var adapters = map[string]adapter{
-	"claude":      claudeAdapter,
-	"antigravity": antigravityAdapter,
-	"codex":       codexAdapter,
+	"claude": claudeAdapter,
+	"codex":  codexAdapter,
 }
 
 // finisher cierra un turno cuyo CLI terminó bien sin emitir un evento final
@@ -402,9 +538,11 @@ var adapters = map[string]adapter{
 type finisher func(t Turn) []Event
 
 // turnAdapters son los adaptadores que necesitan estado DURANTE un turno: uno
-// nuevo por turno. Hoy solo OpenCode, que no cierra el turno en su stream.
+// nuevo por turno: OpenCode, que no cierra el turno en su stream, y Antigravity,
+// cuya respuesta final puede venir solo en `result.response`.
 var turnAdapters = map[string]func() (adapter, finisher){
-	"opencode": newOpencodeTurn,
+	"opencode":    newOpencodeTurn,
+	"antigravity": newAntigravityTurn,
 }
 
 // adapterFor devuelve el adaptador de un turno nuevo y, si lo tiene, su cierre.

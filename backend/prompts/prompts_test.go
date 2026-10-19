@@ -252,3 +252,19 @@ func TestNextNumber(t *testing.T) {
 		}
 	}
 }
+
+// S12.c: el respaldo sin herramientas pide un solo bloque completo con la
+// cabecera, avisa que ScadLab lo guarda solo y qué hacer con los errores.
+func TestSystemPromptFallbackContract(t *testing.T) {
+	for lang, wants := range map[string][]string{
+		"es": {"guarda automáticamente", "**un solo** bloque", "`// @checkpoint parent=<padre> desc=\"…\"`", "bloque **entero** corregido", "`color()` en cada pieza", "parámetros del Customizer"},
+		"en": {"automatically saves", "**one** ```openscad block", "`// @checkpoint parent=<parent> desc=\"…\"`", "**whole** corrected block", "`color()` on every piece", "Customizer parameters"},
+	} {
+		got := SystemPrompt(Context{Lang: lang})
+		for _, w := range wants {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: falta %q", lang, w)
+			}
+		}
+	}
+}

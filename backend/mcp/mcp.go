@@ -73,9 +73,14 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, opts Options) error
 // serverInstructions las muestran algunos clientes (Claude Code) junto al
 // servidor: el flujo recomendado en pocas líneas.
 const serverInstructions = "ScadLab OpenSCAD tools for the current workspace. " +
-	"Typical loop: printer_info (volume, AMS slots) -> create_checkpoint (new immutable NNN-slug.scad; never edit an existing one) " +
-	"-> render (errors with line numbers) -> preview (look at the part) -> measure (size, volume, weight, fits the plate?) " +
-	"-> fix in a NEW checkpoint with parent=<previous> (omit parent to continue from the active parent shown by list_checkpoints). Every top-level part needs color(). Use lint/format while writing code."
+	"Mandatory flow for any design request: printer_info / list_checkpoints -> create_checkpoint (new immutable NNN-slug.scad; never edit an existing one; " +
+	"never write .scad files through the shell) -> render (errors with line numbers) -> if it fails, read the line and fix it in a NEW checkpoint with parent=<previous> " +
+	"-> preview (look at the part) -> measure (size, volume, weight, fits the plate?) -> short summary naming the file. " +
+	"If the workspace has no checkpoints, create the first one right away without asking. A design turn never ends without a checkpoint that renders, and never with only code in the text. " +
+	"When unsure, pick reasonable dimensions and say so. Omit parent to continue from the active parent shown by list_checkpoints. Every top-level part needs color(). Use lint/format while writing code. " +
+	"Shortcuts: a request that resembles a template -> create_from_template; changing a measurement -> get_parameters + set_parameters (new child, not a rewrite); " +
+	"a model in refs/ (STL/3MF/OBJ) -> inspect_reference, import_mesh, then edit_mesh (move, rotate, scale, cut, holes, recolor); too big for the plate -> suggest_orientation; " +
+	"threads or rounded edges -> list_libraries / install_library; export stl/3mf/png only when asked. Discarding = trash_checkpoint (restorable); you cannot open Bambu Studio."
 
 // resolveWorkspace deja WorkspaceDir como ruta absoluta sin enlaces simbólicos.
 func resolveWorkspace(dir string) (string, error) {

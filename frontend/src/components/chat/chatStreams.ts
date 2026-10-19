@@ -2,6 +2,7 @@ import {EventsOn} from '../../../wailsjs/runtime/runtime'
 import type {main} from '../../../wailsjs/go/models'
 import {createStore} from '../../lib/store'
 import {toStep, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
+import {createdCheckpoint} from '../../lib/chatSteps'
 
 // Estado de las respuestas en curso, por chat. Vive a nivel de módulo y no en
 // el componente por dos razones:
@@ -14,7 +15,7 @@ import {toStep, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
 //    escrito hasta ahí; ver syncStream).
 //
 // Contrato de eventos con app_chat.go: chat:delta {chatId, text, seq},
-// chat:step {chatId, step}, chat:usage {chatId, inputTokens, outputTokens, costUsd},
+// chat:step {chatId, workspaceId, step}, chat:usage {chatId, inputTokens, outputTokens, costUsd},
 // chat:done {chatId, messageId, cancelled}, chat:error {chatId, message, messageId}.
 
 export type Stream = {
@@ -133,6 +134,15 @@ export function syncStream(chatId: number, v: main.ChatView) {
     )
 }
 
+// Quien quiera enterarse de que un paso del chat acaba de CREAR un checkpoint (una herramienta del modelo, de un CLI
+// o el «Guardado automáticamente» de ScadLab): App lo abre en el visor y en Código y lo renderiza (S12.c).
+export type ChatCheckpoint = {chatId: number; workspaceId: number; file: string}
+const checkpointListeners = new Set<(c: ChatCheckpoint) => void>()
+export function onChatCheckpoint(fn: (c: ChatCheckpoint) => void): () => void {
+    checkpointListeners.add(fn)
+    return () => void checkpointListeners.delete(fn)
+}
+
 let wired = false
 /** Suscribe los tres eventos una sola vez por sesión de la app. */
 export function ensureChatEvents() {
@@ -149,8 +159,11 @@ export function ensureChatEvents() {
             () => fresh(false),
         )
     })
-    EventsOn('chat:step', (e: {chatId: number; step: Parameters<typeof toStep>[0]}) => {
-        patch(e.chatId, (s) => ({...s, steps: upsertStep(s.steps, toStep(e.step))}), () => fresh(false))
+    EventsOn('chat:step', (e: {chatId: number; workspaceId?: number; step: Parameters<typeof toStep>[0]}) => {
+        const step = toStep(e.step)
+        patch(e.chatId, (s) => ({...s, steps: upsertStep(s.steps, step)}), () => fresh(false))
+        const file = createdCheckpoint(step)
+        if (file && e.workspaceId) checkpointListeners.forEach((fn) => fn({chatId: e.chatId, workspaceId: e.workspaceId as number, file}))
     })
     EventsOn('chat:usage', (e: {chatId: number} & ChatUsage) => {
         patch(e.chatId, (s) => ({...s, usage: {inputTokens: e.inputTokens, outputTokens: e.outputTokens, costUsd: e.costUsd}}), () => fresh(false))

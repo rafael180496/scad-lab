@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,10 +48,35 @@ var viewNames = refmodel.ViewNames
 
 var pngMagic = []byte("\x89PNG\r\n\x1a\n")
 
-func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult, error) {
-	name, _, err := e.checkpointFile(strArg(args, "file"))
-	if err != nil {
-		return nil, err
+// shot es una imagen ya dibujada y la línea de texto que la acompaña.
+type shot struct {
+	png  []byte
+	note string
+}
+
+// viewFromArgs lee la cámara que pidió el agente: una vista con nombre (`view`) o
+// una libre (`rotate` = [rx, ry, rz] en grados, la del --camera de OpenSCAD, y
+// `ortho`). Devuelve el rótulo de la vista para el texto y para el nombre del
+// archivo de una exportación.
+func viewFromArgs(args map[string]any) (string, view, error) {
+	if raw, has := args["rotate"]; has && raw != nil {
+		list, ok := listArg(args, "rotate")
+		if !ok {
+			return "", view{}, i18n.New(i18n.Msg{ES: "`rotate` lleva tres ángulos [rx, ry, rz] en grados", EN: "`rotate` takes three angles [rx, ry, rz] in degrees"})
+		}
+		if len(list) != 3 {
+			return "", view{}, i18n.New(i18n.Msg{ES: "`rotate` lleva tres ángulos [rx, ry, rz] en grados", EN: "`rotate` takes three angles [rx, ry, rz] in degrees"})
+		}
+		var v view
+		for i, it := range list {
+			n, ok := asNum(it)
+			if !ok || math.Abs(n) > 3600 {
+				return "", view{}, i18n.New(i18n.Msg{ES: "`rotate` lleva tres ángulos numéricos en grados", EN: "`rotate` takes three numeric angles in degrees"})
+			}
+			v.rot[i] = int(math.Round(n))
+		}
+		v.ortho = boolArg(args, "ortho", false)
+		return fmt.Sprintf("custom-%d_%d_%d", v.rot[0], v.rot[1], v.rot[2]), v, nil
 	}
 	viewName := strings.ToLower(strings.TrimSpace(strArg(args, "view")))
 	if viewName == "" {
@@ -58,11 +84,40 @@ func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult
 	}
 	v, ok := views[viewName]
 	if !ok {
-		return nil, i18n.Errorf(i18n.Msg{ES: "vista desconocida: %q (usa %s)", EN: "unknown view: %q (use %s)"}, viewName, strings.Join(viewNames, ", "))
+		return "", view{}, i18n.Errorf(i18n.Msg{ES: "vista desconocida: %q (usa %s, o `rotate` con tres ángulos)", EN: "unknown view: %q (use %s, or `rotate` with three angles)"}, viewName, strings.Join(viewNames, ", "))
+	}
+	if _, has := args["ortho"]; has {
+		v.ortho = boolArg(args, "ortho", v.ortho)
+	}
+	return viewName, v, nil
+}
+
+// asNum lee un número que llegó como número o como texto.
+func asNum(v any) (float64, bool) {
+	return numArg(map[string]any{"v": v}, "v")
+}
+
+func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult, error) {
+	name, _, err := e.checkpointFile(strArg(args, "file"))
+	if err != nil {
+		return nil, err
+	}
+	label, v, err := viewFromArgs(args)
+	if err != nil {
+		return nil, err
 	}
 	size := intArg(args, "size", defaultPreviewSize)
 	size = max(minPreviewSize, min(maxPreviewSize, size))
+	sh, err := e.shoot(ctx, name, label, v, size)
+	if err != nil {
+		return nil, err
+	}
+	return &toolResult{Content: []map[string]any{imageContent(sh.png, "image/png"), textContent(sh.note)}}, nil
+}
 
+// shoot dibuja el PNG de un checkpoint: con el OpenSCAD instalado si lo hay y, si
+// no, con el motor integrado y el rasterizador de ScadLab.
+func (e *env) shoot(ctx context.Context, name, viewName string, v view, size int) (shot, error) {
 	s := e.settings()
 	tool := e.openscad(ctx, s.OpenSCADPath)
 	if !tool.Found && e.wasm.Available() {
@@ -71,7 +126,7 @@ func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult
 		return e.previewRaster(ctx, name, viewName, v, size)
 	}
 	if !tool.Found {
-		return nil, i18n.New(i18n.Msg{
+		return shot{}, i18n.New(i18n.Msg{
 			ES: "OpenSCAD no está instalado o no se encontró. Pídele al usuario que lo instale o indique su ruta en ScadLab → Configuración → OpenSCAD.",
 			EN: "OpenSCAD is not installed or was not found. Ask the user to install it or set its path in ScadLab → Settings → OpenSCAD.",
 		})
@@ -83,15 +138,12 @@ func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult
 	png, out, err := e.runPreview(ctx, tool.Path, name, v, size, s.RenderBackend != "cgal", timeout)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, i18n.New(i18n.Msg{ES: "el preview se canceló", EN: "the preview was cancelled"})
+			return shot{}, i18n.New(i18n.Msg{ES: "el preview se canceló", EN: "the preview was cancelled"})
 		}
-		return e.previewFailure(name, out, err)
+		_, ferr := e.previewFailure(name, out, err)
+		return shot{}, ferr
 	}
-	res := &toolResult{Content: []map[string]any{
-		imageContent(png, "image/png"),
-		textContent(msgf(i18n.Msg{ES: "Preview de %s, vista %s, %d×%d px.", EN: "Preview of %s, %s view, %d×%d px."}, name, viewName, size, size)),
-	}}
-	return res, nil
+	return shot{png: png, note: msgf(i18n.Msg{ES: "Preview de %s, vista %s, %d×%d px.", EN: "Preview of %s, %s view, %d×%d px."}, name, viewName, size, size)}, nil
 }
 
 // previewFailure traduce la salida de OpenSCAD a un error con las líneas del

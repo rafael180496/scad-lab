@@ -40,9 +40,10 @@ type ToolboxOptions struct {
 	Parts  *parts.Store
 	// Log recibe los diagnósticos. nil = descartarlos.
 	Log io.Writer
-	// InApp suma las herramientas que solo tienen sentido dentro de la app:
-	// list_skills, read_skill e inspect_reference. El servidor `--mcp` no las
-	// expone (el agente externo ya lee las skills del disco).
+	// InApp se conserva por compatibilidad y ya no cambia nada: desde S12.c
+	// list_skills, read_skill e inspect_reference están también en el servidor
+	// `--mcp` (los CLIs las usan igual que Hermes), así que la caja de la app y el
+	// servidor ofrecen exactamente el mismo catálogo.
 	InApp bool
 }
 
@@ -95,15 +96,12 @@ func NewToolbox(opts ToolboxOptions) (*Toolbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	tools := e.tools()
-	if opts.InApp {
-		tools = append(tools, e.inAppTools()...)
-	}
-	return &Toolbox{e: e, tools: tools}, nil
+	return &Toolbox{e: e, tools: e.tools()}, nil
 }
 
-// inAppTools son las herramientas que solo ofrece la caja de la app.
-func (e *env) inAppTools() []Tool {
+// contextTools son las herramientas de contexto: las skills del workspace y las
+// referencias 3D que adjuntó el usuario.
+func (e *env) contextTools() []Tool {
 	return []Tool{
 		{
 			Name: "list_skills",
@@ -126,8 +124,8 @@ func (e *env) inAppTools() []Tool {
 		},
 		{
 			Name: "inspect_reference",
-			Description: "Analyze a 3D reference the user attached (STL, 3MF or OBJ in the workspace's refs/ folder): size in mm, volume, surface area, triangles, watertightness and, for a 3MF, its parts by color; " +
-				"plus a PNG picture of it. Use it before copying a part. Note that import() cannot be trusted with a 3MF: rebuild it with primitives from the measurements.",
+			Description: "Analyze a 3D reference the user attached (STL, 3MF or OBJ in the workspace's refs/ folder; see list_refs): size in mm, volume, surface area, triangles, watertightness and, for a 3MF, its parts by color; " +
+				"plus a PNG picture of it. Use it before copying or editing a part (import_mesh makes it editable). Note that import() cannot be trusted with a 3MF: rebuild it with primitives from the measurements.",
 			InputSchema: obj(map[string]any{
 				"file": strProp("Reference file in refs/ (e.g. refs/bracket.stl or bracket.stl)."),
 				"view": enumProp("Camera view. Default iso.", viewNames...),

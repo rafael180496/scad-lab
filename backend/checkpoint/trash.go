@@ -284,6 +284,24 @@ func trashFiles(wsDir, file string, branch bool) ([]string, error) {
 	return out, firstErr
 }
 
+// TrashEmpty dice si la papelera del workspace no guarda nada (o no existe). Ante
+// cualquier duda —no se pudo leer, es un enlace— responde false: quien lo usa
+// decide si resucitar algo, y no hacerlo es el lado seguro.
+func TrashEmpty(wsDir string) bool {
+	dir, err := metaDir(wsDir, false, trashDirName)
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	if err != nil {
+		return false
+	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	return err == nil && len(entries) == 0
+}
+
 // ListTrash lista la papelera, lo más reciente primero. Sin papelera, lista vacía.
 // Ignora lo que no tiene el formato `<AAAAMMDD-HHMMSS>-<archivo>.scad` (algo
 // que alguien dejó a mano): Restore no sabría a qué nombre devolverlo.

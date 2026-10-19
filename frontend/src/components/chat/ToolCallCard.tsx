@@ -1,31 +1,46 @@
 import {useState, type ReactNode} from 'react'
 import {
     AlignLeft,
+    Archive,
+    ArchiveRestore,
     ArrowUpRight,
     BookOpen,
     Check,
     ChevronDown,
     CircleAlert,
+    Download,
     Eye,
     FilePlus2,
     FileText,
     FileUp,
+    FolderOpen,
     GitBranch,
+    GitFork,
     Hammer,
     LayoutTemplate,
+    Layers,
+    Library,
     Loader2,
+    Move3d,
     PackageOpen,
+    Pencil,
     Printer,
+    Rotate3d,
     Ruler,
+    Save,
     ScanSearch,
     ShieldCheck,
+    SlidersHorizontal,
+    Trash2,
     TriangleAlert,
+    Weight,
     Wrench,
     type LucideIcon,
 } from 'lucide-react'
 import {fmt, locale, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import type {ChatStep} from '../../lib/chatTypes'
+import {createdCheckpoint, stepResult} from '../../lib/chatSteps'
 import {Dialog} from '../ui/Dialog'
 
 // Tarjeta de un paso: qué herramienta llamó el modelo (o el CLI), con qué
@@ -59,16 +74,46 @@ const ICONS: Record<string, LucideIcon> = {
     read_skill: BookOpen,
     inspect_reference: ScanSearch,
     import_mesh: FileUp,
+    set_active_parent: GitFork,
+    rename_checkpoint: Pencil,
+    trash_checkpoint: Trash2,
+    list_trash: Archive,
+    restore_checkpoint: ArchiveRestore,
+    list_refs: FolderOpen,
+    get_parameters: SlidersHorizontal,
+    set_parameters: SlidersHorizontal,
+    create_from_template: LayoutTemplate,
+    list_libraries: Library,
+    install_library: Download,
+    edit_mesh: Move3d,
+    estimate_print: Weight,
+    list_materials: Layers,
+    suggest_orientation: Rotate3d,
+    autosave: Save,
 }
 
-// Las que escriben algo en el proyecto (un checkpoint nuevo, un export): van en el
-// color de acento, para que de un vistazo la secuencia distinga lo que miró de
-// lo que creó.
-const WRITES = new Set(['create_checkpoint', 'import_mesh', 'export'])
+// Las que escriben algo en el proyecto (un checkpoint nuevo, un cambio del árbol, una
+// librería, un export): van en el color de acento, para que de un vistazo la secuencia
+// distinga lo que miró de lo que cambió. Es la misma división «Solo consulta» / «Agente»
+// de backend/clichat/modes.go.
+const WRITES = new Set([
+    'create_checkpoint',
+    'import_mesh',
+    'set_parameters',
+    'create_from_template',
+    'edit_mesh',
+    'set_active_parent',
+    'rename_checkpoint',
+    'trash_checkpoint',
+    'restore_checkpoint',
+    'install_library',
+    'export',
+    'autosave',
+])
 
 // Claves de los argumentos que mejor resumen la llamada, en orden de preferencia.
 // `file` no está: el checkpoint va aparte, como enlace.
-const SUMMARY_KEYS = ['label', 'name', 'view', 'format', 'template', 'id']
+const SUMMARY_KEYS = ['label', 'name', 'view', 'format', 'template', 'id', 'trashed_name']
 
 function summaryOf(step: ChatStep): string {
     for (const k of SUMMARY_KEYS) {
@@ -138,9 +183,12 @@ const MAX_INLINE_DIAGS = 3
 
 // El checkpoint al que se refiere el paso: el que creó (su resultado lo dice) o el
 // del argumento `file`. Solo si parece un archivo de checkpoint.
-function fileOf(step: ChatStep, r: ToolJSON | null): string {
-    const fromResult = (step.tool === 'create_checkpoint' || step.tool === 'import_mesh') && step.status === 'ok' ? r?.file : ''
-    const f = fromResult || step.args.file
+function fileOf(step: ChatStep): string {
+    // Mandado a la papelera ya no está en el árbol: un enlace llevaría a un archivo que no existe.
+    if (step.tool === 'trash_checkpoint') return ''
+    // Restaurar: el archivo que volvió (puede llevar otro número que el de la papelera).
+    const back = step.tool === 'restore_checkpoint' && step.status === 'ok' ? stepResult(step.text)?.file : undefined
+    const f = createdCheckpoint(step) || back || step.args.file
     return typeof f === 'string' && /\.scad$/i.test(f.trim()) ? f.trim() : ''
 }
 
@@ -265,7 +313,7 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
     const status = c.status[step.status]
     const result = parseResult(step.text)
     const diags = diagnosticsOf(result)
-    const file = fileOf(step, result)
+    const file = fileOf(step)
     const failed = step.status === 'error'
     // Un error sin diagnósticos (otro origen, o un CLI) se lee tal cual, recortado.
     const plainError = failed && diags.length === 0 ? (result?.message ?? prettyResult(step.text)).trim() : ''

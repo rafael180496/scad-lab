@@ -372,6 +372,20 @@ export namespace main {
 	        this.canList = source["canList"];
 	    }
 	}
+	export class AntigravityEnsure {
+	    added: boolean;
+	    state: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AntigravityEnsure(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.added = source["added"];
+	        this.state = source["state"];
+	    }
+	}
 	export class AntigravityMCP {
 	    state: string;
 	    agyPath: string;
@@ -1031,7 +1045,7 @@ export namespace main {
 		}
 	}
 	export class SendOptions {
-	    agent: boolean;
+	    agent?: boolean;
 	    maxSteps: number;
 	
 	    static createFrom(source: any = {}) {
@@ -2021,6 +2035,7 @@ export namespace store {
 	    createdAt: number;
 	    updatedAt: number;
 	    cliSession: string;
+	    mode: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -2036,6 +2051,7 @@ export namespace store {
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	        this.cliSession = source["cliSession"];
+	        this.mode = source["mode"];
 	    }
 	}
 	export class ChatMessage {

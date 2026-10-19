@@ -274,6 +274,18 @@ CREATE TABLE IF NOT EXISTS vault_meta (
 ALTER TABLE chats ADD COLUMN cli_session TEXT NOT NULL DEFAULT '';
 `,
 	},
+	{
+		version: 9,
+		desc:    "modo de escritura por conversación (S12.c): chats.mode",
+		sql: `
+-- El modo del chat vive en la conversación, no en una preferencia global:
+-- '' = «Agente» (el predeterminado: ScadLab existe para crear y modificar
+-- modelos) y 'ask' = «Solo consulta», elegido a mano para ESA conversación.
+-- Toda fila anterior queda en '' (Agente): ninguna conversación conserva un
+-- «Solo consulta» que no eligió nadie. Una conversación nueva también nace ''.
+ALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT '';
+`,
+	},
 }
 
 func (s *Store) migrate() error {

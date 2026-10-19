@@ -16,6 +16,8 @@ type EventMap = {
     'checkpoints:changed': main.WorkspaceView
     'openscad:download': OpenSCADDownloadEvent
     'mcp:changed': {enabled: boolean}
+    // ScadLab se registró (o falló al registrarse) en la configuración global de Antigravity (S12.c).
+    'mcp:antigravity': {added: boolean; error: string}
     // Cambió la lista, el orden o el proyecto activo (S8). El payload no se usa: se vuelve a leer.
     'projects:changed': unknown
 }
