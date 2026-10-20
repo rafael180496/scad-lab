@@ -54,13 +54,13 @@ Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
 ## Descargas
 
-Versión **0.2.1**, en los assets del
-[Release v0.2.1](https://github.com/rafael180496/scad-lab/releases/tag/v0.2.1):
+Versión **0.2.2**, en los assets del
+[Release v0.2.2](https://github.com/rafael180496/scad-lab/releases/tag/v0.2.2):
 
 | Sistema | Archivo | Tamaño |
 |---|---|---|
-| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.1.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1.dmg) | 18,5 MB |
-| Windows (x64) | [`ScadLab-v0.2.1-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1-windows-amd64.exe) (portable) | 49,2 MB |
+| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.2.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.2/ScadLab-v0.2.2.dmg) | 18,6 MB |
+| Windows (x64) | [`ScadLab-v0.2.2-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.2/ScadLab-v0.2.2-windows-amd64.exe) (portable) | 49,6 MB |
 
 Los binarios no van firmados: macOS pide «clic derecho → Abrir» la primera vez y
 Windows muestra el aviso de SmartScreen. También puedes compilarla desde el código
@@ -80,18 +80,18 @@ Arquitectura, reglas y agentes de desarrollo: [CLAUDE.md](CLAUDE.md).
 
 ## Distribución / Empaquetado macOS
 
-**v0.2.1** — [`ScadLab-v0.2.1.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1.dmg), 18,5 MB, SHA-256
-`a3f56de286c4be09d1bb83bd81be012b6cfab56fcc5468a6676b8839b409390a`. Solo Apple Silicon
+**v0.2.2** — [`ScadLab-v0.2.2.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.2/ScadLab-v0.2.2.dmg), 18,6 MB, SHA-256
+`a30b5712036e76310a1cebb4f2a693afa4d30b1569513669fec753c8248e4dc5`. Solo Apple Silicon
 (arm64), macOS 11 o superior (el `Info.plist` que genera Wails declara 10.13, pero el
 binario es arm64 y exige 11+). Sin firma ni notarización: clic derecho → Abrir.
 Detalle en [releases/macos](releases/macos/README.md).
 
 ## Distribución / Empaquetado Windows
 
-**v0.2.1** — [`ScadLab-v0.2.1-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1-windows-amd64.exe), 49,2 MB,
-SHA-256 `9470b8a4d76c2e5d3421266cde53c87b4f3b0777b5113ff85810456a24206a73`. Portable (x86-64),
+**v0.2.2** — [`ScadLab-v0.2.2-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.2/ScadLab-v0.2.2-windows-amd64.exe), 49,6 MB,
+SHA-256 `705ffccf23ecb0db0cb2ef63a983de757315d0b82d1b882fa0c71a49d4251262`. Portable (x86-64),
 sin instalador ni firma Authenticode (SmartScreen avisa). Verificado por el usuario en
-Windows 10 y 11 en la v0.2.0; la 0.2.1 no se probó todavía en Windows. Detalle en [releases/windows](releases/windows/README.md).
+Windows 10 y 11 en la v0.2.0; la 0.2.2 no se probó todavía en Windows. Detalle en [releases/windows](releases/windows/README.md).
 
 ## Apoya el proyecto
 

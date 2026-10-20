@@ -7,6 +7,8 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-20
+
 ### Agregado
 
 - **Un Ollama de poco contexto ya puede modificar un modelo.** Un modelo local de 8 000 o

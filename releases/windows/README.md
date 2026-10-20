@@ -9,19 +9,19 @@ comprueba que su SHA-256 aparezca en este README.
 
 | Campo | Valor |
 |---|---|
-| Versión | **0.2.1** |
-| Archivo | `ScadLab-v0.2.1-windows-amd64.exe` (portable) |
-| Tamaño | 51 611 648 bytes (49,2 MB) |
-| SHA-256 | `9470b8a4d76c2e5d3421266cde53c87b4f3b0777b5113ff85810456a24206a73` |
+| Versión | **0.2.2** |
+| Archivo | `ScadLab-v0.2.2-windows-amd64.exe` (portable) |
+| Tamaño | 52 028 928 bytes (49,6 MB) |
+| SHA-256 | `705ffccf23ecb0db0cb2ef63a983de757315d0b82d1b882fa0c71a49d4251262` |
 | Arquitectura | x86-64 (amd64) |
-| Descarga | https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1-windows-amd64.exe |
+| Descarga | https://github.com/rafael180496/scad-lab/releases/download/v0.2.2/ScadLab-v0.2.2-windows-amd64.exe |
 
 ### Compatibilidad verificada
 
 `file` sobre el binario:
 
 ```
-ScadLab-v0.2.1-windows-amd64.exe: PE32+ executable (GUI) x86-64, for MS Windows
+ScadLab-v0.2.2-windows-amd64.exe: PE32+ executable (GUI) x86-64, for MS Windows
 ```
 
 Compilado sin CGO (`CGO_ENABLED=0`, SQLite puro Go). Windows 10/11 de 64 bits con el
@@ -30,7 +30,7 @@ si falta, el sistema lo pide).
 
 ### Verificación en Windows
 
-**Verificado por el usuario en Windows 10 y 11 en la v0.2.0; la 0.2.1 no se probó todavía
+**Verificado por el usuario en Windows 10 y 11 en la v0.2.0; la 0.2.2 no se probó todavía
 en Windows.** El `.exe` se cross-compila desde macOS (sin Windows de por medio) y solo se
 confirmó que compila limpio. Quedan sin confirmar en esta versión, corriéndola en una
 Windows real: el runtime WebView2, el escalado DPI y los diálogos nativos. La verificación
@@ -45,7 +45,7 @@ de la v0.2.0 no se extiende a esta versión.
 
 No hay instalador: el `.exe` es portable.
 
-1. Descarga `ScadLab-v0.2.1-windows-amd64.exe` desde el Release.
+1. Descarga `ScadLab-v0.2.2-windows-amd64.exe` desde el Release.
 2. Guárdalo donde quieras (por ejemplo `C:\Herramientas\ScadLab\`).
 3. Haz doble clic. Si aparece SmartScreen: **Más información** → **Ejecutar de todas formas**.
 
@@ -64,10 +64,10 @@ Tus datos van en `%AppData%\ScadLab\` y tus modelos, en las carpetas de tus work
 ## Regenerar este artefacto
 
 ```bash
-cat VERSION                          # 0.2.1
+cat VERSION                          # 0.2.2
 ./scripts/package-all.sh             # .dmg + .exe en build/bin/ (cross-compila, sin Windows)
-cp build/bin/ScadLab-v0.2.1-windows-amd64.exe releases/windows/
-shasum -a 256 releases/windows/ScadLab-v0.2.1-windows-amd64.exe
+cp build/bin/ScadLab-v0.2.2-windows-amd64.exe releases/windows/
+shasum -a 256 releases/windows/ScadLab-v0.2.2-windows-amd64.exe
 ```
 
 Una recompilación no da un binario idéntico bit a bit: si se regenera, hay que
