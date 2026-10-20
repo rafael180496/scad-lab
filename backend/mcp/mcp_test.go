@@ -20,7 +20,7 @@ import (
 )
 
 var wantTools = []string{
-	"list_checkpoints", "read_checkpoint", "create_checkpoint", "update_checkpoint", "import_mesh", "render", "lint", "format",
+	"list_checkpoints", "read_checkpoint", "outline_checkpoint", "find_in_checkpoint", "create_checkpoint", "update_checkpoint", "edit_checkpoint", "extract_module", "import_mesh", "render", "lint", "format",
 	"measure", "preview", "printer_info", "export", "list_templates", "get_template",
 	"set_active_parent", "rename_checkpoint", "trash_checkpoint", "list_trash", "restore_checkpoint", "list_refs",
 	"get_parameters", "set_parameters", "create_from_template",
@@ -456,7 +456,7 @@ func TestRenderOKAndMeasure(t *testing.T) {
 	needOpenSCAD(t)
 	c := setup(t, nil)
 	name := c.create("cubo", srcCube, nil)
-	out := c.mustOK("render", map[string]any{"file": name})
+	out := c.mustOK("render", map[string]any{"file": name, "verbose": true})
 	if out["status"] != "ok" || out["file"] != name {
 		t.Fatalf("render: %v", out)
 	}
@@ -475,7 +475,7 @@ func TestRenderOKAndMeasure(t *testing.T) {
 		t.Error("un render bueno no deja RENDER_ERRORS.md")
 	}
 	// Sin file renderiza el más nuevo, y la segunda vez sale de la caché.
-	again := c.mustOK("render", nil)
+	again := c.mustOK("render", map[string]any{"verbose": true})
 	if again["file"] != name || again["cacheHit"] != true {
 		t.Errorf("render del más nuevo: %v", again)
 	}
@@ -487,7 +487,7 @@ func TestRenderOKAndMeasure(t *testing.T) {
 	// defaults (15 % de relleno, 2 perímetros de 0,42): cáscara = min(1000,
 	// 700×0,84) = 588; efectivo = 588 + 412×0,15 = 649,8 mm³; PLA 1,24 → 0,806 g.
 	// Ya no es la pieza sólida al 100 % (1,24 g).
-	ms := c.mustOK("measure", map[string]any{"file": name})
+	ms := c.mustOK("measure", map[string]any{"file": name, "verbose": true})
 	if ms["estimatedWeightG"] != 0.81 || ms["fitsBuildVolume"] != true {
 		t.Errorf("measure: %v", ms)
 	}
@@ -534,7 +534,7 @@ func TestMeasureParts(t *testing.T) {
 	needOpenSCAD(t)
 	c := setup(t, nil)
 	name := c.create("dos", "color(\"red\") cube(10);\ntranslate([20,0,0]) color(\"blue\") cube(10);\n", nil)
-	ms := c.mustOK("measure", map[string]any{"file": name})
+	ms := c.mustOK("measure", map[string]any{"file": name, "verbose": true})
 	parts, _ := ms["parts"].([]any)
 	if len(parts) != 2 {
 		t.Fatalf("partes: %v", ms["parts"])
@@ -578,7 +578,7 @@ func TestMeasureFollowsSettingsInfill(t *testing.T) {
 		}
 	})
 	name := c.create("cubo", srcCube, nil)
-	ms := c.mustOK("measure", map[string]any{"file": name})
+	ms := c.mustOK("measure", map[string]any{"file": name, "verbose": true})
 	// 1000 mm³ macizos de PETG (1,27) = 1,27 g, a 22 por kg.
 	est, _ := ms["estimate"].(map[string]any)
 	total, _ := est["total"].(map[string]any)
@@ -630,7 +630,7 @@ func TestRenderErrorHasLineAndRenderErrorsMd(t *testing.T) {
 	if !found {
 		t.Fatalf("sin error con línea: %v", diags)
 	}
-	if msg, _ := out["message"].(string); !strings.Contains(msg, "update_checkpoint") || !strings.Contains(msg, bad) {
+	if msg, _ := out["message"].(string); !strings.Contains(msg, "edit_checkpoint") || !strings.Contains(msg, bad) {
 		t.Errorf("mensaje de corrección: %q", msg)
 	}
 	md := c.readWs("RENDER_ERRORS.md")
@@ -737,7 +737,7 @@ func TestPreviewReturnsPNG(t *testing.T) {
 			t.Errorf("tamaño %dx%d, quería %d", cfg.Width, cfg.Height, wantSide)
 		}
 	}
-	check(map[string]any{"file": name}, 640)
+	check(map[string]any{"file": name}, 384)
 	check(map[string]any{"file": name, "view": "top", "size": 300}, 300)
 	check(map[string]any{"view": "front", "size": "400"}, 400) // número como texto
 	check(map[string]any{"file": name, "size": 10}, minPreviewSize)
@@ -893,7 +893,7 @@ func TestCancelledNotificationStopsRender(t *testing.T) {
 		t.Errorf("la cancelación tardó %v", time.Since(start))
 	}
 	res, _ := m["result"].(map[string]any)
-	if res["isError"] != true || !strings.Contains(res["content"].([]any)[0].(map[string]any)["text"].(string), `"status": "cancelled"`) {
+	if res["isError"] != true || !strings.Contains(res["content"].([]any)[0].(map[string]any)["text"].(string), `"cancelled"`) {
 		t.Errorf("render cancelado: %v", res)
 	}
 	if c.exists("RENDER_ERRORS.md") {
@@ -904,12 +904,12 @@ func TestCancelledNotificationStopsRender(t *testing.T) {
 // S12.c: las instrucciones del servidor dicen el flujo obligatorio.
 func TestServerInstructionsMandateFlow(t *testing.T) {
 	for _, want := range []string{"create_checkpoint", "render", "preview", "measure", "without asking", "update_checkpoint", "read_checkpoint", "never write .scad files with the CLI", "no backup", "When in doubt, edit the one they named", "color()",
-		"create_from_template", "set_parameters", "edit_mesh", "suggest_orientation", "install_library", "trash_checkpoint"} {
+		"create_from_template", "set_parameters", "edit_mesh", "suggest_orientation", "install_library", "trash_checkpoint", "outline_checkpoint", "find_in_checkpoint", "edit_checkpoint", "extract_module"} {
 		if !strings.Contains(serverInstructions, want) {
 			t.Errorf("serverInstructions sin %q", want)
 		}
 	}
-	if len(serverInstructions) > 2800 {
+	if len(serverInstructions) > 3600 {
 		t.Errorf("serverInstructions demasiado larga (%d): deben ser pocas líneas", len(serverInstructions))
 	}
 }

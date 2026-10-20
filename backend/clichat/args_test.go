@@ -338,3 +338,32 @@ func TestReplyLanguageUsesTu(t *testing.T) {
 		t.Errorf("Claude Code contesta en el idioma de la interfaz: %v", args)
 	}
 }
+
+// La shell de Antigravity (S17, G.2). En `agy --print` cualquier comando que pide
+// confirmación se rechaza ("Print mode: soft-denying tool confirmation RunCommand") y
+// el turno termina: la shell no corre. Lo que NO se debe hacer es pasarle un flag que
+// la habilite: `--sandbox` ejecuta los comandos DENTRO de un sandbox sin pedir permiso
+// (lo contrario de bloquearla) y `--mode auto` aprueba también los comandos. Ninguno de
+// los dos aparece en ningún modo; `--mode` solo es accept-edits en «Agente».
+func TestAntigravityNeverEnablesTheShell(t *testing.T) {
+	for _, mode := range []Mode{ModeAsk, ModeEdit} {
+		tr := baseTurn("antigravity", mode)
+		tr.Session, tr.Model = "abc-123", "gemini-flash"
+		args := mustArgs(t, tr)
+		for _, a := range args {
+			if a == "--sandbox" || a == "--dangerously-skip-permissions" || a == "auto" {
+				t.Errorf("%s: %q habilitaría la shell o los permisos: %v", mode, a, args)
+			}
+		}
+		switch mode {
+		case ModeAsk:
+			if hasArg(args, "--mode") {
+				t.Errorf("«Solo consulta» no pasa --mode: %v", args)
+			}
+		case ModeEdit:
+			if !has(args, "--mode", "accept-edits") {
+				t.Errorf("«Agente» usa accept-edits y nada más: %v", args)
+			}
+		}
+	}
+}

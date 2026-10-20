@@ -44,7 +44,7 @@ var (
 	// pero no tocan el diseño: ningún checkpoint, ningún archivo del proyecto.
 	readTools = []string{
 		// Workspace y archivos
-		"list_checkpoints", "read_checkpoint", "list_trash", "list_refs",
+		"list_checkpoints", "read_checkpoint", "outline_checkpoint", "find_in_checkpoint", "list_trash", "list_refs",
 		// Modelado
 		"lint", "format", "render", "preview", "measure", "get_parameters", "list_templates", "get_template", "list_libraries",
 		// Referencias 3D
@@ -57,11 +57,12 @@ var (
 		"list_skills", "read_skill",
 	}
 	// writeTools solo en «Agente»: crean un checkpoint, reescriben uno en el lugar
-	// con respaldo (update_checkpoint), cambian el estado del
+	// con respaldo (update_checkpoint, edit_checkpoint, set_parameters y
+	// extract_module, que además escribe en lib/), cambian el estado del
 	// árbol (padre activo, rótulo, papelera), escriben en exports/ o en lib/
 	// (install_library descarga de internet) o dejan una malla congelada en refs/.
 	writeTools = []string{
-		"create_checkpoint", "update_checkpoint", "set_parameters", "create_from_template", "import_mesh", "edit_mesh",
+		"create_checkpoint", "update_checkpoint", "edit_checkpoint", "extract_module", "set_parameters", "create_from_template", "import_mesh", "edit_mesh",
 		"set_active_parent", "rename_checkpoint", "trash_checkpoint", "restore_checkpoint",
 		"install_library", "export",
 		// Escriben el SVG o el mapa de alturas en refs/ (S15).

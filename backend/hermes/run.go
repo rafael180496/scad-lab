@@ -3,6 +3,7 @@ package hermes
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -41,6 +42,12 @@ const (
 	// nota (ver compactToolResults).
 	contextBudgetChars    = 160000
 	keepRecentToolResults = 4
+	// minToolResultRunes es el piso del tope por resultado en una ventana chica:
+	// por debajo, un resultado se corta antes de decir algo útil.
+	minToolResultRunes = 3000
+	// shrunkArgChars es desde cuántos caracteres un argumento de texto de una
+	// llamada vieja se reemplaza por su cuenta al apretar el contexto.
+	shrunkArgChars = 600
 )
 
 // ClampSteps lleva el tope pedido a 1–30; 0 o negativo es el default.
@@ -78,6 +85,16 @@ type Config struct {
 	User llm.Message
 	// Tools es la caja de herramientas; nil = modo texto.
 	Tools Toolset
+	// ToolSpecs son las herramientas que se DECLARAN al modelo (S17: el perfil
+	// «esenciales» declara menos, con descripciones cortas). nil = todas las de
+	// Tools. Lo que el modelo pida igual se ejecuta mientras esté en el catálogo
+	// de la caja: declarar menos no es prohibir.
+	ToolSpecs []mcp.ToolSpec
+	// NumCtx es la ventana de contexto efectiva en tokens (la que se le pide a
+	// Ollama y contra la que se mide); 0 = no se sabe (un servidor en la nube),
+	// y rigen los topes fijos. Con ella, el presupuesto de mensajes del turno y el
+	// tope de cada resultado son proporcionales a la ventana.
+	NumCtx int
 	// NoTools fuerza el modo texto aunque haya caja (el modelo ya mostró que no
 	// las soporta, o la persona apagó «Agente»). NoToolsNotice pide avisarlo en
 	// la respuesta: se usa cuando la persona quería herramientas y no se pueden.
@@ -146,6 +163,9 @@ var (
 	msgNoVisionImage   = i18n.Msg{ES: "(La herramienta devolvió una imagen, pero este modelo no ve imágenes: solo tienes el texto.)", EN: "(The tool returned an image, but this model cannot see images: you only have the text.)"}
 	msgImageNote       = i18n.Msg{ES: "Imagen devuelta por la herramienta %s (paso %d):", EN: "Image returned by the %s tool (step %d):"}
 	msgOldResult       = i18n.Msg{ES: "[resultado anterior recortado para ahorrar contexto]", EN: "[earlier result trimmed to save context]"}
+	msgRepeatedFile    = i18n.Msg{ES: "[archivo %s leído, versión %s: sin cambios; usa la lectura más reciente, más abajo]", EN: "[file %s read, version %s: unchanged; use the most recent read, further down]"}
+	msgRepeatedResult  = i18n.Msg{ES: "[resultado de %s, versión %s: se repitió igual; usa el más reciente, más abajo]", EN: "[result of %s, version %s: it came back the same; use the most recent one, further down]"}
+	msgOmittedArg      = i18n.Msg{ES: "[texto de %d caracteres omitido para ahorrar contexto]", EN: "[text of %d characters omitted to save context]"}
 	msgCancelledStep   = i18n.Msg{ES: "cancelado", EN: "cancelled"}
 	msgAutoFix         = i18n.Msg{
 		ES: "ScadLab guardó tu bloque como %s, pero no renderiza:\n\n%s\n\nCorrígelo y devuelve el bloque ```openscad COMPLETO otra vez, con su cabecera `// @checkpoint`.",
@@ -175,6 +195,27 @@ type runner struct {
 	// que hacer); autoFile, el último checkpoint que guardó.
 	autoDone bool
 	autoFile string
+
+	// S17: presupuesto del turno, tokens de la última vuelta (los lleva cada paso
+	// que esa vuelta pidió) y registro de qué mensaje es el resultado de qué
+	// consulta, para no repetir una lectura que no cambió.
+	budgetChars int
+	resultRunes int
+	lastIn      int64
+	lastOut     int64
+	toolRefs    []toolRef
+}
+
+// toolRef recuerda de qué llamada es el mensaje msgs[idx]: con eso una lectura
+// repetida (misma herramienta, mismos argumentos, mismo resultado) se detecta sin
+// releer nada.
+type toolRef struct {
+	idx   int
+	tool  string
+	key   string
+	file  string
+	hash  string
+	short bool // ya reemplazado por una nota
 }
 
 // Run corre un turno completo. Devuelve un error solo por un fallo real del
@@ -189,12 +230,18 @@ func Run(ctx context.Context, cfg Config, h Hooks) (Result, error) {
 func (r *runner) run(ctx context.Context) (Result, error) {
 	cfg := r.cfg
 	if cfg.Tools != nil && !cfg.NoTools {
-		for _, s := range cfg.Tools.Tools() {
-			r.defs = append(r.defs, llm.ToolDef{Name: s.Name, Description: s.Description, Parameters: s.InputSchema})
+		all := cfg.Tools.Tools()
+		for _, s := range all {
 			r.specs[s.Name] = true
 		}
+		declared := all
+		if cfg.ToolSpecs != nil {
+			declared = cfg.ToolSpecs
+		}
+		r.defs = toolDefs(declared)
 	}
 	r.toolsOn = len(r.defs) > 0
+	r.budgetChars, r.resultRunes = contextBudget(cfg.NumCtx, EstimateToolDefs(r.defs))
 	system := cfg.SystemText
 	if r.toolsOn {
 		system = cfg.SystemTools
@@ -216,11 +263,12 @@ func (r *runner) run(ctx context.Context) (Result, error) {
 	}
 
 	for round := 1; ; round++ {
-		compactToolResults(r.msgs)
-		req := llm.ChatRequest{Model: cfg.Model, Messages: r.msgs}
+		compactToolResults(r.msgs, r.budgetChars)
+		req := llm.ChatRequest{Model: cfg.Model, Messages: r.msgs, NumCtx: cfg.NumCtx}
 		if r.toolsOn {
 			req.Tools = r.defs
 		}
+		began := time.Now()
 		res, err := chatRetry(ctx, cfg.Client, req, r.onDelta(round))
 		if err != nil && r.toolsOn && ctx.Err() == nil && llm.IsToolsUnsupported(err) {
 			// El modelo (o el servidor) no soporta herramientas: se sigue sin
@@ -229,12 +277,13 @@ func (r *runner) run(ctx context.Context) (Result, error) {
 			r.res.ToolsUnsupported = true
 			r.msgs[0].Content = cfg.SystemText
 			r.notice(msgNoToolsNotice)
-			res, err = chatRetry(ctx, cfg.Client, llm.ChatRequest{Model: cfg.Model, Messages: r.msgs}, r.onDelta(round))
+			req = llm.ChatRequest{Model: cfg.Model, Messages: r.msgs, NumCtx: cfg.NumCtx}
+			res, err = chatRetry(ctx, cfg.Client, req, r.onDelta(round))
 		}
 		if err != nil {
 			return r.finish(ctx, err)
 		}
-		r.addUsage(res)
+		r.addUsage(res, req, time.Since(began))
 		r.msgs = append(r.msgs, res.Message)
 
 		calls := res.Message.ToolCalls
@@ -347,7 +396,7 @@ func (r *runner) notice(m i18n.Msg, args ...any) {
 	r.text(sep + i18n.T(m, args...) + "\n\n")
 }
 
-func (r *runner) addUsage(res llm.ChatResult) {
+func (r *runner) addUsage(res llm.ChatResult, req llm.ChatRequest, took time.Duration) {
 	u := res.Usage
 	r.usage.Input += u.Input
 	r.usage.Output += u.Output
@@ -355,6 +404,20 @@ func (r *runner) addUsage(res llm.ChatResult) {
 	r.usage.CacheWrite += u.CacheWrite
 	r.usage.Thinking += u.Thinking
 	r.usage.CostUSD = r.cfg.Price.Cost(r.usage)
+	r.usage.ModelMs += took.Milliseconds()
+	r.usage.Rounds++
+	// La entrada de ESTA vuelta es lo que el modelo tenía delante: el contexto real.
+	// Un servidor que no la informa (0) deja una estimación, marcada como tal.
+	in := u.Input
+	if in <= 0 {
+		in = int64(EstimateRequest(req))
+		r.usage.InputEstimated = true
+	}
+	r.lastIn, r.lastOut = in, u.Output
+	r.usage.LastInput = in
+	if in > r.usage.PeakInput {
+		r.usage.PeakInput = in
+	}
 	if res.Model != "" {
 		r.model = res.Model
 	}
@@ -398,6 +461,7 @@ func (r *runner) runCalls(ctx context.Context, calls []llm.ToolCall) (capped boo
 		step := Step{
 			ID: newStepID(), Index: r.ran, Tool: c.Name, Args: capArgs(c.Arguments),
 			Status: StepRunning, Images: []string{}, TextAt: r.textLen,
+			RoundInput: r.lastIn, RoundOutput: r.lastOut,
 		}
 		if r.h.Flush != nil {
 			r.h.Flush()
@@ -406,6 +470,7 @@ func (r *runner) runCalls(ctx context.Context, calls []llm.ToolCall) (capped boo
 		start := time.Now()
 		out := r.execTool(ctx, c)
 		step.DurationMs = time.Since(start).Milliseconds()
+		r.usage.ToolMs += step.DurationMs
 
 		step.Text = clipRunes(out.uiText, maxStepTextRunes)
 		for _, img := range out.images {
@@ -422,6 +487,8 @@ func (r *runner) runCalls(ctx context.Context, calls []llm.ToolCall) (capped boo
 		default:
 			step.Status = StepOK
 		}
+		step.ResultChars = len([]rune(out.modelText))
+		step.ResultTokens = EstimateTokens(out.modelText)
 		r.steps = append(r.steps, step)
 		r.emitStep(step)
 		if out.cancelled {
@@ -446,6 +513,9 @@ func (r *runner) runCalls(ctx context.Context, calls []llm.ToolCall) (capped boo
 			}
 		}
 		r.msgs = append(r.msgs, toolMessage(c, modelText))
+		if !out.isErr && len(out.images) == 0 {
+			r.dedupeRead(c, modelText)
+		}
 	}
 	if len(images) > 0 {
 		// La imagen vuelve como un mensaje de usuario justo después de los
@@ -468,9 +538,12 @@ func (r *runner) emitStep(s Step) {
 func (r *runner) summarize(ctx context.Context) (Result, error) {
 	r.res.StepLimit = true
 	r.msgs = append(r.msgs, llm.Message{Role: llm.RoleUser, Content: i18n.T(msgStepLimitNudge, r.maxSteps)})
-	res, err := chatRetry(ctx, r.cfg.Client, llm.ChatRequest{Model: r.cfg.Model, Messages: r.msgs, Tools: r.defs}, r.onDelta(2))
+	req := llm.ChatRequest{Model: r.cfg.Model, Messages: r.msgs, Tools: r.defs, NumCtx: r.cfg.NumCtx}
+	compactToolResults(r.msgs, r.budgetChars)
+	began := time.Now()
+	res, err := chatRetry(ctx, r.cfg.Client, req, r.onDelta(2))
 	if err == nil {
-		r.addUsage(res)
+		r.addUsage(res, req, time.Since(began))
 	} else if ctx.Err() != nil || errors.Is(err, context.Canceled) {
 		return r.finish(ctx, err)
 	}
@@ -521,8 +594,12 @@ func (r *runner) execTool(ctx context.Context, c llm.ToolCall) (out toolRun) {
 		text = i18n.T(msgEmptyResult)
 	}
 	ui := text
-	if rs := []rune(text); len(rs) > maxToolResultRunes {
-		text = string(rs[:maxToolResultRunes]) + "\n" + i18n.T(msgTrimmed, maxToolResultRunes, len(rs))
+	limit := r.resultRunes
+	if limit <= 0 {
+		limit = maxToolResultRunes
+	}
+	if rs := []rune(text); len(rs) > limit {
+		text = string(rs[:limit]) + "\n" + i18n.T(msgTrimmed, limit, len(rs))
 	}
 	return toolRun{modelText: text, uiText: ui, images: res.Images, isErr: res.IsError}
 }
@@ -589,16 +666,96 @@ func chatRetry(ctx context.Context, c llm.Client, req llm.ChatRequest, onDelta f
 	return c.Chat(ctx, req, onDelta)
 }
 
-// compactToolResults reduce a una nota los resultados de herramientas más viejos
-// cuando la conversación del turno pasa del presupuesto. Los últimos
-// keepRecentToolResults siempre quedan completos: son los que el modelo está
-// usando. Edita los mensajes en su lugar.
-func compactToolResults(msgs []llm.Message) {
-	total := 0
-	for _, m := range msgs {
-		total += len(m.Content)
+// contextBudget devuelve cuántos caracteres pueden ocupar los mensajes de un turno
+// y cuántos caracteres puede tener el resultado de UNA herramienta que vuelve al
+// modelo. Con la ventana conocida son proporcionales a ella: de la ventana se
+// descuentan lo que pesan las definiciones de herramientas (viajan en cada pedido)
+// y una reserva para la respuesta (la sexta parte, al menos 1024 tokens), y cada
+// resultado puede ocupar hasta la cuarta parte de lo que queda. Sin ventana (0,
+// servidores en la nube) rigen los topes fijos de siempre; con una ventana
+// enorme, nunca más que ellos: un turno de 40k tokens ya es caro y no hace falta
+// llenar los 200k.
+func contextBudget(numCtx, toolsTokens int) (budgetChars, resultRunes int) {
+	if numCtx <= 0 {
+		return contextBudgetChars, maxToolResultRunes
 	}
-	if total <= contextBudgetChars {
+	reserve := numCtx / 6
+	if reserve < 1024 {
+		reserve = 1024
+	}
+	tokens := numCtx - toolsTokens - reserve
+	if min := numCtx / 4; tokens < min {
+		tokens = min
+	}
+	budgetChars = tokens * 4
+	if budgetChars > contextBudgetChars {
+		budgetChars = contextBudgetChars
+	}
+	resultRunes = budgetChars / 4
+	if resultRunes < minToolResultRunes {
+		resultRunes = minToolResultRunes
+	}
+	if resultRunes > maxToolResultRunes {
+		resultRunes = maxToolResultRunes
+	}
+	return budgetChars, resultRunes
+}
+
+// dedupeRead registra el resultado que acaba de volver y, si una consulta idéntica
+// (misma herramienta, mismos argumentos) devolvió exactamente lo mismo antes, deja
+// el resultado VIEJO reducido a una nota con la versión: el modelo conserva la
+// copia más reciente, que es la que tiene delante, y no paga dos veces por el mismo
+// archivo. «Versión» es el hash corto del contenido: si el archivo cambió entre
+// una lectura y la otra, el hash cambia y las dos se conservan. Solo para
+// herramientas que no cambian nada: repetir un `render` o un `read_checkpoint` es
+// leer, repetir un `edit_checkpoint` es otra edición.
+func (r *runner) dedupeRead(c llm.ToolCall, text string) {
+	if mcp.EffectOf(c.Name) != mcp.EffectNone {
+		return
+	}
+	sum := sha256.Sum256([]byte(text))
+	ref := toolRef{
+		idx: len(r.msgs) - 1, tool: c.Name, key: c.Name + "|" + canonicalArgs(c.Arguments),
+		hash: hex.EncodeToString(sum[:])[:8],
+	}
+	if f, ok := c.Arguments["file"].(string); ok {
+		ref.file = f
+	}
+	for i := range r.toolRefs {
+		old := &r.toolRefs[i]
+		if old.short || old.key != ref.key || old.hash != ref.hash || old.idx >= len(r.msgs) {
+			continue
+		}
+		if ref.file != "" {
+			r.msgs[old.idx].Content = i18n.T(msgRepeatedFile, ref.file, ref.hash)
+		} else {
+			r.msgs[old.idx].Content = i18n.T(msgRepeatedResult, ref.tool, ref.hash)
+		}
+		old.short = true
+	}
+	r.toolRefs = append(r.toolRefs, ref)
+}
+
+// canonicalArgs serializa los argumentos con las claves en orden (json.Marshal de
+// un mapa ya las ordena): dos llamadas iguales dan el mismo texto.
+func canonicalArgs(args map[string]any) string { return argsJSON(args) }
+
+// compactToolResults reduce a una nota los resultados de herramientas más viejos
+// cuando la conversación del turno pasa del presupuesto (budget, en caracteres).
+// Va por pasadas, de lo menos a lo más drástico, y se detiene apenas entra:
+//
+//  1. resultados viejos a una nota, dejando completos los últimos 4;
+//  2. lo mismo dejando los últimos 2;
+//  3. lo mismo dejando solo el último;
+//  4. los textos largos de los argumentos de llamadas viejas (el código que el
+//     modelo mandó en un update_checkpoint ya está en el archivo).
+//
+// Edita los mensajes en su lugar. Nunca toca los de la vuelta que está por
+// contestarse más allá de lo que dicen las pasadas, ni los bloques firmados
+// (Message.Raw) de Anthropic.
+func compactToolResults(msgs []llm.Message, budget int) {
+	total := messagesChars(msgs)
+	if total <= budget {
 		return
 	}
 	var tools []int
@@ -607,17 +764,100 @@ func compactToolResults(msgs []llm.Message) {
 			tools = append(tools, i)
 		}
 	}
-	if len(tools) <= keepRecentToolResults {
+	note := i18n.T(msgOldResult)
+	for _, keep := range []int{keepRecentToolResults, 2, 1} {
+		if len(tools) <= keep {
+			continue
+		}
+		for _, i := range tools[:len(tools)-keep] {
+			if total <= budget {
+				return
+			}
+			if msgs[i].Content == note {
+				continue
+			}
+			total -= len(msgs[i].Content) - len(note)
+			msgs[i].Content = note
+		}
+	}
+	// Argumentos largos de las llamadas viejas: todo menos los dos últimos mensajes
+	// del asistente.
+	var assistants []int
+	for i, m := range msgs {
+		if m.Role == llm.RoleAssistant && len(m.ToolCalls) > 0 && m.Raw == nil {
+			assistants = append(assistants, i)
+		}
+	}
+	if len(assistants) <= 2 {
 		return
 	}
-	note := i18n.T(msgOldResult)
-	for _, i := range tools[:len(tools)-keepRecentToolResults] {
-		if total <= contextBudgetChars {
+	for _, i := range assistants[:len(assistants)-2] {
+		if total <= budget {
 			return
 		}
-		total -= len(msgs[i].Content) - len(note)
-		msgs[i].Content = note
+		before := messageChars(msgs[i])
+		calls := make([]llm.ToolCall, len(msgs[i].ToolCalls))
+		for j, tc := range msgs[i].ToolCalls {
+			tc.Arguments = shrinkArgs(tc.Arguments)
+			calls[j] = tc
+		}
+		msgs[i].ToolCalls = calls
+		total -= before - messageChars(msgs[i])
 	}
+}
+
+// shrinkArgs devuelve los argumentos con los textos largos reemplazados por la
+// cuenta de lo que había.
+func shrinkArgs(args map[string]any) map[string]any {
+	out := make(map[string]any, len(args))
+	for k, v := range args {
+		if str, ok := v.(string); ok && len(str) > shrunkArgChars {
+			v = i18n.T(msgOmittedArg, len([]rune(str)))
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func messageChars(m llm.Message) int {
+	n := len(m.Content)
+	for _, c := range m.ToolCalls {
+		n += len(c.Name) + len(argsJSON(c.Arguments))
+	}
+	return n
+}
+
+func messagesChars(msgs []llm.Message) int {
+	n := 0
+	for _, m := range msgs {
+		n += messageChars(m)
+	}
+	return n
+}
+
+func toolDefs(specs []mcp.ToolSpec) []llm.ToolDef {
+	defs := make([]llm.ToolDef, 0, len(specs))
+	for _, s := range specs {
+		defs = append(defs, llm.ToolDef{Name: s.Name, Description: s.Description, Parameters: s.InputSchema})
+	}
+	return defs
+}
+
+// Footprint son los tokens (estimados) que cada pedido del turno gasta ANTES de la
+// conversación: el prompt de sistema que le tocaría a este turno y las
+// definiciones de las herramientas que declara. Es lo que el chat compara con la
+// ventana para avisar que, en un modelo chico, casi no queda lugar para trabajar.
+func (c Config) Footprint() (promptTokens, toolsTokens int) {
+	if c.Tools != nil && !c.NoTools {
+		specs := c.ToolSpecs
+		if specs == nil {
+			specs = c.Tools.Tools()
+		}
+		if defs := toolDefs(specs); len(defs) > 0 {
+			return EstimateTokens(c.SystemTools), EstimateToolDefs(defs)
+		}
+	}
+	return EstimateTokens(c.SystemText), 0
 }
 
 // capArgs devuelve los argumentos con los textos muy largos recortados. Se

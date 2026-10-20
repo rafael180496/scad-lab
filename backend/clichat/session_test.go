@@ -52,7 +52,7 @@ func TestRunStreamsATurnWithToolsAndSession(t *testing.T) {
 	if got := text(rec.evs); got != "Voy a renderizar y quedó bien: una caja de 40 mm." {
 		t.Errorf("texto: %q", got)
 	}
-	want := []EventKind{KindStart, KindText, KindTool, KindToolResult, KindTool, KindToolResult, KindText, KindDone}
+	want := []EventKind{KindStart, KindRound, KindText, KindRound, KindTool, KindToolResult, KindRound, KindTool, KindToolResult, KindText, KindDone}
 	if got := kinds(rec.evs); !equalKinds(got, want) {
 		t.Errorf("secuencia de eventos:\n got %v\nwant %v", got, want)
 	}

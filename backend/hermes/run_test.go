@@ -583,7 +583,7 @@ func TestCompactToolResults(t *testing.T) {
 			llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "x", Name: "render"}}},
 			llm.Message{Role: llm.RoleTool, ToolCallID: "x", Content: big})
 	}
-	compactToolResults(msgs)
+	compactToolResults(msgs, contextBudgetChars)
 	var trimmed, whole int
 	for _, m := range msgs {
 		if m.Role != llm.RoleTool {
@@ -595,8 +595,13 @@ func TestCompactToolResults(t *testing.T) {
 			trimmed++
 		}
 	}
-	if whole < keepRecentToolResults || trimmed == 0 {
+	// Cuatro resultados de 50 000 caracteres no caben en 160 000: la segunda pasada
+	// deja menos, pero siempre el más reciente.
+	if whole < 1 || whole > keepRecentToolResults || trimmed == 0 {
 		t.Errorf("completos %d, recortados %d", whole, trimmed)
+	}
+	if got := messagesChars(msgs); got > contextBudgetChars {
+		t.Errorf("tras compactar quedan %d caracteres, sobre el presupuesto %d", got, contextBudgetChars)
 	}
 	// Los últimos quedan completos.
 	last := msgs[len(msgs)-1]
@@ -605,7 +610,7 @@ func TestCompactToolResults(t *testing.T) {
 	}
 	// Bajo el presupuesto no se toca nada.
 	small := []llm.Message{{Role: llm.RoleTool, Content: "ok"}}
-	compactToolResults(small)
+	compactToolResults(small, contextBudgetChars)
 	if small[0].Content != "ok" {
 		t.Error("no debía tocar nada")
 	}

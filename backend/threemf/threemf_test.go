@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -373,13 +374,12 @@ func checkPackage(t *testing.T, path string, nParts int) {
 	var model struct {
 		Unit      string `xml:"unit,attr"`
 		Resources struct {
-			Base []struct {
-				ID    string `xml:"id,attr"`
-				Bases []struct {
-					Name  string `xml:"name,attr"`
-					Color string `xml:"displaycolor,attr"`
-				} `xml:"base"`
-			} `xml:"basematerials"`
+			Groups []struct {
+				ID     string `xml:"id,attr"`
+				Colors []struct {
+					Color string `xml:"color,attr"`
+				} `xml:"color"`
+			} `xml:"colorgroup"`
 			Objects []struct {
 				ID       string `xml:"id,attr"`
 				PID      string `xml:"pid,attr"`
@@ -412,11 +412,17 @@ func checkPackage(t *testing.T, path string, nParts int) {
 	if model.Unit != "millimeter" {
 		t.Errorf("unit = %q", model.Unit)
 	}
-	if len(model.Resources.Base) != 1 || len(model.Resources.Base[0].Bases) != nParts {
-		t.Fatalf("basematerials: %+v", model.Resources.Base)
+	// Un <m:colorgroup> por parte, con un solo color (es lo que lee Bambu Studio).
+	if len(model.Resources.Groups) != nParts {
+		t.Fatalf("colorgroups: %+v", model.Resources.Groups)
 	}
-	ids := map[string]int{} // id → índice de objeto
-	for _, g := range model.Resources.Base {
+	groupByID := map[string]int{} // id del grupo → cantidad de colores
+	ids := map[string]int{}       // id → índice de objeto
+	for _, g := range model.Resources.Groups {
+		if len(g.Colors) != 1 || !regexp.MustCompile(`^#[0-9A-F]{6}FF$`).MatchString(g.Colors[0].Color) {
+			t.Errorf("grupo %s: colores %+v", g.ID, g.Colors)
+		}
+		groupByID[g.ID] = len(g.Colors)
 		ids[g.ID] = -1
 	}
 	meshes, containers := 0, 0
@@ -430,10 +436,10 @@ func checkPackage(t *testing.T, path string, nParts int) {
 		}
 		if len(o.Vertices) > 0 {
 			meshes++
-			if o.PID != model.Resources.Base[0].ID {
-				t.Errorf("objeto %s: pid %q", o.ID, o.PID)
+			if n, ok := groupByID[o.PID]; !ok || n != 1 {
+				t.Errorf("objeto %s: pid %q no es un colorgroup", o.ID, o.PID)
 			}
-			if pi, _ := strconv.Atoi(o.PIndex); pi < 0 || pi >= nParts {
+			if o.PIndex != "0" {
 				t.Errorf("objeto %s: pindex %q", o.ID, o.PIndex)
 			}
 			for _, tr := range o.Tris {

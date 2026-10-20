@@ -174,6 +174,20 @@ export default function CodeEditor(props: CodeEditorProps) {
         e.setPosition({lineNumber: 1, column: 1})
     }, [props.docKey, props.value])
 
+    // Mismo documento cuyo contenido cambió en el disco (la IA lo editó con update_checkpoint, se
+    // restauró una versión del historial): sin esto el editor seguía mostrando el código viejo,
+    // porque solo recargaba al cambiar docKey. Únicamente en solo lectura —con edición en curso el
+    // borrador manda— y conservando el scroll y el cursor.
+    useEffect(() => {
+        const e = ed.current
+        const model = e?.getModel()
+        if (!e || !model || loadedKey.current !== props.docKey || !props.readOnly) return
+        if (model.getValue() === props.value) return
+        const view = e.saveViewState()
+        model.setValue(props.value)
+        if (view) e.restoreViewState(view)
+    }, [props.docKey, props.value, props.readOnly])
+
     useEffect(() => {
         ed.current?.updateOptions({
             readOnly: props.readOnly,

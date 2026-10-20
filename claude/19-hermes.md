@@ -27,9 +27,9 @@ Es el `llmrunner.go` de mini-tools con las herramientas de ScadLab:
 
 - **Un error de herramienta vuelve al modelo como `error: …`**, nunca corta el turno:
   herramienta inexistente, argumentos que no son JSON (`_raw`), pánico, render con
-  error de línea. El resultado se recorta a 32 000 caracteres para el modelo y a 4000
-  para la tarjeta; los resultados viejos se reducen a una nota al pasar de 160 000
-  caracteres (`compactToolResults`; los 4 últimos quedan completos).
+  error de línea. El resultado se recorta para el modelo y a 4000 caracteres para la tarjeta. **Desde S17 los topes son
+  proporcionales a la ventana de contexto** (`Config.NumCtx`; ver «Modelos chicos» abajo): con la ventana desconocida rigen los de siempre
+  —32 000 caracteres por resultado y 160 000 de mensajes, con los resultados viejos reducidos a una nota, `compactToolResults`—.
 - **Imagen de `preview` / `inspect_reference`**: se escribe a
   `<datos>/chat-attachments/<chatId>/step-*.png` (`llm.Message.Images` son **rutas**) y
   vuelve como un mensaje `user` justo después de los resultados —OpenAI y Ollama no
@@ -62,9 +62,30 @@ resultado queda en el texto final y en los checkpoints, que lista el prompt de s
 las imágenes tampoco (una línea con los nombres) y de un modelo de referencia viaja su
 informe, que dice dónde quedó en `refs/`. Los mensajes seguidos del mismo rol se funden.
 
+**Entre turnos (S17)**: lo que no cabe del historial ya no se pierde: `SeedHistory` lo reduce a un **resumen extractivo** (qué se pidió, qué se
+contestó y qué archivos se tocaron, sin llamar al modelo) que encabeza el primer mensaje conservado, y los últimos mensajes viajan enteros. El
+presupuesto del historial es proporcional a la ventana (`chat.HistoryBudgetFor`: un tercio de ella en caracteres, 4 000–60 000 en Ollama).
+
 El prompt de sistema es `prompts.AgentSystemPrompt`: con herramientas, el de Hermes
 (bucle, tope, skills del workspace —nombre y descripción, se leen con `read_skill`—,
 referencias adjuntas, si el modelo ve); sin ellas, el de S5.
+
+## Modelos chicos y tiempos (S17)
+
+Un Ollama de 8k–32k no entra con el catálogo completo, un prompt largo y el código de una maceta: medido, **17 900–28 500 tokens por vuelta** contra 8 192
+de ventana (con las esenciales: 1 900–3 500). Spec: [.claude/specs/s17-edicion-compacta-modelos-chicos.md](../.claude/specs/s17-edicion-compacta-modelos-chicos.md); todo el detalle,
+las medidas y el cálculo de ↑/↓ están en **[35-edicion-compacta.md](35-edicion-compacta.md)**. En corto:
+
+- **Ventana efectiva** (`effectiveWindow`, `app_chat_context.go`): la del servidor si está fijada; si no, `min(ventana del modelo, 32 768)` con mínimo
+  8 192 (`/api/show`), y si el modelo no la dice, `chatDefaultNumCtx` (16 384). Va al pedido de Ollama como `options.num_ctx` por petición
+  (`llm.ChatRequest.NumCtx`, no por cliente: el cliente se arma antes de saber el modelo).
+- **Perfil de herramientas** por conversación (`chats.tools`: Auto / Esenciales / Todas): esenciales = `Toolbox.ToolsFor(ProfileEssential)` con el prompt compacto.
+  `Config.ToolSpecs` declara menos, pero `Call` sigue aceptando todo el catálogo.
+- **Dentro del turno** (`backend/hermes/run.go`): presupuesto y tope por resultado proporcionales a `NumCtx`; una lectura repetida que no cambió deja la vieja
+  como `[archivo X leído, versión Y…]` (`dedupeRead`); al apretar, resultados viejos a nota y luego los textos largos de las llamadas viejas.
+- **«Nueva conversación con resumen»** (`NewChatWithSummary`) al pasar el 70 % de la ventana.
+- **Tiempo y tokens**: `Step.roundInput/roundOutput/resultChars/resultTokens` y `Usage.modelMs/toolMs/rounds/peakInput/lastInput`, que alimentan las tarjetas y el pie del turno.
+- **Un turno sin texto** cuenta qué hizo (`turnRecap`), también el de un CLI.
 
 ## Adjuntos (`backend/hermes/attachments.go`, `app_chat_attach.go`)
 
@@ -292,5 +313,5 @@ cuotas de CLIs, PDF y texto pegado como adjuntos.
 
 Una herramienta nueva en `backend/mcp` llega sola a Hermes; solo su etiqueta y su ícono
 (`steps.tools` en `es.ts`/`en.ts`, `ICONS` de `ToolCallCard.tsx`) se agregan a mano — sin
-ellos se muestra el nombre crudo. Un campo nuevo de `hermes.Step`/`Usage` se agrega en
+ellos se muestra el nombre crudo. Si es esencial para un modelo chico, además entra en `mcp.EssentialTools` con su descripción corta. Un campo nuevo de `hermes.Step`/`Usage` se agrega en
 `types.go`, `lib/chatTypes.ts` y `chatStreams.ts` en el mismo cambio.

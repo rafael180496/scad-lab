@@ -11,6 +11,7 @@ import {
     Columns2,
     Download,
     Eye,
+    FilePenLine,
     FilePlus2,
     FileImage,
     FileText,
@@ -22,9 +23,11 @@ import {
     LayoutTemplate,
     Layers,
     Library,
+    ListTree,
     Loader2,
     Mountain,
     Move3d,
+    Blocks,
     PackageOpen,
     Pencil,
     Printer,
@@ -35,6 +38,7 @@ import {
     ShieldCheck,
     SlidersHorizontal,
     Spline,
+    TextSearch,
     Trash2,
     TriangleAlert,
     Weight,
@@ -45,6 +49,7 @@ import {fmt, locale, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import type {ChatStep} from '../../lib/chatTypes'
 import {createdCheckpoint, stepResult} from '../../lib/chatSteps'
+import {compactTokens, formatDuration} from '../../lib/chatContext'
 import {Dialog} from '../ui/Dialog'
 
 // Tarjeta de un paso: qué herramienta llamó el modelo (o el CLI), con qué
@@ -64,6 +69,11 @@ import {Dialog} from '../ui/Dialog'
 const ICONS: Record<string, LucideIcon> = {
     list_checkpoints: GitBranch,
     read_checkpoint: FileText,
+    outline_checkpoint: ListTree,
+    find_in_checkpoint: TextSearch,
+    edit_checkpoint: FilePenLine,
+    update_checkpoint: FilePenLine,
+    extract_module: Blocks,
     create_checkpoint: FilePlus2,
     render: Hammer,
     lint: ShieldCheck,
@@ -108,6 +118,9 @@ const ICONS: Record<string, LucideIcon> = {
 // de backend/clichat/modes.go.
 const WRITES = new Set([
     'create_checkpoint',
+    'edit_checkpoint',
+    'update_checkpoint',
+    'extract_module',
     'import_mesh',
     'set_parameters',
     'create_from_template',
@@ -298,11 +311,6 @@ const dim = (v: Vec | number[] | undefined): number[] | null => {
     return a.length === 3 && a.every((n) => typeof n === 'number') ? (a as number[]) : null
 }
 
-function formatDuration(ms: number): string {
-    if (ms <= 0) return ''
-    return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`
-}
-
 function Pre({children, className}: {children: ReactNode; className?: string}) {
     return (
         <pre
@@ -321,18 +329,23 @@ function ArgsView({args}: {args: Record<string, unknown>}) {
     if (entries.length === 0) return null
     return (
         <dl className="flex flex-col gap-1.5">
-            {entries.map(([k, v]) => (
-                <div key={k} className="min-w-0">
-                    <dt className="font-mono text-ui-10 tracking-wider text-faint uppercase">{k}</dt>
-                    <dd className="min-w-0">
-                        {isLong(v) ? (
-                            <Pre>{String(v)}</Pre>
-                        ) : (
-                            <span className="selectable font-mono text-ui-11 break-words text-fg">{typeof v === 'string' ? v : JSON.stringify(v)}</span>
-                        )}
-                    </dd>
-                </div>
-            ))}
+            {entries.map(([k, v]) => {
+                // Un argumento que no es texto (las `edits` de edit_checkpoint, una lista de parámetros) se sangra si es largo.
+                const text = typeof v === 'string' ? v : (JSON.stringify(v) ?? '')
+                const long = isLong(text)
+                return (
+                    <div key={k} className="min-w-0">
+                        <dt className="font-mono text-ui-10 tracking-wider text-faint uppercase">{k}</dt>
+                        <dd className="min-w-0">
+                            {long ? (
+                                <Pre>{typeof v === 'string' ? v : JSON.stringify(v, null, 2)}</Pre>
+                            ) : (
+                                <span className="selectable font-mono text-ui-11 break-words text-fg">{text}</span>
+                            )}
+                        </dd>
+                    </div>
+                )
+            })}
         </dl>
     )
 }
@@ -398,6 +411,33 @@ function DiagnosticRow({d}: {d: Diagnostic}) {
     )
 }
 
+// Las medidas de un paso, en el detalle: cuánto tardó, el contexto de la vuelta que lo pidió, lo que
+// escribió el modelo en esa vuelta y lo que la herramienta le devolvió. Solo lo que se informó (S17).
+function StepStats({step}: {step: ChatStep}) {
+    const c = useT().chat.steps
+    const loc = locale()
+    const n = (v: number) => v.toLocaleString(loc)
+    const rows: [string, string][] = []
+    if (step.durationMs > 0) rows.push([c.statTime, formatDuration(step.durationMs, loc)])
+    if (step.roundInput > 0) rows.push([c.statContext, fmt(c.statTokens, {n: n(step.roundInput)})])
+    if (step.roundOutput > 0) rows.push([c.statOutput, fmt(c.statTokens, {n: n(step.roundOutput)})])
+    if (step.resultTokens > 0) rows.push([c.statResult, fmt(c.statResultValue, {tokens: n(step.resultTokens), chars: n(step.resultChars)})])
+    if (rows.length === 0) return null
+    return (
+        <div data-testid="step-stats">
+            <p className="mb-0.5 font-mono text-ui-10 tracking-wider text-faint uppercase">{c.stats}</p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-ui-11">
+                {rows.map(([k, v]) => (
+                    <div key={k} className="contents">
+                        <dt className="text-faint">{k}</dt>
+                        <dd className="font-mono text-fg tabular-nums">{v}</dd>
+                    </div>
+                ))}
+            </dl>
+        </div>
+    )
+}
+
 export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCheckpoint?: (file: string) => void}) {
     const t = useT()
     const c = t.chat.steps
@@ -409,7 +449,11 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
     const known = (c.tools as Record<string, string>)[step.tool]
     const label = known ?? step.tool
     const summary = summaryOf(step)
-    const dur = formatDuration(step.durationMs)
+    const loc = locale()
+    const dur = formatDuration(step.durationMs, loc)
+    // S17: el contexto de la vuelta que pidió el paso y lo que el paso devolvió al modelo. 0 = no se informó.
+    const ctx = step.roundInput > 0 ? compactTokens(step.roundInput, loc) : ''
+    const added = step.resultTokens > 0 ? compactTokens(step.resultTokens, loc) : ''
     const status = c.status[step.status]
     const result = parseResult(step.text)
     const diags = diagnosticsOf(result)
@@ -443,7 +487,21 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
                 <Icon className={cn('icon-ui-14 shrink-0', WRITES.has(step.tool) ? 'text-accent' : 'text-muted')} />
                 <span className="min-w-0 shrink-0 truncate text-ui-12 font-medium text-fg">{label}</span>
                 {summary ? <span className="min-w-0 flex-1 truncate font-mono text-ui-11 text-muted">{summary}</span> : <span className="flex-1" />}
-                {dur ? <span className="hidden shrink-0 font-mono text-ui-10-5 text-faint tabular-nums @min-[18rem]:inline">{dur}</span> : null}
+                {dur ? <span title={`${c.statTime}: ${dur}`} className="hidden shrink-0 font-mono text-ui-10-5 text-faint tabular-nums @min-[18rem]:inline">{dur}</span> : null}
+                {ctx ? (
+                    <span data-testid="step-ctx" title={fmt(c.ctxHint, {n: step.roundInput.toLocaleString(loc)})} className="hidden shrink-0 font-mono text-ui-10-5 text-faint tabular-nums @min-[24rem]:inline">
+                        {fmt(c.ctx, {n: ctx})}
+                    </span>
+                ) : null}
+                {added ? (
+                    <span
+                        data-testid="step-added"
+                        title={fmt(c.addedHint, {tokens: step.resultTokens.toLocaleString(loc), chars: step.resultChars.toLocaleString(loc)})}
+                        className="hidden shrink-0 font-mono text-ui-10-5 text-faint tabular-nums @min-[24rem]:inline"
+                    >
+                        {fmt(c.added, {n: added})}
+                    </span>
+                ) : null}
                 <span
                     title={status}
                     className={cn('flex shrink-0 items-center gap-1 text-ui-11', step.status === 'ok' && 'text-ok', failed && 'text-danger', step.status === 'running' && 'text-accent')}
@@ -546,6 +604,7 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
             {open ? (
                 <div className="flex flex-col gap-2 border-t border-line px-2.5 py-2">
                     <ArgsView args={step.args} />
+                    <StepStats step={step} />
                     <div>
                         <p className="mb-0.5 font-mono text-ui-10 tracking-wider text-faint uppercase">{failed ? c.error : c.result}</p>
                         {step.text.trim() ? (

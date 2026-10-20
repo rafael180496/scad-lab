@@ -22,11 +22,12 @@ func (e *env) printerTools() []Tool {
 	return []Tool{
 		{
 			Name: "list_printers",
-			Description: "List the printers in ScadLab's catalog (Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker, UltiMaker): id, brand, model, build volume in mm (X×Y×Z), maximum colors, multicolor system, recommended slicer and filament diameter, " +
-				"and which one is this workspace's (`current`). Filter by `brand` (id or name, e.g. prusa) and/or `query` (text in the id, name or model). The `id` is what set_workspace_printer takes; printer_info gives the full detail of the current one.",
+			Description: "List the printers in ScadLab's catalog (Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker, UltiMaker): id, name, build volume in mm (X×Y×Z), maximum colors and multicolor system, " +
+				"and which one is this workspace's (`current`). Filter by `brand` (id or name, e.g. prusa) and/or `query` (text in the id, name or model); without a filter it only counts printers per brand (the whole catalog is too long). The `id` is what set_workspace_printer takes; printer_info gives the full detail of the current one. verbose=true adds slicer, filament diameter and unconfirmed fields.",
 			InputSchema: obj(map[string]any{
-				"brand": strProp("Brand id or name (bambu, prusa, creality, elegoo, anycubic, snapmaker, ultimaker). Omit for all."),
-				"query": strProp("Case-insensitive text to look for in the printer id, name, model or brand (e.g. mk4, kobra, centauri)."),
+				"brand":   strProp("Brand id or name (bambu, prusa, creality, elegoo, anycubic, snapmaker, ultimaker). Omit for all."),
+				"query":   strProp("Case-insensitive text to look for in the printer id, name, model or brand (e.g. mk4, kobra, centauri)."),
+				"verbose": verboseProp,
 			}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.listPrinters,
@@ -107,24 +108,7 @@ func (e *env) listPrinters(_ context.Context, args map[string]any) (*toolResult,
 		brand = id
 	}
 	query := strings.ToLower(strings.TrimSpace(strArg(args, "query")))
-	type row struct {
-		ID                 string         `json:"id"`
-		Name               string         `json:"name"`
-		Brand              string         `json:"brand"`
-		BrandID            string         `json:"brandId"`
-		Model              string         `json:"model"`
-		BuildVolumeMM      vec3           `json:"buildVolumeMm"`
-		MaxColors          int            `json:"maxColors"`
-		DefaultColors      int            `json:"defaultColors"`
-		MulticolorKind     string         `json:"multicolorKind"`
-		MulticolorSystem   string         `json:"multicolorSystem"`
-		Slicer             map[string]any `json:"slicer,omitempty"`
-		FilamentDiameterMM float64        `json:"filamentDiameterMm"`
-		BrandSkill         string         `json:"brandSkill"`
-		Current            bool           `json:"current,omitempty"`
-		Unconfirmed        []string       `json:"unconfirmedFields,omitempty"`
-	}
-	out := []row{}
+	out := []printerRow{}
 	for _, p := range all {
 		if brand != "" && p.BrandID != brand {
 			continue
@@ -132,7 +116,7 @@ func (e *env) listPrinters(_ context.Context, args map[string]any) (*toolResult,
 		if query != "" && !strings.Contains(strings.ToLower(p.ID+" "+p.Name+" "+p.Model+" "+p.BrandName), query) {
 			continue
 		}
-		out = append(out, row{
+		out = append(out, printerRow{
 			ID: p.ID, Name: p.Name, Brand: p.BrandName, BrandID: p.BrandID, Model: p.Model,
 			BuildVolumeMM: vec3{p.BuildVolume.X, p.BuildVolume.Y, p.BuildVolume.Z},
 			MaxColors:     p.MaxColors, DefaultColors: p.DefaultColors,
@@ -140,6 +124,9 @@ func (e *env) listPrinters(_ context.Context, args map[string]any) (*toolResult,
 			Slicer: slicerOut(p), FilamentDiameterMM: p.FilamentDiameterMM, BrandSkill: p.Skill,
 			Current: p.ID == current.ID, Unconfirmed: p.Verify,
 		})
+	}
+	if !boolArg(args, "verbose", false) {
+		return compactPrinters(out, brand, query, current.ID)
 	}
 	res := map[string]any{"count": len(out), "printers": out, "currentPrinter": current.ID}
 	if len(out) == 0 {
@@ -149,6 +136,86 @@ func (e *env) listPrinters(_ context.Context, args map[string]any) (*toolResult,
 		})
 	}
 	return jsonResult(res)
+}
+
+// printerRow es una impresora del catálogo con todo su detalle (list_printers verbose).
+type printerRow struct {
+	ID                 string         `json:"id"`
+	Name               string         `json:"name"`
+	Brand              string         `json:"brand"`
+	BrandID            string         `json:"brandId"`
+	Model              string         `json:"model"`
+	BuildVolumeMM      vec3           `json:"buildVolumeMm"`
+	MaxColors          int            `json:"maxColors"`
+	DefaultColors      int            `json:"defaultColors"`
+	MulticolorKind     string         `json:"multicolorKind"`
+	MulticolorSystem   string         `json:"multicolorSystem"`
+	Slicer             map[string]any `json:"slicer,omitempty"`
+	FilamentDiameterMM float64        `json:"filamentDiameterMm"`
+	BrandSkill         string         `json:"brandSkill"`
+	Current            bool           `json:"current,omitempty"`
+	Unconfirmed        []string       `json:"unconfirmedFields,omitempty"`
+}
+
+// compactPrinters es la respuesta corta de list_printers: id, nombre, volumen y
+// colores (lo que hace falta para elegir con set_workspace_printer). Sin filtro y
+// con muchas impresoras solo cuenta por marca: el catálogo entero pesa decenas de
+// KB y un modelo chico no puede pagarlo.
+func compactPrinters(rows []printerRow, brand, query, current string) (*toolResult, error) {
+	const unfilteredMax = 30
+	if brand == "" && query == "" && len(rows) > unfilteredMax {
+		counts := map[string]int{}
+		names := map[string]string{}
+		var order []string
+		for _, r := range rows {
+			if counts[r.BrandID] == 0 {
+				order = append(order, r.BrandID)
+				names[r.BrandID] = r.Brand
+			}
+			counts[r.BrandID]++
+		}
+		brands := make([]ordered, 0, len(order))
+		for _, id := range order {
+			brands = append(brands, ordered{{"id", id}, {"name", names[id]}, {"printers", counts[id]}})
+		}
+		return compactResult(ordered{
+			{"count", len(rows)}, {"brands", brands}, {"currentPrinter", current},
+			{"note", msgf(i18n.Msg{
+				ES: "El catálogo entero es demasiado largo: filtra con `brand` (uno de los ids de arriba) o `query` (p. ej. mk4, a1).",
+				EN: "The whole catalog is too long: filter with `brand` (one of the ids above) or `query` (e.g. mk4, a1).",
+			})},
+		})
+	}
+	list := make([]ordered, 0, len(rows))
+	size := 0
+	omitted := 0
+	for _, r := range rows {
+		o := ordered{{"id", r.ID}, {"name", r.Name}, {"volumeMm", []float64{r.BuildVolumeMM.X, r.BuildVolumeMM.Y, r.BuildVolumeMM.Z}}, {"colors", r.MaxColors}}
+		if r.MulticolorSystem != "" {
+			o.set("system", r.MulticolorSystem)
+		}
+		if r.Current {
+			o.set("current", true)
+		}
+		b, _ := marshalNoEscape(o)
+		if size+len(b) > toolResultSoftCap {
+			omitted = len(rows) - len(list)
+			break
+		}
+		size += len(b)
+		list = append(list, o)
+	}
+	res := ordered{{"count", len(rows)}, {"printers", list}, {"currentPrinter", current}}
+	if omitted > 0 {
+		res.set("omitted", msgf(i18n.Msg{ES: "%d impresoras más: afina con `query`", EN: "%d more printers: narrow with `query`"}, omitted))
+	}
+	if len(rows) == 0 {
+		res.set("note", msgf(i18n.Msg{
+			ES: "Ninguna impresora coincide. Prueba sin `query` o con otra marca.",
+			EN: "No printer matches. Try without `query` or with another brand.",
+		}))
+	}
+	return compactResult(res)
 }
 
 // userSkillsDir es la carpeta de las skills propias: settings.skillsDir si es una

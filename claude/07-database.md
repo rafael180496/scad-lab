@@ -13,7 +13,7 @@ conexión de escritura). Código en `backend/store/`.
 | `ai_providers` | claude, opencode, codex, antigravity (`agy`), ollama, openai-compatible, anthropic. Desde la migración 5 el chat no usa las tres últimas (usa `model_servers`); siguen ahí sin tocar |
 | `model_servers` | servidores de modelos del chat (migración 5): `kind` ollama/openai/anthropic, URL, `api_key_env`, `encrypted_token`+`token_nonce` (AES-256-GCM con la llave derivada de la contraseña maestra, que nunca está en la base; ver [21-llavero.md](21-llavero.md)), modelo por defecto, ventana de Ollama |
 | `vault_meta` | una fila (migración 7): `verifier`+`verifier_nonce` (un texto conocido cifrado con la llave derivada: si abre, la contraseña es la buena), `remember` (la llave está en el llavero del SO), `created_at`. El salt vive en `<datos>/vault.salt`, no acá |
-| `chats`, `chat_messages` | conversaciones del chat (migración 2); `chat_messages.parts` (JSON de adjuntos o pasos), `input_tokens`, `output_tokens` y `cost_usd` desde la migración 6; `chats.cli_session` desde la 8 (el id de conversación del CLI con que sigue un chat `cli:*`) |
+| `chats`, `chat_messages` | conversaciones del chat (migración 2); `chat_messages.parts` (JSON de adjuntos o pasos, y desde S17 el uso del turno con su tiempo), `input_tokens`, `output_tokens` y `cost_usd` desde la migración 6; `chats.cli_session` desde la 8 (el id de conversación del CLI con que sigue un chat `cli:*`); `chats.mode` desde la 9; `chats.tools` desde la 11 (el perfil de herramientas de Hermes en esa conversación) |
 | `materials` | densidad y costo/kg (PLA, PETG, ABS, ASA, TPU, PLA-CF) |
 
 ## Migraciones — reglas duras
@@ -67,3 +67,11 @@ workspace. `Store.SetWorkspaceConfig(id, printerId, skills, print)` guarda impre
 `settings`: lo que no fija lo hereda (ver [29](29-contrato-workspaces.md#configuración-por-workspace--app_wsconfiggo-s14)).
 
 `settings.slicerPaths` (mapa id → ruta del slicer) es una clave más de la tabla key/value: sin migración.
+
+## Migración de S17
+
+| Versión | Qué agrega |
+|---|---|
+| 11 | `chats.tools TEXT NOT NULL DEFAULT ''`: qué herramientas de ScadLab declara Hermes **en esa conversación**. `''` = «Auto» (esenciales si la ventana de contexto efectiva del modelo es menor de 32 768 tokens, todas si es mayor o no se sabe; el predeterminado, de toda fila anterior y de toda conversación nueva), `'essential'` y `'full'` elegidos a mano. `store.ChatToolsValue` normaliza lo que llega de la interfaz (`auto` → `''`) y rechaza el resto; `Store.SetChatTools` no toca `updated_at`. Un CLI no la usa (trae su propio catálogo). Prueba: `migration11_test.go` (base de la v10 con un chat de un servidor en «Solo consulta» y otro de un CLI con sesión: suben a la 11 en Auto, sin perder nada; la elección persiste y es por conversación; un perfil desconocido se rechaza sin cambiar nada; la segunda apertura no hace nada) y `TestMigration2IsAdditive`, que ahora también borra la 11 |
+
+`chat_messages.parts` ganó un campo opcional, `usage` (el `hermes.Usage` del turno: tiempo en el modelo y en las herramientas, vueltas, contexto máximo y última entrada), sin migración: es un JSON opaco para `backend/store` y un mensaje anterior simplemente no lo trae.

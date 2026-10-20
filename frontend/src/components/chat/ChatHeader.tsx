@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react'
-import {Bot, Ellipsis, Eye, Folder, MessageSquarePlus, MessagesSquare, Pencil, RefreshCw, Trash2} from 'lucide-react'
+import {Bot, Ellipsis, Eye, Folder, MessageSquarePlus, MessagesSquare, Pencil, RefreshCw, Trash2, Wrench} from 'lucide-react'
 import type {main, store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
@@ -14,6 +14,7 @@ import {HealthPill} from './HealthIndicators'
 import {ModeControl, modeTexts, type ModeControlProps} from './ModeControl'
 import {ModelPicker} from './ModelPicker'
 import {ProviderPicker} from './ProviderPicker'
+import {TOOL_PROFILES, ToolsControl, toolProfileHint, toolProfileLabel, type ToolsControlProps} from './ToolsControl'
 import type {ChatTier} from './useChatTier'
 
 // Barra superior del chat (S12.b): UNA línea compacta con el título de la
@@ -129,6 +130,7 @@ export function ChatHeader({
     model,
     mode,
     modeKind,
+    tools,
     workspaceName,
     onSelect,
     onNew,
@@ -143,6 +145,8 @@ export function ChatHeader({
     model: ModelControl
     mode: ModeControlProps
     modeKind: 'cli' | 'server'
+    /** S17: perfil de herramientas; solo con un servidor de modelos y «Agente» (sin él no hay herramientas que declarar). */
+    tools?: ToolsControlProps
     workspaceName: string
     onSelect: (id: number) => void
     onNew: () => void
@@ -167,6 +171,7 @@ export function ChatHeader({
     const modeInline = tier !== 'tiny'
     const newInline = tier === 'wide'
     const small = tier === 'tiny'
+    const toolsInMenu = tier === 'tiny' || tier === 'narrow'
 
     const entries: MenuEntry[] = []
     if (workspaceName && !showChip) {
@@ -192,6 +197,20 @@ export function ChatHeader({
                 checked: agent === effectiveAgent,
                 disabled: agent && !!mode.unavailable,
                 onSelect: () => mode.onChange(agent),
+            })
+        }
+    }
+    // En un panel angosto (narrow, tiny) el perfil de herramientas pasa al menú: la barra ya va justa de ancho.
+    if (tools && toolsInMenu) {
+        for (const p of TOOL_PROFILES) {
+            entries.push({
+                id: `tools-${p || 'auto'}`,
+                label: fmt(t.chat.menu.tools, {name: toolProfileLabel(t, p, tools.resolved)}),
+                title: toolProfileHint(t, p),
+                icon: <Wrench className="icon-ui-14" />,
+                checked: p === tools.value,
+                disabled: tools.disabled,
+                onSelect: () => tools.onChange(p),
             })
         }
     }
@@ -248,6 +267,7 @@ export function ChatHeader({
                 </span>
             ) : null}
             {modeInline ? <ModeControl {...mode} kind={modeKind} iconOnly={tier === 'narrow'} /> : null}
+            {tools && !toolsInMenu ? <ToolsControl {...tools} iconOnly={tier === 'mid'} /> : null}
             {newInline ? (
                 <IconButton data-testid="chat-new" title={t.chat.newChatHint} onClick={onNew} disabled={!current} className="shrink-0">
                     <MessageSquarePlus className="icon-ui-14" />

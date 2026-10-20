@@ -14,20 +14,29 @@ ScadLab reconstruye el árbol y las ramas del modelo leyendo los archivos `.scad
 del workspace. Por eso:
 
 - **Cuando el usuario nombra un archivo existente o se refiere al
-  abierto/seleccionado (“este”, “el actual”) y pide cambios, edítalo con
-  `update_checkpoint`. Crea un checkpoint nuevo solo si pide algo nuevo, una
-  variante u “otra versión”. Ante la duda, edita el que nombró.**
-  `update_checkpoint(file, source, note?)` recibe el archivo **completo**, conserva
-  la cabecera `// @checkpoint`, guarda antes la versión anterior en el historial
-  del archivo (`.scadlab/history/`, así el usuario ve las diferencias y deshace) y
-  devuelve el lint y el render del resultado. Un render roto del archivo que
-  acabas de crear o de editar se corrige igual: `update_checkpoint` sobre el mismo
-  archivo.
+  abierto/seleccionado (“este”, “el actual”) y pide cambios, edítalo en el lugar.
+  Crea un checkpoint nuevo solo si pide algo nuevo, una variante u “otra
+  versión”. Ante la duda, edita el que nombró.** Con qué herramienta:
+  - una **medida, un color o un texto del Customizer** → `set_parameters`
+    (`values` = `{nombre: valor}`); es un cambio de un literal, no se escribe código;
+  - **cualquier otro cambio de código** → `edit_checkpoint(file, edits, note?)`:
+    solo mandas lo que cambia (`{old, new}` con el texto exacto, o
+    `{from_line, to_line, new}` con los números de línea que leíste);
+  - **reescritura grande** o reestructurar → `update_checkpoint(file, source,
+    note?)`, que recibe el archivo **completo**.
+
+  Las tres conservan la cabecera `// @checkpoint`, guardan antes la versión
+  anterior en el historial del archivo (`.scadlab/history/`, así el usuario ve
+  las diferencias y deshace) y devuelven el lint y el render del resultado. Un
+  render roto del archivo que acabas de crear o de editar se corrige igual:
+  `edit_checkpoint` sobre el mismo archivo.
 - **Leer y escribir**: un `.scad` se lee con `read_checkpoint` y el nombre del
   archivo (nunca una ruta ni las herramientas de archivo del CLI) y se cambia con
-  `update_checkpoint`. Nunca escribas `.scad` con las herramientas de
-  archivo/shell del CLI: no dejan respaldo. Nunca renombres ni borres un `.scad`
-  (descartar = `trash_checkpoint`).
+  `edit_checkpoint` / `set_parameters` / `update_checkpoint`. **Un archivo largo
+  no se lee entero:** `outline_checkpoint` (el mapa), `find_in_checkpoint` y
+  `read_checkpoint` con `from`/`to` (sección 11). Nunca escribas `.scad` con las
+  herramientas de archivo/shell del CLI: no dejan respaldo. Nunca renombres ni
+  borres un `.scad` (descartar = `trash_checkpoint`).
 - **Un checkpoint nuevo** (algo nuevo, una variante, otra versión) es un archivo
   `.scad` con el siguiente número, que parte del código del padre.
 - **Nombre**: `NNN-slug.scad`. `NNN` = número de 3 dígitos, **siguiente al mayor
@@ -52,7 +61,9 @@ del workspace. Por eso:
 - **Cada checkpoint es autocontenido**: copia el código completo del padre y
   modifícalo. No hagas `include`/`use` de otro checkpoint (la app renderiza cada
   archivo por separado y un cambio en otro checkpoint cambiaría este sin aviso).
-  Las librerías externas van en `lib/` (ver skill `openscad-libraries`).
+  Lo que sí puede incluir son archivos de `lib/`: las librerías externas
+  (ver skill `openscad-libraries`) y los módulos propios que sacas con
+  `extract_module` (sección 11).
 - `desc` describe **qué cambia respecto del padre**, en español, en una frase.
   No uses comillas dobles dentro de `desc`.
 
@@ -196,7 +207,7 @@ Referencia rápida de sintaxis, primitivas y patrones:
 3. Revisa **todo** `WARNING:` y `ERROR:`. Un render sin errores pero con
    warnings no está terminado.
 4. Si la app dejó `RENDER_ERRORS.md` en el workspace, léelo y corrige ese mismo
-   archivo con `update_checkpoint` (la versión rota queda en su historial).
+   archivo con `edit_checkpoint` (la versión rota queda en su historial).
 5. Para probar variantes de parámetros sin crear archivos:
    `openscad -D 'width=80' -o /tmp/out.stl archivo.scad`.
 
@@ -238,3 +249,48 @@ Lee el **número de línea** del mensaje y revisa también la línea anterior (l
 - [ ] Apoya en z=0, cabe en la placa (`printer.json`).
 - [ ] Renderizado sin `ERROR` ni `WARNING`.
 - [ ] Reglas FDM revisadas (skill de marca de la impresora y `references/fdm-design-rules.md`).
+
+## 11. Archivos largos: leer por partes y partir en `lib/`
+
+Un modelo de 600 líneas cuesta 20 KB cada vez que se lee y minutos cada vez que
+se regenera. Para cambiarlo sin pagar eso:
+
+1. **Ubícate**: `outline_checkpoint(file)` devuelve el mapa sin leer el archivo
+   (parámetros del Customizer por sección con su línea y valor, módulos y funciones
+   con su primera y última línea, `include`/`use` y las partes `color()`).
+   `find_in_checkpoint(file, query)` busca un texto o una regex y devuelve
+   ventanas numeradas.
+2. **Mira solo lo que vas a tocar**: `read_checkpoint(file, from, to)` devuelve
+   las líneas numeradas `N| código` (hasta 400 por llamada). Esos números son los
+   que usa `edit_checkpoint`.
+3. **Cambia solo eso**: `edit_checkpoint(file, edits)`. Todas las ediciones se
+   resuelven contra el archivo **tal como está ahora** (no una tras otra), así
+   que usa los números que leíste y manda varias ediciones en una llamada; si
+   dos se solapan o una falla, no se escribe nada. Después de editar, las líneas
+   de abajo pueden haberse movido: vuelve a leer antes de otra edición por líneas.
+4. **Medidas, colores y textos del Customizer**: `set_parameters`, sin tocar el
+   código.
+
+**Partir el archivo con `extract_module(file, modules, lib, mode?)`.** Mueve los
+`module`/`function` que nombras a `lib/<lib>.scad` y deja `include <lib/<lib>.scad>`
+en su lugar; renderiza antes y después y, si cambia la caja o el volumen, lo
+deshace. Después `read_checkpoint`, `outline_checkpoint`, `find_in_checkpoint` y
+`edit_checkpoint` aceptan `file="lib/<lib>.scad"` (solo los archivos directos de
+`lib/`; las subcarpetas son librerías instaladas, de solo lectura). Los archivos
+de `lib/` tienen su propio historial.
+
+- **Cuándo `include` y cuándo `use`.** `include <…>` (por defecto) pega el
+  archivo como si fuera texto: el módulo movido **ve las variables** del
+  checkpoint (los parámetros del Customizer) y a los módulos que se quedaron.
+  `use <…>` solo importa módulos y funciones y **no ve variables globales ni los
+  módulos del archivo que lo usa**: solo sirve para piezas autocontenidas que
+  reciben todo por argumentos (`module tapa(w, d, h)`). Ante la duda, `include`.
+- **Qué se queda en el checkpoint**: la cabecera, los parámetros del Customizer
+  (solo se ven los de este archivo, antes del primer `module`) y el ensamblado con
+  los `color()` de cada pieza. Se mueven los módulos y las funciones.
+- **Rutas relativas**: dentro de `lib/`, `import("refs/x.stl")`, `surface()` o un
+  `include` de otro archivo se resuelven **relativas a `lib/`**. Si el módulo
+  movido los usa, escribe `"../refs/x.stl"`. Es la causa más común de que
+  `extract_module` deshaga el cambio (la caja cambió).
+- Un módulo ya definido en la librería destino no se pisa: elige otro nombre de
+  `lib`.

@@ -120,8 +120,11 @@ export function EditorPane({
     restoreRef.current = restore
     const onRestoredRef = useRef(onRestored)
     onRestoredRef.current = onRestored
+    // Solo un borrador en edición o con cambios manda sobre lo guardado: el de un documento que
+    // estaba en solo lectura no aporta nada y, si se quedara fijo, taparía el código que cambia
+    // en el disco (la IA lo edita con update_checkpoint, se restaura una versión).
     const draft = useRef<{key: string; text: string} | null>(null)
-    if (restore && restore.file === file && restore.text != null && draft.current?.key !== docKey) {
+    if (restore && restore.file === file && restore.text != null && (restore.editing || restore.dirty) && draft.current?.key !== docKey) {
         draft.current = {key: docKey, text: restore.text}
     }
     const value = draft.current?.key === docKey ? draft.current.text : source

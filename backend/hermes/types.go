@@ -49,6 +49,15 @@ type Step struct {
 	// unidades UTF-16 (lo que cuenta `String.length` en JavaScript): el
 	// frontend parte el texto ahí para intercalar los pasos donde ocurrieron.
 	TextAt int `json:"textAt"`
+	// RoundInput y RoundOutput son los tokens de la vuelta del modelo que pidió
+	// esta herramienta (S17): RoundInput es lo que el modelo tenía delante en esa
+	// vuelta, es decir cuánto contexto había en ese momento. 0 = el servidor no lo
+	// informó. ResultChars y ResultTokens son lo que de esta herramienta VUELVE al
+	// modelo (tras el tope; los tokens son una estimación de caracteres/4).
+	RoundInput   int64 `json:"roundInput"`
+	RoundOutput  int64 `json:"roundOutput"`
+	ResultChars  int   `json:"resultChars"`
+	ResultTokens int   `json:"resultTokens"`
 }
 
 // Usage son los tokens y el costo de un turno (suma de todas sus vueltas).
@@ -61,6 +70,20 @@ type Usage struct {
 	// CostUSD solo se calcula con precios que el proveedor publicó (OpenRouter);
 	// 0 significa «no informado», no «gratis».
 	CostUSD float64 `json:"costUsd"`
+
+	// S17: tiempo y ocupación del contexto. Input/Output de arriba son la SUMA de
+	// todas las vueltas del turno (cada vuelta reenvía el contexto entero, así que un
+	// turno de 5 vueltas con 10k de contexto suma ~50k): el contexto de verdad es
+	// PeakInput, la vuelta con más entrada. LastInput es la de la última vuelta.
+	// InputEstimated dice que el servidor no informó la entrada y PeakInput/LastInput
+	// son una estimación de caracteres/4. ModelMs es lo que se esperó al modelo y
+	// ToolMs lo que tardaron las herramientas; Rounds, las vueltas al modelo.
+	ModelMs        int64 `json:"modelMs"`
+	ToolMs         int64 `json:"toolMs"`
+	Rounds         int   `json:"rounds"`
+	PeakInput      int64 `json:"peakInput"`
+	LastInput      int64 `json:"lastInput"`
+	InputEstimated bool  `json:"inputEstimated"`
 }
 
 // Price son los dólares por millón de tokens de un modelo; 0 = desconocido.

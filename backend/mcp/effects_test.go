@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,7 +40,7 @@ func TestEffectsCoverTheWriteTools(t *testing.T) {
 	}
 	// Los grupos que usa el resto del código, fijos a propósito: cambiarlos es una
 	// decisión (hermes, el autosave, el árbol y CREATING_TOOLS del frontend).
-	wantCreate := []string{"create_checkpoint", "create_from_template", "edit_mesh", "import_mesh", "set_parameters", "update_checkpoint"}
+	wantCreate := []string{"create_checkpoint", "create_from_template", "edit_checkpoint", "edit_mesh", "extract_module", "import_mesh", "set_parameters", "update_checkpoint"}
 	if got := ToolsWithEffect(EffectCheckpoint); !slices.Equal(got, wantCreate) {
 		t.Errorf("crean checkpoint: %v, esperaba %v", got, wantCreate)
 	}
@@ -57,14 +58,23 @@ func TestEffectsCoverTheWriteTools(t *testing.T) {
 			t.Errorf("%s solo escribe archivos: no crea checkpoints ni cambia el árbol ni la configuración", n)
 		}
 	}
-	// update_checkpoint es la única que reescribe en el lugar (no crea un .scad nuevo).
+	// Reescriben en el lugar (no crean un .scad nuevo) las que puede decir el
+	// RESULTADO: set_parameters también crea hijos (variant=true).
+	inPlace := map[string]bool{"update_checkpoint": true, "edit_checkpoint": true, "set_parameters": true, "extract_module": true}
 	for _, n := range wantCreate {
-		if UpdatesInPlace(n) != (n == "update_checkpoint") {
-			t.Errorf("UpdatesInPlace(%s) = %v", n, UpdatesInPlace(n))
+		if got := UpdatesInPlace(n, `{"file":"001-a.scad","updated":true}`); got != inPlace[n] {
+			t.Errorf("UpdatesInPlace(%s, updated:true) = %v", n, got)
+		}
+		if UpdatesInPlace(n, `{"file":"001-a.scad","created":true}`) || UpdatesInPlace(n, `{"file":"001-a.scad","updated":false}`) || UpdatesInPlace(n, "") {
+			t.Errorf("UpdatesInPlace(%s) sin updated:true debe ser falso", n)
 		}
 	}
-	if UpdatesInPlace("render") || UpdatesInPlace("no_existe") || UpdatesInPlace("") {
-		t.Error("UpdatesInPlace solo es cierto para update_checkpoint")
+	// Un resultado recortado (JSON roto) sigue diciéndolo: `updated` va entre las primeras claves.
+	if !UpdatesInPlace("edit_checkpoint", `{"file":"003-x.scad","updated":true,"unchanged":false,"lines":6`) {
+		t.Error("un resultado recortado debe seguir reconociéndose")
+	}
+	if UpdatesInPlace("render", `{"updated":true}`) || UpdatesInPlace("no_existe", `{"updated":true}`) || UpdatesInPlace("", `{"updated":true}`) {
+		t.Error("UpdatesInPlace solo es cierto para las herramientas que reescriben en el lugar")
 	}
 	for _, n := range wantCreate {
 		if !CreatesCheckpoint(n) || ChangesTree(n) {
@@ -94,6 +104,7 @@ func TestDeclaredEffectsMatchWhatTheToolsDo(t *testing.T) {
 		return files
 	}
 	base := tb.create(t, "caja", paramsModel, nil)
+	modular := tb.create(t, "modular", "color(\"red\") pieza();\nmodule pieza() {\n    cube([20, 10, 5]);\n}\n", nil)
 	if err := os.MkdirAll(filepath.Join(ws, "refs"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -106,28 +117,37 @@ func TestDeclaredEffectsMatchWhatTheToolsDo(t *testing.T) {
 		"create_from_template": {"name": "knob"},
 		"edit_mesh":            {"file": base, "operations": []any{map[string]any{"op": "center"}}},
 		"update_checkpoint":    {"file": base, "source": srcCube},
+		"edit_checkpoint":      {"file": base, "edits": []any{map[string]any{"old": "tall = 5;", "new": "tall = 6;"}}},
+		"extract_module":       {"file": modular, "modules": []any{"pieza"}, "lib": "piezas"},
 	}
-	// edit_mesh congela la malla del checkpoint: necesita un motor (el instalado o el integrado).
+	// edit_mesh congela la malla del checkpoint y extract_module compara dos renders:
+	// necesitan un motor (el instalado o el integrado).
 	if tool := tb.e.openscad(context.Background(), ""); !tool.Found && !tb.e.wasm.Available() {
 		delete(calls, "edit_mesh")
+		delete(calls, "extract_module")
 	}
-	if len(calls) < 5 {
+	if len(calls) < 7 {
 		t.Fatalf("faltan herramientas por probar: %v", calls)
 	}
 	for _, name := range ToolsWithEffect(EffectCheckpoint) {
 		args, ok := calls[name]
 		if !ok {
-			if name == "edit_mesh" {
+			if name == "edit_mesh" || name == "extract_module" {
 				continue // sin motor, arriba
 			}
 			t.Fatalf("%s crea checkpoints y esta prueba no la llama: agrégala a calls", name)
 		}
 		before := scads()
-		file, _ := tb.mustJSON(t, name, args)["file"].(string)
-		if UpdatesInPlace(name) {
+		out := tb.must(t, name, args)
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(out.Text), &parsed); err != nil {
+			t.Fatalf("%s: el resultado no es JSON: %v", name, err)
+		}
+		file, _ := parsed["file"].(string)
+		if UpdatesInPlace(name, out.Text) {
 			// Reescribe un .scad que ya existía: devuelve su nombre y no aparece ninguno nuevo.
-			if file != base || !slices.Equal(scads(), before) {
-				t.Errorf("%s: `file` = %q, esperaba %q y ningún .scad nuevo (%v -> %v)", name, file, base, before, scads())
+			if want, _ := args["file"].(string); file != want || !slices.Equal(scads(), before) {
+				t.Errorf("%s: `file` = %q, esperaba %q y ningún .scad nuevo (%v -> %v)", name, file, want, before, scads())
 			}
 			continue
 		}

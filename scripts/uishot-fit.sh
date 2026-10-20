@@ -29,7 +29,7 @@
 # control cortado o con scroll horizontal), lo mismo la lista de mensajes y el panel entero. Las vistas
 # chat-w320/480/720/1200 son el chat solo, en un panel de ese ancho (se fija en el contenedor: Chrome headless
 # no baja de ~500 px de ventana): con poke=1 abren el
-# selector de proveedor, el de modelo, el del modo, el menú «…» y la lista de conversaciones, y fallan si
+# selector de proveedor, el de modelo, el del modo, el de herramientas (solo chat-sw*), el menú «…» y la lista de conversaciones, y fallan si
 # alguno de esos desplegables se sale de la ventana.
 set -euo pipefail
 cd "$(dirname "$0")/../frontend"
@@ -69,7 +69,8 @@ else
         COMBOS="$COMBOS$c
 "
     done
-    for c in "chat-w320 520 700" "chat-w479 600 700" "chat-w480 640 700" "chat-narrow 520 760" "chat-w719 800 700" "chat-w720 900 760" "chat-w899 1000 760" "chat-w900 1000 760" "chat-w1200 1400 800"; do
+    # chat-sw*: lo mismo con un servidor de modelos (S17): suma el selector del perfil de herramientas y el aviso de contexto.
+    for c in "chat-w320 520 700" "chat-w479 600 700" "chat-w480 640 700" "chat-narrow 520 760" "chat-w719 800 700" "chat-w720 900 760" "chat-w899 1000 760" "chat-w900 1000 760" "chat-w1200 1400 800" "chat-sw320 520 700" "chat-sw479 600 700" "chat-sw480 640 700" "chat-sw719 800 700" "chat-sw720 900 760" "chat-sw899 1000 760" "chat-sw900 1000 760" "chat-sw1200 1400 800"; do
         COMBOS="$COMBOS$c
 "
     done

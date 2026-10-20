@@ -43,11 +43,18 @@ type claudeLine struct {
 		Status string `json:"status"`
 	} `json:"mcp_servers"`
 	Message struct {
+		ID      string          `json:"id"`
 		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
+		// Usage es el de ESE pedido al modelo (una vuelta); el de `result` es el
+		// total del turno.
+		Usage *claudeUsage `json:"usage"`
 	} `json:"message"`
 	Usage      claudeUsage `json:"usage"`
 	TotalCost  float64     `json:"total_cost_usd"`
+	DurationMs int64       `json:"duration_ms"`
+	APIMs      int64       `json:"duration_api_ms"`
+	NumTurns   int         `json:"num_turns"`
 	IsError    bool        `json:"is_error"`
 	Result     string      `json:"result"`
 	StopReason string      `json:"stop_reason"`
@@ -97,6 +104,15 @@ func claudeAdapter(line []byte) []Event {
 
 	case "assistant":
 		var out []Event
+		// El pedido al modelo que originó este mensaje. Claude Code parte un mismo
+		// mensaje en una línea por bloque, todas con el mismo id y el mismo uso: la
+		// clave deja que quien consume cuente la vuelta una sola vez.
+		if mu := l.Message.Usage; mu != nil && l.Message.ID != "" {
+			in := mu.Input + mu.CacheWrite + mu.CacheRead
+			if in > 0 || mu.Output > 0 {
+				out = append(out, Event{Kind: KindRound, RoundKey: l.Message.ID, Usage: &Usage{Input: in, Output: mu.Output, CacheRead: mu.CacheRead, CacheWrite: mu.CacheWrite}})
+			}
+		}
 		for _, c := range claudeBlocks(l.Message.Content) {
 			switch c.Type {
 			case "text":
@@ -135,6 +151,9 @@ func claudeAdapter(line []byte) []Event {
 			CacheWrite: l.Usage.CacheWrite,
 			Thinking:   l.Usage.Details.Thinking,
 			CostUSD:    l.TotalCost,
+			APIMs:      l.APIMs,
+			DurationMs: l.DurationMs,
+			Turns:      l.NumTurns,
 		}
 		u.Total = u.Input + u.Output + u.CacheRead
 		if l.IsError {
@@ -176,7 +195,11 @@ type agyLine struct {
 		TextDelta json.RawMessage `json:"text_delta"`
 		ToolName  string          `json:"tool_name"`
 		ToolInput any             `json:"tool_input"`
-		Usage     *agyUsage       `json:"usage"`
+		// ToolInfo: en agy 1.4.x los argumentos de la llamada viajan en
+		// `tool_info.parameters` (ServerName, ToolName, Arguments) en lugar de
+		// `tool_input`; en un paso que falló, `tool_info` es un texto con el motivo.
+		ToolInfo json.RawMessage `json:"tool_info"`
+		Usage    *agyUsage       `json:"usage"`
 	} `json:"step_update"`
 	Result *struct {
 		ConversationID string    `json:"conversation_id"`
@@ -236,6 +259,17 @@ var agyStepKnownKeys = map[string]bool{
 // agyStepDetail saca de un paso (JSON crudo) el texto que explica por qué falló,
 // o lo que devolvió. Vacío si el CLI no dijo nada.
 func agyStepDetail(raw map[string]json.RawMessage, failed bool) string {
+	// agy 1.4.x puede dejar el resultado dentro de `tool_info` como objeto; como
+	// texto, `tool_info` es el motivo del fallo y cae en la búsqueda de abajo.
+	if info := parseArgs(raw["tool_info"]); info != nil {
+		for _, k := range []string{"error", "output", "result", "message"} {
+			if v, ok := info[k]; ok {
+				if t := strings.TrimSpace(agyValueText(json.RawMessage(rawJSON(v)))); t != "" {
+					return t
+				}
+			}
+		}
+	}
 	for _, k := range agyStepDetailKeys {
 		if v, ok := raw[k]; ok {
 			if t := strings.TrimSpace(agyValueText(v)); t != "" {
@@ -299,7 +333,19 @@ func agyEvents(line []byte, st *agyTurn) []Event {
 	if err := json.Unmarshal(line, &l); err != nil {
 		return nil
 	}
+	evs := agyEventsOf(l, line, st)
+	// Un paso que informa su propio uso es una vuelta del modelo: la entrada de esa
+	// vuelta es lo no cacheado más lo leído de la caché (en la sesión real, cada
+	// paso del planificador trae input_tokens y cache_read_tokens por separado).
+	if s := l.StepUpdate; s != nil && s.Usage != nil && (s.Usage.Input > 0 || s.Usage.CacheRead > 0 || s.Usage.Output > 0) {
+		u := s.Usage
+		round := Event{Kind: KindRound, RoundKey: "step-" + strconv.Itoa(s.StepIndex), Usage: &Usage{Input: u.Input + u.CacheRead, Output: u.Output, CacheRead: u.CacheRead, Thinking: u.Thinking}}
+		return append([]Event{round}, evs...)
+	}
+	return evs
+}
 
+func agyEventsOf(l agyLine, line []byte, st *agyTurn) []Event {
 	switch {
 	case l.Init != nil:
 		return []Event{{Kind: KindStart, Model: l.Init.Model, Tools: l.Init.Tools, ConversationID: l.ConversationID}}
@@ -329,7 +375,11 @@ func agyEvents(line []byte, st *agyTurn) []Event {
 			switch s.State {
 			case "ACTIVE":
 				name := firstNonEmpty(s.ToolName, s.StepType)
-				return []Event{{Kind: KindTool, Tool: unwrapAgyMCP(newToolCall(id, name, rawJSON(s.ToolInput)))}}
+				input := rawJSON(s.ToolInput)
+				if input == "" {
+					input = agyToolInfoInput(s.ToolInfo)
+				}
+				return []Event{{Kind: KindTool, Tool: unwrapAgyMCP(newToolCall(id, name, input))}}
 			case "DONE":
 				return []Event{{Kind: KindToolResult, Tool: &ToolCall{ID: id, Result: agyDetailOf(line, false)}}}
 			case "ERROR", "FAILED", "CANCELLED":
@@ -400,6 +450,39 @@ func unwrapAgyMCP(tc *ToolCall) *ToolCall {
 		tc.Input = trim(rawJSON(m))
 	}
 	return tc
+}
+
+// agyToolInfoInput saca de `tool_info` (agy 1.4.x) los argumentos de la llamada:
+// el objeto de `parameters` —que puede venir como objeto o como un JSON dentro de un
+// texto—, o `args`/`arguments`/`input`; si el propio `tool_info` ya trae el
+// ServerName/ToolName, él mismo. Vacío si es un texto (el motivo de un fallo) o no
+// trae nada que se entienda.
+func agyToolInfoInput(raw json.RawMessage) string {
+	obj := parseArgs(raw)
+	if obj == nil {
+		return ""
+	}
+	for _, k := range []string{"parameters", "args", "arguments", "input"} {
+		v, ok := obj[k]
+		if !ok {
+			continue
+		}
+		if s, isStr := v.(string); isStr {
+			if m := parseArgs(json.RawMessage(s)); m != nil {
+				return rawJSON(m)
+			}
+			continue
+		}
+		if m, isObj := v.(map[string]any); isObj {
+			return rawJSON(m)
+		}
+	}
+	for k := range obj {
+		if lk := strings.ToLower(k); lk == "servername" || lk == "server_name" || lk == "toolname" || lk == "tool_name" {
+			return rawJSON(obj)
+		}
+	}
+	return ""
 }
 
 // agyDetailOf lee el detalle (error o salida) del `step_update` de una línea.

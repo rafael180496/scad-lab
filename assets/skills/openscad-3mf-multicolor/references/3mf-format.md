@@ -53,21 +53,20 @@ Aquí el `Target` **sí** lleva barra inicial (es una URI dentro del paquete).
 ## 4. `3D/3dmodel.model`
 
 Un objeto padre con una parte por color (componentes), cada parte con su
-material base:
+grupo de color (un solo color por grupo):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US"
-       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+       xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+       xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
   <metadata name="Application">ScadLab</metadata>
   <metadata name="Title">nameplate</metadata>
   <resources>
-    <basematerials id="1">
-      <base name="base_color" displaycolor="#FFFFFFFF"/>
-      <base name="text_color" displaycolor="#D32F2FFF"/>
-    </basematerials>
+    <m:colorgroup id="1"><m:color color="#FFFFFFFF"/></m:colorgroup>
+    <m:colorgroup id="2"><m:color color="#D32F2FFF"/></m:colorgroup>
 
-    <object id="2" type="model" name="base" pid="1" pindex="0">
+    <object id="3" type="model" name="base" pid="1" pindex="0">
       <mesh>
         <vertices>
           <vertex x="0" y="0" z="0"/>
@@ -81,19 +80,19 @@ material base:
       </mesh>
     </object>
 
-    <object id="3" type="model" name="text" pid="1" pindex="1">
+    <object id="4" type="model" name="text" pid="2" pindex="0">
       <mesh> ... </mesh>
     </object>
 
-    <object id="4" type="model" name="nameplate">
+    <object id="5" type="model" name="nameplate">
       <components>
-        <component objectid="2"/>
         <component objectid="3"/>
+        <component objectid="4"/>
       </components>
     </object>
   </resources>
   <build>
-    <item objectid="4"/>
+    <item objectid="5"/>
   </build>
 </model>
 ```
@@ -106,7 +105,12 @@ material base:
   objeto. Orden **antihorario visto desde fuera** (normal saliente, regla de la
   mano derecha). Los STL de OpenSCAD ya vienen orientados así: conservar el
   orden de los vértices de cada faceta.
-- La malla debe ser cerrada (manifold) y sin triángulos degenerados.
+- La malla debe ser cerrada (manifold) y sin triángulos degenerados. **Cada parte lo es por
+  separado**: Bambu Studio lamina cada parte aparte, y una cáscara abierta (cada arista
+  dirigida debe aparecer una vez y su opuesta una vez) se rellena mal. Una parte repartida
+  del 3MF fundido de OpenSCAD queda abierta donde tocaba otro color; se evita con
+  `--enable=lazy-union` (claude/11 del repo: «Partes cerradas»). El volumen con signo de una
+  parte tiene que dar > 0.
 - Deduplicar vértices al leer el STL (STL repite cada vértice por faceta):
   mapa `[3]float32 → índice`. Reduce el tamaño ~6× y Bambu Studio lo agradece.
 - Un objeto con `<mesh>` o con `<components>`, nunca ambos.
@@ -115,14 +119,16 @@ material base:
 
 ### Color / material
 
-- `<basematerials>` pertenece al core. Cada `<base>` tiene `name` y
-  `displaycolor` sRGB `#RRGGBB` o `#RRGGBBAA`.
+- **`<m:colorgroup>` es lo que lee Bambu Studio** (y Orca); `<basematerials>` no: lo ignoran
+  y el modelo llega sin colores. El prefijo es `m:` **literal** (expat sin espacios de
+  nombres), declarado con `xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"`.
+  Cada `<m:color color="#RRGGBB">` o `#RRGGBBAA`. ScadLab escribe un grupo por parte, con un
+  solo color (Orca guarda un único color por grupo).
 - Un objeto toma su material con `pid` (id del grupo) + `pindex` (índice base 0
   dentro del grupo). También se puede asignar por triángulo
-  (`<triangle ... pid="1" p1="1"/>`).
-- Alternativa del Materials Extension: `<m:colorgroup>` con
-  `xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02"`.
-  Para ScadLab basta `basematerials`.
+  (`<triangle ... pid="1" p1="0"/>`); un triángulo sin `pid`/`p1` hereda los del objeto.
+- `<basematerials>` (`<base name displaycolor>`) es el color del core y es lo que escribe
+  OpenSCAD en su 3MF; ScadLab lo **lee** (`threemf.Read`) pero no lo escribe.
 
 ### Transformaciones
 
@@ -143,10 +149,17 @@ recoloca).
   forks de Orca. El `part id` del config tiene que ser el `id` del objeto-malla que
   referencia el `<component>`. Un XML inválido en este archivo es error fatal en
   Creality Print y Anycubic. `Application` no debe empezar por `BambuStudio-` ni
-  `OrcaSlicer-`: con ese prefijo se trata como proyecto propio y exige un
-  `project_settings.config` completo.
-- Bambu Studio no siempre asigna filamentos a partir de `displaycolor`; el
-  mapeo fiable es su archivo propio `Metadata/model_settings.config`:
+  `OrcaSlicer-`: con ese prefijo se trata como proyecto propio, se descarta el color por
+  triángulo y se exige un `project_settings.config` completo. Tampoco debe decir `PrusaSlicer`.
+- **Bambu Studio 02.08.02.x**: un 3MF sin `project_settings.config` abre el aviso «configuración
+  no válida, carga solo los datos de geometría» (defecto de esa versión, `check_project_config`
+  devuelve `false` con la config vacía; corregido en 02.08.03.65). Es inofensivo. Luego, con
+  `<m:colorgroup>`, abre «Standard 3mf Import color» (por defecto agrega los colores como
+  filamentos nuevos; «Color match» los empareja con los del AMS) y asigna el extrusor de cada parte. Sin ese cuadro, el extrusor del
+  `model_settings.config` solo sobrevive si el proyecto ya tiene tantos filamentos
+  (`ModelVolume::update_extruder_count` borra el mayor). Detalle: `claude/11-exportacion.md`.
+- Los colores de los filamentos los pone el usuario; además de eso, `model_settings.config`
+  es el mapeo de partes y extrusores:
 
   ```xml
   <?xml version="1.0" encoding="UTF-8"?>
@@ -243,7 +256,7 @@ una parte no llega con su extrusor, el camino seguro es el STL por color.
   triángulo (normal, 3 vértices `float32` little-endian, `uint16` atributo).
   STL ASCII empieza con `solid` (pero hay binarios que también: validar por
   tamaño `84 + 50*n`).
-- Un grupo de color = un `<base>`; un STL por color = un objeto-parte.
+- Un grupo de color = un `<m:colorgroup>`; un STL por color = un objeto-parte.
 - Validar el resultado con las pruebas de `backend/threemf` y `backend/exporter`
   (zip y XML válidos, rangos de triángulos contiguos que cubren la malla, volumen
   total igual al del STL con OpenSCAD real). **No se abre ningún slicer** en las

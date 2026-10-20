@@ -343,3 +343,26 @@ func TestStreamFlushAndSnapshot(t *testing.T) {
 		t.Error("tras Cancel debía figurar cancelado")
 	}
 }
+
+// El historial es proporcional a la ventana: más ventana, más historial; sin
+// ventana rige el presupuesto de siempre; nunca baja de 4 000 ni pasa del techo.
+func TestHistoryBudgetForScalesWithTheWindow(t *testing.T) {
+	small := HistoryBudgetFor(llm.KindOllama, 8192)
+	mid := HistoryBudgetFor(llm.KindOllama, 16384)
+	big := HistoryBudgetFor(llm.KindOllama, 32768)
+	if !(small < mid && mid < big) {
+		t.Errorf("debía crecer con la ventana: %d %d %d", small, mid, big)
+	}
+	if small != 8192*4*35/100 {
+		t.Errorf("8k = %d", small)
+	}
+	if HistoryBudgetFor(llm.KindOllama, 0) != HistoryBudget(llm.KindOllama) {
+		t.Error("sin ventana rige el presupuesto de siempre")
+	}
+	if HistoryBudgetFor(llm.KindOllama, 1024) != 4000 {
+		t.Error("el piso es 4 000")
+	}
+	if HistoryBudgetFor(llm.KindOllama, 10_000_000) != 60_000 || HistoryBudgetFor(llm.KindAnthropic, 10_000_000) != HistoryBudget(llm.KindAnthropic) {
+		t.Error("el techo no se pasa")
+	}
+}

@@ -20,8 +20,9 @@ import (
 
 const (
 	// manifestVersion cambia cuando cambia el formato del manifest o cómo se
-	// reparten las partes: una caché con otra versión se regenera.
-	manifestVersion = 1
+	// reparten las partes: una caché con otra versión se regenera. La 2 son partes
+	// cerradas (lazy-union cuando el reparto del sólido fundido las deja abiertas).
+	manifestVersion = 2
 	manifestName    = "manifest.json"
 
 	// maxCacheBytes es el tope de la caché de partes: 512 MB. Se poda por

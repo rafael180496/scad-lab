@@ -75,3 +75,38 @@ func TestUpdateCheckpointIsAnAgentOnlyTool(t *testing.T) {
 		t.Errorf("denegadas en consulta: %q", got)
 	}
 }
+
+// S17: leer por partes es de lectura (los dos modos); editar y partir un modelo
+// escriben en el workspace y son solo de «Agente».
+func TestS17ToolsAreClassifiedForTheModes(t *testing.T) {
+	for _, r := range []string{"outline_checkpoint", "find_in_checkpoint"} {
+		if !slices.Contains(ReadTools(), r) || slices.Contains(WriteTools(), r) {
+			t.Errorf("%s es de lectura", r)
+		}
+		for _, mode := range []Mode{ModeAsk, ModeEdit} {
+			if got := claudeAllowed(mode); !strings.Contains(","+got+",", ",mcp__scadlab__"+r+",") {
+				t.Errorf("Claude en %s no permite %s: %q", mode, r, got)
+			}
+			if got := codexEnabledTools(mode); !strings.Contains(got, `"`+r+`"`) {
+				t.Errorf("Codex en %s no permite %s: %q", mode, r, got)
+			}
+		}
+	}
+	for _, w := range []string{"edit_checkpoint", "extract_module"} {
+		if !slices.Contains(WriteTools(), w) || slices.Contains(ReadTools(), w) {
+			t.Errorf("%s es de escritura", w)
+		}
+		if got := claudeAllowed(ModeEdit); !strings.Contains(","+got+",", ",mcp__scadlab__"+w+",") {
+			t.Errorf("Claude en «Agente» no permite %s: %q", w, got)
+		}
+		if got := claudeAllowed(ModeAsk); strings.Contains(got, w) {
+			t.Errorf("Claude en «Solo consulta» permite %s: %q", w, got)
+		}
+		if got := codexEnabledTools(ModeAsk); strings.Contains(got, w) {
+			t.Errorf("Codex en «Solo consulta» permite %s: %q", w, got)
+		}
+		if got := codexEnabledTools(ModeEdit); !strings.Contains(got, `"`+w+`"`) {
+			t.Errorf("Codex en «Agente» no permite %s: %q", w, got)
+		}
+	}
+}

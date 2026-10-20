@@ -81,3 +81,77 @@ func TestAntigravityAdapterKeepsThePermissionDenialDetail(t *testing.T) {
 		t.Errorf("sin texto y con cierre: %q %v", text(evs), kinds(evs))
 	}
 }
+
+// agy 1.4.x: la herramienta de ScadLab viaja en `tool_info.parameters` (como objeto o
+// como un JSON dentro de un texto) en lugar de `tool_input`. Fixture saneado a partir
+// de una sesión real; sin rutas ni datos de nadie.
+func TestAntigravityAdapterUnwrapsToolInfoParameters(t *testing.T) {
+	adapt, _, _ := adapterFor("antigravity")
+	evs := feed(t, adapt, "antigravity-mcp-1.4.jsonl")
+
+	tools := find(evs, KindTool)
+	if len(tools) != 4 {
+		t.Fatalf("herramientas: %+v", tools)
+	}
+	if o := tools[0].Tool; o.Name != "outline_checkpoint" || o.Args["file"] != "001-maceta.scad" {
+		t.Errorf("tool_info.parameters como objeto: %+v", o)
+	}
+	e := tools[1].Tool
+	if e.Name != "edit_checkpoint" || e.Args["file"] != "001-maceta.scad" {
+		t.Errorf("tool_info.parameters como texto JSON: %+v", e)
+	}
+	if _, nested := e.Args["ToolName"]; nested {
+		t.Errorf("los argumentos son los de la herramienta, no el envoltorio: %+v", e.Args)
+	}
+	if edits, _ := e.Args["edits"].([]any); len(edits) != 1 {
+		t.Errorf("los argumentos anidados llegan enteros: %+v", e.Args)
+	}
+	if gh := tools[2].Tool; gh.Name != "call_mcp_tool" || gh.Args["ServerName"] != "github" {
+		t.Errorf("otro servidor intacto: %+v", gh)
+	}
+	if sh := tools[3].Tool; sh.Name != "run_command" || !strings.Contains(sh.Input, "python3") {
+		t.Errorf("run_command conserva su comando: %+v", sh)
+	}
+
+	res := find(evs, KindToolResult)
+	if len(res) != 4 {
+		t.Fatalf("resultados: %+v", res)
+	}
+	if !strings.Contains(res[0].Tool.Result, `"lines":612`) {
+		t.Errorf("la salida de un paso con `output`: %q", res[0].Tool.Result)
+	}
+	if !strings.Contains(res[1].Tool.Result, `"updated":true`) {
+		t.Errorf("el resultado dentro de tool_info.output: %q", res[1].Tool.Result)
+	}
+	last := res[3].Tool
+	if !last.IsError || !strings.Contains(last.Result, "permission check failed for unsandboxed") {
+		t.Errorf("el rechazo de la shell llega entero al paso: %+v", last)
+	}
+	// El turno cerró sin texto y con el uso: lo que lee el pie del turno.
+	if text(evs) != "" {
+		t.Errorf("el fixture termina sin texto: %q", text(evs))
+	}
+	done := find(evs, KindDone)
+	if len(done) != 1 || done[0].Usage == nil || done[0].Usage.Input != 2400 || done[0].Usage.CacheRead != 90000 {
+		t.Errorf("uso: %+v", done)
+	}
+}
+
+func TestAgyToolInfoInputShapes(t *testing.T) {
+	for _, tc := range []struct{ name, raw string }{
+		{"texto (motivo de un fallo)", `"permission check failed"`},
+		{"vacío", ``},
+		{"objeto sin parámetros", `{"toolAction":"x"}`},
+		{"parameters que no es JSON", `{"parameters":"nada"}`},
+	} {
+		if got := agyToolInfoInput([]byte(tc.raw)); got != "" {
+			t.Errorf("%s: esperaba vacío y salió %q", tc.name, got)
+		}
+	}
+	if got := agyToolInfoInput([]byte(`{"ServerName":"scadlab","ToolName":"lint"}`)); !strings.Contains(got, "ToolName") {
+		t.Errorf("tool_info que ya trae el ServerName: %q", got)
+	}
+	if got := agyToolInfoInput([]byte(`{"args":{"ServerName":"scadlab","ToolName":"lint"}}`)); !strings.Contains(got, "lint") {
+		t.Errorf("tool_info.args: %q", got)
+	}
+}

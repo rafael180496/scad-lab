@@ -36,6 +36,12 @@ const (
 	KindTool EventKind = "tool"
 	// KindToolResult es el resultado de una llamada anterior (mismo Tool.ID).
 	KindToolResult EventKind = "toolresult"
+	// KindRound (S17) es una vuelta del modelo dentro del turno, con lo que ese
+	// pedido recibió y devolvió (Event.Usage) y una clave para no contarla dos veces
+	// (Event.RoundKey). Solo los CLIs que informan el uso de cada mensaje la emiten
+	// (Claude Code, Antigravity si el paso lo trae): con ella el chat sabe el
+	// contexto máximo y las vueltas del turno, que el total de KindDone no dice.
+	KindRound EventKind = "round"
 	// KindDone cierra el turno con el uso total.
 	KindDone EventKind = "done"
 	// KindError es un fallo del proceso o de la conversación.
@@ -57,6 +63,12 @@ type Usage struct {
 	CostUSD float64 `json:"costUsd"`
 	// Model es el modelo que respondió, si el CLI lo dice al cerrar (OpenCode).
 	Model string `json:"model,omitempty"`
+	// S17: lo que el CLI diga del tiempo del turno. APIMs es lo que pasó esperando
+	// al modelo (Claude Code: duration_api_ms), DurationMs el total del turno y
+	// Turns las vueltas al modelo (num_turns). 0 = no lo dijo.
+	APIMs      int64 `json:"apiMs,omitempty"`
+	DurationMs int64 `json:"durationMs,omitempty"`
+	Turns      int   `json:"turns,omitempty"`
 }
 
 // ToolCall es una llamada a herramienta ya normalizada, o su resultado.
@@ -93,4 +105,7 @@ type Event struct {
 	MCPServers []string
 	// Error acompaña a KindError.
 	Error string
+	// RoundKey identifica la vuelta de un KindRound (el id del mensaje, el índice
+	// del paso): el mismo mensaje puede llegar partido en varias líneas.
+	RoundKey string
 }

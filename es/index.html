@@ -1782,6 +1782,9 @@ color("SteelBlue") difference() {
   <p><strong>«Solo consulta» sigue funcionando.</strong> Las reglas son globales —iguales en Agente y en Solo consulta—, así que el modo lo hace cumplir el servidor de ScadLab: durante un turno de Solo consulta
   el chat deja una marca en el proyecto (<code>.scadlab/turn-mode</code>, se retira al terminar el turno y trae un vencimiento para que nunca quede huérfana) y el servidor rechaza las herramientas que modifican el proyecto
   con el motivo, para que Antigravity te entregue el diseño en un bloque. En modo Agente todo pasa. La shell sigue denegada y <code>--dangerously-skip-permissions</code> no se usa nunca.</p>
+  <p><strong>La shell.</strong> En modo no interactivo Antigravity rechaza cualquier comando de la terminal (<code>run_command</code>) y, igual que con una herramienta sin permiso, <strong>termina el turno</strong>: el comando no llega a ejecutarse.
+  ScadLab le pide al modelo que no lo intente; si lo intenta, el mensaje del chat nombra el comando bloqueado y dice que no se ejecutó nada. No se usan <code>--sandbox</code> (ejecutaría los comandos dentro de un sandbox, lo contrario de bloquearlos) ni
+  reglas globales de shell que afectarían también a tu terminal. Un turno que termina sin escribir nada ya no dice solo «terminó sin responder»: cuenta qué herramientas ejecutó, qué archivos quedaron cambiados y qué devolvió la última.</p>
   <div class="note"><span class="lbl">Son globales</span><p>Las reglas valen para <strong>todo</strong> uso de Antigravity, también cuando lo abres tú (en la terminal de ScadLab o en cualquier otro lado): sus avisos de permiso
   no te pedirán las herramientas de ScadLab, tampoco las que escriben. Si prefieres aprobarlas una por una, quítalas como se explica a continuación.</p></div>
 
@@ -2003,7 +2006,8 @@ Corrige 004-add-hinge.scad en el lugar con la herramienta update_checkpoint.</co
     <li><strong>Caja de mensaje.</strong> Los atajos están a la vista bajo la caja: <kbd>Enter</kbd> envía, <kbd>Mayús+Enter</kbd> agrega una línea y <kbd>⌘/Ctrl+Enter</kbd> también envía.
       Los adjuntos pendientes se ven sobre la caja y <strong>Detener</strong> muestra un reloj.</li>
     <li><strong>Contador de contexto.</strong> Al lado de los atajos, los tokens <em>estimados</em> del borrador más la conversación (4 caracteres ≈ 1 token) contra la ventana del modelo, cuando el proveedor
-      la informa; se pone ámbar al 70 % y rojo al 90 %, y es la señal para empezar un chat nuevo. No cuenta las instrucciones del sistema ni los adjuntos.</li>
+      la informa; se pone ámbar al 70 % y rojo al 90 %, y es la señal para empezar un chat nuevo. Con un servidor mide contra la ventana efectiva del último turno y suma el prompt y las herramientas
+      (ver <a href="#ia-hermes--chicos">Modelos chicos</a>); no cuenta los adjuntos.</li>
   </ul>
 
   <h2 id="ia-hermes--agente">Los modos: Solo consulta y Agente</h2>
@@ -2089,11 +2093,40 @@ Corrige 004-add-hinge.scad en el lugar con la herramienta update_checkpoint.</co
     <li>Las conversaciones se guardan <strong>por proyecto</strong>. Al abrir ScadLab retomas la última. El buscador de la lista mira el <strong>título y lo que se dijo</strong> (desde 2 letras, en las 60 conversaciones
       más recientes) y resalta la coincidencia. Puedes <strong>renombrar</strong> una (hasta 120 letras; también con un clic en el título de la barra) y
       <strong>borrarla</strong>, con confirmación: los checkpoints que guardaste desde ella no se tocan.</li>
-    <li>Debajo de cada respuesta ves los <strong>tokens</strong> del turno (entrada y salida) y, si el proveedor publica precios, el <strong>costo</strong>. Si el proveedor no lo
-      informa, no se muestra ningún costo: un costo ausente no es «gratis».</li>
+    <li>Debajo de cada respuesta ves el <strong>pie del turno</strong>: los tokens (entrada y salida), el contexto máximo, el tiempo y, si el proveedor publica precios, el <strong>costo</strong> (ver
+      <a href="#ia-hermes--tokens">Tiempo y tokens de cada turno</a>). Si el proveedor no informa el costo, no se muestra ninguno: un costo ausente no es «gratis».</li>
     <li>Tras reabrir la app el modelo <strong>recuerda la conversación</strong> (lo que escribiste, lo que contestó y las referencias que adjuntaste), pero no el detalle de sus pasos
       anteriores: eso está en los checkpoints. Un CLI retoma, además, la sesión que él mismo guardó.</li>
   </ul>
+
+  <h2 id="ia-hermes--tokens">Tiempo y tokens de cada turno</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-turn-stats.png" alt="Un turno de Ollama con cuatro tarjetas —ver la estructura, buscar en el código, editar el checkpoint y renderizar— cada una con su tiempo, «ctx 7,2k» y «+880»; bajo la respuesta, el pie «Contexto máx. 12k · ↑ 48k en 5 vueltas · ↓ 2k · modelo 41 s · herramientas 2,6 s»" loading="lazy"><figcaption>Cada tarjeta dice cuánto tardó y cuánto contexto había; el pie del turno, el contexto máximo, la suma de entrada, el tiempo en el modelo y en las herramientas.</figcaption></figure>
+  <p>Para saber dónde se va el tiempo y el contexto, cada tarjeta de paso muestra, además de lo que tardó, <strong><code>ctx 7,2k</code></strong> —el contexto de la vuelta que pidió ese paso: lo que el modelo tenía delante— y
+  <strong><code>+880</code></strong> —lo que la herramienta le devolvió al modelo, estimado—. Desplegada, la tarjeta da las medidas completas. Bajo cada respuesta, el <strong>pie del turno</strong>:</p>
+  <ul>
+    <li><strong>Contexto máx.</strong> es la vuelta con más entrada del turno: lo que de verdad ocupó de la ventana del modelo. Es el número que se compara con su límite.</li>
+    <li><strong>↑</strong> es la <em>suma</em> de la entrada de todas las vueltas (<em>«en 5 vueltas»</em>): cada vuelta reenvía el contexto entero, así que un turno de 5 vueltas con 10k de contexto suma ~50k. Antes se leía como si fuera el
+      contexto; no lo es y no hay que compararlo con la ventana. <strong>↓</strong> es lo que escribió el modelo.</li>
+    <li><strong>modelo</strong> y <strong>herramientas</strong> son el tiempo que pasó esperando al modelo y ejecutando las herramientas.</li>
+    <li>Un valor que el proveedor no informó no se muestra; con <strong>≈</strong> es una estimación (el servidor no informó la entrada). Los CLIs informan lo que su stream trae: Claude Code da el uso de cada mensaje (hay contexto máximo y vueltas);
+      los demás, solo el total —que ahora cuenta también lo leído de la caché— y el tiempo.</li>
+  </ul>
+
+  <h2 id="ia-hermes--chicos">Modelos chicos: herramientas esenciales y contexto</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-tools.png" alt="El selector de herramientas abierto en la barra del chat con un Ollama de 8k: «Auto (esenciales)», «Esenciales» —marcada— y «Todas», cada una con su explicación" loading="lazy"><figcaption>El selector de herramientas de la barra: Auto, Esenciales o Todas, para cada conversación.</figcaption></figure>
+  <p>Un modelo local de 8 000 o 32 000 tokens de contexto no entra con todo el catálogo de herramientas de ScadLab, unas instrucciones largas y el código de una maceta de 600 líneas. Por eso, con un servidor de modelos:</p>
+  <ul>
+    <li><strong>Herramientas.</strong> El selector de la barra (solo con servidores y en modo Agente; en un panel angosto está en el menú «…») elige qué herramientas se le declaran al modelo en <strong>esa conversación</strong>:
+      <strong>Esenciales</strong> (leer por partes, buscar, editar unas líneas, parámetros, render, vista y medición, con descripciones cortas y unas instrucciones compactas), <strong>Todas</strong>, o <strong>Auto</strong>, que usa las esenciales
+      cuando la ventana del modelo es menor de 32 768 tokens y todas si es mayor o no se sabe. Si el modelo pide otra herramienta del catálogo, se ejecuta igual.</li>
+    <li><strong>Ventana de Ollama.</strong> ScadLab le pide a Ollama la ventana del servidor si la fijaste en Configuración; si no, la del modelo con un tope de 32 768 y un mínimo de 8 192 (Ollama, sin esto, recorta el comienzo del prompt sin avisar).</li>
+    <li><strong>Dentro del turno</strong> el modelo no acumula contexto de más: lo que una herramienta le devuelve tiene un tope proporcional a la ventana, una lectura repetida del mismo archivo que no cambió se reemplaza por una nota con su versión,
+      y los resultados viejos se reducen a una nota. <strong>Entre turnos</strong>, lo viejo que ya no cabe se reduce a un resumen automático (qué se pidió, qué se contestó, qué archivos se tocaron) y los últimos mensajes viajan enteros.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-context.png" alt="El chat con un Ollama de 8k al 75 % de la ventana: sobre la caja de mensaje, un aviso ámbar «La conversación ya ocupa el 75 % de la ventana del modelo» con el botón Nueva conversación con resumen; el contador marca 6,1k / 8,2k" loading="lazy"><figcaption>Al pasar el 70 % de la ventana, el chat ofrece seguir en una conversación nueva que empieza con un resumen.</figcaption></figure>
+  <p>El <strong>contador de contexto</strong> mide contra la ventana efectiva y suma lo fijo de cada vuelta (el prompt y las herramientas, que el último turno informó). Dos avisos sobre la caja: si <strong>el prompt y las herramientas solos pasan del 60 %</strong>
+  de la ventana, lo dice y ofrece <em>Usar esenciales</em>; si <strong>la conversación llega al 70 %</strong>, ofrece <strong>Nueva conversación con resumen</strong>: el modelo escribe un resumen de unos 300 tokens (si el servidor falla, se arma uno automático) y se abre una
+  conversación nueva, con el mismo proveedor, modelo, modo y herramientas, que empieza con ese resumen. La conversación de antes se conserva tal cual.</p>
 
   <h2 id="ia-hermes--contexto">Qué sabe el modelo de tu workspace</h2>
   <ul>
@@ -2510,14 +2543,21 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
     <li>Abre el archivo en Bambu Studio (con <strong>Abrir en Bambu Studio</strong> o con <strong>Archivo → Importar</strong>
     o arrastrándolo a la ventana).</li>
     <li>Si pregunta si cargarlo como un objeto con varias partes, responde que sí.</li>
+    <li>Bambu Studio 02.08.02 muestra primero <em>«El archivo 3mf tiene una configuración no válida, carga solo los datos de
+    geometría»</em>: es un defecto de esa versión con cualquier 3MF que no venga de Bambu Studio, y el archivo carga igual.
+    Acéptalo. (Desde la 02.08.03 es solo un aviso.)</li>
+    <li>Después se abre la ventana <strong>Standard 3mf Import color</strong> con los colores del modelo. Por defecto
+    (<strong>Append</strong>) los agrega como filamentos nuevos; <strong>Color match</strong> los empareja con los que ya
+    tienes en el AMS. Pulsa <strong>OK</strong>.</li>
     <li>Revisa la lista de objetos: tiene que verse <strong>un objeto con una parte por color</strong>, cada parte con su
-    extrusor (1, 2…) y el nombre de su color.</li>
+    extrusor (1, 2…) y el color de su filamento.</li>
     <li><strong>Asigna los filamentos del AMS</strong> a cada extrusor y lamina. No deberían aparecer errores de
     geometría.</li>
   </ol>
-  <p>Un modelo sin <code>color()</code> sale como un objeto de una sola parte.</p>
+  <p>Un modelo sin <code>color()</code> sale como un objeto de una sola parte. Si cierras la ventana de colores sin
+  aceptarla, la segunda parte solo conserva su extrusor si el proyecto ya tiene dos filamentos o más.</p>
   <div class="note"><span class="lbl">Los colores del filamento los pones tú</span><p>El 3MF lleva el color de cada parte
-  como referencia, pero el filamento real lo eliges en el AMS de Bambu Studio.</p></div>
+  para que Bambu Studio lo empareje con un filamento, pero el filamento real lo eliges en el AMS.</p></div>
 </article>
 
 <article class="topic" id="imprimir-multicolor" data-title="Multicolor con AMS">

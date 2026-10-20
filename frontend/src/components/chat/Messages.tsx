@@ -1,8 +1,9 @@
-import {memo, useEffect, useMemo, useRef} from 'react'
+import {Fragment, memo, useEffect, useMemo, useRef} from 'react'
 import {CircleAlert, Loader2, X} from 'lucide-react'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, locale, useT} from '../../i18n'
-import {interleave, parseParts, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
+import {interleave, parseParts, toUsage, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
+import {hasUsage, usagePieces} from '../../lib/chatContext'
 import {createdCheckpoint} from '../../lib/chatSteps'
 import {IconButton} from '../ui/Button'
 import {MessageAttachments} from './AttachmentChips'
@@ -11,29 +12,40 @@ import {Markdown} from './Markdown'
 import {ToolCallCard} from './ToolCallCard'
 import {dismissError, useStreamError, useStreamMessageId, useStreamRunning, useStreamSteps, useStreamText, useStreamUsage} from './chatStreams'
 
-// 12 345 → «12,3k»; el chat muestra tokens, no cifras exactas.
-function compact(n: number): string {
-    if (n < 1000) return String(n)
-    return `${(n / 1000).toLocaleString(locale(), {maximumFractionDigits: n < 10_000 ? 1 : 0})}k`
-}
-
-// Tokens y costo de un turno, al pie de la respuesta. El costo solo existe si el
-// proveedor publica precios (OpenRouter): sin ellos queda el aviso «no informado»
-// en el título en vez de un «$0» que se leería como gratis.
+// Tiempo y tokens de un turno, al pie de la respuesta (S17): «Contexto máx. 12k · ↑ 48k en 5 vueltas · ↓ 2k ·
+// modelo 41 s · herramientas 6 s». ↑ es la SUMA de la entrada de todas las vueltas, no el contexto, y el
+// `title` lo explica (lib/chatContext.ts). Solo se muestra lo que el proveedor informó. El costo solo existe si
+// el proveedor publica precios (OpenRouter): sin ellos queda el aviso «no informado» en el título en vez de
+// un «$0» que se leería como gratis.
 function UsageLine({usage, model, stepLimit}: {usage: ChatUsage | null; model?: string; stepLimit?: boolean}) {
     const t = useT()
     const c = t.chat.usage
-    if (!usage || (usage.inputTokens === 0 && usage.outputTokens === 0)) return null
+    if (!hasUsage(usage)) return null
+    const loc = locale()
+    const pieces = usagePieces(usage, c, loc)
     const cost = usage.costUsd > 0 ? (usage.costUsd < 0.01 ? `< $0.01` : `$${usage.costUsd.toFixed(2)}`) : ''
+    const n = (v: number) => v.toLocaleString(loc)
+    const lines = [
+        usage.peakInput > 0 ? fmt(usage.inputEstimated ? c.hintContextEstimated : c.hintContext, {n: n(usage.peakInput)}) : '',
+        usage.inputTokens > 0 ? fmt(usage.rounds > 1 ? c.hintInput : c.hintInputOne, {input: n(usage.inputTokens), rounds: usage.rounds}) : '',
+        usage.outputTokens > 0 ? fmt(c.hintOutput, {output: n(usage.outputTokens)}) : '',
+        usage.modelMs > 0 || usage.toolMs > 0 ? c.hintTime : '',
+        fmt(c.hintCost, {cost: cost || c.costUnknown}),
+    ].filter(Boolean)
+    const items = [
+        ...pieces.map((text) => ({text, className: undefined as string | undefined})),
+        ...(cost ? [{text: cost, className: undefined}] : []),
+        ...(model ? [{text: model, className: 'max-w-[16rem] truncate'}] : []),
+        ...(stepLimit ? [{text: c.stepLimit, className: 'text-warn'}] : []),
+    ]
     return (
-        <p
-            className="mt-1 flex flex-wrap items-center gap-x-2 font-mono text-ui-10-5 text-faint tabular-nums"
-            title={fmt(c.hint, {input: usage.inputTokens.toLocaleString(), output: usage.outputTokens.toLocaleString(), cost: cost || c.costUnknown})}
-        >
-            <span>{fmt(c.tokens, {input: compact(usage.inputTokens), output: compact(usage.outputTokens)})}</span>
-            {cost ? <span>{cost}</span> : null}
-            {model ? <span className="max-w-[16rem] truncate">{model}</span> : null}
-            {stepLimit ? <span className="text-warn">{c.stepLimit}</span> : null}
+        <p data-testid="usage-line" className="mt-1 flex flex-wrap items-center gap-x-1.5 font-mono text-ui-10-5 text-faint tabular-nums" title={lines.join('\n')}>
+            {items.map((it, i) => (
+                <Fragment key={i}>
+                    {i > 0 ? <span aria-hidden>·</span> : null}
+                    <span className={it.className}>{it.text}</span>
+                </Fragment>
+            ))}
         </p>
     )
 }
@@ -82,7 +94,8 @@ const MessageBubble = memo(function MessageBubble({message, actions}: {message: 
             </div>
         )
     }
-    const usage = message.inputTokens || message.outputTokens ? {inputTokens: message.inputTokens, outputTokens: message.outputTokens, costUsd: message.costUsd} : null
+    // Lo guardado en la fila (tokens y costo) y, desde S17, el tiempo y el contexto máximo de los `parts`.
+    const usage = message.inputTokens || message.outputTokens ? toUsage({...parts.usage, inputTokens: message.inputTokens, outputTokens: message.outputTokens, costUsd: message.costUsd}) : null
     return (
         <div>
             <Turn text={message.content} steps={parts.steps ?? []} actions={actions} onOpenCheckpoint={actions.onOpenCheckpoint} />

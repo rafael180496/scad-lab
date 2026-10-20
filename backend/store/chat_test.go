@@ -139,8 +139,8 @@ func TestMigration2IsAdditive(t *testing.T) {
 	w := chatWorkspace(t, s)
 	// Simula una base de antes del chat: sin las tablas ni las migraciones que
 	// las crearon o les agregaron columnas (2: tablas; 6: partes y tokens de los
-	// mensajes; 8: la sesión del CLI de los chats; 9: el modo de cada chat).
-	for _, q := range []string{`DROP TABLE chat_messages`, `DROP TABLE chats`, `DELETE FROM schema_migrations WHERE version IN (2, 6, 8, 9)`} {
+	// mensajes; 8: la sesión del CLI de los chats; 9: el modo de cada chat; 11: el perfil de herramientas).
+	for _, q := range []string{`DROP TABLE chat_messages`, `DROP TABLE chats`, `DELETE FROM schema_migrations WHERE version IN (2, 6, 8, 9, 11)`} {
 		if _, err := s.db.Exec(q); err != nil {
 			t.Fatal(err)
 		}

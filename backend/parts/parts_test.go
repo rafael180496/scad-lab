@@ -24,6 +24,7 @@ import (
 	"scadlab/backend/printers"
 	"scadlab/backend/render"
 	"scadlab/backend/threemf"
+	"scadlab/backend/threemf/macetatest"
 )
 
 const nameplateTemplate = "skills/openscad-templates/templates/nameplate-two-color.scad"
@@ -121,13 +122,11 @@ func TestNameplateTwoParts(t *testing.T) {
 		t.Errorf("clave %q, quería %q", m.Key, key)
 	}
 	var sum float64
-	tris := 0
 	for i, p := range m.Parts {
 		if p.Index != i || p.URL != "/parts/"+key+"/"+FileName(i) || p.Uncolored || p.Name == "" {
 			t.Errorf("parte %d: %+v", i, p)
 		}
 		sum += p.Info.VolumeMM3
-		tris += p.Info.Triangles
 		if p.Info.VolumeMM3 <= 0 || p.Info.AreaMM2 <= 0 {
 			t.Errorf("parte %d sin volumen o área: %+v", i, p.Info)
 		}
@@ -135,8 +134,12 @@ func TestNameplateTwoParts(t *testing.T) {
 	if rel := math.Abs(sum-m.Total.VolumeMM3) / m.Total.VolumeMM3; rel > 1e-3 {
 		t.Errorf("volumen de las partes %.3f, del total %.3f (dif. relativa %.2g)", sum, m.Total.VolumeMM3, rel)
 	}
-	if tris != m.Total.Triangles {
-		t.Errorf("triángulos de las partes %d, del total %d", tris, m.Total.Triangles)
+	// Cada parte es un sólido cerrado (conserva la cara por la que toca a la otra): su
+	// cantidad de triángulos no tiene por qué coincidir con la del sólido fundido.
+	for i, p := range m.Parts {
+		if !p.Info.Watertight {
+			t.Errorf("parte %d: no es un sólido cerrado: %+v", i, p.Info)
+		}
 	}
 	// El total es la malla del render normal.
 	want, err := mesh.InfoFromFile(src.MeshPath)
@@ -258,8 +261,10 @@ func TestConcurrentEnsureGeneratesOnce(t *testing.T) {
 			t.Fatalf("llamada %d: %+v err=%v", i, ms[i], err)
 		}
 	}
-	if n := r.counts.artifacts.Load(); n != 1 {
-		t.Errorf("render 3MF %d veces, quería 1", n)
+	// Una generación = dos renders 3MF: el normal (sus partes salen abiertas porque los dos
+	// colores se tocan) y el de lazy-union. Seis pedidos no los repiten.
+	if n := r.counts.artifacts.Load(); n != 2 {
+		t.Errorf("render 3MF %d veces, quería 2 (una sola generación)", n)
 	}
 }
 
@@ -566,3 +571,116 @@ func TestTooManyParts(t *testing.T) {
 }
 
 func runtimeGosched() { runtime.Gosched() }
+
+// --- maceta con relieve: partes cerradas (S17, tarea 17.2) -------------------
+
+// La maceta verde con relieve naranja: las dos partes del visor son sólidos cerrados (en el
+// STL de cada una, aristas compartidas por exactamente dos caras) con el volumen de ese color.
+// Sin lazy-union salían como cáscaras abiertas con volúmenes sin sentido (21 951 y 1 314 mm³
+// en vez de 23 132 y 164).
+func TestPotPartsAreWatertight(t *testing.T) {
+	r := newRig(t)
+	r.write("001-maceta.scad", macetatest.Scad)
+	m, err := r.store.Ensure(context.Background(), r.source("001-maceta.scad"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Parts) != 2 {
+		t.Fatalf("partes: %+v", m.Parts)
+	}
+	want := []float64{macetatest.Ref.GreenVol, macetatest.Ref.OrangeVol}
+	for i, p := range m.Parts {
+		if !p.Info.Watertight {
+			t.Errorf("parte %d no es un sólido cerrado: %+v", i, p.Info)
+		}
+		if math.Abs(p.Info.VolumeMM3-want[i])/want[i] > 1e-3 {
+			t.Errorf("parte %d: volumen %.3f, el del STL de ese color %.3f", i, p.Info.VolumeMM3, want[i])
+		}
+	}
+	if n := r.counts.artifacts.Load(); n != 2 {
+		t.Errorf("render 3MF %d veces, quería 2 (normal + lazy-union)", n)
+	}
+
+	// Un manifest de la versión anterior (partes abiertas) no se reutiliza.
+	path := filepath.Join(r.store.Dir(), m.Key+DirSuffix, manifestName)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := strings.Replace(string(b), `"version": 2`, `"version": 1`, 1)
+	if old == string(b) {
+		t.Fatalf("el manifest no declara version 2:\n%s", b)
+	}
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.store.Lookup(m.Key); ok {
+		t.Error("un manifest de la versión 1 (partes abiertas) no se tiene que servir")
+	}
+}
+
+// lazyEngine sirve el 3MF por defecto de OpenSCAD (partes abiertas) y, si se le pide
+// LazyUnion, el de lazy-union (partes cerradas).
+type lazyEngine struct {
+	dir       string
+	calls     []bool // LazyUnion de cada llamada
+	lazyFails bool
+}
+
+func (l *lazyEngine) Render(context.Context, render.Request, render.Options) (render.Result, error) {
+	return render.Result{Status: render.StatusOK}, nil
+}
+
+func (l *lazyEngine) RenderArtifact(_ context.Context, _ render.Request, opts render.Options, _, _ string) (render.Result, error) {
+	l.calls = append(l.calls, opts.LazyUnion)
+	body := macetatest.Union
+	if opts.LazyUnion {
+		if l.lazyFails {
+			return render.Result{Status: render.StatusError, Diagnostics: []render.Diagnostic{{Severity: render.SeverityError, Message: "boom"}}}, nil
+		}
+		body = macetatest.Lazy
+	}
+	p := filepath.Join(l.dir, "m.3mf")
+	if err := os.WriteFile(p, body, 0o644); err != nil {
+		return render.Result{}, err
+	}
+	return render.Result{Status: render.StatusOK, MeshPath: p}, nil
+}
+
+func TestLoad3MFRendersAgainWithLazyUnionWhenPartsAreOpen(t *testing.T) {
+	eng := &lazyEngine{dir: t.TempDir()}
+	split, _, err := Load3MF(context.Background(), eng, render.Request{}, render.Options{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	macetatest.AssertSolids(t, split, 1e-3)
+	if len(eng.calls) != 2 || eng.calls[0] || !eng.calls[1] {
+		t.Errorf("llamadas (LazyUnion): %v, quería [false true]", eng.calls)
+	}
+
+	// Pedir ya LazyUnion no encadena otro render.
+	eng = &lazyEngine{dir: t.TempDir()}
+	split, _, err = Load3MF(context.Background(), eng, render.Request{}, render.Options{LazyUnion: true}, "")
+	if err != nil || len(eng.calls) != 1 || len(split) != 2 {
+		t.Errorf("LazyUnion explícito: llamadas %v, partes %d, err %v", eng.calls, len(split), err)
+	}
+
+	// Si el segundo render falla se queda con lo que ya tenía (la exportación avisa).
+	eng = &lazyEngine{dir: t.TempDir(), lazyFails: true}
+	split, _, err = Load3MF(context.Background(), eng, render.Request{}, render.Options{}, "")
+	if err != nil || len(split) != 2 || threemf.OpenEdgeCount(split) == 0 {
+		t.Errorf("sin lazy-union: partes %d, aristas abiertas %d, err %v", len(split), threemf.OpenEdgeCount(split), err)
+	}
+}
+
+// Partes que ya vienen cerradas (colores separados) no pagan el segundo render.
+func TestLoad3MFSkipsLazyUnionWhenPartsAreClosed(t *testing.T) {
+	eng := &fakeEngine{}
+	src := fakeSource(t, eng)
+	if _, _, err := Load3MF(context.Background(), eng, src.Req, src.Opts, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n := eng.artifacts.Load(); n != 1 {
+		t.Errorf("render 3MF %d veces, quería 1", n)
+	}
+}

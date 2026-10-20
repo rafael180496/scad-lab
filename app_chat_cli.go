@@ -395,7 +395,11 @@ func (a *App) cliPrompt(j chatJob, withHistory bool) string {
 			b.WriteString(" " + i18n.T(msgCLIPromptNoMCP))
 		} else {
 			b.WriteString(" " + i18n.T(msgCLIPromptEdit))
+			b.WriteString(" " + i18n.T(msgCLIPromptCompact))
 		}
+	}
+	if j.cli.det.ID == "antigravity" {
+		b.WriteString(" " + i18n.T(msgCLIPromptAgyShell))
 	}
 	if pctx.CurrentFile != "" {
 		b.WriteString("\n\n" + i18n.T(msgCLIPromptSelected, pctx.CurrentFile))
@@ -455,6 +459,18 @@ var (
 	msgCLIPromptEdit = i18n.Msg{
 		ES: "Para leer un .scad usa `read_checkpoint` con su nombre; si el usuario nombra un archivo o se refiere al seleccionado y pide cambios, edítalo con `update_checkpoint`; crea uno nuevo solo si pide algo nuevo o una variante. Nunca escribas .scad con tus herramientas de archivo ni la shell.",
 		EN: "To read a .scad use `read_checkpoint` with its name; if the user names a file or refers to the selected one and asks for changes, edit it with `update_checkpoint`; create a new one only if they ask for something new or a variant. Never write .scad files with your file tools or the shell.",
+	}
+	// Editar sin reescribir y leer por partes (S17): un .scad de 600 líneas regenerado
+	// completo cuesta minutos y contexto; un cambio pequeño es una edición de unas pocas líneas.
+	msgCLIPromptCompact = i18n.Msg{
+		ES: "Cambios pequeños: `edit_checkpoint` (reemplaza solo las líneas que cambian) y, para medidas, colores o textos del Customizer, `set_parameters`; `update_checkpoint` solo para reescribir o reestructurar. En un archivo grande no lo leas entero: `outline_checkpoint` da su estructura, `find_in_checkpoint` busca y `read_checkpoint` con from/to lee un tramo.",
+		EN: "Small changes: `edit_checkpoint` (replaces only the lines that change) and, for measurements, colors or Customizer texts, `set_parameters`; `update_checkpoint` only to rewrite or restructure. In a large file do not read it whole: `outline_checkpoint` gives its structure, `find_in_checkpoint` searches and `read_checkpoint` with from/to reads a range.",
+	}
+	// Antigravity en --print rechaza cualquier comando de shell y TERMINA el turno: mejor que
+	// el modelo no lo intente (S17).
+	msgCLIPromptAgyShell = i18n.Msg{
+		ES: "No uses `run_command` ni la terminal: en este chat se bloquea y el turno termina sin respuesta. Para inspeccionar o cambiar el modelo usa solo las herramientas del servidor «scadlab», y responde siempre con un texto breve de lo que hiciste.",
+		EN: "Do not use `run_command` or the terminal: in this chat it is blocked and the turn ends without an answer. To inspect or change the model use only the tools of the “scadlab” server, and always finish with a short text saying what you did.",
 	}
 	// En «Solo consulta» también se lee con read_checkpoint: la ruta que el modelo inventaría para las
 	// herramientas de archivo del CLI es el mismo fallo, aunque no escriba.
@@ -667,9 +683,21 @@ func (a *App) cliTurnText(j chatJob, res hermes.Result, made bool) string {
 		}
 		return text
 	}
+	shellCmd, shellBlocked := "", false
+	if j.cli.det.ID == "antigravity" {
+		shellCmd, shellBlocked = agyShellDenial(res.Steps)
+	}
 	if strings.TrimSpace(text) == "" {
 		var b strings.Builder
 		b.WriteString("_" + i18n.T(msgCLIEmptyTurn, j.cli.det.Name) + "_")
+		// Qué sí llegó a hacer (S17): sin esto, un turno que ejecutó cinco herramientas
+		// y se calló se lee igual que uno que no hizo nada.
+		explained := func(st hermes.Step) bool {
+			return agyDeniedRe.MatchString(st.Text) || (isShellTool(st.Tool) && agyShellRe.MatchString(st.Text))
+		}
+		if recap := turnRecap(res.Steps, explained); recap != "" {
+			b.WriteString("\n\n" + recap)
+		}
 		shown := 0
 		denied := a.agyDeniedNote(j, res)
 		for _, st := range res.Steps {
@@ -679,12 +707,17 @@ func (a *App) cliTurnText(j chatJob, res hermes.Result, made bool) string {
 			if denied != "" && agyDeniedRe.MatchString(st.Text) {
 				continue // el rechazo de permisos lo explica la nota, una sola vez
 			}
+			if shellBlocked && isShellTool(st.Tool) && agyShellRe.MatchString(st.Text) {
+				continue // lo explica la nota de la shell
+			}
 			shown++
 			b.WriteString("\n\n" + i18n.T(msgCLIEmptyToolFailed, st.Tool, clipText(strings.TrimSpace(st.Text), 300)))
 		}
 		switch {
 		case denied != "":
 			b.WriteString("\n\n" + denied)
+		case shellBlocked:
+			b.WriteString("\n\n" + i18n.T(msgCLIAgyShell, shellCmd))
 		case agentNote(j) != "":
 			b.WriteString("\n\n" + agentNote(j))
 		case j.agent:
@@ -694,6 +727,9 @@ func (a *App) cliTurnText(j chatJob, res hermes.Result, made bool) string {
 	}
 	if denied := a.agyDeniedNote(j, res); denied != "" {
 		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + denied + "_"
+	}
+	if shellBlocked {
+		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + i18n.T(msgCLIAgyShell, shellCmd) + "_"
 	}
 	if note := agentNote(j); note != "" {
 		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + note + "_"
@@ -794,6 +830,16 @@ type cliRecorder struct {
 	session string
 	usage   hermes.Usage
 	sent    bool // ya se emitió chat:usage
+
+	// S17: las vueltas del modelo que el CLI informó (una por mensaje o paso con su
+	// propio uso), para el contexto máximo y la última entrada, y el reloj del turno.
+	began    time.Time
+	seen     map[string]bool
+	rounds   int
+	peak     int64
+	lastIn   int64
+	lastOut  int64
+	toolMsAc int64
 }
 
 func newCLIRecorder(a *App, c store.Chat, stream *chat.TextStream) *cliRecorder {
@@ -811,6 +857,8 @@ func (r *cliRecorder) reset() {
 	r.byID = map[string]*hermes.Step{}
 	r.started = map[string]time.Time{}
 	r.usage, r.sent = hermes.Usage{}, false
+	r.began, r.seen = time.Now(), map[string]bool{}
+	r.rounds, r.peak, r.lastIn, r.lastOut, r.toolMsAc = 0, 0, 0, 0, 0
 }
 
 func (r *cliRecorder) hadOutput() bool { return r.textLen > 0 || len(r.steps) > 0 }
@@ -859,6 +907,7 @@ func (r *cliRecorder) handle(ev clichat.Event) {
 		st := &hermes.Step{
 			ID: "st-" + randHex(6), Index: len(r.steps) + 1, Tool: t.Name, Args: capStepArgs(args),
 			Status: hermes.StepRunning, Images: []string{}, TextAt: r.textLen,
+			RoundInput: r.lastIn, RoundOutput: r.lastOut,
 		}
 		r.steps = append(r.steps, st)
 		r.ids = append(r.ids, id)
@@ -879,6 +928,19 @@ func (r *cliRecorder) handle(ev clichat.Event) {
 		}
 		r.close(t.ID, st, t.IsError, t.Result, t.Images)
 
+	case clichat.KindRound:
+		// Una vuelta del modelo con su propio uso. El mismo mensaje puede llegar
+		// partido en varias líneas: se cuenta una sola vez por su clave.
+		if ev.Usage == nil || (ev.RoundKey != "" && r.seen[ev.RoundKey]) {
+			return
+		}
+		r.seen[ev.RoundKey] = true
+		r.rounds++
+		r.lastIn, r.lastOut = ev.Usage.Input, ev.Usage.Output
+		if ev.Usage.Input > r.peak {
+			r.peak = ev.Usage.Input
+		}
+
 	case clichat.KindDone:
 		if ev.Usage != nil {
 			r.setUsage(*ev.Usage)
@@ -897,13 +959,46 @@ func (r *cliRecorder) close(id string, st *hermes.Step, isErr bool, text string,
 		st.Images = images
 	}
 	st.DurationMs = time.Since(r.started[id]).Milliseconds()
+	r.toolMsAc += st.DurationMs
+	st.ResultChars = len([]rune(text))
+	st.ResultTokens = hermes.EstimateTokens(text)
 	r.emitStep(st)
 }
 
+// setUsage arma el uso del turno con lo que el CLI informó. Cómo se lee ↑ (S17):
+//
+//   - Input es TODO lo que el modelo recibió sumando las vueltas del turno, la
+//     entrada no cacheada más la leída de la caché (los adaptadores la informan
+//     aparte): el mismo criterio de Hermes, donde Input ya incluye la caché. Un turno
+//     de 8 vueltas con 90k de contexto suma ~700k y NO significa que el contexto sea
+//     de 700k: por eso el pie del turno lo acompaña con las vueltas y el contexto
+//     máximo (PeakInput), que es el número que se compara con la ventana del modelo.
+//   - PeakInput/LastInput/Rounds salen de las vueltas que el CLI informó (Claude Code,
+//     y Antigravity si el paso trae su uso); un CLI que no las informa los deja en 0 y
+//     el pie no los muestra, en lugar de inventarlos. Rounds cae a num_turns si el
+//     CLI lo dice.
+//   - ModelMs es el tiempo en el modelo (Claude Code: duration_api_ms); en los demás,
+//     el del turno menos el de las herramientas. ToolMs es la suma de lo que tardó
+//     cada paso.
 func (r *cliRecorder) setUsage(u clichat.Usage) {
-	r.usage = hermes.Usage{Input: u.Input, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite, Thinking: u.Thinking, CostUSD: u.CostUSD}
+	r.usage = hermes.Usage{
+		Input: u.Input + u.CacheRead, Output: u.Output, CacheRead: u.CacheRead, CacheWrite: u.CacheWrite,
+		Thinking: u.Thinking, CostUSD: u.CostUSD,
+		ToolMs: r.toolMsAc, Rounds: r.rounds, PeakInput: r.peak, LastInput: r.lastIn,
+	}
+	if r.usage.Rounds == 0 {
+		r.usage.Rounds = u.Turns
+	}
+	switch {
+	case u.APIMs > 0:
+		r.usage.ModelMs = u.APIMs
+	default:
+		if ms := time.Since(r.began).Milliseconds() - r.toolMsAc; ms > 0 {
+			r.usage.ModelMs = ms
+		}
+	}
 	r.a.chatSvc().setUsage(r.chat.ID, r.usage)
-	r.a.emit(evChatUsage, ChatUsageEvent{ChatID: r.chat.ID, InputTokens: r.usage.Input, OutputTokens: r.usage.Output, CostUSD: r.usage.CostUSD})
+	r.a.emit(evChatUsage, usageEvent(r.chat.ID, r.usage))
 	r.sent = true
 }
 

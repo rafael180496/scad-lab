@@ -24,6 +24,12 @@ const (
 	minPreviewSize     = 256
 	maxPreviewSize     = 1024
 	defaultPreviewSize = 640
+	// defaultShotSize es el lado de la imagen de `preview` sin `size` (S17): una
+	// sola vista de 384 px pesa un tercio de una de 640 y alcanza para ver la
+	// forma. Las exportaciones PNG siguen en defaultPreviewSize.
+	defaultShotSize = 384
+	// maxPreviewViews es cuántas vistas puede pedir `views` en una llamada.
+	maxPreviewViews = 8
 )
 
 // view es una cámara: rotación (rx, ry, rz) del `--camera` de OpenSCAD y si la
@@ -102,17 +108,59 @@ func (e *env) previewTool(ctx context.Context, args map[string]any) (*toolResult
 	if err != nil {
 		return nil, err
 	}
-	label, v, err := viewFromArgs(args)
-	if err != nil {
-		return nil, err
-	}
-	size := intArg(args, "size", defaultPreviewSize)
+	size := intArg(args, "size", defaultShotSize)
 	size = max(minPreviewSize, min(maxPreviewSize, size))
-	sh, err := e.shoot(ctx, name, label, v, size)
-	if err != nil {
-		return nil, err
+
+	// Una vista por defecto; `views` o `all` piden más.
+	type req struct {
+		label string
+		v     view
 	}
-	return &toolResult{Content: []map[string]any{imageContent(sh.png, "image/png"), textContent(sh.note)}}, nil
+	var reqs []req
+	switch {
+	case boolArg(args, "all", false):
+		for _, n := range viewNames {
+			reqs = append(reqs, req{n, views[n]})
+		}
+	case args["views"] != nil:
+		list, ok := listArg(args, "views")
+		if !ok || len(list) == 0 || len(list) > maxPreviewViews {
+			return nil, i18n.Errorf(i18n.Msg{
+				ES: "`views` es una lista de 1 a %d vistas (%s)",
+				EN: "`views` is a list of 1 to %d views (%s)",
+			}, maxPreviewViews, strings.Join(viewNames, ", "))
+		}
+		seen := map[string]bool{}
+		for _, it := range list {
+			label, v, err := viewFromArgs(map[string]any{"view": it, "ortho": args["ortho"]})
+			if err != nil {
+				return nil, err
+			}
+			if !seen[label] {
+				seen[label] = true
+				reqs = append(reqs, req{label, v})
+			}
+		}
+	default:
+		label, v, err := viewFromArgs(args)
+		if err != nil {
+			return nil, err
+		}
+		reqs = append(reqs, req{label, v})
+	}
+
+	res := &toolResult{}
+	var notes []string
+	for _, r := range reqs {
+		sh, err := e.shoot(ctx, name, r.label, r.v, size)
+		if err != nil {
+			return nil, err
+		}
+		res.Content = append(res.Content, imageContent(sh.png, "image/png"))
+		notes = append(notes, sh.note)
+	}
+	res.Content = append(res.Content, textContent(strings.Join(notes, "\n")))
+	return res, nil
 }
 
 // shoot dibuja el PNG de un checkpoint: con el OpenSCAD instalado si lo hay y, si

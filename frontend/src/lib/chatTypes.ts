@@ -20,9 +20,61 @@ export type ChatStep = {
     durationMs: number
     /** Texto visible (unidades UTF-16) que llevaba el turno cuando arrancó el paso. */
     textAt: number
+    /** S17: tokens de la vuelta del modelo que pidió este paso (0 = el proveedor no los informó). RoundInput es el contexto de esa vuelta. */
+    roundInput: number
+    roundOutput: number
+    /** S17: lo que de este paso vuelve al modelo (caracteres y tokens estimados). */
+    resultChars: number
+    resultTokens: number
 }
 
-export type ChatUsage = {inputTokens: number; outputTokens: number; costUsd: number}
+/**
+ * Uso de un turno (S17). `inputTokens` es la SUMA de todas las vueltas (cada una reenvía el contexto
+ * entero), no el contexto: ese es `peakInput`, la vuelta con más entrada. Un campo en 0 es «no se
+ * informó» y no se muestra.
+ */
+export type ChatUsage = {
+    inputTokens: number
+    outputTokens: number
+    costUsd: number
+    modelMs: number
+    toolMs: number
+    rounds: number
+    peakInput: number
+    lastInput: number
+    /** peakInput/lastInput son una estimación (el servidor no informó la entrada). */
+    inputEstimated: boolean
+}
+
+/** Normaliza el uso que llega de Go (un evento, GetChat o los `parts` guardados): lo que falte es 0. */
+export function toUsage(u: Partial<ChatUsage> | null | undefined): ChatUsage {
+    return {
+        inputTokens: u?.inputTokens ?? 0,
+        outputTokens: u?.outputTokens ?? 0,
+        costUsd: u?.costUsd ?? 0,
+        modelMs: u?.modelMs ?? 0,
+        toolMs: u?.toolMs ?? 0,
+        rounds: u?.rounds ?? 0,
+        peakInput: u?.peakInput ?? 0,
+        lastInput: u?.lastInput ?? 0,
+        inputEstimated: u?.inputEstimated ?? false,
+    }
+}
+
+/**
+ * Lo que dice la ventana de un turno con un servidor (evento `chat:context`, S17): su tamaño efectivo,
+ * lo que pesan solos el prompt de sistema y las herramientas declaradas (viajan en CADA vuelta), el
+ * perfil de herramientas y si pasa del 60 % de la ventana. `profile` vacío = sin herramientas.
+ */
+export type ChatContextInfo = {
+    chatId: number
+    numCtx: number
+    promptTokens: number
+    toolsTokens: number
+    profile: '' | 'essential' | 'full'
+    auto: boolean
+    overBudget: boolean
+}
 
 /** Lo que se guarda de un adjunto de un mensaje: nunca los bytes. */
 export type AttachmentMeta = {
@@ -40,6 +92,8 @@ export type ChatParts = {
     steps?: ChatStep[]
     model?: string
     stepLimit?: boolean
+    /** S17: tiempo y contexto del turno (el pie de la respuesta). Un mensaje anterior no lo trae. */
+    usage?: ChatUsage
 }
 
 /** Lee los `parts` de un mensaje; vacío o corrupto = sin partes. */
@@ -56,6 +110,7 @@ export function parseParts(raw: string | undefined): ChatParts {
             ...p,
             attachments: Array.isArray(p.attachments) ? p.attachments : [],
             steps: Array.isArray(p.steps) ? p.steps.map((s) => toStep(s as Parameters<typeof toStep>[0])) : [],
+            usage: p.usage ? toUsage(p.usage) : undefined,
         }
     } catch {
         return {}
@@ -73,6 +128,10 @@ export function toStep(s: {
     images?: string[] | null
     durationMs?: number
     textAt?: number
+    roundInput?: number
+    roundOutput?: number
+    resultChars?: number
+    resultTokens?: number
 }): ChatStep {
     return {
         id: s.id,
@@ -84,6 +143,10 @@ export function toStep(s: {
         images: s.images ?? [],
         durationMs: s.durationMs ?? 0,
         textAt: s.textAt ?? 0,
+        roundInput: s.roundInput ?? 0,
+        roundOutput: s.roundOutput ?? 0,
+        resultChars: s.resultChars ?? 0,
+        resultTokens: s.resultTokens ?? 0,
     }
 }
 

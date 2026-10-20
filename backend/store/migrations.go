@@ -328,6 +328,17 @@ END
 WHERE print_settings = '' AND printer_id IN ('bambu-a1-mini','bambu-a1','bambu-p1p','bambu-p1s','bambu-p2s','bambu-x1c','bambu-x1e','bambu-h2d','bambu-h2s');
 `,
 	},
+	{
+		version: 11,
+		desc:    "perfil de herramientas por conversación (S17): chats.tools",
+		sql: `
+-- Qué herramientas de ScadLab declara Hermes en ESA conversación: '' = automático
+-- (esenciales si la ventana de contexto efectiva es chica), 'essential' o 'full'.
+-- Toda fila anterior y toda conversación nueva quedan en '' (automático). Los CLIs
+-- no lo usan: cada uno trae su propio catálogo.
+ALTER TABLE chats ADD COLUMN tools TEXT NOT NULL DEFAULT '';
+`,
+	},
 }
 
 func (s *Store) migrate() error {

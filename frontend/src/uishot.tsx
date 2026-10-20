@@ -65,6 +65,12 @@ const scale = [90, 100, 115, 130, 150].includes(Number(q.get('scale'))) ? Number
 // herramienta, y con el guardado automático). `chat-query-only`: «Solo consulta» con «Crear checkpoint y renderizar» y el
 // aviso «Cambiar a Agente».
 const starterShot = view === 'workspace-starter'
+// S17: chat-turn-stats (tarjetas con tiempo y tokens + pie del turno) y chat-tools / chat-context (un Ollama de 8k).
+const statsShot = view === 'chat-turn-stats'
+// chat-sw<N>: el chat solo (como chat-w<N>) pero con un servidor —un Ollama de 8k—, para que la barra muestre el selector de herramientas
+// y el aviso de contexto, que un CLI no tiene (uishot-fit.sh los recorre de 320 a 1200 px).
+const chatServerHarness = /^chat-sw\d+$/.test(view)
+const smallShot = view === 'chat-tools' || view === 'chat-context' || chatServerHarness
 const createsShot = view === 'chat-agent-creates' || view === 'chat-autosave' || view === 'chat-agy-denied'
 const firstShot = starterShot || createsShot
 
@@ -127,6 +133,13 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     // S12.c T14: Antigravity bloqueó una herramienta de ScadLab por permisos (en --print termina el turno): el mensaje
     // dice cuál, dónde aprueba ScadLab sus herramientas y qué hacer, y el aviso trae «Reparar permisos de Antigravity».
     'chat-agy-denied': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    // S17 (edición compacta y modelos chicos): `chat-turn-stats` son las tarjetas con su tiempo y los tokens de cada paso y el pie del
+    // turno (contexto máximo, ↑ la suma de las vueltas, ↓, tiempos); `chat-tools` el selector del perfil de herramientas abierto,
+    // con «Esenciales» elegido en un modelo de 8k; `chat-context` el aviso de que la conversación pasó el 70 % de la ventana y la
+    // oferta de «Nueva conversación con resumen».
+    'chat-turn-stats': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-tools': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    'chat-context': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'workspace-starter': {scenario: 'ok'},
     // S13 (editar un STL): el diálogo de importar con una malla abierta, el modo «Editar» con el gizmo de mover y la pila,
     // el plano de corte partiendo en dos colores, un cilindro como agujero (rojo translúcido) y «Modificar con IA» (el
@@ -297,7 +310,7 @@ if (view === 'chat-from-image') {
     ]
 }
 // S12.b: el chat solo, en un panel de N px de ancho (chat-narrow = 360), para ver y comprobar que la barra no se desborda.
-const chatWidth = view === 'chat-narrow' ? 360 : Number(/^chat-w(\d+)$/.exec(view)?.[1] ?? 0)
+const chatWidth = view === 'chat-narrow' ? 360 : Number(/^chat-s?w(\d+)$/.exec(view)?.[1] ?? 0)
 const chatHarness = chatWidth > 0
 const isTerminalView = view === 'terminal' || view === 'terminal-sessions' || view === 'terminal-mcp' || view === 'appearance-150' || view === 'small' || view === 'dock-150'
 if (view === 'terminal-sessions') terminalShot.openSessions = true
@@ -948,7 +961,7 @@ const mi = (id: string, vision: boolean, tools: boolean, ctx: number, pp = 0, cp
     id, vision, visionKnown: true, tools, toolsKnown: true, contextTokens: ctx, promptPricePerM: pp, completionPricePerM: cp,
 })
 const serverModels: Record<string, ReturnType<typeof mi>[]> = {
-    ollama: [mi('deepseek-r1:14b', false, false, 131072), mi('gemma3:12b', true, false, 131072), mi('llama3.2:3b', false, true, 131072), mi('qwen3-coder:30b', false, true, 262144), mi('qwen3-vl:8b', true, true, 262144)],
+    ollama: [...(smallShot ? [mi('qwen3:4b', false, true, 8192)] : []), mi('deepseek-r1:14b', false, false, 131072), mi('gemma3:12b', true, false, 131072), mi('llama3.2:3b', false, true, 131072), mi('qwen3-coder:30b', false, true, 262144), mi('qwen3-vl:8b', true, true, 262144)],
     'srv-4f1a9c2e7b30': [
         mi('anthropic/claude-opus-5-5', true, true, 1_000_000, 15, 75),
         mi('anthropic/claude-sonnet-5-5', true, true, 1_000_000, 3, 15),
@@ -1120,14 +1133,16 @@ const streamParts = es
 // Las imágenes del «preview» y las miniaturas se DIBUJAN aquí con un canvas
 // (cajas isométricas sombreadas): el banco no tiene OpenSCAD, y una captura
 // real traería el modelo y las carpetas de alguien. Todo es inventado.
-const hermesView = view === 'chat' || createsShot || view === 'chat-query-only' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || view === 'chat-compare' || view === 'chat-trace' || chatHarness
+const hermesView = view === 'chat' || createsShot || statsShot || smallShot || view === 'chat-query-only' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || view === 'chat-compare' || view === 'chat-trace' || chatHarness
 // El chat del banco corre sobre OpenRouter; el panel angosto (chat-narrow, chat-w*), sobre un CLI: sus pasos usan las mismas tarjetas.
 // chat-code y chat-query-only: la conversación abierta está en «Solo consulta», elegido a mano. El modo es de cada
 // conversación (chats.mode, S12.c T12): ya no hay nada que fijar en localStorage, y el predeterminado es «Agente».
 const hermesChatMode = view === 'chat-code' || view === 'chat-query-only' ? 'ask' : ''
+// S17: el perfil de herramientas de la conversación abierta ('' = Auto).
+const hermesChatTools = view === 'chat-tools' ? 'essential' : ''
 // chat-agent-creates: Claude Code con el MCP de ScadLab; chat-autosave: un modelo local SIN herramientas (Ollama); chat-query-only: Codex en consulta.
-const hermesServerId = chatHarness ? 'cli:codex' : view === 'chat-agy-denied' ? 'cli:antigravity' : view === 'chat-agent-creates' ? 'cli:claude' : view === 'chat-autosave' ? 'ollama' : view === 'chat-query-only' ? 'cli:codex' : 'srv-4f1a9c2e7b30'
-const hermesModel = chatHarness ? 'gpt-5-codex' : view === 'chat-agy-denied' ? 'gemini-4-argon-high' : view === 'chat-agent-creates' ? 'opus' : view === 'chat-autosave' ? 'llama3.2:3b' : view === 'chat-query-only' ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
+const hermesServerId = statsShot || smallShot ? 'ollama' : chatHarness ? 'cli:codex' : view === 'chat-agy-denied' ? 'cli:antigravity' : view === 'chat-agent-creates' ? 'cli:claude' : view === 'chat-autosave' ? 'ollama' : view === 'chat-query-only' ? 'cli:codex' : 'srv-4f1a9c2e7b30'
+const hermesModel = statsShot ? 'qwen3-coder:30b' : smallShot ? 'qwen3:4b' : chatHarness ? 'gpt-5-codex' : view === 'chat-agy-denied' ? 'gemini-4-argon-high' : view === 'chat-agent-creates' ? 'opus' : view === 'chat-autosave' ? 'llama3.2:3b' : view === 'chat-query-only' ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
 
 const shadeHex = (hex: string, f: number) => {
     const n = parseInt(hex.slice(1), 16)
@@ -1238,7 +1253,7 @@ const stepsAtt = [
     hermesStep(1, 'create_checkpoint', {parent: '006-two-color-logo.scad', label: es ? 'repisa de pared' : 'wall shelf', source: chatScad}, 'ok', `{"file":"${shelfFile}"}`, 40, ro.sentence.length),
     hermesStep(2, 'render', {file: shelfFile}, 'ok', `{"file":"${shelfFile}","status":"ok","durationMs":801}`, 830, ro.sentence.length),
 ]
-const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, cliSession: '', mode: hermesChatMode, title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
+const hermesChatItem = {id: 3, workspaceId: 1, providerId: hermesServerId, model: hermesModel, cliSession: '', mode: hermesChatMode, tools: hermesChatTools, title: es ? 'Caja para Raspberry Pi 5 con tapa deslizante' : 'Raspberry Pi 5 case with a sliding lid', createdAt: 1_790_000_000, updatedAt: 1_790_003_000}
 const parts = (p: Record<string, unknown>) => JSON.stringify(p)
 const codeMd = es
     ? `Te dejo la caja de la **Raspberry Pi 5**. Estas son las medidas que usé:\n\n| Pieza | Medida | Nota |\n|:--|--:|:-:|\n| Placa | 85 × 56 mm | la de la Pi 5 |\n| Paredes | 2 mm | imprimen bien en la A1 mini |\n| Altura | 24 mm | deja sitio al ventilador |\n\n## Qué cambié\n\n- La tapa va en un checkpoint **aparte**, para imprimirla plana.\n- Los tornillos son \`M2.5\`; si quedan justos mira [la guía de tolerancias](https://example.com/tolerancias).\n- [x] Paredes de 2 mm\n- [ ] Ranuras de ventilación\n\n\`\`\`openscad\n${chatScad}\`\`\``
@@ -1271,6 +1286,45 @@ const agyDeniedText = es
     ? `_Antigravity CLI terminó el turno sin responder nada._\n\nAntigravity bloqueó la herramienta «printer_info» de ScadLab: en modo no interactivo no puede pedirte permiso y termina el turno. ScadLab la aprueba con una regla \`mcp(scadlab/…)\` en \`permissions.allow\` de ${agySettings}. Usa «Reparar permisos de Antigravity» (en el aviso, o en Configuración → Proveedores de IA) y vuelve a pedirlo. Detalle: ${agyDetail}`
     : `_Antigravity CLI finished the turn without saying anything._\n\nAntigravity blocked ScadLab's “printer_info” tool: in non-interactive mode it cannot ask you for permission and ends the turn. ScadLab approves it with an \`mcp(scadlab/…)\` rule in \`permissions.allow\` of ${agySettings}. Use “Repair Antigravity permissions” (in the notice, or in Settings → AI providers) and ask again. Detail: ${agyDetail}`
 const stepsAgyDenied = [hermesStep(1, 'printer_info', {}, 'error', agyDetail, 22, 0)]
+// ── S17: tiempo y tokens de un turno, perfil de herramientas y aviso de contexto ────────────────────────────────────────
+const potFile = es ? '002-maceta-modular.scad' : '002-modular-planter.scad'
+const rs = es
+    ? {ask: 'Hazle los agujeros de drenaje de 5 mm a la maceta.', sentence: 'Miro cómo está armada la maceta y busco el drenaje.', done: `Listo: los 5 agujeros de drenaje de **${potFile}** ahora miden 5 mm (antes 3,5). La maceta sigue cerrada y cabe en tu A1 mini. Edité solo la línea 14, sin reescribir el archivo.`}
+    : {ask: 'Make the drainage holes of the planter 5 mm.', sentence: 'I look at how the planter is built and find the drainage.', done: `Done: the 5 drainage holes of **${potFile}** are now 5 mm (they were 3.5). The planter is still closed and fits your A1 mini. I edited just line 14, without rewriting the file.`}
+const statStep = (index: number, tool: string, args: Record<string, unknown>, text: string, durationMs: number, roundInput: number, roundOutput: number, resultTokens: number) => ({
+    ...hermesStep(index, tool, args, 'ok', text, durationMs, rs.sentence.length), roundInput, roundOutput, resultTokens, resultChars: resultTokens * 4,
+})
+const stepsStats = [
+    statStep(1, 'outline_checkpoint', {file: potFile}, `{"file":"${potFile}","lines":612,"bytes":21480,"params":[{"section":"Medidas","items":[{"name":"altura","line":6,"value":"80"},{"name":"drain_d","line":14,"value":"3.5"},{"name":"drain_n","line":16,"value":"5"}]}],"modules":[{"name":"cuerpo","line":28,"end":36},{"name":"drenajes","line":38,"end":44}]}`, 18, 7_200, 45, 880),
+    statStep(2, 'find_in_checkpoint', {file: potFile, query: 'drain_d'}, `{"file":"${potFile}","matches":2,"windows":[{"from":12,"to":16,"lines":["12| // Diámetro de cada agujero de drenaje en mm","13| drain_d = 3.5; // [1:0.5:10]"]}]}`, 22, 8_800, 30, 310),
+    statStep(3, 'edit_checkpoint', {file: potFile, edits: [{from_line: 13, to_line: 13, new: 'drain_d = 5; // [1:0.5:10]'}], note: es ? 'Drenaje de 5 mm' : '5 mm drainage'}, `{"file":"${potFile}","updated":true,"changes":1}`, 2_480, 9_900, 120, 190),
+    statStep(4, 'render', {file: potFile}, `{"file":"${potFile}","status":"ok","durationMs":2310,"mesh":{"triangles":4210,"watertight":true,"sizeMm":{"x":90,"y":90,"z":80}},"fitsBuildVolume":true,"printer":{"name":"Bambu Lab A1 mini"}}`, 60, 10_100, 25, 240),
+]
+const statsUsage = {inputTokens: 48_000, outputTokens: 2_000, costUsd: 0, modelMs: 41_000, toolMs: 2_580, rounds: 5, peakInput: 12_000, lastInput: 12_000, inputEstimated: false}
+// Ollama de 8k: el aviso de contexto y el selector de herramientas. La conversación pesa ~3,6k tokens estimados (caracteres ÷ 4) más
+// los ~2,6k fijos del prompt y las herramientas esenciales que el último turno informó.
+const smallCtx = {chatId: 3, numCtx: 8192, promptTokens: 1_180, toolsTokens: 1_440, profile: 'essential', auto: view === 'chat-context', overBudget: false}
+// Un historial largo, con viñetas distintas (medidas inventadas), para que el contador llegue al 70 % de 8 192 sin repetir un párrafo.
+const potZones = es
+    ? ['borde superior', 'cuello', 'panza', 'base', 'plato', 'asa izquierda', 'asa derecha', 'drenaje', 'relieve del nombre', 'anillo de apoyo', 'faldón', 'tapa del plato', 'canal de riego', 'pestaña de encaje']
+    : ['top rim', 'neck', 'belly', 'base', 'saucer', 'left handle', 'right handle', 'drainage', 'name relief', 'support ring', 'skirt', 'saucer lid', 'watering channel', 'snap tab']
+const potBullets = (seed: number, n: number) =>
+    Array.from({length: n}, (_, i) => {
+        const z = potZones[(i + seed) % potZones.length]
+        const wall = (1.6 + ((i * 7 + seed) % 9) * 0.2).toFixed(1)
+        const r = 2 + ((i * 5 + seed * 3) % 11)
+        return es ? `- **${z}**: pared de ${wall} mm, radio de ${r} mm y ${r % 3 === 0 ? 'sin soportes' : 'con voladizo de 40°'}.` : `- **${z}**: ${wall} mm wall, ${r} mm radius and ${r % 3 === 0 ? 'no supports' : 'a 40° overhang'}.`
+    }).join('\n')
+const potTurn = (seed: number, n: number) =>
+    (es ? `Así quedó la maceta, zona por zona (pared, radio y si imprime sin soportes):\n\n` : `This is how the planter turned out, zone by zone (wall, radius and whether it prints without supports):\n\n`) +
+    potBullets(seed, n) +
+    (es ? `\n\nTodo lo anterior sale de los parámetros del Customizer, así que puedes ajustarlo sin tocar el código.` : `\n\nAll of the above comes from the Customizer parameters, so you can adjust it without touching the code.`)
+const smallMessages = [
+    {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_800, content: es ? 'Hazme una maceta cónica de 90 mm con drenaje y un plato.' : 'Make me a 90 mm conical planter with drainage and a saucer.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+    {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_002_900, content: potTurn(1, view === 'chat-tools' ? 24 : 96), parts: parts({model: 'qwen3:4b'}), inputTokens: 5_900, outputTokens: 1_200, costUsd: 0},
+    {id: 3, chatId: 3, role: 'user', createdAt: 1_790_003_000, content: es ? 'Ahora agrégale un borde ondulado y un texto en relieve con el nombre de la planta.' : 'Now add a wavy rim and a raised text with the name of the plant.', parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+    {id: 4, chatId: 3, role: 'assistant', createdAt: 1_790_003_100, content: potTurn(4, 96), parts: parts({model: 'qwen3:4b'}), inputTokens: 6_200, outputTokens: 1_300, costUsd: 0},
+]
 const queryText = es
     ? `Te propongo esta caja para la **Raspberry Pi 5**, con paredes de 2 mm:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- Si quieres la tapa a presión, la hago como otro checkpoint.`
     : `Here is a box proposal for the **Raspberry Pi 5**, with 2 mm walls:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- If you want the snap-fit lid, I will make it as another checkpoint.`
@@ -1314,7 +1368,16 @@ const stepsTrace = [
     hermesStep(4, 'render', {file: logoFile}, 'ok', `{"file":"${logoFile}","status":"ok","durationMs":1104,"mesh":{"triangles":1480,"watertight":true,"sizeMm":{"x":80,"y":80,"z":3.6}},"fitsBuildVolume":true}`, 1139, rtr.sentence.length),
 ]
 const hermesMessages =
-    view === 'chat-compare'
+    statsShot
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: rs.ask, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rs.sentence}\n\n${rs.done}`, parts: parts({steps: stepsStats, model: 'qwen3-coder:30b', usage: statsUsage}), inputTokens: statsUsage.inputTokens, outputTokens: statsUsage.outputTokens, costUsd: 0},
+          ]
+        : smallShot
+        ? view === 'chat-tools'
+            ? smallMessages.slice(0, 2)
+            : smallMessages
+        : view === 'chat-compare'
         ? [
               {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: bracketAsk, parts: parts({attachments: bracketAtt}), inputTokens: 0, outputTokens: 0, costUsd: 0},
               {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rcmp.sentence}\n\n${rcmp.done}`, parts: parts({steps: stepsCompare, model: hermesModel}), inputTokens: 24_310, outputTokens: 1_480, costUsd: 0.0951},
@@ -1393,7 +1456,12 @@ const chatMocks = {
     ListChats: () => P(['chat-models', 'chat-empty', 'chat-from-image', 'chat-no-vision', 'chat-providers', 'chat-cli-models', 'chat-no-providers'].includes(view) ? [] : chatsFor()),
     GetChat: (id: number) => {
         if (hermesView) {
-            return P({chat: id === 3 ? hermesChatItem : (chatItems.find((c) => c.id === id) ?? hermesChatItem), messages: id === 3 ? hermesMessages : (otherChats[id] ?? []), running: false, partial: '', partialSeq: 0, steps: [], usage: {inputTokens: 0, outputTokens: 0, costUsd: 0}})
+            return P({
+                chat: id === 3 ? hermesChatItem : (chatItems.find((c) => c.id === id) ?? hermesChatItem),
+                messages: id === 3 ? hermesMessages : (otherChats[id] ?? []),
+                running: false, partial: '', partialSeq: 0, steps: [], usage: {inputTokens: 0, outputTokens: 0, costUsd: 0},
+                context: id === 3 && smallShot ? smallCtx : id === 3 && statsShot ? {...smallCtx, numCtx: 32768, profile: 'full', auto: true} : undefined,
+            })
         }
         if (view === 'chat-stream') {
             setTimeout(() => {
@@ -2121,6 +2189,7 @@ const clickParam = q.get('click')
 const CLICK_ONE: Record<string, string> = {
     'chat-providers': '[data-testid="provider-picker"]',
     'chat-cli-models': '[data-testid="model-picker"]',
+    'chat-tools': '[data-testid="tools-control"]',
     'settings-import-minitools': '[data-testid="import-minitools"]',
 }
 if (clickParam || CLICK_ONE[view]) {
@@ -2263,12 +2332,12 @@ if (q.get('keytest') === '1') {
 // El documento no puede medir más que la ventana ni estar desplazado; con
 // poke=1 antes se le provoca el desplazamiento que lo rompía.
 const poke = q.get('poke') === '1'
-// chat-w*: con poke=1 se abren, uno tras otro, el selector de proveedor, el de modelo, el del modo, el menú «…» y la lista
+// chat-w* y chat-sw*: con poke=1 se abren, uno tras otro, el selector de proveedor, el de modelo, el del modo, el de herramientas, el menú «…» y la lista
 // de conversaciones, y se anota dónde quedó cada desplegable: uishot-fit.sh falla si alguno se sale de la ventana.
 const popRects: Record<string, number[] | null> = {}
 if (chatHarness && poke) {
     ;(window as unknown as {__popRects: typeof popRects}).__popRects = popRects
-    const ids = ['provider-picker', 'model-picker', 'mode-control', 'chat-more', 'chat-switcher']
+    const ids = ['provider-picker', 'model-picker', 'mode-control', 'tools-control', 'chat-more', 'chat-switcher']
     let k = 0
     const next = () => {
         if (k >= ids.length) {

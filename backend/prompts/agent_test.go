@@ -319,14 +319,16 @@ func TestAgentPromptNamesThePrinterAndTheSlicer(t *testing.T) {
 }
 
 // S16: la regla es una sola en todas partes —el archivo que el usuario nombra o
-// tiene abierto se edita con update_checkpoint; uno nuevo solo para algo nuevo o
+// tiene abierto se edita en el lugar (edit_checkpoint, set_parameters; update_checkpoint para reescrituras grandes); uno nuevo solo para algo nuevo o
 // una variante— y el viejo «checkpoints inmutables / nunca edites» dirigido a la
 // IA no sobrevive en ningún texto embebido (prompts, reglas, starter, skills).
 func TestEditRuleIsUniformAndTheOldImmutableRuleIsGone(t *testing.T) {
 	for lang, wants := range map[string][]string{
-		"es": {"Cuando el usuario nombra un archivo existente o se refiere al abierto/seleccionado (“este”, “el actual”) y pide cambios, **edítalo con `update_checkpoint`**",
+		"es": {"Cuando el usuario nombra un archivo existente o se refiere al abierto/seleccionado (“este”, “el actual”) y pide cambios, **edítalo en el lugar**",
+			"`edit_checkpoint`", "`set_parameters`", "`outline_checkpoint`", "`find_in_checkpoint`", "`extract_module`", "`update_checkpoint` (el archivo **completo**) solo para reescrituras grandes",
 			"solo si pide algo nuevo, una variante u “otra versión”", "Ante la duda, edita el que nombró", "Para leer un `.scad` usa `read_checkpoint` con el nombre del archivo"},
-		"en": {"When the user names an existing file, or refers to the open/selected one (“this”, “the current one”), and asks for changes, **edit it with `update_checkpoint`**",
+		"en": {"When the user names an existing file, or refers to the open/selected one (“this”, “the current one”), and asks for changes, **edit it in place**",
+			"`edit_checkpoint`", "`set_parameters`", "`outline_checkpoint`", "`find_in_checkpoint`", "`extract_module`", "`update_checkpoint` (the **complete** file) only for big rewrites",
 			"only if they ask for something new, a variant or “another version”", "When in doubt, edit the one they named", "To read a `.scad` use `read_checkpoint` with the file name"},
 	} {
 		got := AgentSystemPrompt(agentContext(lang))

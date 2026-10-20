@@ -39,7 +39,7 @@ func (a *App) refreshTreeAfterStep(workspaceID int64, st hermes.Step) {
 		a.emitWorkspaceConfig(workspaceID)
 		return
 	}
-	if mcp.UpdatesInPlace(st.Tool) {
+	if mcp.UpdatesInPlace(st.Tool, st.Text) {
 		a.refreshAfterUpdate(workspaceID, st)
 		return
 	}

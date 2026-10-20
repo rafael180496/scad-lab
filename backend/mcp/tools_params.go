@@ -3,8 +3,10 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"scadlab/backend/checkpoint"
@@ -22,25 +24,28 @@ func (e *env) parameterTools() []Tool {
 	return []Tool{
 		{
 			Name: "get_parameters",
-			Description: "Read a checkpoint's Customizer parameters: the top-level variables with a literal value (number, text, true/false or a vector of numbers) before the first module, with their group, description, range [min:step:max] and list of options. " +
-				"Use it before set_parameters to see what can be changed. Variables in the Hidden section are listed with hidden=true and cannot be changed with set_parameters.",
-			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
+			Description: "Read a checkpoint's Customizer parameters: the top-level variables with a literal value (number, text, true/false or a vector of numbers) before the first module, grouped by section, each with its value, range `min:step:max`, list of options, line and description. " +
+				"Use it before set_parameters to see what can be changed. Variables in the Hidden section are listed under \"Hidden\" and cannot be changed with set_parameters. verbose=true gives the flat list with the type and the literal as written.",
+			InputSchema: obj(map[string]any{"file": strProp(fileHelp), "verbose": verboseProp}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.getParameters,
 		},
 		{
 			Name: "set_parameters",
-			Description: "Change Customizer parameter values in a NEW child checkpoint: reads the checkpoint, replaces only those literals and keeps everything else byte for byte (comments, ranges, order). The original is never modified: this makes a VARIANT. If the user asked to change the file they named (or the open one), edit it with update_checkpoint instead (read_checkpoint first). " +
-				"Use it for «give me a version 10 mm wider», «another one with the slide lid», «a copy without the logo». Values must match the parameter type (number, text, true/false, or a list of numbers of the same length); a value outside its range or options list is applied with a warning. Then call render.",
+			Description: "Change Customizer parameter values IN PLACE in the file: reads the checkpoint, replaces only those literals and keeps everything else byte for byte (comments, ranges, order). The previous version is saved in the file's history (the user can undo). " +
+				"Use it for ANY change of a size, color or text that is a Customizer parameter («10 mm taller», «make it red», «change the name»): one call, no code to write. It then renders and returns a short summary (verbose=true: full detail). " +
+				"variant=true keeps the old behavior instead: the original is untouched and a NEW child checkpoint holds the values («give me another version 10 mm wider»). Values must match the parameter type (number, text, true/false, or a list of numbers of the same length); a value outside its range or options list is applied with a warning. Names come from get_parameters.",
 			InputSchema: obj(map[string]any{
 				"values": map[string]any{
 					"type":                 "object",
 					"description":          "Parameter name -> new value, e.g. {\"width\": 80, \"lid_type\": \"slide\", \"logo\": false, \"size\": [10, 20, 5]}. Names come from get_parameters.",
 					"additionalProperties": true,
 				},
-				"file":        strProp("Checkpoint to start from (default: the active parent, else the newest). It becomes the parent of the new one."),
-				"label":       strProp("Short title for the new checkpoint (default: «params» plus the names changed)."),
-				"description": strProp("One-line description for the header (default: the changes made)."),
+				"file":        strProp("Checkpoint to change (default: the active parent, else the newest)."),
+				"variant":     map[string]any{"type": "boolean", "description": "Create a NEW child checkpoint with the values and leave the file untouched. Default false: edit the file in place."},
+				"label":       strProp("variant only: short title for the new checkpoint (default: «params» plus the names changed)."),
+				"description": strProp("One-line description for the header: replaces `desc` when editing in place; the description of the new checkpoint with variant (default: the changes made)."),
+				"verbose":     verboseProp,
 			}, "values"),
 			Annotations: annotations(annWrite),
 			handler:     e.setParameters,
@@ -112,15 +117,104 @@ func (e *env) getParameters(_ context.Context, args map[string]any) (*toolResult
 	if err != nil {
 		return nil, err
 	}
+	if !verboseArg(args) {
+		return compactResult(compactParams(name, params))
+	}
 	out := map[string]any{"file": name, "count": len(params), "parameters": params}
 	if len(params) == 0 {
-		out["note"] = msgf(i18n.Msg{
-			ES: "Este checkpoint no declara parámetros del Customizer (variables con un valor literal arriba del archivo, antes del primer module). Para cambiar una medida, edita el archivo con update_checkpoint.",
-			EN: "This checkpoint declares no Customizer parameters (variables with a literal value at the top of the file, before the first module). To change a measurement, edit the file with update_checkpoint.",
-		})
+		out["note"] = noParamsNote()
 	}
 	return jsonResult(out)
 }
+
+func noParamsNote() string {
+	return msgf(i18n.Msg{
+		ES: "Este checkpoint no declara parámetros del Customizer (variables con un valor literal arriba del archivo, antes del primer module). Para cambiar una medida, edita el archivo con edit_checkpoint.",
+		EN: "This checkpoint declares no Customizer parameters (variables with a literal value at the top of the file, before the first module). To change a measurement, edit the file with edit_checkpoint.",
+	})
+}
+
+// compactParams es la respuesta corta de get_parameters: por sección, cada
+// parámetro con su valor, rango `min:step:max`, opciones, línea y descripción. Si no
+// cabe en el tope se quitan las descripciones y, después, se cortan los últimos.
+func compactParams(file string, params []scad.Param) ordered {
+	build := func(withDesc bool, maxParams int) ordered {
+		sections := []ordered{}
+		var cur ordered
+		curName, n := "\x00", 0
+		omitted := 0
+		for _, p := range params {
+			if maxParams > 0 && n >= maxParams {
+				omitted++
+				continue
+			}
+			if p.Group != curName || cur == nil {
+				if cur != nil {
+					sections = append(sections, cur)
+				}
+				curName = p.Group
+				cur = ordered{}
+				if p.Group != "" {
+					cur.set("section", p.Group)
+				}
+				cur.set("params", []ordered{})
+			}
+			e := ordered{{"name", p.Name}, {"value", p.Value}}
+			if p.Min != nil && p.Max != nil {
+				if p.Step != nil {
+					e.set("range", formatRange(*p.Min)+":"+formatRange(*p.Step)+":"+formatRange(*p.Max))
+				} else {
+					e.set("range", formatRange(*p.Min)+":"+formatRange(*p.Max))
+				}
+			}
+			if len(p.Options) > 0 {
+				opts := make([]any, len(p.Options))
+				for i, o := range p.Options {
+					if o.Label != "" {
+						opts[i] = fmt.Sprintf("%v:%s", o.Value, o.Label)
+					} else {
+						opts[i] = o.Value
+					}
+				}
+				e.set("options", opts)
+			}
+			e.set("line", p.Line)
+			if withDesc && p.Description != "" {
+				e.set("desc", p.Description)
+			}
+			prev, _ := cur.get("params")
+			cur.set("params", append(prev.([]ordered), e))
+			n++
+		}
+		if cur != nil {
+			sections = append(sections, cur)
+		}
+		res := ordered{{"file", file}, {"count", len(params)}, {"sections", sections}}
+		if omitted > 0 {
+			res.set("omitted", msgf(i18n.Msg{ES: "%d parámetros más: usa outline_checkpoint para verlos", EN: "%d more parameters: use outline_checkpoint to see them"}, omitted))
+		}
+		if len(params) == 0 {
+			res.set("note", noParamsNote())
+		}
+		return res
+	}
+	size := func(o ordered) int { b, _ := marshalNoEscape(o); return len(b) }
+	if out := build(true, 0); size(out) <= toolResultSoftCap {
+		return out
+	}
+	if out := build(false, 0); size(out) <= toolResultSoftCap {
+		return out
+	}
+	for n := len(params); n > 0; n -= 5 {
+		if out := build(false, n); size(out) <= toolResultSoftCap {
+			return out
+		}
+	}
+	return build(false, 1)
+}
+
+// formatRange escribe un número de un rango sin ceros de sobra.
+func formatRange(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
 
 // paramSummary describe los cambios: «ancho 60 → 80, tapa "snap" → "slide"».
 func paramSummary(changes []scad.ParamChange) string {
@@ -131,8 +225,8 @@ func paramSummary(changes []scad.ParamChange) string {
 	return strings.Join(parts, ", ")
 }
 
-func (e *env) setParameters(_ context.Context, args map[string]any) (*toolResult, error) {
-	e.settings()
+func (e *env) setParameters(ctx context.Context, args map[string]any) (*toolResult, error) {
+	s := e.settings()
 	values, ok := objArg(args, "values")
 	if !ok || len(values) == 0 {
 		return nil, i18n.New(i18n.Msg{ES: "falta `values`: un objeto nombre → valor (los nombres salen de get_parameters)", EN: "`values` is required: an object name -> value (names come from get_parameters)"})
@@ -149,13 +243,43 @@ func (e *env) setParameters(_ context.Context, args map[string]any) (*toolResult
 	if err != nil {
 		return nil, err
 	}
-	src, changes, warnings, err := scad.SetParameters(string(raw), values)
+	base := string(raw)
+	src, changes, warnings, err := scad.SetParameters(base, values)
 	if err != nil {
 		return nil, err
 	}
 	if len(changes) == 0 {
 		return nil, i18n.New(i18n.Msg{ES: "los valores pedidos ya son los actuales: no hay nada que cambiar", EN: "the requested values are already the current ones: there is nothing to change"})
 	}
+
+	if boolArg(args, "variant", false) {
+		return e.setParametersVariant(args, name, src, changes, warnings)
+	}
+
+	// En el lugar (S17): el respaldo queda en el historial del archivo y el
+	// resultado trae el render. La cabecera no se toca salvo que se pida otra
+	// descripción.
+	up, err := checkpoint.UpdateWith(e.ws, name, src, s.HistoryMaxVersions, checkpoint.UpdateOptions{
+		Tool: "set_parameters", Note: strArg(args, "description"), HistoryNote: paramSummary(changes), Verbatim: true, Base: &base,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := ordered{{"file", name}, {"updated", true}, {"unchanged", up.Unchanged}}
+	if !up.Unchanged {
+		out.set("version", up.Version.ID)
+	}
+	out.set("changes", changes)
+	if len(warnings) > 0 {
+		out.set("warnings", warnings)
+	}
+	e.verifyWritten(ctx, &out, fileRef{Key: name, Path: path}, verboseArg(args))
+	return compactResult(out)
+}
+
+// setParametersVariant es set_parameters con variant=true: un hijo nuevo con los
+// valores, y el original intacto.
+func (e *env) setParametersVariant(args map[string]any, name, src string, changes []scad.ParamChange, warnings []string) (*toolResult, error) {
 	names := make([]string, len(changes))
 	for i, c := range changes {
 		names[i] = c.Name
@@ -173,17 +297,16 @@ func (e *env) setParameters(_ context.Context, args map[string]any) (*toolResult
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{
-		"file":         child,
-		"parent":       name,
-		"activeParent": checkpoint.ActiveParent(e.ws),
-		"changes":      changes,
-		"next":         msgf(i18n.Msg{ES: "Valídalo con render (file=%s).", EN: "Validate it with render (file=%s)."}, child),
+	out := ordered{
+		{"file", child}, {"created", true}, {"parent", name},
+		{"activeParent", checkpoint.ActiveParent(e.ws)},
+		{"changes", changes},
 	}
 	if len(warnings) > 0 {
-		out["warnings"] = warnings
+		out.set("warnings", warnings)
 	}
-	return jsonResult(out)
+	out.set("next", msgf(i18n.Msg{ES: "Valídalo con render (file=%s).", EN: "Validate it with render (file=%s)."}, child))
+	return compactResult(out)
 }
 
 // templateDesc saca la descripción de la cabecera de una plantilla.

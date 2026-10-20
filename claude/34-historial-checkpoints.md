@@ -3,7 +3,8 @@
 Plan: [.claude/specs/s16-ia-edita-con-historial.md](../.claude/specs/s16-ia-edita-con-historial.md). Lógica de archivos
 (escritura atómica, tope, papelera, purga): [15-checkpoints.md](15-checkpoints.md). Herramienta MCP
 `update_checkpoint`: [13-mcp.md](13-mcp.md) y [25-herramientas-ia.md](25-herramientas-ia.md). Contrato de bindings y
-evento: [30-contrato-checkpoints.md](30-contrato-checkpoints.md).
+evento: [30-contrato-checkpoints.md](30-contrato-checkpoints.md). **S17** (editar sin regenerar): `edit_checkpoint`,
+`set_parameters` en el lugar y `extract_module` escriben por el mismo camino y se anotan abajo.
 
 ## El problema
 
@@ -27,8 +28,10 @@ leer el historial real del usuario para confirmarlo: queda en la prueba manual d
 ## La regla (una frase, la misma en todas partes)
 
 Cuando el usuario **nombra un archivo existente** o se refiere al **seleccionado** («este», «el actual») y pide cambios, la IA
-lo **edita con `update_checkpoint`**; crea un checkpoint nuevo solo si pide algo nuevo, una variante u «otra versión»; ante la
-duda, edita el que nombró. Corregir un render que falla en el archivo que acaba de crear también es `update_checkpoint`. El
+lo **edita en el lugar** (desde S17: `edit_checkpoint` para cambios de código, `set_parameters` para medidas, colores y textos del
+Customizer, y `update_checkpoint` solo para reescrituras grandes); crea un checkpoint nuevo solo si pide algo nuevo, una variante
+u «otra versión»; ante la duda, edita el que nombró. Corregir un render que falla en el archivo que acaba de crear también es
+editarlo (`edit_checkpoint`). El
 «nunca modifiques un checkpoint existente» dirigido a la IA ya no existe en ningún prompt.
 
 El prompt de cada turno CLI (`cliPrompt`, textos `msgCLIPrompt*`) lleva: la ruta absoluta, «Checkpoint seleccionado en la app
@@ -43,13 +46,28 @@ El prompt de cada turno CLI (`cliPrompt`, textos `msgCLIPrompt*`) lleva: la ruta
 <ws>/.scadlab/history/<archivo.scad>/<id>.json    {savedAt, reason, tool, note, size}
 ```
 
-`<id>` = `AAAAMMDD-HHMMSS` hora local (`-2`, `-3`… si choca). `reason`: `ai` (lo guardó `update_checkpoint`) o `restore`
+`<id>` = `AAAAMMDD-HHMMSS` hora local (`-2`, `-3`… si choca). `tool` anota qué herramienta escribió (`update_checkpoint`,
+`edit_checkpoint`, `set_parameters`, `extract_module`) y `note` la nota (la de `note`, o un resumen: «1 edición, líneas 23»,
+«altura 85 → 95», «extract_module: a, b → lib/x.scad»). `reason`: `ai` (lo guardó una de esas herramientas) o `restore`
 (lo guardó un «Restaurar» o «Deshacer»). Orden: **respaldo → escritura atómica**. Tope: `Settings.HistoryMaxVersions`
 (`historyMaxVersions`, 1–200, 20 por defecto), se poda lo más viejo **de ese archivo**. El historial queda fuera del árbol:
 `workspace.Scan` solo mira la raíz. La papelera lo lleva a `.scadlab/trash/<sello>-<archivo>.history/` y lo devuelve al
 restaurar; `EmptyTrash` y `PurgeTrashed` lo borran. «Editado por la IA» = la versión **más nueva** tiene `reason: "ai"`:
 restaurar guarda la actual como `restore`, así que el indicador se apaga solo y el deshacer se puede deshacer. Restaurar
 conserva el `parent=` **actual** del archivo (metadato del árbol).
+
+### Archivos de `lib/` (S17)
+
+Los `lib/<nombre>.scad` (los hijos **directos** de `lib/`; las subcarpetas son librerías instaladas, de solo lectura) tienen el mismo
+historial en `<ws>/.scadlab/history/lib/<nombre>.scad/` (`checkpoint.UpdateWith` con la clave `lib/<nombre>.scad`; cada nivel de la
+ruta del historial se comprueba que no sea un enlace). No tienen cabecera `@checkpoint`: se escriben tal cual, con la misma garantía
+respaldo → escritura atómica, y `History`, `ReadVersion`, `RestoreVersion` y `EditedByAI` aceptan la clave. `checkpoint.CreateLib`
+crea un archivo nuevo sin pisar (temporal + enlace duro) y `checkpoint.RemoveCreatedLib` solo existe para el deshacer de
+`extract_module`: quita lo recién creado si sigue siendo exactamente lo escrito. Los bindings de la interfaz (`app_history.go`) siguen
+validando `ValidName`: el historial de `lib/` es, por ahora, de las herramientas.
+
+`UpdateOptions.Verbatim` (`edit_checkpoint`, `set_parameters`, `extract_module`): `source` es el archivo completo y la cabecera tiene
+que ser la que ya tiene el archivo, byte a byte; así el BOM, los fines de línea (aun mezclados) y todo lo no editado quedan intactos.
 
 ## Bindings y evento (`app_history.go`)
 
@@ -64,7 +82,8 @@ en la base: lo calcula `rescan` (`checkpoint.EditedByAI`, una lectura de directo
 
 **`checkpoint:updated {workspaceId, file}`** se emite por tres caminos (la interfaz tolera repetidos: releer es idempotente):
 
-1. tras un paso bueno de una herramienta con `mcp.UpdatesInPlace(tool)` (`refreshTreeAfterStep` → `refreshAfterUpdate`, en el
+1. tras un paso bueno de una herramienta con `mcp.UpdatesInPlace(tool, resultText)` —por el `"updated": true` del resultado, no
+   solo por el nombre: `set_parameters` con `variant` crea un hijo— (`refreshTreeAfterStep` → `refreshAfterUpdate`, en el
    chat de Hermes y de los CLIs; el archivo sale de `args.file` o del `file` del resultado);
 2. por el watcher (`backend/watch`, `StartChanges`): compara tamaño y fecha de cada `.scad` de la raíz entre dos escaneos y
    reporta `Updated` (existía y cambió). Por **firma y no por tipo de evento**: una escritura atómica llega como Write, Create

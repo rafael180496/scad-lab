@@ -336,3 +336,39 @@ func TestAntigravityResponseOnlyTurnStillShowsTheAnswer(t *testing.T) {
 		t.Errorf("no se duplica: %q", got)
 	}
 }
+
+// S17: Claude Code informa el uso de cada pedido al modelo en el propio mensaje del
+// asistente; el adaptador lo vuelve una vuelta (KindRound) con la entrada completa
+// (no cacheada + escrita + leída de la caché) y el total del turno trae el tiempo.
+func TestClaudeAdapterReportsRoundsAndTimes(t *testing.T) {
+	evs := feed(t, claudeAdapter, "claude-stream.jsonl")
+	rounds := find(evs, KindRound)
+	if len(rounds) != 3 {
+		t.Fatalf("vueltas: %+v", rounds)
+	}
+	for i, want := range []struct {
+		key     string
+		in, out int64
+	}{{"msg_1", 902, 4}, {"msg_2", 1203, 40}, {"msg_3", 1503, 35}} {
+		r := rounds[i]
+		if r.RoundKey != want.key || r.Usage.Input != want.in || r.Usage.Output != want.out {
+			t.Errorf("vuelta %d: %+v (%+v)", i, r, r.Usage)
+		}
+	}
+	done := find(evs, KindDone)[0].Usage
+	if done.DurationMs != 3100 || done.Turns != 3 {
+		t.Errorf("tiempo y vueltas del turno: %+v", done)
+	}
+}
+
+// Un paso de Antigravity que informa su uso es una vuelta del modelo; sin uso, no.
+func TestAntigravityAdapterStepUsageIsARound(t *testing.T) {
+	adapt, _, _ := adapterFor("antigravity")
+	got := adapt([]byte(`{"event":"step_update","step_update":{"step_index":7,"state":"DONE","step_type":"agent_response","text_delta":"hola","usage":{"input_tokens":2400,"cache_read_tokens":90000,"output_tokens":120}}}`))
+	if len(got) != 2 || got[0].Kind != KindRound || got[0].RoundKey != "step-7" || got[0].Usage.Input != 92400 || got[0].Usage.CacheRead != 90000 || got[1].Kind != KindText {
+		t.Fatalf("eventos: %+v", got)
+	}
+	if got := adapt([]byte(`{"event":"step_update","step_update":{"step_index":8,"state":"DONE","step_type":"agent_response","text_delta":"x"}}`)); len(got) != 1 || got[0].Kind != KindText {
+		t.Errorf("sin uso no hay vuelta: %+v", got)
+	}
+}

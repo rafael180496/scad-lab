@@ -215,9 +215,9 @@ func TestNudgeContent(t *testing.T) {
 		count      int
 		want       []string
 	}{
-		{"003-add-hinge.scad", "es", 2, []string{`"003-add-hinge.scad"`, "con 2 errores", "update_checkpoint", "file=003-add-hinge.scad"}},
+		{"003-add-hinge.scad", "es", 2, []string{`"003-add-hinge.scad"`, "con 2 errores", "edit_checkpoint", "file=003-add-hinge.scad"}},
 		{"003-add-hinge.scad", "es", 1, []string{"con 1 error."}},
-		{"003-add-hinge.scad", "en", 3, []string{`"003-add-hinge.scad"`, "with 3 errors", "update_checkpoint", "file=003-add-hinge.scad"}},
+		{"003-add-hinge.scad", "en", 3, []string{`"003-add-hinge.scad"`, "with 3 errors", "edit_checkpoint", "file=003-add-hinge.scad"}},
 		{"003-add-hinge.scad", "en", 0, []string{"failed. Read"}},
 		{"a\nb.scad", "en", 1, []string{`"a_b.scad"`, "file=a_b.scad"}},
 	}

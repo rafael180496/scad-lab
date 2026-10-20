@@ -12,10 +12,17 @@
    la papelera** (`DeleteTrashed` / `EmptyTrash`) la dispara únicamente el usuario desde
    la interfaz, con confirmación, y **nunca está expuesta a un agente** (ni MCP ni
    Hermes); (c) la **reescritura en el lugar con respaldo previo** en
-   `.scadlab/history/<archivo>/`: `update_checkpoint` (la IA, **solo en «Agente»**;
-   `checkpoint.Update`) y «Restaurar versión» / «Deshacer cambio de la IA» (el usuario;
-   `checkpoint.RestoreVersion`, que guarda primero la versión actual). El orden es
-   siempre respaldo → escritura atómica: si el respaldo falla no se escribe; (d) la
+   `.scadlab/history/<archivo>/`: `update_checkpoint`, `edit_checkpoint` (unas líneas),
+   `set_parameters` (sin `variant`) y `extract_module` (la IA, **solo en «Agente»**;
+   `checkpoint.Update`/`UpdateWith`) y «Restaurar versión» / «Deshacer cambio de la IA»
+   (el usuario; `checkpoint.RestoreVersion`, que guarda primero la versión actual). Lo
+   mismo vale para los archivos directos de `lib/` (`lib/<nombre>.scad`, historial en
+   `.scadlab/history/lib/<nombre>.scad/`; las subcarpetas de `lib/` son de solo lectura).
+   El orden es siempre respaldo → escritura atómica: si el respaldo falla no se escribe.
+   `extract_module` además crea `lib/<nombre>.scad` (sin pisar) y, si el modelo cambia
+   después de mover el código, lo deshace: restaura desde el historial y quita el
+   archivo SOLO si lo creó esa misma llamada y sigue siendo exactamente lo que escribió
+   (`checkpoint.RemoveCreatedLib`); (d) la
    **poda del historial** por el tope (`Settings.HistoryMaxVersions`, 20 de fábrica),
    que borra **respaldos** —copias de seguridad—, nunca un checkpoint. Las escrituras
    directas con las herramientas de archivo de un CLI no dejan respaldo y las reglas se

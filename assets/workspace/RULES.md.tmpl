@@ -31,8 +31,11 @@ un cambio:
 2. **Orden de preferencia de las herramientas:**
    1. las herramientas MCP del servidor `scadlab`: `create_checkpoint` para un
       archivo nuevo (escribe la cabecera `@checkpoint`, numera y nunca pisa un
-      archivo) y `update_checkpoint` para editar uno que ya existe (conserva la
-      cabecera y guarda antes la versión anterior en su historial);
+      archivo); para uno que ya existe, **cambios pequeños con
+      `edit_checkpoint`** (solo mandas lo que cambia), medidas, colores y textos
+      del Customizer con `set_parameters`, y `update_checkpoint` solo para
+      reescrituras grandes (todas conservan la cabecera y guardan antes la
+      versión anterior en su historial);
    2. después, con las mismas herramientas MCP, `render` → `preview` →
       `measure`;
    3. solo si el servidor `scadlab` no está conectado: escribir el archivo
@@ -45,9 +48,12 @@ un cambio:
    archivo de tu CLI** (`echo >`, `cat <<EOF`, `tee`, `sed -i`, `Edit`, `Write`,
    `view_file`…): se salta la cabecera, la numeración y el respaldo. Para leer un
    `.scad` usa `read_checkpoint` con el nombre del archivo (nunca una ruta); para
-   cambiarlo, `update_checkpoint`.
+   cambiarlo, `edit_checkpoint` (o `set_parameters` / `update_checkpoint`).
+   **Un archivo largo no se lee entero:** `outline_checkpoint` da el mapa
+   (parámetros, módulos con sus líneas), `find_in_checkpoint` busca y
+   `read_checkpoint` con `from`/`to` trae solo el rango que vas a tocar.
 5. **Si el render falla**, lee el error con su línea y corrígelo con
-   `update_checkpoint` sobre ese mismo archivo (la versión rota queda en su
+   `edit_checkpoint` sobre ese mismo archivo (la versión rota queda en su
    historial); repite hasta que renderice.
 6. **Ante la duda, no preguntes:** elige medidas razonables como parámetros del
    Customizer y di en el resumen qué supusiste. Pregunta solo si el pedido es
@@ -55,12 +61,14 @@ un cambio:
 
 ## Reglas obligatorias
 
-1. **Cambiar un `.scad` existente = `update_checkpoint`; nunca borrarlo.**
+1. **Cambiar un `.scad` existente = editarlo en el lugar; nunca borrarlo.**
    Cuando el usuario nombra un archivo existente o se refiere al
-   abierto/seleccionado (“este”, “el actual”) y pide cambios, edítalo con
-   `update_checkpoint`. Crea un checkpoint nuevo solo si pide algo nuevo, una
+   abierto/seleccionado (“este”, “el actual”) y pide cambios, edítalo: cambios
+   pequeños con `edit_checkpoint`, medidas, colores o textos del Customizer con
+   `set_parameters` y `update_checkpoint` (el archivo completo) solo para
+   reescrituras grandes. Crea un checkpoint nuevo solo si pide algo nuevo, una
    variante u “otra versión”. Ante la duda, edita el que nombró. Antes de
-   escribir, `update_checkpoint` guarda la versión anterior en el historial del
+   escribir, esas herramientas guardan la versión anterior en el historial del
    archivo (`.scadlab/history/`, lo gestiona la app) y el usuario puede ver las
    diferencias y deshacer. Para leer un `.scad` usa `read_checkpoint` con el
    nombre del archivo; nunca las herramientas de archivo del CLI ni rutas; nunca
@@ -83,7 +91,8 @@ un cambio:
    `parent` es el checkpoint del que parte (vacío en el primero: `parent=`).
    Ramificar = crear un archivo nuevo cuyo `parent` es un checkpoint anterior
    distinto del último. ScadLab arma el árbol con estas líneas.
-   `update_checkpoint` la conserva: tú solo mandas el código.
+   `edit_checkpoint`, `set_parameters` y `update_checkpoint` la conservan (la
+   línea 1 no se edita): tú solo mandas el código.
 
    **Padre activo.** Si el usuario eligió «Ramificar desde aquí», ScadLab guarda
    el checkpoint elegido en `.scadlab/active-parent` (una línea con el nombre
@@ -104,7 +113,7 @@ un cambio:
    Solo si el servidor MCP `scadlab` no está disponible, renderizar con
    `openscad -o exports/check.stl <archivo>.scad`.
 6. **Si existe `RENDER_ERRORS.md`**, ScadLab lo escribió porque el último
-   render falló: leerlo y corregir ese mismo archivo con `update_checkpoint`.
+   render falló: leerlo y corregir ese mismo archivo con `edit_checkpoint`.
    (`render` también devuelve esos mismos errores, con la línea.)
 7. **Debe caber en la placa**: el modelo completo dentro de
    {{.BuildX}} × {{.BuildY}} × {{.BuildZ}} mm. Si no cabe, partirlo en piezas y decirlo.
@@ -138,14 +147,18 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 | `list_printers` | el catálogo de impresoras (id, marca, modelo, volumen, colores máximos, sistema, slicer); filtra por `brand` o `query` |
 | `set_workspace_printer` | cambia la impresora (y los colores) de ESTE workspace: reescribe estas reglas y `printer.json`, y cambia la skill de marca. Solo cuando el usuario lo pida |
 | `list_checkpoints` | árbol de checkpoints (también dibujado como texto: padre, descripción, rótulo, hijos), el último estado de render conocido y el padre activo (`activeParent`) |
-| `read_checkpoint` | código de un checkpoint, por el **nombre del archivo** (así se lee un `.scad`; nunca una ruta ni las herramientas de archivo del CLI) |
+| `read_checkpoint` | código de un checkpoint, por el **nombre del archivo** (así se lee un `.scad`; nunca una ruta ni las herramientas de archivo del CLI). Con `from`/`to` trae solo ese rango, numerado `N\| código` (hasta 400 líneas); un archivo de más de 12 KB sin rango llega recortado (`full=true` lo trae entero). `file` también acepta `lib/<nombre>.scad` |
+| `outline_checkpoint` | el **mapa** de un `.scad` sin leerlo (≈1 KB para 600 líneas): parámetros del Customizer por sección, módulos y funciones con su línea de inicio y fin, `include`/`use` y las partes `color()`. Empieza por aquí con un archivo largo |
+| `find_in_checkpoint` | busca texto (o una regex) en un `.scad` y devuelve ventanas numeradas con contexto (hasta 30 coincidencias, ≈4 KB); los números sirven para `read_checkpoint(from, to)` y `edit_checkpoint` |
 | `create_checkpoint` | crea un checkpoint **nuevo** `NNN-slug.scad` con el encabezado correcto; nunca pisa uno existente. `parent` por defecto: el padre activo si hay, y si no el más nuevo; `root=true` abre un diseño nuevo sin padre |
-| `update_checkpoint` | **edita en el lugar** un checkpoint existente (`file`, `source` completo, `note` opcional): conserva la cabecera, guarda antes la versión anterior en su historial (el usuario puede deshacer) y devuelve el lint y el render del resultado. Es lo que usas cuando el usuario nombra un archivo o se refiere al abierto y pide cambios, y para corregir un render roto |
-| `get_parameters` / `set_parameters` | leen los parámetros del Customizer de un checkpoint y crean un checkpoint **hijo** con otros valores (el resto del archivo no cambia): para «hazme una versión 10 mm más ancha». Si el usuario quiere el cambio en su archivo, `update_checkpoint` |
+| `edit_checkpoint` | **cambia unas líneas en el lugar sin reescribir el archivo**: `edits` = lista de `{old, new}` (texto exacto que aparece una vez) o `{from_line, to_line, new}` (rango de líneas; `to_line = from_line - 1` inserta; `new = ""` borra). Todas se resuelven contra el archivo tal como está (usa los números que leíste); si dos se solapan o una falla, no se escribe nada. La línea 1 no se edita. Guarda la versión anterior en el historial y devuelve un resumen con el render. `file` también acepta `lib/<nombre>.scad`. Es lo que usas para casi cualquier cambio de código y para corregir un render roto |
+| `update_checkpoint` | **reescribe en el lugar** un checkpoint existente (`file`, `source` completo, `note` opcional): solo para reescrituras grandes. Conserva la cabecera, guarda antes la versión anterior en su historial (el usuario puede deshacer) y devuelve el lint y el render del resultado |
+| `extract_module` | parte un modelo grande: **mueve** los `module`/`function` que nombres a `lib/<nombre>.scad` y deja un `include` (o `use`) en su lugar. Renderiza antes y después: si cambia la caja o el volumen, lo deshace. Después edita cada parte por separado (`file="lib/<nombre>.scad"`) |
+| `get_parameters` / `set_parameters` | leen los parámetros del Customizer de un checkpoint y **cambian sus valores en el lugar** (el resto del archivo no cambia; con historial): para «hazla 10 mm más alta», un color o un texto. Con `variant=true` crean un checkpoint **hijo** y dejan el original: «hazme una versión más ancha» |
 | `list_templates` / `get_template` / `create_from_template` | plantillas paramétricas listas (misma colección que la skill `openscad-templates`); `create_from_template` crea el checkpoint ya con los parámetros y la placa de esta impresora |
-| `render` | renderiza con OpenSCAD: estado, errores con línea, tamaño, volumen, triángulos, si cabe en la placa; mantiene `RENDER_ERRORS.md` |
+| `render` | renderiza con OpenSCAD y devuelve un **resumen corto**: estado, caja, volumen, si cabe en la placa, partes por color y hasta 5 errores con su línea (`verbose=true` para todo el detalle); mantiene `RENDER_ERRORS.md` |
 | `lint` / `format` | revisa (OpenSCAD + reglas SL001–SL009) y formatea código sin guardarlo |
-| `preview` | **imagen PNG** de la pieza (`view`: `iso`, `front`, `top`, `right`…, o un ángulo libre con `rotate`; con los colores del modelo) para mirarla |
+| `preview` | **imagen PNG** de la pieza: una sola vista `iso` de 384 px por defecto (`view`: `iso`, `front`, `top`, `right`…, un ángulo libre con `rotate`, varias con `views`, todas con `all`; con los colores del modelo) para mirarla |
 | `measure` / `estimate_print` / `list_materials` | medidas, volumen, ¿cabe en la placa?, partes por color y **estimación de impresión** (peso, metros de filamento y costo); `estimate_print` con otro material, relleno o perímetros |
 | `suggest_orientation` | cómo poner la pieza en la placa (las 6 caras: tamaño, si cabe, voladizo, contacto) con las operaciones listas para `edit_mesh`; si nada cabe, escala máxima y por dónde partirla |
 | `list_refs` / `inspect_reference` / `import_mesh` | lo que hay en `refs/`: los modelos (STL/3MF/OBJ, `kind: "model"`) y las imágenes (`kind: "image"`, en `refs/images/`); de un modelo: medirlo con una imagen y medirlos con una imagen y volverlos editables (checkpoint **raíz**; un 3MF u OBJ se convierte a STL y el original no se toca) |
@@ -167,17 +180,21 @@ Flujo (obligatorio, ver arriba):
    hay checkpoints, el paso 2 es inmediato y sin preguntar.
 2. Un diseño nuevo: `create_checkpoint` con el código (empezando, si encaja, por
    `create_from_template`). Cambios a un archivo que el usuario nombró o tiene
-   abierto: `read_checkpoint` + `update_checkpoint`. Una variante de una medida:
-   `get_parameters` + `set_parameters`; para un STL/3MF/OBJ de `refs/`,
-   `import_mesh` + `edit_mesh`.
-3. `render` (`update_checkpoint` ya devuelve el render del resultado). Si falla,
-   leer la línea del error y corregir con `update_checkpoint` sobre ese mismo
-   archivo.
+   abierto: `outline_checkpoint` / `find_in_checkpoint` para ubicarte,
+   `read_checkpoint` con `from`/`to` para ver solo ese rango y
+   `edit_checkpoint` para cambiarlo (no reescribas un archivo largo para
+   cambiar tres líneas); una medida, un color o un texto del Customizer:
+   `get_parameters` + `set_parameters`; reescribir todo:
+   `update_checkpoint`. Un archivo de cientos de líneas se parte con
+   `extract_module`. Para un STL/3MF/OBJ de `refs/`, `import_mesh` + `edit_mesh`.
+3. `render` (`edit_checkpoint`, `set_parameters` y `update_checkpoint` ya devuelven
+   el render del resultado). Si falla, leer la línea del error y corregir con
+   `edit_checkpoint` sobre ese mismo archivo.
 4. `preview` para mirar la pieza: un modelo puede renderizar sin errores y
    estar mal (voladizos, piezas flotando, un agujero del lado equivocado).
 5. `measure` para confirmar que cabe en la placa y ver el peso (si no cabe,
    `suggest_orientation`).
-6. Si algo no convence, otra vuelta con `update_checkpoint` (o un checkpoint nuevo
+6. Si algo no convence, otra vuelta con `edit_checkpoint` (o un checkpoint nuevo
    si es una variante) y vuelta al paso 3. `export` solo
    cuando el usuario lo pida o el modelo esté terminado, con el formato que lee
    su slicer. Abrir el archivo en el slicer
@@ -190,7 +207,7 @@ Si el usuario adjunta una foto, un logo o un boceto, queda en `refs/images/`
 `openscad-from-image`** (`read_skill`): trae el método, las medidas estándar de
 monedas y tornillería y plantillas. El flujo es el mismo de arriba con un paso
 más: `image_info` → `create_checkpoint` con primitivas y parámetros → `render` →
-`compare_with_image` desde la misma vista → corregir con `update_checkpoint`.
+`compare_with_image` desde la misma vista → corregir con `edit_checkpoint`.
 Un logo o una placa plana: `trace_image_outline`; un relieve o una litofanía:
 `image_to_heightmap`. Una foto **no trae medidas**: usa la que dé el usuario o un
 objeto conocido de la foto como escala; sin ninguna, di que el tamaño es un
@@ -198,7 +215,7 @@ supuesto. Si tu modelo no ve imágenes, no juzgues la forma a ojo: apóyate en
 `image_info`, en `trace_image_outline` y en el IoU de `compare_with_image`. Las
 imágenes se leen solo de `refs/` y `refs/images/`, hasta 20 MB y 40 MP.
 
-Sin el MCP (último recurso; no hay `update_checkpoint`): si el usuario pidió
+Sin el MCP (último recurso; no hay `edit_checkpoint` ni `update_checkpoint`): si el usuario pidió
 cambios a un archivo, haz una copia con el siguiente número y edítala, así
 queda el original; escribe el `NNN-slug.scad` con la cabecera correcta, `openscad -o exports/check.stl <archivo>.scad` para validar y
 `openscad -o exports/preview.png --render --colorscheme=Tomorrow --imgsize=800,800 --viewall --autocenter <archivo>.scad`
@@ -217,7 +234,7 @@ Si hay imágenes en `refs/images/`, leer antes `openscad-from-image`.
 | Carpeta | Qué va |
 |---|---|
 | raíz | los checkpoints `NNN-slug.scad` |
-| `lib/` | librerías OpenSCAD (BOSL2, etc.): `list_libraries` / `install_library` — ver skill `openscad-libraries` |
+| `lib/` | librerías OpenSCAD (BOSL2, etc.): `list_libraries` / `install_library` — ver skill `openscad-libraries`. Los `lib/<nombre>.scad` sueltos son módulos del propio proyecto (`extract_module`): se leen y se editan como un checkpoint, con historial; las subcarpetas (`lib/BOSL2/`) son librerías instaladas y son de solo lectura |
 | `refs/` | modelos 3D de referencia (STL/3MF/OBJ): `list_refs`; nunca se modifican. También los SVG y mapas de alturas que escriben `trace_image_outline` e `image_to_heightmap` (nunca pisan un archivo) |
 | `refs/images/` | las imágenes que el usuario adjuntó en el chat (PNG, JPEG, GIF, WebP): `image_info`, `compare_with_image`; skill `openscad-from-image` |
 | `exports/` | STL/3MF/PNG generados; se pueden borrar y regenerar |

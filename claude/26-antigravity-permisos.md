@@ -121,3 +121,48 @@ muestra al arrancar, así que sí), que un `agy` con **otra versión** acepte el
 (punto 5), qué hace `agy` en una carpeta sin confianza, y Windows (`settings.json` en `%USERPROFILE%\.gemini\antigravity-cli`; compila, no se probó).
 Cómo diagnosticar: el log de `agy` (`~/.gemini/antigravity-cli/log/cli-*.log`) dice `CLI settings initialized: permissions=&{Allow:[…]}` con las reglas
 que cargó, y `Print mode: soft-denying tool confirmation "CallMcpTool"` si igual rechazó una herramienta.
+
+## S17: la herramienta real, la shell y el turno sin respuesta (17.3, G)
+
+Tres cosas que salieron de leer una sesión real de `agy` 1.4.x (`~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl` y `log/cli-*.log`, solo lectura).
+
+**1. La tarjeta decía `call_mcp_tool`.** En 1.4.x los argumentos de la llamada viajan en `step_update.tool_info.parameters` (`ServerName`, `ToolName`, `Arguments`) —como objeto o como un JSON dentro de un texto— y ya no en `tool_input`; `unwrapAgyMCP` no los veía. `agyToolInfoInput` (`adapters.go`) los saca de ahí y `tool_info.parameters` desemboca en el mismo `unwrapAgyMCP`: la tarjeta es `edit_checkpoint`, `render`… y `mcp.CreatesCheckpoint` la reconoce. Si el resultado de un paso viene dentro de `tool_info` como objeto (`output`, `result`, `error`, `message`) también se lee. En un paso que **falló**, `tool_info` es un texto con el motivo y sigue cayendo en el detalle del paso. Fixture saneado: `backend/clichat/testdata/antigravity-mcp-1.4.jsonl` (sin rutas ni datos de nadie; el contorno `tool_info.parameters` es el que describió el usuario y el contenido —`ServerName`/`ToolName`/`Arguments`— el que muestra el transcript real). **El JSON exacto del stream de 1.4.x no se pudo ver en esta máquina** (el transcript guarda las llamadas como `args`, no el NDJSON de `--output-format stream-json`): ver «Para probar» abajo.
+
+**2. La shell: ya está bloqueada, y por eso el turno terminaba.** Lo medido (`cli-20261020_*.log` y el transcript):
+
+```
+Print mode: soft-denying tool confirmation "RunCommand" at step 163
+step 74  ERROR  permission check failed for unsandboxed "openscad -v": user denied permission to run command: …
+                Do not attempt to circumvent this denial by rephrasing the command…
+```
+
+En `agy --print` **todo lo que pide confirmación se rechaza** (igual que el MCP sin regla, [arriba](#lo-que-se-midió-con-el-agy-real-14x-y-por-qué-no-son-los-hooks)) y el turno termina ahí: `run_command` nunca llegó a ejecutarse —la tarjeta «Agente» que se veía era el intento rechazado—, y el «terminó el turno sin responder nada» era ese rechazo, no una respuesta perdida. Lo que decidí, y por qué:
+
+- **No se pasa `--sandbox`.** `agy --help`: «Run in a sandbox with terminal restrictions enabled». La guía local de Antigravity (`builtin/skills/antigravity_guide/references/app.md`) lo describe como una política de ejecución —`proceed-in-sandbox`—: los comandos **corren dentro de un sandbox** sin pedir permiso. Es lo contrario de bloquear: habilitaría la shell. Tampoco `--mode auto` (aprueba comandos) ni `--dangerously-skip-permissions`. `TestAntigravityNeverEnablesTheShell` (`args_test.go`) fija el argv: sin `--sandbox`, `--mode` solo `accept-edits` en «Agente» y nada en «Solo consulta».
+- **No se escribe ningún `deny` global.** La única regla de shell que documenta el propio `agy` es `command(...)` en `permissions.deny` del `settings.json` global, que afectaría también a la terminal interactiva del usuario; y como `--print` ya la rechaza, no aporta. Sigue valiendo lo de [arriba](#cómo-queda): ScadLab solo mantiene las reglas `mcp(scadlab/…)`.
+- **Los hooks no sirven.** `PreToolUse` con `matcher: run_command` y `decision: deny` es lo que documenta `builtin/skills/agy-customizations/docs/hooks.md`, pero T14 midió que la confirmación de permiso va **antes** de los hooks (para MCP) y aquí la confirmación de `RunCommand` es la misma; y exigiría escribir un `hooks.json` y un script en el proyecto del usuario.
+- **Se le pide al modelo que no lo intente** (`msgCLIPromptAgyShell`, en el prompt del turno de Antigravity): «no uses `run_command` ni la terminal… responde siempre con un texto breve» — un modelo que no intenta la shell no termina el turno.
+- **Se explica cuando lo intenta igual** (`agyShellDenial`, `msgCLIAgyShell`): el chat nombra el comando que Antigravity se negó a ejecutar, dice que no se ejecutó nada y qué hacer (pedir que use `edit_checkpoint`/`set_parameters`/`render`, o cambiar de proveedor). Solo con el texto de rechazo real de Antigravity (`permission check failed` / `user denied permission to run command`), no con cualquier fallo de la shell. La nota no repite el rechazo crudo.
+
+**3. El turno sin texto cuenta qué hizo.** `cliTurnText` (CLIs) y `runChatTurn` (servidores) ya no dejan solo «terminó sin responder nada»: `turnRecap` (`app_chat_recap.go`) agrega «Esto es lo que hizo antes de terminar»: las herramientas en orden (`outline_checkpoint` → `edit_checkpoint` → `render ×2`, con ✗ en las que fallaron), los archivos que quedaron creados o cambiados (o «no quedó ningún checkpoint») y el resultado de la última herramienta resumido a sus campos útiles (`file`, `status`, `updated`, `watertight`…). El resultado que ya explica otra nota —un rechazo de permisos, la shell— no se repite.
+
+### Para probar con el `agy` real (no se pudo aquí)
+
+Ninguna abre un prompt en esta sesión de desarrollo: son comandos para que los corras tú, en una carpeta cualquiera.
+
+```sh
+# 1. ¿La shell se rechaza en --print? Esperado: un paso run_command con state ERROR y «permission check failed for unsandboxed …».
+agy --print "ejecuta echo hola con run_command" --output-format stream-json --mode accept-edits | tee /tmp/agy-shell.jsonl
+grep -c 'soft-denying tool confirmation "RunCommand"' ~/.gemini/antigravity-cli/log/cli-*.log   # sube en 1 por intento
+
+# 2. ¿--sandbox ejecuta el comando en vez de rechazarlo? (por eso ScadLab NO lo pasa). Esperado: el paso termina en DONE con «hola».
+agy --sandbox --print "ejecuta echo hola con run_command" --output-format stream-json --mode accept-edits
+
+# 3. El NDJSON exacto de una llamada MCP en 1.4.x (donde está tool_info.parameters):
+agy --print "llama a la herramienta printer_info del servidor scadlab" --output-format stream-json | head -40 > /tmp/agy-mcp.jsonl
+#   compara el step_update ACTIVE de call_mcp_tool con backend/clichat/testdata/antigravity-mcp-1.4.jsonl;
+#   si el contorno es otro, el cambio va en agyToolInfoInput (adapters.go) y el fixture.
+
+# 4. En el chat de ScadLab con Antigravity en «Agente»: pide «mide la maceta con python»: la tarjeta run_command sale roja y el
+#    mensaje nombra el comando bloqueado y dice «Nothing was run / No se ejecutó nada».
+```

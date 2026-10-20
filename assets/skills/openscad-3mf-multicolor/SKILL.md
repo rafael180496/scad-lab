@@ -14,9 +14,29 @@ es su sistema multicolor y qué slicer usa.
 - Cada región de color es un **sólido separado**, de primer nivel, envuelto en
   su propio `color()`. La app agrupa por color: mismo string de color = mismo
   filamento.
-- **Las piezas de colores distintos NO se solapan.** Si el texto va incrustado
-  en la base, réstalo de la base. Un solape hace que el slicer decida quién gana
-  (o falle) y el resultado no es predecible.
+- **Las piezas de colores distintos NO se solapan** (que se toquen sí). Si el texto
+  va incrustado en la base, réstalo de la base. Un solape hace que el slicer decida
+  quién gana en esa franja y el resultado no es predecible; si un relieve necesita
+  agarrarse a la pared, que entre como mucho 0.1–0.2 mm.
+- **El `color()` va en el nivel superior del archivo, no dentro de un módulo ni de
+  `union()`.** OpenSCAD funde todo lo del nivel superior en un solo sólido; ScadLab pide
+  que **no** funda los `color()` que cuelgan directamente de él (también a través de
+  `if` y `for`) y así cada color llega al slicer como un sólido **cerrado**. Si un color
+  queda dentro de `union()`, `intersection()`, un `translate()` que agrupa colores o un
+  módulo que contiene varios `color()`, la cara por la que tocaba al otro color
+  desaparece y esa parte llega **abierta**: Bambu Studio la lamina mal (rellena el
+  hueco de una maceta y llena de soportes) y la exportación avisa «no es un sólido
+  cerrado».
+
+  ```openscad
+  // Bien: cada color() en el nivel superior, los módulos solo hacen la geometría
+  color(c_maceta)  maceta();
+  color(c_detalle) relieve();
+
+  // Mal: el módulo contiene los color() (o van dentro de union()) y se funden
+  module ensamble() { color(c_maceta) maceta(); color(c_detalle) relieve(); }
+  ensamble();
+  ```
 - Usa nombres o hex estables y declarados como parámetros:
 
   ```openscad
@@ -130,8 +150,12 @@ slicer recomendado de la impresora (`slicer`) y los otros posibles (`slicers`).
 Cómo asignar los extrusores en cada uno:
 
 - **Bambu Studio / Orca / Creality Print / Anycubic / Elegoo / Snapmaker Orca**: el
-  `3mf` abre **un objeto con partes**; cada parte ya trae su extrusor (1..N). Los
-  colores de los filamentos los pone el sistema multicolor del usuario.
+  `3mf` abre **un objeto con partes**; cada parte ya trae su extrusor (1..N) y su color
+  (`<m:colorgroup>`). En Bambu Studio, al abrirlo sale la ventana «Standard 3mf Import
+  color» con los colores del modelo («Append» los agrega como filamentos nuevos; «Color match»
+  los empareja con los del AMS): se acepta con OK. En 02.08.02.x antes sale un aviso de «configuración no válida»
+  (defecto de esa versión; el archivo carga igual). Si no se acepta el cuadro, la parte 2
+  solo conserva su extrusor si el proyecto ya tiene 2 filamentos o más.
 - **PrusaSlicer**: el `3mf-prusa` abre **un objeto con partes**, cada una con su
   extrusor. Con `stl-per-color`: abre todos los STL juntos y responde **Sí** a
   «¿cargar como un solo objeto con varias partes?»; luego asigna el extrusor de
@@ -149,7 +173,11 @@ usuario en su slicer. `displaycolor` solo sirve para verlos en el visor de ScadL
 (2024+) y la versión 2025 exportan 3MF conservando `color()`, especialmente con el
 backend Manifold; la 2021.01 estable **no** guarda colores en 3MF. Sale **un solo
 objeto con color por triángulo** (`basematerials`), que un slicer puede abrir pero
-sin partes ni extrusores: ScadLab lo reparte por color (`export`) para dárselos.
+sin partes ni extrusores: ScadLab lo reparte por color (`export`) para dárselos. Ojo:
+OpenSCAD **funde** los colores del nivel superior en ese objeto, y repartirlo por color
+deja cáscaras abiertas donde dos colores se tocan; ScadLab lo resuelve renderizando con
+`--enable=lazy-union` (cada `color()` del nivel superior como sólido propio). A mano:
+`openscad --enable=lazy-union -o modelo.3mf modelo.scad`.
 
 **Opción B — un objeto por color** (cualquier versión de OpenSCAD):
 
@@ -166,7 +194,8 @@ partes (ver arriba). El formato interno de los 3MF está en
 ## 5. Reglas rápidas
 
 - [ ] Un `color()` de primer nivel por color, con color en parámetro.
-- [ ] Sin solapes entre colores (restar donde haga falta).
+- [ ] Sin solapes entre colores (restar donde haga falta); a lo sumo 0.1–0.2 mm donde un relieve necesite agarrarse.
+- [ ] Los `color()` en el nivel superior (no dentro de módulos ni de `union()`): si no, las partes llegan abiertas.
 - [ ] Parámetro `PART` para exportar cada color por separado.
 - [ ] Colores totales ≤ `colors` del workspace (`printer.json`).
 - [ ] Formato de exportación según el slicer de la impresora (tabla de la sección 4).

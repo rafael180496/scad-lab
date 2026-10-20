@@ -1,10 +1,10 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Bot, Settings as SettingsIcon} from 'lucide-react'
-import {CancelChat, ChatCheckpointParent, DeleteChat, EnsureAntigravityMCP, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, RemoveChatAttachment, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatMode, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
+import {CancelChat, ChatCheckpointParent, DeleteChat, EnsureAntigravityMCP, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, NewChatWithSummary, RemoveChatAttachment, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatMode, SetChatModel, SetChatToolProfile, SetLastModel} from '../../../wailsjs/go/main/App'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
-import {contextUsage, estimateTokens} from '../../lib/chatContext'
+import {contextAdvice, contextUsage, estimateTokens, fixedOverhead, windowLimit} from '../../lib/chatContext'
 import {asksToCreate} from '../../lib/chatIntent'
 import {useProviderHealth} from '../../lib/chatHealth'
 import {chatModeValue, isAgentMode} from '../../lib/chatMode'
@@ -21,6 +21,7 @@ import {toast} from '../ui/Toast'
 import {DropOverlay} from './AttachmentChips'
 import {ChatHeader} from './ChatHeader'
 import {Composer, type AgentControl} from './Composer'
+import {ContextNotice} from './ContextNotice'
 import {EmptyChat} from './EmptyChat'
 import {FromImageDialog} from './FromImageDialog'
 import {HealthBanner} from './HealthIndicators'
@@ -28,7 +29,8 @@ import {withVault} from '../../lib/vault'
 import {MessageList} from './Messages'
 import {NoVisionNotice} from './NoVisionNotice'
 import {SwitchAgentNotice} from './SwitchAgentNotice'
-import {clearStream, ensureChatEvents, startStream, syncStream, useStreamFinished, useStreamRunning, useStreamStartedAt} from './chatStreams'
+import type {ToolProfile} from './ToolsControl'
+import {clearStream, ensureChatEvents, setChatContext, startStream, syncStream, useChatContextInfo, useStreamFinished, useStreamRunning, useStreamStartedAt} from './chatStreams'
 import {useChatAttachments} from './useChatAttachments'
 import {useChatTier} from './useChatTier'
 import {headerDescription} from './scadBlock'
@@ -152,6 +154,13 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     useEffect(() => setDraftAgent(true), [chatId, workspaceId])
     // El guardado en curso del último cambio de modo: un envío inmediato espera a que termine.
     const modeSaving = useRef<Promise<unknown>>(Promise.resolve())
+    // S17: el perfil de herramientas también es de cada conversación (chats.tools). Mientras no hay chat abierto es un
+    // borrador ('' = Auto) que se guarda en la conversación al crearla.
+    const [draftTools, setDraftTools] = useState<ToolProfile>('')
+    useEffect(() => setDraftTools(''), [chatId, workspaceId])
+    const ctxInfo = useChatContextInfo(chatId)
+    const [summarizing, setSummarizing] = useState(false)
+    const [adviceDismissed, setAdviceDismissed] = useState('')
     const [maxSteps, setMaxSteps] = useState(rememberedSteps)
     // «Crear desde una imagen» (S15): el diálogo, la señal que abre el selector de modelos filtrado a los que ven imágenes
     // (aviso sin visión) y el envío automático del pedido que armó el diálogo (ver más abajo).
@@ -274,6 +283,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
             const v = await GetChat(id)
             if (seq !== loadSeq.current) return
             setMessages(v.messages ?? [])
+            if (v.context) setChatContext({...v.context, profile: v.context.profile === 'essential' || v.context.profile === 'full' ? v.context.profile : ''})
             syncStream(id, v)
             // Una respuesta que terminó con el panel cerrado ya está en `messages`.
             if (!v.running) clearStream(id)
@@ -391,8 +401,43 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     }
 
     // ── Contexto ────────────────────────────────────────────────────────────
+    // S17: la ventana es la efectiva del último turno (lo que se le pide a Ollama) y suma lo fijo de cada vuelta —prompt de
+    // sistema y herramientas declaradas— que el servidor ya reportó; antes del primer turno, la del modelo.
     const historyTokens = useMemo(() => messages.reduce((n, m) => n + estimateTokens(m.content), 0), [messages])
-    const context = contextUsage(historyTokens, text, activeInfo?.contextTokens ?? 0)
+    const toolsValue: ToolProfile = (current ? current.tools : draftTools) === 'essential' ? 'essential' : (current ? current.tools : draftTools) === 'full' ? 'full' : ''
+    // Lo fijo de cada vuelta (prompt y herramientas) solo vale mientras el perfil elegido sea el del último turno: si recién se
+    // cambió de perfil, esos números son los del anterior y se ignoran hasta que el próximo turno informe los nuevos.
+    const freshInfo = ctxInfo && (toolsValue === '' || toolsValue === ctxInfo.profile) ? ctxInfo : null
+    const context = contextUsage(historyTokens, text, windowLimit(ctxInfo, activeInfo?.contextTokens ?? 0), fixedOverhead(freshInfo))
+    const advice = !cli && current && !running ? contextAdvice(freshInfo, context, true, messages.length > 0) : null
+    const adviceKey = advice ? `${current?.id}:${advice.kind}` : ''
+    const setTools = (p: ToolProfile) => {
+        if (!current) {
+            setDraftTools(p)
+            return
+        }
+        const id = current.id
+        setChats((prev) => prev.map((c) => (c.id === id ? {...c, tools: p} : c)))
+        SetChatToolProfile(id, p).catch((e) => {
+            toast.error(errorText(e))
+            if (workspaceId != null) void reloadChats(workspaceId)
+        })
+    }
+    // «Nueva conversación con resumen»: el modelo resume esta conversación y se sigue en una nueva que empieza con ese resumen.
+    const summarize = async () => {
+        if (!current || workspaceId == null || summarizing) return
+        setSummarizing(true)
+        try {
+            const nc = await NewChatWithSummary(current.id)
+            await reloadChats(workspaceId)
+            setChatId(nc.id)
+            toast.ok(t.chat.contextNotice.opened)
+        } catch (e) {
+            toast.error(errorText(e))
+        } finally {
+            setSummarizing(false)
+        }
+    }
 
     // ── Enviar / detener ────────────────────────────────────────────────────
     // `asFiles` (S15, «Usar trazado de contorno»): las fotos viajan solo como archivos de refs/images y el mensaje pide
@@ -415,6 +460,10 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 if (!draftAgent) {
                     await SetChatMode(c.id, chatModeValue(false))
                     c = {...c, mode: 'ask'}
+                }
+                if (draftTools !== '' && !isCLI(providerId)) {
+                    await SetChatToolProfile(c.id, draftTools)
+                    c = {...c, tools: draftTools}
                 }
                 remember(providerId, model)
                 id = c.id
@@ -705,6 +754,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 model={{value: pickerModel, models, defaultHint, loading: modelsLoading, error: modelsError, onChange: onModel, onReload: reloadModels, openSignal: visionSignal, visionOnly: true}}
                 mode={{agent: agentOn, onChange: setAgent, unavailable: noTools ? t.chat.agent.noTools : '', kind: cli ? 'cli' : 'server', disabled: false}}
                 modeKind={cli ? 'cli' : 'server'}
+                tools={!cli && effectiveAgent ? {value: toolsValue, resolved: ctxInfo?.profile ?? '', onChange: setTools, disabled: running} : undefined}
                 workspaceName={workspaceName}
                 onSelect={setChatId}
                 onNew={newChat}
@@ -719,6 +769,12 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 empty={<EmptyChat provider={provider} modelLabel={modelLabel} agent={effectiveAgent} onPick={setText} onFromImage={() => setFromImageOpen(true)} />}
             />
             {showBanner ? <HealthBanner health={health} name={provider?.name ?? pickerProviderId} onRetry={recheckHealth} /> : null}
+            {advice && adviceDismissed !== adviceKey ? (
+                <ContextNotice advice={advice} busy={summarizing} onSummarize={() => void summarize()} onNarrow={() => {
+                        setTools('essential')
+                        setAdviceDismissed(adviceKey)
+                    }} onDismiss={() => setAdviceDismissed(adviceKey)} />
+            ) : null}
             {showSwitch ? <SwitchAgentNotice onSwitch={() => setAgent(true)} onDismiss={() => setNoticeDismissed(askText)} /> : null}
             {attach.blockedCount > 0 ? <NoVisionNotice disabled={running} onSwitch={() => setVisionSignal((n) => n + 1)} onTrace={() => void doSend(true)} /> : null}
             <Composer

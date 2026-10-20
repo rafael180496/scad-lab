@@ -150,6 +150,9 @@ type modelCaps struct {
 	Tools, ToolsKnown   bool
 	// Precios en dólares por millón de tokens; 0 = desconocido.
 	PromptPricePerM, CompletionPricePerM float64
+	// ContextTokens es la ventana que informó el proveedor (0 = no la dijo): con
+	// ella se decide el num_ctx de Ollama y el perfil de herramientas (S17).
+	ContextTokens int
 }
 
 // assumeVision dice si se le mandan imágenes: ve, o no se sabe (se manda igual y
@@ -166,6 +169,7 @@ func (a *App) modelCapabilities(srv store.ModelServer, client llm.Client, model 
 		return modelCaps{
 			Vision: m.Vision, VisionKnown: m.VisionKnown, Tools: m.Tools, ToolsKnown: m.ToolsKnown,
 			PromptPricePerM: m.PromptPricePerM, CompletionPricePerM: m.CompletionPricePerM,
+			ContextTokens: m.ContextTokens,
 		}
 	}
 	if m, ok := a.serverModelInfo(srv.ID, model); ok {

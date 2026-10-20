@@ -132,30 +132,40 @@ func esc(s string) string {
 	return b.String()
 }
 
-// ids: 1 = <basematerials>, 2..N+1 = una malla por parte, N+2 = el objeto que
-// las agrupa.
-func objectIDs(parts []Part) (partIDs []int, container int) {
+// nsMaterials es el espacio de nombres de la extensión Materials del 3MF, donde
+// vive <m:colorgroup>. El prefijo «m:» no es adorno: el lector de Bambu Studio
+// (y el de Orca) abre el XML con expat sin procesar espacios de nombres y compara
+// el nombre de la etiqueta literal con "m:colorgroup" / "m:color"
+// (bbs_3mf.cpp, COLOR_GROUP_TAG y COLOR_TAG). Con otro prefijo no ve ningún color.
+const nsMaterials = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+
+// ids: 1..N = un <m:colorgroup> por parte (un solo color cada uno), N+1..2N = una
+// malla por parte, 2N+1 = el objeto que las agrupa. Los ids de materiales y de
+// objetos comparten espacio en el 3MF, por eso no se repiten.
+func objectIDs(parts []Part) (groupIDs, partIDs []int, container int) {
+	n := len(parts)
 	for i := range parts {
-		partIDs = append(partIDs, 2+i)
+		groupIDs = append(groupIDs, 1+i)
+		partIDs = append(partIDs, 1+n+i)
 	}
-	return partIDs, 2 + len(parts)
+	return groupIDs, partIDs, 2*n + 1
 }
 
 func writeModel(w *bufio.Writer, parts []Part, opts WriteOptions) {
-	partIDs, container := objectIDs(parts)
+	groupIDs, partIDs, container := objectIDs(parts)
 	w.WriteString(xmlHeader)
-	w.WriteString(`<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">` + "\n")
+	w.WriteString(`<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="` + nsMaterials + `">` + "\n")
 	w.WriteString(` <metadata name="Application">` + applicationName + `</metadata>` + "\n")
 	w.WriteString(` <metadata name="Title">` + esc(opts.Title) + `</metadata>` + "\n")
 	w.WriteString(` <resources>` + "\n")
-	w.WriteString(`  <basematerials id="1">` + "\n")
-	for _, p := range parts {
-		w.WriteString(`   <base name="` + esc(p.Name) + `" displaycolor="` + p.Color.Hex() + `FF"/>` + "\n")
+	// El color de cada parte va en su propio <m:colorgroup>, no en <basematerials>:
+	// Bambu Studio solo lee el primero (ver el comentario de applicationName).
+	for i, p := range parts {
+		w.WriteString(`  <m:colorgroup id="` + strconv.Itoa(groupIDs[i]) + `"><m:color color="` + p.Color.Hex() + `FF"/></m:colorgroup>` + "\n")
 	}
-	w.WriteString(`  </basematerials>` + "\n")
 
 	for i, p := range parts {
-		w.WriteString(`  <object id="` + strconv.Itoa(partIDs[i]) + `" name="` + esc(p.Name) + `" type="model" pid="1" pindex="` + strconv.Itoa(i) + `">` + "\n")
+		w.WriteString(`  <object id="` + strconv.Itoa(partIDs[i]) + `" name="` + esc(p.Name) + `" type="model" pid="` + strconv.Itoa(groupIDs[i]) + `" pindex="0">` + "\n")
 		if opts.CuraExtruders {
 			// Va antes de <mesh>: es el orden del esquema 3MF (metadatagroup, luego
 			// mesh o components). Cura resta 1: su primer extrusor es el 0.
@@ -221,7 +231,7 @@ func itemTransform(parts []Part, opts WriteOptions) string {
 }
 
 func writeModelSettings(w *bufio.Writer, parts []Part, opts WriteOptions) {
-	partIDs, container := objectIDs(parts)
+	_, partIDs, container := objectIDs(parts)
 	cid := strconv.Itoa(container)
 	w.WriteString(xmlHeader)
 	w.WriteString("<config>\n")
@@ -245,13 +255,28 @@ func writeModelSettings(w *bufio.Writer, parts []Part, opts WriteOptions) {
 	w.WriteString("</config>\n")
 }
 
-// applicationName NO empieza con «BambuStudio-» a propósito. Con ese prefijo
-// Bambu Studio trata el archivo como un proyecto suyo y exige un
-// project_settings.config completo (el de 555 claves que él mismo guarda); uno
-// parcial lo hace caerse (verificado: segfault de la CLI 02.08.02.61, con
-// config ausente, vacío o con solo filament_colour). Como archivo de «otro
-// fabricante» solo carga geometría y la estructura de objeto/partes de
-// model_settings.config, que es justo lo que hace falta: partes con su nombre y
-// su extrusor. Los colores de los filamentos los pone la impresora/AMS del
-// usuario, no el archivo.
+// applicationName NO empieza con «BambuStudio-» ni dice «PrusaSlicer», a propósito.
+// Lo que hace cada valor en Bambu Studio 02.08.02.61 (bbs_3mf.cpp, Model.cpp y
+// Plater.cpp del tag v02.08.02.61; el 02.08.04.61 es igual en lo que importa):
+//
+//   - «BambuStudio-x.y.z»: m_is_bbl_3mf = true. Entonces NO se guarda el color por
+//     triángulo (`if (!m_is_bbl_3mf)` de _handle_start_triangle y de
+//     _generate_volumes_new), así que el cuadro «colores del 3MF → filamentos» nunca
+//     aparece, y además se lee Metadata/project_settings.config, que tiene que ser el
+//     completo (el parcial hizo caerse la CLI 02.08.02.61).
+//   - «PrusaSlicer…»: Model::read_from_archive lo manda por el lector de Prusa
+//     (check_3mf_from_prusa) y Bambu muestra «el 3mf no es de Bambu Lab».
+//   - Cualquier otro valor: archivo de «otro fabricante». Se carga geometría, las
+//     partes y el extrusor de model_settings.config, y el color de cada parte se
+//     lee de <m:colorgroup> (ver writeModel). Con esos colores Bambu Studio abre
+//     «Standard 3mf Import color»: por defecto («Append») agrega los colores del modelo
+//     como filamentos nuevos, o los empareja con los que hay («Color match»), y al
+//     aceptar asigna el extrusor de cada parte (ObjColorPanel::apply_volume_filament_ids).
+//
+// Sin ese cuadro, el extrusor 2 de una parte se pierde si el proyecto tiene un solo
+// filamento: GLCanvas3D::reload_scene llama a ModelVolume::update_extruder_count, que
+// borra el `extruder` mayor que la cantidad de filamentos, y el bloque que agrega
+// filamentos en Plater::load_files corre ANTES de decidir load_config=false. Así
+// funcionaba el 3MF anterior (con <basematerials>, que Bambu no lee): una sola pieza
+// de un solo color.
 const applicationName = "ScadLab"

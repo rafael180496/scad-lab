@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -95,7 +96,7 @@ func TestCLISafetyNetSavesAndRendersATextOnlyAnswer(t *testing.T) {
 			if steps[0].Status != "ok" || !strings.Contains(steps[0].Text, files[1]) || steps[0].Args["file"] != files[1] {
 				t.Errorf("paso de guardado: %+v", steps[0])
 			}
-			if steps[1].Status != "ok" || !strings.Contains(steps[1].Text, `"status": "ok"`) || !strings.Contains(steps[1].Text, `"triangles"`) {
+			if steps[1].Status != "ok" || !regexp.MustCompile(`"status":\s*"ok"`).MatchString(steps[1].Text) || !strings.Contains(steps[1].Text, `"triangles"`) {
 				t.Errorf("el render debía andar de verdad: %+v", steps[1])
 			}
 			for _, e := range stepsOf(ev) {

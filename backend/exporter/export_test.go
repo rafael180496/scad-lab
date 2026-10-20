@@ -21,6 +21,7 @@ import (
 	"scadlab/backend/printers"
 	"scadlab/backend/render"
 	"scadlab/backend/threemf"
+	"scadlab/backend/threemf/bbscheck"
 )
 
 const nameplateTemplate = "skills/openscad-templates/templates/nameplate-two-color.scad"
@@ -117,8 +118,13 @@ func TestNameplateTwoPartsMatchSTL(t *testing.T) {
 	for _, i := range infos {
 		total += i.Triangles
 	}
-	if total != stlInfo.Triangles {
-		t.Errorf("triángulos de las partes %d, del STL %d", total, stlInfo.Triangles)
+	// Las partes ya no son el reparto del sólido fundido (con la cara de contacto perdida)
+	// sino un sólido cerrado por color: su cantidad de triángulos no tiene por qué coincidir
+	// con la del STL fundido. Lo que sí tiene que coincidir es la geometría (abajo).
+	for _, i := range infos {
+		if i.Triangles == 0 {
+			t.Errorf("parte sin triángulos: %+v", i)
+		}
 	}
 
 	dest := filepath.Join(t.TempDir(), "placa.3mf")
@@ -384,7 +390,7 @@ func checkPackage(t *testing.T, path string, nParts int) {
 		}
 	}
 	m := have["3D/3dmodel.model"]
-	if !strings.Contains(m, `unit="millimeter"`) || strings.Count(m, "<mesh>") != nParts || strings.Count(m, "<base ") != nParts {
+	if !strings.Contains(m, `unit="millimeter"`) || strings.Count(m, "<mesh>") != nParts || strings.Count(m, "<m:colorgroup ") != nParts {
 		t.Errorf("modelo: unit/mallas/materiales no cuadran con %d partes", nParts)
 	}
 	if strings.Count(have["Metadata/model_settings.config"], "<part ") != nParts {
@@ -485,8 +491,8 @@ func TestNameplatePrusa3MF(t *testing.T) {
 			}
 		}
 	}
-	if next != stlInfo.Triangles {
-		t.Errorf("los rangos cubren %d triángulos, el STL tiene %d", next, stlInfo.Triangles)
+	if next != infos[0].Triangles+infos[1].Triangles {
+		t.Errorf("los rangos cubren %d triángulos, las partes suman %d", next, infos[0].Triangles+infos[1].Triangles)
 	}
 
 	// Mismo volumen que el STL: se relee el 3MF escrito y se vuelca a un STL.
@@ -547,4 +553,86 @@ func TestNameplateNormal3MFHasNoCuraExtruders(t *testing.T) {
 		t.Errorf("model_settings.config cambió:\n%s", cfg)
 	}
 	checkPackage(t, dest, 2)
+}
+
+const potWithReliefText = `// @checkpoint parent= desc="Maceta con texto en relieve"
+color("#3A7D44") difference() {
+    cylinder(h = 40, r1 = 25, r2 = 32, $fn = 64);
+    translate([0, 0, 3]) cylinder(h = 40, r1 = 22, r2 = 29, $fn = 64);
+}
+// Texto en relieve de otro color, pegado a la pared de la maceta.
+color("#E76F51") translate([0, -27.5, 18]) rotate([90, 0, 0])
+    linear_extrude(height = 2) text("Hola", size = 8, halign = "center", valign = "center");
+`
+
+// El 3MF que se entrega, releído como lo hace Bambu Studio 02.08.02.61 (bbscheck es un
+// port de bbs_3mf.cpp): las dos partes llegan con su color y su extrusor, y se abre el
+// cuadro de colores del 3MF. No se abre Bambu Studio (regla 9).
+func TestBambuStudioReadsTwoColorModels(t *testing.T) {
+	cases := []struct {
+		name   string
+		setup  func(r *rig) string
+		colors []string
+	}{
+		{"nameplate-two-color", func(r *rig) string { r.nameplate(); return "001-nameplate.scad" }, []string{"#FFFFFF", "#D32F2F"}},
+		{"maceta-con-texto", func(r *rig) string { r.write("001-maceta.scad", potWithReliefText); return "001-maceta.scad" }, []string{"#3A7D44", "#E76F51"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t)
+			file := tc.setup(r)
+			p, err := Prepare(context.Background(), r.job(file), Format3MF)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := hexes(p); strings.Join(got, ",") != strings.Join(tc.colors, ",") {
+				t.Fatalf("partes %v, esperaba %v", got, tc.colors)
+			}
+			dest := filepath.Join(t.TempDir(), "modelo.3mf")
+			if err := p.Write(dest); err != nil {
+				t.Fatal(err)
+			}
+			checkPackage(t, dest, 2)
+
+			res, err := bbscheck.Import(dest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.IsBBL || res.FromPrusa || res.HasProjectConfig {
+				t.Fatalf("Application %q: tiene que ser un archivo de otro fabricante", res.Application)
+			}
+			if len(res.Objects) != 1 || len(res.Objects[0].Volumes) != 2 {
+				t.Fatalf("objetos: %+v", res.Objects)
+			}
+			d := res.ColorDialog()
+			if !d.Shown || !d.AssignsVolumeExtruders || len(d.Colors) != 2 {
+				t.Fatalf("cuadro de colores: %+v", d)
+			}
+			for i, v := range res.Objects[0].Volumes {
+				want, _ := hexRGBA(tc.colors[i])
+				if v.Extruder != i+1 || d.VolumeColors[0][i] == nil || *d.VolumeColors[0][i] != want {
+					t.Errorf("parte %d: extrusor %d color %v, esperaba %d y %v", i, v.Extruder, d.VolumeColors[0][i], i+1, want)
+				}
+			}
+			// Con un solo filamento y sin el cuadro, la 2.ª parte cae al extrusor 1;
+			// con dos se mantiene (los AMS de los usuarios suelen tener 4).
+			if got := res.ExtruderAfterLoad(2); got[0][0] != 1 || got[0][1] != 2 {
+				t.Errorf("extrusores con 2 filamentos: %v", got)
+			}
+		})
+	}
+}
+
+func hexRGBA(h string) ([4]uint8, bool) {
+	var c [4]uint8
+	c[3] = 255
+	h = strings.TrimPrefix(h, "#")
+	for i := 0; i < 3; i++ {
+		v, err := strconv.ParseUint(h[2*i:2*i+2], 16, 8)
+		if err != nil {
+			return c, false
+		}
+		c[i] = uint8(v)
+	}
+	return c, true
 }

@@ -173,7 +173,7 @@ func TestFromImageSkillTemplatesRender(t *testing.T) {
 					t.Errorf("tamaño %s = %.2f, esperaba %.2f ± %.1f (%v)", axis, got, c.size[i], c.tol, size)
 				}
 			}
-			if r["mesh"].(map[string]any)["volumeMm3"].(float64) <= 0 {
+			if r["mesh"].(map[string]any)["volumeCm3"].(float64) <= 0 {
 				t.Errorf("volumen: %v", r["mesh"])
 			}
 			l := tb.mustJSON(t, "lint", map[string]any{"file": file})

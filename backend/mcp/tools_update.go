@@ -2,13 +2,11 @@ package mcp
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"scadlab/backend/checkpoint"
 	"scadlab/backend/i18n"
-	"scadlab/backend/render"
 )
 
 // update_checkpoint (S16): la IA edita EN EL LUGAR el archivo que el usuario
@@ -52,60 +50,32 @@ func (e *env) updateCheckpoint(ctx context.Context, args map[string]any) (*toolR
 	if err != nil {
 		return nil, err
 	}
+	verbose := verboseArg(args)
 
-	out := map[string]any{
-		"file":        file,
-		"updated":     true,
-		"unchanged":   up.Unchanged,
-		"parent":      up.Parent,
-		"description": up.Description,
-	}
+	// `updated` va primero: lo lee la interfaz (UpdatesInPlace) y no debe quedar
+	// detrás de un render largo si el resultado se recorta.
+	out := ordered{{"file", file}, {"updated", true}, {"unchanged", up.Unchanged}}
 	if !up.Unchanged {
-		out["version"] = up.Version
+		out.set("version", up.Version.ID)
 	}
+	out.set("parent", up.Parent)
+	out.set("description", up.Description)
+	ref := fileRef{Key: file, Path: filepath.Join(e.ws, file)}
+	e.verifyWritten(ctx, &out, ref, verbose)
 
-	// Lint y render sobre lo que quedó en el disco (con su cabecera).
-	if raw, rerr := os.ReadFile(filepath.Join(e.ws, file)); rerr == nil {
-		if ds, _, lerr := e.lintSource(ctx, s, string(raw), file); lerr == nil {
-			if len(ds) > maxDiagnostics {
-				ds = ds[:maxDiagnostics]
-			}
-			out["lint"] = ds
+	if verbose {
+		switch {
+		case up.Unchanged:
+			out.set("next", msgf(i18n.Msg{
+				ES: "El código es idéntico al que ya tiene %s: no se escribió nada ni se guardó respaldo.",
+				EN: "The code is identical to what %s already has: nothing was written and no backup was saved.",
+			}, file))
+		default:
+			out.set("next", msgf(i18n.Msg{
+				ES: "%s quedó actualizado; la versión anterior está en su historial (se puede deshacer desde ScadLab).",
+				EN: "%s is updated; the previous version is in its history (it can be undone from ScadLab).",
+			}, file))
 		}
 	}
-	if _, has := out["lint"]; !has {
-		out["lint"] = []any{}
-	}
-	res, _, rerr := e.render(ctx, file)
-	switch {
-	case rerr != nil:
-		// El archivo ya cambió: el fallo es de verificar, no de editar.
-		out["render"] = map[string]any{"ok": false, "message": rerr.Error()}
-	case res.Status != render.StatusOK:
-		fail := e.renderFailure(file, res)
-		fail["ok"] = false
-		out["render"] = fail
-	default:
-		sum, serr := e.renderSummary(file, res, s)
-		if serr != nil {
-			out["render"] = map[string]any{"ok": false, "message": serr.Error()}
-			break
-		}
-		sum["ok"] = true
-		out["render"] = sum
-	}
-
-	switch {
-	case up.Unchanged:
-		out["next"] = msgf(i18n.Msg{
-			ES: "El código es idéntico al que ya tiene %s: no se escribió nada ni se guardó respaldo.",
-			EN: "The code is identical to what %s already has: nothing was written and no backup was saved.",
-		}, file)
-	default:
-		out["next"] = msgf(i18n.Msg{
-			ES: "%s quedó actualizado; la versión anterior está en su historial (se puede deshacer desde ScadLab).",
-			EN: "%s is updated; the previous version is in its history (it can be undone from ScadLab).",
-		}, file)
-	}
-	return jsonResult(out)
+	return compactResult(out)
 }

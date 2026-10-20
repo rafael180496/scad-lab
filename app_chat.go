@@ -42,6 +42,10 @@ const (
 	evChatUsage = "chat:usage"
 	evChatDone  = "chat:done"
 	evChatError = "chat:error"
+	// evChatContext (S17) anuncia, al empezar un turno con un servidor, la ventana
+	// efectiva, lo que pesan el prompt y las herramientas, el perfil y si es
+	// demasiado para esa ventana.
+	evChatContext = "chat:context"
 )
 
 // ChatDeltaEvent es un trozo de la respuesta. Seq cuenta los trozos del turno
@@ -71,6 +75,22 @@ type ChatUsageEvent struct {
 	InputTokens  int64   `json:"inputTokens"`
 	OutputTokens int64   `json:"outputTokens"`
 	CostUSD      float64 `json:"costUsd"`
+	// S17: tiempo y ocupación del contexto del turno (ver hermes.Usage). Las
+	// tokens de arriba son la SUMA de las vueltas; PeakInput es el contexto real.
+	ModelMs        int64 `json:"modelMs"`
+	ToolMs         int64 `json:"toolMs"`
+	Rounds         int   `json:"rounds"`
+	PeakInput      int64 `json:"peakInput"`
+	LastInput      int64 `json:"lastInput"`
+	InputEstimated bool  `json:"inputEstimated"`
+}
+
+// usageEvent arma el evento de uso de un chat con el uso acumulado u.
+func usageEvent(chatID int64, u hermes.Usage) ChatUsageEvent {
+	return ChatUsageEvent{
+		ChatID: chatID, InputTokens: u.Input, OutputTokens: u.Output, CostUSD: u.CostUSD,
+		ModelMs: u.ModelMs, ToolMs: u.ToolMs, Rounds: u.Rounds, PeakInput: u.PeakInput, LastInput: u.LastInput, InputEstimated: u.InputEstimated,
+	}
 }
 
 // ChatDoneEvent cierra un turno. MessageID es la respuesta guardada (0 si no
@@ -102,6 +122,10 @@ type ChatView struct {
 	// Steps y Usage son los del turno en curso (vacíos si no hay).
 	Steps []hermes.Step `json:"steps"`
 	Usage hermes.Usage  `json:"usage"`
+	// Context (S17) es lo último que se supo de la ventana del chat en esta sesión
+	// (el evento chat:context del último turno con un servidor); nil si todavía no
+	// corrió ninguno desde que se abrió la app.
+	Context *ChatContextEvent `json:"context"`
 }
 
 // SendOptions son las opciones de un envío. MaxSteps es el tope de llamadas a
@@ -139,6 +163,11 @@ func (o SendOptions) agentFor(c store.Chat) bool {
 // mandar medio megabyte a un modelo local ni a un proveedor que cobra por token.
 const maxChatTextBytes = 100 * 1024
 
+var msgServerEmptyTurn = i18n.Msg{
+	ES: "El modelo terminó el turno sin escribir una respuesta.",
+	EN: "The model finished the turn without writing an answer.",
+}
+
 // chatDefaultNumCtx es la ventana que se le pide a Ollama: su default (2k–4k)
 // recorta el prompt SIN avisar, y el de sistema más el código abierto ya
 // pasan de eso. Se puede cambiar con `numCtx` en la config del proveedor.
@@ -159,6 +188,8 @@ type chatService struct {
 	// noTools recuerda los modelos que ya rechazaron las herramientas (servidor|
 	// modelo): no se vuelve a intentar en cada turno para fallar otra vez.
 	noTools map[string]bool
+	// ctxInfo es el último chat:context de cada chat (para GetChat).
+	ctxInfo map[int64]ChatContextEvent
 }
 
 // liveTurn es lo que GetChat necesita de un turno en curso además de su texto.
@@ -173,7 +204,7 @@ func (a *App) chatSvc() *chatService {
 	if v, ok := chatServices.Load(a); ok {
 		return v.(*chatService)
 	}
-	s := &chatService{mgr: chat.NewManager(), attachments: hermes.NewRegistry(), live: map[int64]*liveTurn{}, noTools: map[string]bool{}}
+	s := &chatService{mgr: chat.NewManager(), attachments: hermes.NewRegistry(), live: map[int64]*liveTurn{}, noTools: map[string]bool{}, ctxInfo: map[int64]ChatContextEvent{}}
 	actual, loaded := chatServices.LoadOrStore(a, s)
 	if !loaded {
 		a.onShutdown(func() {
@@ -291,6 +322,9 @@ func (a *App) GetChat(chatID int64) (ChatView, error) {
 	v := ChatView{Chat: c, Messages: msgs}
 	v.Running, v.Partial, v.PartialSeq = a.chatSvc().mgr.Snapshot(chatID)
 	v.Steps, v.Usage = a.chatSvc().liveSnapshot(chatID)
+	if ci, ok := a.chatSvc().contextInfo(chatID); ok {
+		v.Context = &ci
+	}
 	return v, nil
 }
 
@@ -388,11 +422,12 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 	}
 	um, turn, stored, prepared := ot.user, ot.turn, ot.stored, ot.prepared
 
+	window := windowFor(p, caps)
 	job := chatJob{
 		turn: turn, chat: c, server: p, client: client, workspace: w, caps: caps,
 		currentFile: currentFile, user: hermes.UserMessage(prepared), agent: agent,
-		maxSteps: hermes.ClampSteps(opts.MaxSteps), history: seedFrom(stored, p.Kind), refs: referencePaths(stored, prepared.Metas),
-		imageRefs: prepared.ImageRefs,
+		maxSteps: hermes.ClampSteps(opts.MaxSteps), history: seedFrom(stored, p.Kind, window.Tokens), refs: referencePaths(stored, prepared.Metas),
+		imageRefs: prepared.ImageRefs, window: window,
 	}
 	a.chatSvc().beginLive(chatID)
 	go a.runChatTurn(job)
@@ -454,12 +489,12 @@ func (a *App) openChatTurn(c store.Chat, text string, pending []*hermes.Pending,
 }
 
 // seedFrom arma el historial del modelo con las filas guardadas.
-func seedFrom(stored []store.ChatMessage, kind string) []llm.Message {
+func seedFrom(stored []store.ChatMessage, kind string, window int) []llm.Message {
 	rows := make([]hermes.StoredMessage, len(stored))
 	for i, m := range stored {
 		rows[i] = hermes.StoredMessage{Role: m.Role, Content: m.Content, Parts: m.Parts}
 	}
-	return hermes.SeedHistory(rows, chat.HistoryBudget(kind))
+	return hermes.SeedHistory(rows, chat.HistoryBudgetFor(kind, window))
 }
 
 // referencePaths son las referencias 3D que el chat tiene adjuntas (las de los
@@ -508,6 +543,9 @@ type chatJob struct {
 	// el prompt de sistema las nombra para que el modelo las pase a las herramientas de
 	// imagen. Las de mensajes anteriores quedan en el historial (hermes.AttachmentNote).
 	imageRefs []string
+	// window es la ventana de contexto efectiva del turno (S17), de la que salen
+	// num_ctx, el perfil de herramientas automático y el presupuesto del turno.
+	window ctxWindow
 	// cli es lo propio de un turno con un CLI agéntico (S12.b); nil en un turno
 	// con un servidor de modelos.
 	cli *cliJob
@@ -527,6 +565,7 @@ func (a *App) runChatTurn(j chatJob) {
 	}
 
 	cfg := a.withAutoSave(j, a.hermesConfig(j))
+	a.announceContext(j, cfg)
 	if cl, ok := cfg.Tools.(io.Closer); ok {
 		// La caja se cierra al terminar el turno; lo inyectado (base, motor,
 		// WebAssembly, caché de partes) es de la app y no se cierra.
@@ -545,7 +584,7 @@ func (a *App) runChatTurn(j chatJob) {
 		},
 		Usage: func(u hermes.Usage) {
 			svc.setUsage(c.ID, u)
-			a.emit(evChatUsage, ChatUsageEvent{ChatID: c.ID, InputTokens: u.Input, OutputTokens: u.Output, CostUSD: u.CostUSD})
+			a.emit(evChatUsage, usageEvent(c.ID, u))
 		},
 	})
 	stream.Close()
@@ -556,6 +595,13 @@ func (a *App) runChatTurn(j chatJob) {
 	errText := ""
 	if err != nil {
 		errText = chatErrorText(p, err)
+	}
+	// Un modelo que usó herramientas y se calló (un modelo chico sin contexto, un
+	// servidor que corta) deja el turno sin texto: se cuenta qué alcanzó a hacer.
+	if err == nil && !res.Cancelled && strings.TrimSpace(res.Text) == "" {
+		if recap := turnRecap(res.Steps, nil); recap != "" {
+			res.Text = "_" + i18n.T(msgServerEmptyTurn) + "_\n\n" + recap
+		}
 	}
 	a.concludeChatTurn(c, res, err, errText)
 }
@@ -568,7 +614,7 @@ func (a *App) concludeChatTurn(c store.Chat, res hermes.Result, err error, errTe
 	if strings.TrimSpace(res.Text) != "" || len(res.Steps) > 0 {
 		m, serr := a.store.AddChatMessageFull(c.ID, store.NewChatMessage{
 			Role: "assistant", Content: res.Text,
-			Parts:       hermes.EncodeParts(hermes.Parts{Steps: hermes.StepsForStorage(res.Steps), Model: res.Model, StepLimit: res.StepLimit}),
+			Parts:       hermes.EncodeParts(hermes.Parts{Steps: hermes.StepsForStorage(res.Steps), Model: res.Model, StepLimit: res.StepLimit, Usage: usageForParts(res.Usage)}),
 			InputTokens: res.Usage.Input, OutputTokens: res.Usage.Output, CostUSD: res.Usage.CostUSD,
 		})
 		switch {
@@ -598,6 +644,9 @@ func (a *App) hermesConfig(j chatJob) hermes.Config {
 	toolsCtx := base
 	toolsCtx.Tools = true
 	toolsCtx.Skills = mcp.ListWorkspaceSkills(w.Path)
+	// S17: con el perfil esencial (la ventana es chica, o la persona lo pidió) el prompt es el compacto.
+	profile, _ := resolveToolProfile(c.Tools, j.window.Tokens)
+	setCompactPrompt(&toolsCtx, profile == profileEssential)
 	textCtx := base // Tools=false: el prompt de S5
 
 	cfg := hermes.Config{
@@ -611,6 +660,7 @@ func (a *App) hermesConfig(j chatJob) hermes.Config {
 		MaxSteps:    j.maxSteps,
 		Price:       hermes.Price{PromptPerM: j.caps.PromptPricePerM, CompletionPerM: j.caps.CompletionPricePerM},
 		NoTools:     true,
+		NumCtx:      j.window.Tokens,
 	}
 	if !j.agent {
 		return cfg
@@ -628,6 +678,9 @@ func (a *App) hermesConfig(j chatJob) hermes.Config {
 		return cfg
 	}
 	cfg.Tools, cfg.NoTools = tools, false
+	if specs := toolSpecsFor(tools, profile); specs != nil {
+		cfg.ToolSpecs = specs
+	}
 	return cfg
 }
 

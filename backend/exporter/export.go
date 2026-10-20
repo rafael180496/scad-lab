@@ -225,6 +225,20 @@ func warnings(parts []threemf.Part, pr printers.Printer) []string {
 			EN: "Some geometry has no color(): it will come out as one more part (\"Default\", yellow) using its own filament. Wrap it in color() to assign one.",
 		}))
 	}
+	checks, _ := threemf.InspectAll(parts)
+	for _, c := range checks {
+		if c.OpenEdges+c.NonManifoldEdges > 0 {
+			out = append(out, i18n.T(i18n.Msg{
+				ES: "La parte \"%s\" no es un sólido cerrado (%d aristas abiertas): OpenSCAD fundió ese color con otro y la cara donde se tocaban desapareció, así que el slicer no puede laminarla bien (suele rellenar huecos o llenar de soportes). Pon cada color() al nivel superior del archivo, sin union() ni difference() que los envuelvan.",
+				EN: "The \"%s\" part is not a closed solid (%d open edges): OpenSCAD fused that color with another one and the face where they touched is gone, so the slicer cannot slice it properly (it usually fills hollows or adds lots of supports). Put each color() at the top level of the file, not inside union() or difference().",
+			}, c.Name, c.OpenEdges+c.NonManifoldEdges))
+		} else if c.Triangles > 0 && c.SignedVolume <= 0 {
+			out = append(out, i18n.T(i18n.Msg{
+				ES: "La parte \"%s\" tiene las caras al revés (volumen negativo): el slicer la vería como un hueco.",
+				EN: "The \"%s\" part has its faces inside out (negative volume): the slicer would see it as a void.",
+			}, c.Name))
+		}
+	}
 	for _, pair := range threemf.NearColors(parts, nearColorDistance) {
 		out = append(out, i18n.T(i18n.Msg{
 			ES: "Los colores %s y %s son casi iguales y usarán dos filamentos distintos. Si querías uno solo, unifícalos en el .scad.",

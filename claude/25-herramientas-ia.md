@@ -20,9 +20,13 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 | Herramienta | Qué hace | Modo | Hermes | `--mcp` |
 |---|---|---|---|---|
 | `list_checkpoints` | árbol: archivo, padre, descripción, **rótulo** del usuario, hijos, fecha y estado de render; `tree` lo dibuja como texto; `activeParent` | L | sí | sí |
-| `read_checkpoint` | el código (`file`, def. el más nuevo). **Así se lee un `.scad`**: por nombre de archivo, nunca por ruta ni con las herramientas de archivo del CLI | L | sí | sí |
+| `read_checkpoint` | el código (`file`, def. el más nuevo; también `lib/<nombre>.scad`). **Así se lee un `.scad`**: por nombre de archivo, nunca por ruta ni con las herramientas de archivo del CLI. `from`/`to` → líneas numeradas `N\| código` (≤ 400 por llamada); sin rango, ≤ 12 KB crudo o el comienzo + nota `[truncado…]`; `full=true` entero (S17) | L | sí | sí |
+| `outline_checkpoint` | el **mapa** de un `.scad` sin leerlo (S17): parámetros del Customizer por sección (nombre, línea, valor), módulos/funciones (línea de inicio y fin, args), `include`/`use`, partes `color()`. JSON de una línea, ≤ 5 KB (se achica solo) | L | sí | sí |
+| `find_in_checkpoint` | `query` (+ `context`=2, `regex`): ventanas numeradas fusionadas (`N: ` la coincidencia, `N\| ` el contexto), ≤ 30 coincidencias y ≈ 4 KB; sin coincidencias, las 3 líneas más parecidas (S17) | L | sí | sí |
 | `create_checkpoint` | `label`, `source`, `parent` (def. padre activo o el más nuevo), `description`; `root=true` abre una raíz nueva aunque ya haya otras. Nunca pisa | E | sí | sí |
-| `update_checkpoint` | `file`, `source` (archivo completo, ≤ 2 MB), `note?`: **edita en el lugar** el archivo que el usuario nombró o tiene abierto; guarda antes la versión anterior en `.scadlab/history/` ([15](15-checkpoints.md#historial-y-edición-en-el-lugar-s16)) y devuelve `{file, updated, unchanged, version, parent, description, lint, render}`. Idéntico → no escribe. No toca el padre activo | E | sí | sí |
+| `update_checkpoint` | `file`, `source` (archivo completo, ≤ 2 MB), `note?`: **reescribe en el lugar** el archivo que el usuario nombró o tiene abierto — desde S17 solo para reescrituras grandes—; guarda antes la versión anterior en `.scadlab/history/` ([15](15-checkpoints.md#historial-y-edición-en-el-lugar-s16)) y devuelve `{file, updated, unchanged, version, parent, description, lint, render}` compacto. Idéntico → no escribe. No toca el padre activo | E | sí | sí |
+| `edit_checkpoint` | `file` (checkpoint o `lib/<nombre>.scad`), `edits[]`, `note?`: **edita unas líneas en el lugar** (S17). Cada edición es `{old, new}` (exactamente una aparición) o `{from_line, to_line, new}` (rango inclusivo; `to_line = from_line - 1` inserta; `new:""` borra). Se resuelven contra el archivo en disco; solape → error; **todo o nada**; la línea 1 `// @checkpoint` no se edita. Respaldo + escritura atómica (`checkpoint.UpdateWith`, `tool:"edit_checkpoint"`). Devuelve `{file, updated, lines, version, changes[{was, now, old, new}], lint, render}` compacto | E | sí | sí |
+| `extract_module` | `file`, `modules[]`, `lib`, `mode` (`include` \| `use`): **mueve** módulos/funciones del nivel superior a `lib/<lib>.scad` (nuevo, o agrega con respaldo) y deja el `include`/`use`; renderiza antes y después y, si cambia la caja o el volumen (tol. 1e-3), **deshace** ambos archivos y lo dice (S17) | E | sí | sí |
 | `set_active_parent` | el «Ramificar desde aquí» (`file`) o `clear=true`; avanza solo con cada hijo | E | sí | sí |
 | `rename_checkpoint` | `file` + `label` (≤ 80): el rótulo del árbol, en `scadlab.db`. Ver decisiones | E | sí | sí |
 | `trash_checkpoint` | `file` (+ `branch=true` con sus descendientes) a `.scadlab/trash/`. **Nunca borra**; sin `branch`, los hijos directos pasan a colgar del padre (`relinked` en la respuesta, ver [15](15-checkpoints.md)) | E | sí | sí |
@@ -36,12 +40,12 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 
 | Herramienta | Qué hace | Modo | Hermes | `--mcp` |
 |---|---|---|---|---|
-| `render` | estado, errores con línea y código, tamaño, volumen, ¿cabe?, motor (`native`/`wasm`); `isError` si no renderiza | L | sí | sí |
-| `lint` / `format` | diagnósticos OpenSCAD + SL001–SL009 / código formateado, sin guardar | L | sí | sí |
-| `preview` | **PNG**: 8 vistas con nombre o ángulo libre (`rotate:[rx,ry,rz]`, `ortho`), `size` 256–1024 | L | sí | sí |
-| `measure` | malla, ¿cabe en la placa?, partes por color y estimación con la configuración de la app | L | sí | sí |
-| `get_parameters` | parámetros del Customizer: tipo, valor, grupo, descripción, rango `[min:paso:max]`, opciones | L | sí | sí |
-| `set_parameters` | `values` {nombre→valor} en un checkpoint **hijo** (una variante; para cambiarlo en el archivo, `update_checkpoint`) (`file`, `label`, `description`); el resto del archivo, byte a byte. Avisa de fuera de rango/opciones | E | sí | sí |
+| `render` | resumen (S17): estado, caja (`sizeMm`/`minMm`/`maxMm`), volumen, ¿cabe?, partes por color si ya están en caché y hasta 5 errores/avisos con línea y código; `verbose` = el detalle completo. `isError` si no renderiza | L | sí | sí |
+| `lint` / `format` | conteos + hasta 5 diagnósticos OpenSCAD + SL001–SL009 (`verbose` = todos) / código formateado, sin guardar | L | sí | sí |
+| `preview` | **PNG**: por defecto UNA vista `iso` de 384 px (S17); `view`, `views[]` (≤ 8) o `all`; ángulo libre (`rotate:[rx,ry,rz]`, `ortho`), `size` 256–1024 | L | sí | sí |
+| `measure` | resumen (S17): malla, ¿cabe en la placa?, peso total y partes por color (color, tamaño, cm³, g); `verbose` = estimación con sus supuestos | L | sí | sí |
+| `get_parameters` | parámetros del Customizer **por sección**: valor, rango `min:paso:max`, opciones, línea, descripción; ≤ 5 KB (`verbose` = la lista plana con tipo y literal) | L | sí | sí |
+| `set_parameters` | `values` {nombre→valor}: **cambia el archivo en el lugar** (S17: con respaldo, `tool:"set_parameters"`, y render compacto; el resto del archivo, byte a byte). `variant:true` = un checkpoint **hijo** y el original intacto (`label`, `description`). Avisa de fuera de rango/opciones | E | sí | sí |
 | `list_templates` / `get_template` | las plantillas de `openscad-templates` / su código | L | sí | sí |
 | `create_from_template` | `name` + `parameters`: checkpoint con los valores puestos y `PLATE` = placa de la impresora; raíz si el workspace está vacío, si no hijo del padre por defecto (`parent`, `root`) | E | sí | sí |
 | `list_libraries` | BOSL2, MCAD, NopSCADlib: versión, licencia, ¿instalada?, línea `include` exacta; más lo otro que haya en `lib/` | L | sí | sí |
@@ -73,7 +77,7 @@ Modelar a partir de una foto, un logo o un boceto. Procesa `backend/imagetools` 
 | Herramienta | Qué hace | Modo | Hermes | `--mcp` |
 |---|---|---|---|---|
 | `printer_info` | la impresora **efectiva** del workspace: marca, modelo, placa, boquilla, filamento, sistema multicolor, `colors` (los del workspace) y `maxColors`, slicer recomendado (`slicer`) y posibles (`slicers`), skill de la marca (`brandSkill`), superficie, temperaturas, `sources`, campos a confirmar; además reglas FDM, material por defecto y motor detectado | L | sí | sí |
-| `list_printers` | el catálogo de las siete marcas (id, marca, modelo, placa, colores máx., sistema, slicer, filamento) filtrable por `brand` y `query`; marca la actual | L | sí | sí |
+| `list_printers` | el catálogo de las siete marcas filtrable por `brand` y `query`; sin filtro solo cuenta por marca (el catálogo entero pesa 29 KB); filas cortas (id, nombre, placa, colores, sistema) o `verbose` con slicer y filamento; marca la actual | L | sí | sí |
 | `set_workspace_printer` | cambia la impresora y los colores de **este** workspace (`wsconfig.Apply`): reescribe `CLAUDE.md`/`AGENTS.md`/`printer.json` y, con `swap_brand_skill` (por defecto sí), cambia la skill de la marca. Efecto `EffectConfig`. Ver decisiones | E | sí | sí |
 | `estimate_print` | peso, metros y costo con `material`, `infill_percent`, `wall_loops` a elección | L | sí | sí |
 | `list_materials` | id, nombre, densidad, costo/kg y el material por defecto | L | sí | sí |
@@ -137,20 +141,43 @@ Modelar a partir de una foto, un logo o un boceto. Procesa `backend/imagetools` 
 - **Parámetros.** `scad.Parameters`/`SetParameters` leen y reemplazan solo el literal de las asignaciones del nivel superior
   anteriores al primer `module` (la regla de SL009). Hidden y expresiones no son editables.
 
+- **S17: editar sin regenerar, leer por partes, respuestas cortas.** Medido con Antigravity, cada cambio a una maceta de 600 líneas
+  pasaba por `update_checkpoint` con el archivo completo (1:42–3:39 min por cambio, 105–192k tokens de contexto por paso).
+  `edit_checkpoint` manda solo las ediciones; la lógica pura (resolver contra el original, solapes, todo o nada, errores con la línea
+  más parecida) es `backend/textedit`, y la escritura `checkpoint.UpdateWith` con `Verbatim` (el archivo queda byte a byte salvo
+  lo editado, aun con CRLF y LF mezclados). `set_parameters` edita en el lugar (coherente con S16); `variant:true` conserva el hijo.
+  **Salidas compactas**: JSON de una línea; `render`, `lint`, `measure`, `update/edit/set_parameters`, `get_parameters`, `list_printers`
+  y `outline_checkpoint` caben en 6 KB (`TestToolOutputBudgetTable` corre TODAS las herramientas sobre una maceta de 596 líneas y
+  falla si una pasa; exentas por diseño: `read_checkpoint` —tope propio de 12 KB / 400 líneas—, `read_skill`, `get_template`, `format`).
+  `verbose:true` devuelve el detalle de siempre. Las partes por color del `render` salen solo si ya están en la caché de partes
+  (generarlas cuesta otro render con color); `measure` siempre las calcula.
+- **`lib/<nombre>.scad`.** `read`, `outline`, `find` y `edit` aceptan solo hijos DIRECTOS de `lib/` (`checkpoint.ValidLibName`: sin `..`,
+  rutas absolutas, `\`, `:` ni subcarpetas; `lib\x.scad` se normaliza); `lib/BOSL2/…` queda de solo lectura y fuera de las herramientas.
+  Historial en `.scadlab/history/lib/<nombre>.scad/` con la misma garantía respaldo → escritura atómica. Un archivo de `lib/` no tiene
+  cabecera: la línea 1 sí se edita y se verifica renderizando el checkpoint más nuevo que lo incluye (`checked`).
+- **`extract_module`.** Escribe primero la librería y después el checkpoint; si la caja o el volumen cambian, restaura el checkpoint
+  desde su historial y la librería desde el suyo —o, si la creó esta llamada, la quita solo si sigue siendo exactamente lo que escribió
+  (`checkpoint.RemoveCreatedLib`)—. Con `use` rechaza (antes de tocar nada) mover código que usa variables globales o módulos que se
+  quedan (`scad.ListDefs`). La causa real más común de deshacer: un `import("refs/x.stl")` dentro del módulo (dentro de `lib/` la ruta
+  es relativa a `lib/`).
+- **Perfil de herramientas.** `mcp.ProfileEssential` ofrece 11 herramientas (`EssentialTools()`) con `Tool.Short`/`ShortSchema`;
+  `(*Toolbox).ToolsFor(p)`. Catálogo completo ≈ 11 200 tokens (chars/4), esencial ≈ 1 100. `Call` acepta cualquiera. El prompt
+  `agent-compact.{es,en}.md` (`prompts.Context.Compact`, ≈ 700 tokens) supone ese perfil y solo nombra esas herramientas.
+
 ## Para la interfaz (T13)
 
 **Una sola definición de qué hace cada herramienta de escritura** en `backend/mcp/effects.go` (`Effect`):
 
 | Efecto | Herramientas | Quién lo usa |
 |---|---|---|
-| `EffectCheckpoint` (deja un `.scad`: nuevo, o reescrito en el lugar si es `update_checkpoint`, que `mcp.UpdatesInPlace` distingue; el resultado trae `file`) | `create_checkpoint`, `update_checkpoint`, `import_mesh`, `set_parameters`, `create_from_template`, `edit_mesh` | `mcp.CreatesCheckpoint`: la red de seguridad de Hermes (`runner.createdCheckpoint`) y de los CLIs (`cliSafetyNet`); espejo `CREATING_TOOLS` (`lib/chatSteps.ts`): enlace de la tarjeta y selección automática del checkpoint |
+| `EffectCheckpoint` (deja un `.scad`: nuevo, o reescrito en el lugar —`update_checkpoint`, `edit_checkpoint`, `extract_module` y `set_parameters` sin `variant`—, que `mcp.UpdatesInPlace(tool, resultText)` distingue por `"updated": true` del RESULTADO; trae `file`, que puede ser `lib/<nombre>.scad`) | `create_checkpoint`, `update_checkpoint`, `edit_checkpoint`, `extract_module`, `import_mesh`, `set_parameters`, `create_from_template`, `edit_mesh` | `mcp.CreatesCheckpoint`: la red de seguridad de Hermes (`runner.createdCheckpoint`) y de los CLIs (`cliSafetyNet`); espejo `CREATING_TOOLS` (`lib/chatSteps.ts`): enlace de la tarjeta y selección automática del checkpoint |
 | `EffectTree` (cambia el árbol sin `.scad` nuevo) | `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `restore_checkpoint` | `mcp.ChangesTree`: `refreshTreeAfterStep` (`app_chat_tree.go`) |
 | `EffectFiles` (escribe fuera del árbol) | `export`, `install_library`, `trace_image_outline`, `image_to_heightmap` | nada que refrescar |
 | `EffectConfig` (cambia la impresora, los colores o las skills del workspace) | `set_workspace_printer` | `mcp.ChangesConfig`: evento `workspace:config` (S14) |
 
 `TestEffectsCoverTheWriteTools` exige que toda herramienta de `clichat.WriteTools()` tenga su entrada y que ninguna de
 lectura la tenga: una herramienta nueva que cambie el proyecto **no compila a verde** sin declarar su efecto.
-`TestDeclaredEffectsMatchWhatTheToolsDo` comprueba que las `EffectCheckpoint` devuelven de verdad un `.scad` en `file` (nuevo; `update_checkpoint`, el mismo archivo y ninguno nuevo), y
+`TestDeclaredEffectsMatchWhatTheToolsDo` comprueba que las `EffectCheckpoint` devuelven de verdad un `.scad` en `file` (nuevo; las que `UpdatesInPlace` reconoce, el mismo archivo y ninguno nuevo), y
 `chat-ux.test.mjs` lee `effects.go` y exige que `CREATING_TOOLS` diga lo mismo (más `autosave`).
 
 **Refresco del árbol.** `set_active_parent`, `rename_checkpoint`, `trash_checkpoint` y `restore_checkpoint` no crean un

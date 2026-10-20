@@ -55,6 +55,17 @@ type ollamaSim struct {
 	// support tools», como Ollama con un modelo que no las tiene.
 	rejectTools bool
 	served      int
+
+	// S17: ventana de contexto simulada. ctxLen es lo que /api/show dice del modelo
+	// (0 = 32768); limit, si es mayor que 0, hace que un /api/chat que pese más de
+	// esos tokens (estimados como caracteres/4) conteste 400 «context length exceeded»,
+	// como un modelo chico de verdad. tokens y numCtx anotan, por pedido, lo que pesó y
+	// el `options.num_ctx` que ScadLab pidió.
+	ctxLen int
+	limit  int
+	tokens []int
+	numCtx []int
+	over   int
 }
 
 func (s *ollamaSim) server(t *testing.T) *httptest.Server {
@@ -77,7 +88,7 @@ func (s *ollamaSim) server(t *testing.T) *httptest.Server {
 			s.mu.Lock()
 			caps := s.caps[req.Model]
 			s.mu.Unlock()
-			b, _ := json.Marshal(map[string]any{"capabilities": caps, "model_info": map[string]any{"llama.context_length": 32768}})
+			b, _ := json.Marshal(map[string]any{"capabilities": caps, "model_info": map[string]any{"llama.context_length": s.contextLength()}})
 			_, _ = w.Write(b)
 		case "/api/chat":
 			raw, _ := io.ReadAll(r.Body)
@@ -85,6 +96,22 @@ func (s *ollamaSim) server(t *testing.T) *httptest.Server {
 			_ = json.Unmarshal(raw, &body)
 			s.mu.Lock()
 			s.bodies = append(s.bodies, body)
+			weight := simTokens(body)
+			s.tokens = append(s.tokens, weight)
+			nc := 0
+			if opts, ok := body["options"].(map[string]any); ok {
+				if v, ok := opts["num_ctx"].(float64); ok {
+					nc = int(v)
+				}
+			}
+			s.numCtx = append(s.numCtx, nc)
+			if s.limit > 0 && weight > s.limit {
+				s.over++
+				s.mu.Unlock()
+				w.WriteHeader(400)
+				_, _ = io.WriteString(w, fmt.Sprintf(`{"error":"context length exceeded: %d tokens > %d"}`, weight, s.limit))
+				return
+			}
 			_, withTools := body["tools"]
 			if withTools && s.rejectTools {
 				// Un pedido rechazado no gasta una entrada del guion.
@@ -129,6 +156,38 @@ func (s *ollamaSim) server(t *testing.T) *httptest.Server {
 	}))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+func (s *ollamaSim) contextLength() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ctxLen > 0 {
+		return s.ctxLen
+	}
+	return 32768
+}
+
+// simTokens estima los tokens de un /api/chat como caracteres/4 de lo que un modelo
+// recibe de verdad: el texto de los mensajes, los argumentos de las llamadas que
+// pidió y las definiciones de herramientas. Es la misma regla que usa ScadLab
+// (hermes.EstimateTokens), a propósito: la prueba mide si el turno cabe, no si el
+// tokenizador de algún modelo coincide.
+func simTokens(body map[string]any) int {
+	chars := 0
+	for _, m := range body["messages"].([]any) {
+		mm := m.(map[string]any)
+		c, _ := mm["content"].(string)
+		chars += len([]rune(c)) + 4
+		if tc, ok := mm["tool_calls"]; ok {
+			raw, _ := json.Marshal(tc)
+			chars += len([]rune(string(raw)))
+		}
+	}
+	if tools, ok := body["tools"]; ok {
+		raw, _ := json.Marshal(tools)
+		chars += len([]rune(string(raw)))
+	}
+	return (chars + 3) / 4
 }
 
 func jsonString(s string) string {
@@ -205,6 +264,7 @@ type hermesEvents struct {
 	text   map[int64]string
 	steps  []ChatStepEvent
 	usage  []ChatUsageEvent
+	ctx    []ChatContextEvent
 	done   chan ChatDoneEvent
 	errs   chan ChatErrorEvent
 	nsteps int
@@ -222,6 +282,8 @@ func captureHermesEvents(a *App) *hermesEvents {
 			ev.steps = append(ev.steps, p)
 		case ChatUsageEvent:
 			ev.usage = append(ev.usage, p)
+		case ChatContextEvent:
+			ev.ctx = append(ev.ctx, p)
 		case ChatDoneEvent:
 			ev.done <- p
 		case ChatErrorEvent:

@@ -64,6 +64,33 @@ type Version struct {
 	Size    int64     `json:"size"`
 }
 
+// UpdateOptions ajusta Update/UpdateWith.
+type UpdateOptions struct {
+	// Tool es la herramienta que anota el respaldo en su .json ("edit_checkpoint",
+	// "set_parameters"…). Vacío = update_checkpoint.
+	Tool string
+	// Note reemplaza el desc de la cabecera (si no está vacía; no en lib/, que no
+	// tiene cabecera) y queda en el historial.
+	Note string
+	// HistoryNote queda solo en el historial, sin tocar la cabecera: se usa si
+	// Note está vacía. Es lo que permite anotar «ancho 60 → 80» sin cambiar la
+	// descripción del checkpoint.
+	HistoryNote string
+	// Verbatim: source es el archivo COMPLETO tal como debe quedar, con su
+	// cabecera byte a byte (la de edit_checkpoint y set_parameters, que parten de
+	// lo que hay en disco y cambian otra cosa). Se rechaza si la cabecera no es la
+	// que ya tiene el archivo; con Note se reescribe solo su `desc`. Así los fines
+	// de línea, el BOM y todo lo que no se tocó quedan intactos aunque el archivo
+	// mezcle \n y \r\n.
+	Verbatim bool
+	// Base, si no es nil, es el contenido sobre el que se calculó source: el
+	// archivo tiene que ser exactamente ese (se comprueba con el candado tomado) o
+	// no se escribe nada. Es lo que impide que una edición por rangos pise un
+	// cambio hecho entre su lectura y su escritura (otro proceso, otro paso del
+	// agente): los números de línea que usó ya no valen.
+	Base *string
+}
+
 // UpdateResult es lo que devuelve Update.
 type UpdateResult struct {
 	Unchanged   bool
@@ -142,7 +169,9 @@ func lockHistory(ws, file string) func() {
 // historyDir devuelve <ws>/.scadlab/history/<file>. metaDir rechaza que
 // .scadlab, history o la carpeta del archivo sean enlaces.
 func historyDir(ws, file string, create bool) (string, error) {
-	return metaDir(ws, create, historyDirName, file)
+	// La clave de un archivo de lib/ es «lib/x.scad»: cada nivel es una carpeta
+	// que metaDir comprueba (que no sea un enlace).
+	return metaDir(ws, create, append([]string{historyDirName}, strings.Split(file, "/")...)...)
 }
 
 // cleanNote deja la nota en una línea y acotada.
@@ -237,13 +266,36 @@ func trashedCopy(ws, file string) (string, bool) {
 // checkEditable valida que file sea un archivo regular de la raíz del workspace
 // y devuelve su estado.
 func checkEditable(ws, file string) (string, os.FileInfo, error) {
-	if err := ValidName(file); err != nil {
+	if err := validTarget(file); err != nil {
 		return "", nil, err
+	}
+	if IsLibFile(file) {
+		return checkEditableLib(ws, file)
 	}
 	path := filepath.Join(ws, file)
 	st, err := os.Lstat(path)
 	if err != nil || st.IsDir() {
 		return "", nil, notInWorkspace(ws, file)
+	}
+	if !st.Mode().IsRegular() {
+		return "", nil, i18n.Errorf(i18n.Msg{
+			ES: "%s no es un archivo normal (¿es un enlace?): no lo reescribo por seguridad",
+			EN: "%s is not a plain file (is it a link?): not rewriting it for safety",
+		}, file)
+	}
+	return path, st, nil
+}
+
+// checkEditableLib es checkEditable para un archivo de lib/: tiene que existir y
+// ser un archivo normal (un enlace no se reescribe).
+func checkEditableLib(ws, file string) (string, os.FileInfo, error) {
+	path, err := LibPath(ws, file)
+	if err != nil {
+		return "", nil, err
+	}
+	st, err := os.Lstat(path)
+	if err != nil || st.IsDir() {
+		return "", nil, notFoundLib(ws, file)
 	}
 	if !st.Mode().IsRegular() {
 		return "", nil, i18n.Errorf(i18n.Msg{
@@ -269,6 +321,15 @@ func checkEditable(ws, file string) (string, os.FileInfo, error) {
 // maxVersions <= 0 es DefaultHistoryMax. No toca el padre activo ni los demás
 // archivos.
 func Update(ws, file, source, note string, maxVersions int) (UpdateResult, error) {
+	return UpdateWith(ws, file, source, maxVersions, UpdateOptions{Note: note})
+}
+
+// UpdateWith es Update con opciones: la herramienta que queda anotada en el
+// respaldo (edit_checkpoint, set_parameters…) y una nota solo de historial. Con
+// una clave "lib/<nombre>.scad" reescribe un archivo de lib/: sin cabecera,
+// source es el archivo entero tal cual, y el respaldo va a
+// `.scadlab/history/lib/<nombre>.scad/`. Mismo orden: respaldo → escritura atómica.
+func UpdateWith(ws, file, source string, maxVersions int, o UpdateOptions) (UpdateResult, error) {
 	path, st, err := checkEditable(ws, file)
 	if err != nil {
 		return UpdateResult{}, err
@@ -280,7 +341,24 @@ func Update(ws, file, source, note string, maxVersions int) (UpdateResult, error
 	if err != nil {
 		return UpdateResult{}, err
 	}
+	if o.Base != nil && string(curRaw) != *o.Base {
+		return UpdateResult{}, i18n.Errorf(i18n.Msg{
+			ES: "%s cambió mientras se preparaba la edición: no se escribió nada. Vuelve a leer el archivo y repite la edición",
+			EN: "%s changed while the edit was being prepared: nothing was written. Read the file again and repeat the edit",
+		}, file)
+	}
+	tool := o.Tool
+	if tool == "" {
+		tool = updateTool
+	}
+	if IsLibFile(file) {
+		return updateLibLocked(ws, file, path, st, curRaw, source, maxVersions, tool, o)
+	}
+	note := o.Note
 	cur := parseHeader(string(curRaw))
+	if o.Verbatim {
+		return updateVerbatimLocked(ws, file, path, st, curRaw, cur, source, maxVersions, tool, o)
+	}
 
 	src := strings.TrimPrefix(source, "\uFEFF")
 	body := src
@@ -308,6 +386,10 @@ func Update(ws, file, source, note string, maxVersions int) (UpdateResult, error
 	}
 
 	note = cleanNote(note)
+	histNote := note
+	if histNote == "" {
+		histNote = o.HistoryNote
+	}
 	res := UpdateResult{Parent: cur.parent, Description: cur.desc}
 	var headerLine string
 	switch {
@@ -334,13 +416,89 @@ func Update(ws, file, source, note string, maxVersions int) (UpdateResult, error
 	}
 
 	// 1) Respaldo de lo que hay. Sin él no se escribe.
-	ver, err := saveVersion(ws, file, curRaw, ReasonAI, updateTool, note)
+	ver, err := saveVersion(ws, file, curRaw, ReasonAI, tool, histNote)
 	if err != nil {
 		return UpdateResult{}, err
 	}
 	// 2) Escritura atómica.
 	if err := replaceKeepingMode(path, newRaw, st); err != nil {
 		removeVersion(ws, file, ver.ID) // el respaldo es una copia del archivo intacto: no cuenta como edición
+		return UpdateResult{}, err
+	}
+	res.Version = ver
+	pruneHistory(ws, file, maxVersions)
+	return res, nil
+}
+
+// updateVerbatimLocked es UpdateWith con Verbatim (el candado ya está tomado).
+func updateVerbatimLocked(ws, file, path string, st os.FileInfo, curRaw []byte, cur headerInfo, source string, maxVersions int, tool string, o UpdateOptions) (UpdateResult, error) {
+	if strings.TrimSpace(source) == "" {
+		return UpdateResult{}, i18n.New(i18n.Msg{
+			ES: "el código nuevo está vacío: no reescribo el archivo",
+			EN: "the new source is empty: not rewriting the file",
+		})
+	}
+	note := cleanNote(o.Note)
+	res := UpdateResult{Parent: cur.parent, Description: cur.desc}
+	newRaw := []byte(source)
+	if cur.has {
+		nh := parseHeader(source)
+		if !nh.has || nh.line != cur.line || nh.bom != cur.bom {
+			return UpdateResult{}, i18n.New(i18n.Msg{
+				ES: "la cabecera `// @checkpoint` (línea 1) no se puede cambiar así: es metadato del árbol",
+				EN: "the `// @checkpoint` header (line 1) cannot be changed this way: it is tree metadata",
+			})
+		}
+		if note != "" {
+			newRaw = []byte(boolStr(nh.bom, "\uFEFF") + Header(cur.parent, note) + nh.nl + nh.body)
+			res.Description = strings.Join(strings.Fields(note), " ")
+		}
+	}
+	if bytes.Equal(newRaw, curRaw) {
+		res.Unchanged = true
+		return res, nil
+	}
+	histNote := note
+	if histNote == "" {
+		histNote = o.HistoryNote
+	}
+	ver, err := saveVersion(ws, file, curRaw, ReasonAI, tool, histNote)
+	if err != nil {
+		return UpdateResult{}, err
+	}
+	if err := replaceKeepingMode(path, newRaw, st); err != nil {
+		removeVersion(ws, file, ver.ID)
+		return UpdateResult{}, err
+	}
+	res.Version = ver
+	pruneHistory(ws, file, maxVersions)
+	return res, nil
+}
+
+// updateLibLocked es UpdateWith para un archivo de lib/ (el candado ya está tomado).
+func updateLibLocked(ws, file, path string, st os.FileInfo, curRaw []byte, source string, maxVersions int, tool string, o UpdateOptions) (UpdateResult, error) {
+	if strings.TrimSpace(source) == "" {
+		return UpdateResult{}, i18n.New(i18n.Msg{
+			ES: "el código nuevo está vacío: no reescribo el archivo",
+			EN: "the new source is empty: not rewriting the file",
+		})
+	}
+	res := UpdateResult{}
+	newRaw := []byte(source)
+	if bytes.Equal(newRaw, curRaw) {
+		res.Unchanged = true
+		return res, nil
+	}
+	note := cleanNote(o.Note)
+	if note == "" {
+		note = cleanNote(o.HistoryNote)
+	}
+	ver, err := saveVersion(ws, file, curRaw, ReasonAI, tool, note)
+	if err != nil {
+		return UpdateResult{}, err
+	}
+	if err := replaceKeepingMode(path, newRaw, st); err != nil {
+		removeVersion(ws, file, ver.ID)
 		return UpdateResult{}, err
 	}
 	res.Version = ver
@@ -508,7 +666,7 @@ func readMeta(dir, id string) (versionMeta, bool) {
 // historial devuelve nil, nil. Solo cuentan las versiones completas: las dos
 // piezas presentes y el .json legible.
 func History(ws, file string) ([]Version, error) {
-	if err := ValidName(file); err != nil {
+	if err := validTarget(file); err != nil {
 		return nil, err
 	}
 	dir, err := historyDir(ws, file, false)
@@ -538,7 +696,7 @@ func History(ws, file string) ([]Version, error) {
 
 // ReadVersion devuelve el código de una versión del historial.
 func ReadVersion(ws, file, id string) (string, error) {
-	if err := ValidName(file); err != nil {
+	if err := validTarget(file); err != nil {
 		return "", err
 	}
 	if err := ValidVersionID(id); err != nil {
@@ -599,6 +757,8 @@ func RestoreVersion(ws, file, id string, maxVersions int) (Version, error) {
 
 	var newRaw string
 	switch {
+	case IsLibFile(file): // sin cabecera: la versión tal cual
+		newRaw = old
 	case vh.has:
 		raw := []byte(old)
 		out, _, werr := withParent(raw, cur.parent)
@@ -645,7 +805,7 @@ func boolStr(b bool, s string) string {
 // se apaga solo. Es barato: ordena por nombre y lee un único .json, sin tocar el
 // código de ninguna versión.
 func EditedByAI(ws, file string) bool {
-	if ValidName(file) != nil {
+	if validTarget(file) != nil {
 		return false
 	}
 	dir, err := historyDir(ws, file, false)

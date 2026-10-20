@@ -18,6 +18,29 @@ type Chat struct {
 	// predeterminado, también de las filas anteriores a la migración 9) y
 	// ChatModeAsk = «Solo consulta», elegido a mano. Ver Agent().
 	Mode string `json:"mode"`
+	// Tools es el perfil de herramientas de Hermes en ESTA conversación (S17):
+	// "" = automático (esenciales si el contexto efectivo es chico),
+	// ChatToolsEssential o ChatToolsFull. Un CLI no lo usa.
+	Tools string `json:"tools"`
+}
+
+// Perfiles de herramientas que se guardan en chats.tools ("" = automático).
+const (
+	ChatToolsEssential = "essential"
+	ChatToolsFull      = "full"
+)
+
+// ChatToolsValue valida el perfil que llega de la interfaz ("" | "auto" =
+// automático, "essential", "full"). ok=false si no es ninguno: no se guarda un
+// texto cualquiera en la columna.
+func ChatToolsValue(profile string) (stored string, ok bool) {
+	switch profile {
+	case "", "auto":
+		return "", true
+	case ChatToolsEssential, ChatToolsFull:
+		return profile, true
+	}
+	return "", false
 }
 
 // ChatModeAsk es el valor de Chat.Mode de «Solo consulta». Cualquier otro valor
@@ -71,11 +94,11 @@ type NewChatMessage struct {
 	CostUSD      float64
 }
 
-const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at, cli_session, mode`
+const chatCols = `id, workspace_id, provider_id, model, title, created_at, updated_at, cli_session, mode, tools`
 
 func scanChat(sc interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
-	err := sc.Scan(&c.ID, &c.WorkspaceID, &c.ProviderID, &c.Model, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.CLISession, &c.Mode)
+	err := sc.Scan(&c.ID, &c.WorkspaceID, &c.ProviderID, &c.Model, &c.Title, &c.CreatedAt, &c.UpdatedAt, &c.CLISession, &c.Mode, &c.Tools)
 	return c, err
 }
 
@@ -185,6 +208,24 @@ func (s *Store) SetChatMode(id int64, mode string) error {
 		return i18n.Errorf(i18n.Msg{ES: "modo de conversación desconocido: %q (usa «agent» o «ask»)", EN: "unknown conversation mode: %q (use “agent” or “ask”)"}, mode)
 	}
 	res, err := s.db.Exec(`UPDATE chats SET mode = ? WHERE id = ?`, stored, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetChatTools guarda el perfil de herramientas de la conversación ("" | "auto",
+// "essential", "full"). No toca updated_at: no es actividad del chat. ErrNotFound si
+// el chat no existe; un perfil desconocido es un error y no cambia nada.
+func (s *Store) SetChatTools(id int64, profile string) error {
+	stored, ok := ChatToolsValue(profile)
+	if !ok {
+		return i18n.Errorf(i18n.Msg{ES: "perfil de herramientas desconocido: %q (usa «auto», «essential» o «full»)", EN: "unknown tool profile: %q (use “auto”, “essential” or “full”)"}, profile)
+	}
+	res, err := s.db.Exec(`UPDATE chats SET tools = ? WHERE id = ?`, stored, id)
 	if err != nil {
 		return err
 	}

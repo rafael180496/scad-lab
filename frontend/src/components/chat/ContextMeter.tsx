@@ -22,7 +22,7 @@ export function ContextMeter({usage, className}: {usage: ContextUsage; className
         <span
             data-testid="context-meter"
             data-level={usage.level}
-            title={`${title}\n${c.note}${usage.level === 'full' ? `\n${c.full}` : usage.level === 'warn' ? `\n${c.warn}` : ''}`}
+            title={`${title}\n${usage.overhead > 0 ? fmt(c.noteWithOverhead, {fixed: usage.overhead.toLocaleString(loc)}) : c.note}${usage.level === 'full' ? `\n${c.full}` : usage.level === 'warn' ? `\n${c.warn}` : ''}`}
             className={cn(
                 'flex shrink-0 items-center gap-1.5 font-mono text-ui-10-5 tabular-nums',
                 usage.level === 'full' ? 'text-danger' : usage.level === 'warn' ? 'text-warn' : 'text-faint',

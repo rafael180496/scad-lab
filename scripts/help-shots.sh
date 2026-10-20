@@ -73,6 +73,9 @@ chat-from-image     chat-from-image   1440  900
 chat-compare        chat-compare      1440 1500
 chat-trace          chat-trace        1440 1180
 chat-no-vision      chat-no-vision    1440  900
+chat-turn-stats     chat-turn-stats   1440 1240
+chat-tools          chat-tools        1440 1240
+chat-context        chat-context      1440 1240
 workspace-starter   workspace-starter 1440  900
 chat-narrow         chat-narrow        360  760
 settings-appearance settings-appearance 1280 980

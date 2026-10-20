@@ -25,7 +25,7 @@ func (e *env) workspaceTools() []Tool {
 	return []Tool{
 		{
 			Name: "set_active_parent",
-			Description: "Choose which checkpoint the NEXT checkpoint will branch from (the user's «Branch from here»). create_checkpoint, set_parameters, create_from_template and edit_mesh use it as the default parent and it advances to each new child by itself. " +
+			Description: "Choose which checkpoint the NEXT checkpoint will branch from (the user's «Branch from here»). create_checkpoint, set_parameters (with variant=true), create_from_template and edit_mesh use it as the default parent and it advances to each new child by itself. " +
 				"Use it to go back to an earlier version and try another direction. Pass clear=true to go back to «the newest checkpoint».",
 			InputSchema: obj(map[string]any{
 				"file":  strProp("Checkpoint to branch from (e.g. 003-base-box.scad)."),

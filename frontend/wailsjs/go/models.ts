@@ -346,6 +346,10 @@ export namespace hermes {
 	    images: string[];
 	    durationMs: number;
 	    textAt: number;
+	    roundInput: number;
+	    roundOutput: number;
+	    resultChars: number;
+	    resultTokens: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Step(source);
@@ -362,6 +366,10 @@ export namespace hermes {
 	        this.images = source["images"];
 	        this.durationMs = source["durationMs"];
 	        this.textAt = source["textAt"];
+	        this.roundInput = source["roundInput"];
+	        this.roundOutput = source["roundOutput"];
+	        this.resultChars = source["resultChars"];
+	        this.resultTokens = source["resultTokens"];
 	    }
 	}
 	export class Usage {
@@ -371,6 +379,12 @@ export namespace hermes {
 	    cacheWrite: number;
 	    thinking: number;
 	    costUsd: number;
+	    modelMs: number;
+	    toolMs: number;
+	    rounds: number;
+	    peakInput: number;
+	    lastInput: number;
+	    inputEstimated: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Usage(source);
@@ -384,6 +398,12 @@ export namespace hermes {
 	        this.cacheWrite = source["cacheWrite"];
 	        this.thinking = source["thinking"];
 	        this.costUsd = source["costUsd"];
+	        this.modelMs = source["modelMs"];
+	        this.toolMs = source["toolMs"];
+	        this.rounds = source["rounds"];
+	        this.peakInput = source["peakInput"];
+	        this.lastInput = source["lastInput"];
+	        this.inputEstimated = source["inputEstimated"];
 	    }
 	}
 
@@ -515,6 +535,30 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class ChatContextEvent {
+	    chatId: number;
+	    numCtx: number;
+	    promptTokens: number;
+	    toolsTokens: number;
+	    profile: string;
+	    auto: boolean;
+	    overBudget: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatContextEvent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.chatId = source["chatId"];
+	        this.numCtx = source["numCtx"];
+	        this.promptTokens = source["promptTokens"];
+	        this.toolsTokens = source["toolsTokens"];
+	        this.profile = source["profile"];
+	        this.auto = source["auto"];
+	        this.overBudget = source["overBudget"];
+	    }
+	}
 	export class ChatProvider {
 	    id: string;
 	    kind: string;
@@ -549,6 +593,7 @@ export namespace main {
 	    partialSeq: number;
 	    steps: hermes.Step[];
 	    usage: hermes.Usage;
+	    context?: ChatContextEvent;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatView(source);
@@ -563,6 +608,7 @@ export namespace main {
 	        this.partialSeq = source["partialSeq"];
 	        this.steps = this.convertValues(source["steps"], hermes.Step);
 	        this.usage = this.convertValues(source["usage"], hermes.Usage);
+	        this.context = this.convertValues(source["context"], ChatContextEvent);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2360,6 +2406,7 @@ export namespace store {
 	    updatedAt: number;
 	    cliSession: string;
 	    mode: string;
+	    tools: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chat(source);
@@ -2376,6 +2423,7 @@ export namespace store {
 	        this.updatedAt = source["updatedAt"];
 	        this.cliSession = source["cliSession"];
 	        this.mode = source["mode"];
+	        this.tools = source["tools"];
 	    }
 	}
 	export class ChatMessage {

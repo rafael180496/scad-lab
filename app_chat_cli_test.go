@@ -474,8 +474,13 @@ func TestCLIChatTurnStreamsStepsUsageAndSavesTheSession(t *testing.T) {
 	ev.mu.Lock()
 	usage := append([]ChatUsageEvent(nil), ev.usage...)
 	ev.mu.Unlock()
-	if len(usage) != 1 || usage[0].InputTokens != 2+7775 || usage[0].OutputTokens != 120 || usage[0].CostUSD != 0.088648 {
+	if len(usage) != 1 || usage[0].InputTokens != 2+7775+20400 || usage[0].OutputTokens != 120 || usage[0].CostUSD != 0.088648 {
 		t.Errorf("uso: %+v", usage)
+	}
+	// S17: ↑ suma todo lo que el modelo recibió (la caché incluida); el contexto de verdad
+	// es la vuelta más grande, y las vueltas salen del uso de cada mensaje del CLI.
+	if u := usage[0]; u.Rounds != 3 || u.PeakInput != 1503 || u.LastInput != 1503 || u.InputEstimated {
+		t.Errorf("vueltas y contexto: %+v", u)
 	}
 
 	// Lo guardado: texto, pasos, tokens y modelo, igual que en Hermes.
@@ -485,7 +490,7 @@ func TestCLIChatTurnStreamsStepsUsageAndSavesTheSession(t *testing.T) {
 	}
 	m := view.Messages[1]
 	parts := hermes.ParseParts(m.Parts)
-	if m.Role != "assistant" || m.Content != "Voy a renderizar y quedó bien: una caja de 40 mm." || m.InputTokens != 7777 || m.OutputTokens != 120 || m.CostUSD != 0.088648 {
+	if m.Role != "assistant" || m.Content != "Voy a renderizar y quedó bien: una caja de 40 mm." || m.InputTokens != 28177 || m.OutputTokens != 120 || m.CostUSD != 0.088648 {
 		t.Errorf("mensaje: %+v", m)
 	}
 	if len(parts.Steps) != 2 || parts.Steps[0].Tool != "render" || parts.Steps[1].Tool != "preview" || len(parts.Steps[1].Images) != 1 || parts.Model != "claude-opus-5[1m]" {

@@ -162,10 +162,16 @@ La herramienta MCP `export` (y los botones de la app) escribe en `exports/`:
 
 | Para | Formato | Nota |
 |---|---|---|
-| **Bambu Studio** (recomendado) | **`3mf`** | Un objeto con una parte por color; cada parte con su extrusor (`Metadata/model_settings.config`). Los colores de los filamentos los pone el AMS del usuario. |
+| **Bambu Studio** (recomendado) | **`3mf`** | Un objeto con una parte por color; cada parte con su extrusor (`Metadata/model_settings.config`) y su color (`<m:colorgroup>`). Al abrirlo, Bambu Studio muestra «Standard 3mf Import color» para asignar esos colores a filamentos («Append» los agrega; «Color match» los empareja con los del AMS): se acepta con OK. En 02.08.02.x antes sale el aviso «configuración no válida» (defecto de esa versión, inofensivo). |
 | OrcaSlicer | `3mf` | Igual. |
 | Cualquiera | `stl-per-color` | Un STL por color en un zip. En Bambu Studio, importa los STL juntos y responde **Sí** a «¿cargar como un solo objeto con varias partes?»; después asigna el filamento de cada parte. |
 | Una sola pieza | `stl` | Sin color. |
+
+Si el modelo es de varios colores que se tocan (una maceta con texto en relieve, una placa con
+letras), cada `color()` tiene que estar en el **nivel superior** del `.scad`, no dentro de un
+módulo ni de `union()`: así la parte de cada color llega **cerrada**. Con una parte abierta Bambu
+Studio rellena el hueco de la pieza y llena de soportes; la exportación lo avisa («no es un
+sólido cerrado»).
 
 No uses `3mf-prusa`: es para PrusaSlicer. Detalle del formato y qué lee cada slicer:
 skill `openscad-3mf-multicolor`.
@@ -179,5 +185,5 @@ skill `openscad-3mf-multicolor`.
 - [ ] Holguras parametrizadas según el tipo de ajuste.
 - [ ] Agujeros horizontales grandes en lágrima.
 - [ ] Texto ≥ 4–6 mm, trazo ≥ 0.8.
-- [ ] Colores ≤ `colors` del workspace (`printer.json`), un `color()` por filamento.
+- [ ] Colores ≤ `colors` del workspace (`printer.json`), un `color()` por filamento, todos en el nivel superior del archivo.
 - [ ] Exportación `3mf` si el slicer es Bambu Studio (ver sección 5).

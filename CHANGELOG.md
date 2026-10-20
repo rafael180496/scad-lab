@@ -7,6 +7,116 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+### Agregado
+
+- **Un Ollama de poco contexto ya puede modificar un modelo.** Un modelo local de 8 000 o
+  32 000 tokens no entraba con el catálogo completo de herramientas (más de 10 000 tokens
+  solo en descripciones), unas instrucciones largas y el código de una maceta de 600
+  líneas: medido con un Ollama simulado de 8k, **cada vuelta pesaba entre 17 900 y 28 500
+  tokens** contra una ventana de 8 192; ahora, entre 1 900 y 3 500. El chat con un servidor
+  de modelos se adapta a la ventana del modelo:
+  - **Herramientas esenciales.** Un selector nuevo en la barra del chat —«Auto (esenciales)»,
+    «Esenciales» o «Todas», por conversación— elige qué herramientas se le declaran al
+    modelo. Las esenciales son las once que alcanzan para modificar un modelo (leer por
+    partes, buscar, editar unas líneas, parámetros, render, vista y medición), con
+    descripciones cortas y unas instrucciones compactas. «Auto» las usa cuando la ventana del
+    modelo es menor de 32 768 tokens y el catálogo completo si es mayor o no se sabe.
+  - **La ventana de Ollama sale del modelo.** Si no la fijas en Configuración, ScadLab le pide
+    a Ollama la del modelo (con tope de 32 768 y mínimo de 8 192) en lugar de los 16 384
+    fijos de antes; sin esto Ollama recorta el comienzo del prompt sin avisar.
+  - **El turno no acumula contexto de más.** Lo que cada herramienta le devuelve al modelo
+    tiene un tope proporcional a la ventana; una lectura repetida del mismo archivo que no
+    cambió se reemplaza por una nota con su versión; los resultados viejos y el código que
+    el modelo mandó en llamadas anteriores se reducen cuando aprieta el contexto. Entre
+    turnos, lo viejo que ya no cabe se reduce a un resumen automático —qué se pidió, qué se
+    contestó, qué archivos se tocaron— y los últimos mensajes viajan enteros.
+  - **Avisos y «Nueva conversación con resumen».** El contador de contexto mide contra la
+    ventana de verdad y suma el prompt y las herramientas de cada vuelta. Si estos solos pasan
+    del 60 % de la ventana, el chat lo dice y ofrece usar las esenciales; al llegar al 70 % con
+    la conversación, ofrece un botón que le pide al modelo un resumen de unos 300 tokens y
+    abre una conversación nueva —con el mismo proveedor, modelo, modo y herramientas— que
+    empieza con él (si el modelo falla, el resumen es uno automático). La anterior se conserva.
+- **Tiempo y tokens de cada paso y de cada turno.** Cada tarjeta de herramienta muestra, además
+  de su duración, `ctx 7,2k` (el contexto de la vuelta que la pidió) y `+880` (lo que le
+  devolvió al modelo), y el pie de cada respuesta dice «Contexto máx. 12k · ↑ 48k en 5
+  vueltas · ↓ 2k · modelo 41 s · herramientas 6 s». **El ↑ ya no se lee como el contexto**:
+  es la suma de la entrada de todas las vueltas (cada una reenvía el contexto entero) y el
+  contexto de verdad es el máximo; con un CLI, ↑ ahora cuenta también lo que leyó de la
+  caché, y Claude Code (y Antigravity, si su paso lo informa) aportan el contexto máximo y las
+  vueltas. Lo que el proveedor no informa no se muestra. Un turno que termina sin escribir nada
+  —un modelo chico sin contexto, Antigravity al primer rechazo— cuenta qué herramientas ejecutó,
+  qué archivos quedaron cambiados y qué devolvió la última, en lugar de «terminó sin responder».
+
+- **La IA cambia unas líneas de un modelo sin regenerarlo entero.** Medido con Antigravity,
+  cada cambio a una maceta de 600 líneas pasaba por reescribir el archivo completo y tardaba
+  entre 1 min 42 s y 3 min 39 s, con 105 000 a 192 000 tokens de contexto por paso. Ahora la
+  IA se orienta y edita por partes, con las herramientas nuevas `outline_checkpoint` (el mapa
+  del archivo: parámetros por sección, módulos con sus líneas), `find_in_checkpoint` y
+  `read_checkpoint` con `from`/`to`, y cambia solo lo que toca con `edit_checkpoint` (el
+  texto exacto o un rango de líneas; si una edición falla o dos se pisan no se escribe nada, y
+  el error le dice cuál es la línea más parecida). Una medida, un color o un texto del
+  Customizer lo cambia `set_parameters`, que ahora edita el mismo archivo (con su respaldo en el
+  historial) en vez de crear otro; «una versión más ancha» sigue siendo un hijo con
+  `variant`. `update_checkpoint` queda para reescrituras grandes.
+  - **Respuestas cortas.** `render`, `lint`, `measure` y las que editan devuelven un resumen
+    (estado, caja, volumen, ¿cabe?, partes por color y hasta 5 errores con su línea) en vez
+    de varios KB de JSON, `preview` manda una sola vista de 384 px salvo que pidas más, y
+    ninguna herramienta pasa de 6 KB sin pedirlo (`verbose`). Una prueba corre todas las
+    herramientas sobre una maceta de 596 líneas y falla si una se pasa.
+  - **Modelos grandes en archivos de `lib/`.** `extract_module` mueve módulos a
+    `lib/<nombre>.scad` y deja el `include`; renderiza antes y después y, si la caja o el
+    volumen cambian, lo deshace y te lo dice. Los archivos de `lib/` se leen y se editan como un
+    checkpoint, con su propio historial (las librerías instaladas, como BOSL2, siguen de solo
+    lectura).
+  - **Perfil esencial para modelos chicos.** Las once herramientas que alcanzan para modificar
+    un modelo, con descripciones cortas, pesan unos 1 100 tokens contra unos 11 200 del
+    catálogo completo, y hay instrucciones compactas (unos 700 tokens contra unos 6 200 del
+    prompt de siempre con el código abierto).
+
+### Corregido
+
+- **El editor de código mostraba la versión vieja después de que la IA editara el archivo.**
+  Cuando la IA cambiaba un `.scad` con `update_checkpoint` (o se restauraba una versión
+  del historial), «Ver diferencias» y el visor ya tenían el código nuevo, pero el panel
+  Código seguía mostrando el anterior: solo recargaba el texto al cambiar de archivo. Ahora
+  se actualiza solo, sin perder el scroll ni el cursor, siempre que no estés editando a
+  mano (con cambios sin guardar, tu borrador manda y aparece el aviso de siempre).
+- **El 3MF multicolor llegaba a Bambu Studio sin colores ni extrusores.** Un modelo de dos
+  colores (una maceta y su texto en relieve) se abría como una sola pieza en el filamento 1.
+  La causa, leída del código de Bambu Studio 02.08.02.61: ScadLab escribía el color en
+  `<basematerials>`, que Bambu Studio no lee (solo lee `<m:colorgroup>`), así que no había
+  colores que emparejar con los filamentos y el extrusor 2 de la segunda parte se descartaba
+  cuando el proyecto tenía un solo filamento. Ahora cada parte lleva su `<m:colorgroup>`: al
+  abrir el archivo, Bambu Studio muestra su ventana de colores del 3MF («Standard 3mf Import
+  color») con los colores del modelo —por defecto los agrega como filamentos nuevos («Append»);
+  «Color match» los empareja con los del AMS— y asigna el extrusor de cada parte al aceptar. El aviso «El archivo 3mf tiene una configuración no válida, carga solo los datos de
+  geometría» de la 02.08.02 es un defecto de esa versión con cualquier 3MF de otro fabricante
+  (se corrige en la 02.08.03): el archivo carga igual, acéptalo. Orca, Creality Print y
+  Anycubic siguen leyendo las partes y extrusores de `model_settings.config`.
+- **Un modelo de varios colores que se tocan se abría en Bambu Studio con el hueco relleno y
+  llenó de soportes.** Pasaba con una maceta y su texto y marco en relieve de otro color, y con
+  la plantilla de placa de dos colores: cualquier color apoyado en otro. La causa, medida pieza
+  por pieza: OpenSCAD funde todo lo del nivel superior en un solo sólido antes de exportar, y la
+  cara por la que dos colores se tocaban desaparece, así que al repartir el modelo por color
+  cada parte quedaba como una cáscara abierta (109 aristas sin cerrar en cada parte de la
+  maceta de prueba, 226 en la tuya). Bambu Studio lamina cada parte por separado y una cáscara
+  abierta se rellena mal. No era el orden de las caras, ni las coordenadas, ni el tipo de parte:
+  esos salían bien. Ahora, si las partes salen abiertas, ScadLab renderiza otra vez con
+  `--enable=lazy-union` y cada color llega como un sólido cerrado, con el volumen y la caja de
+  ese color solo; el motor integrado lo hace igual y la vista de partes del visor también. Si
+  el color está dentro de un `union()` o de un módulo que contiene varios `color()`, no hay
+  forma de separarlo sin perder esa cara: la exportación lo avisa («no es un sólido cerrado») y
+  las skills piden poner cada `color()` en el nivel superior del archivo. Si ya exportaste un
+  modelo así, vuelve a exportarlo.
+- **En Antigravity las tarjetas decían `call_mcp_tool` y la shell terminaba el turno sin
+  explicación.** Antigravity 1.4.x manda el nombre de la herramienta de ScadLab dentro de
+  `tool_info.parameters`, no donde ScadLab la buscaba: ahora cada tarjeta es la herramienta
+  que es (`render`, `edit_checkpoint`…) y ScadLab reconoce un checkpoint creado. Y cuando el
+  modelo intenta ejecutar un comando de shell (`run_command`), Antigravity —que en modo no
+  interactivo lo rechaza— termina el turno: el chat ahora le pide al modelo que no lo intente
+  y, si lo intenta, nombra el comando bloqueado y dice que no se ejecutó nada. No se usa
+  `--sandbox`, que ejecutaría los comandos en vez de bloquearlos, ni reglas globales de shell.
+
 ## [0.2.1] - 2026-10-20
 
 ### Agregado

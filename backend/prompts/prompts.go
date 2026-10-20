@@ -31,6 +31,10 @@ const MaxSourceBytes = 12 * 1024
 // workspace largo, los últimos son los que importan para ramificar.
 const maxListedCheckpoints = 40
 
+// maxCompactCheckpoints es cuántos checkpoints lista el prompt compacto: los
+// últimos, que son los que sirven para ramificar.
+const maxCompactCheckpoints = 6
+
 // maxPromptImages limita las imágenes que el prompt lista: más de las que un
 // modelo puede mirar bien no le sirven y agrandan el prompt.
 const maxPromptImages = 10
@@ -50,6 +54,11 @@ type Context struct {
 	Checkpoints   []string // nombres existentes (para sugerir el siguiente)
 	CurrentFile   string   // checkpoint seleccionado ("" si ninguno)
 	CurrentSource string   // su código (se recorta a MaxSourceBytes)
+
+	// Compact (S17) elige la plantilla agent-compact.<idioma>.md en vez de la
+	// completa (solo AgentSystemPrompt): para un modelo con poco contexto. No
+	// embebe el código del checkpoint abierto ni lista más de maxCompactCheckpoints.
+	Compact bool
 
 	// S15: las imágenes que el usuario adjuntó, como rutas relativas al workspace
 	// ("refs/images/foto-1a2b3c4d.jpg"). Con ellas, los prompts mandan a la skill
@@ -170,8 +179,12 @@ func buildData(c Context) tplData {
 	d.Next = nextNumber(append(append([]string{}, names...), d.CurrentFile))
 	listed := names
 	prefix := ""
-	if len(listed) > maxListedCheckpoints {
-		listed = listed[len(listed)-maxListedCheckpoints:]
+	limit := maxListedCheckpoints
+	if c.Compact {
+		limit = maxCompactCheckpoints
+	}
+	if len(listed) > limit {
+		listed = listed[len(listed)-limit:]
 		prefix = "… "
 	}
 	if len(listed) > 0 {
@@ -185,7 +198,11 @@ func buildData(c Context) tplData {
 		d.Parent = latest(names)
 	}
 
-	if src := strings.TrimSpace(strings.ReplaceAll(c.CurrentSource, "\r\n", "\n")); src != "" {
+	if src := strings.TrimSpace(strings.ReplaceAll(c.CurrentSource, "\r\n", "\n")); src != "" && c.Compact {
+		// El compacto no embebe el código: dice cuántas líneas tiene y el modelo lo
+		// lee por partes (outline_checkpoint / read_checkpoint con from/to).
+		d.LinesTotal = strings.Count(src, "\n") + 1
+	} else if src != "" {
 		shown, truncated := truncateLines(src, MaxSourceBytes)
 		d.HasSource = true
 		d.Source = shown
@@ -309,7 +326,7 @@ func oneLine(s string, maxRunes int) string {
 // render del checkpoint más nuevo (auto-iteración): una sola línea, en el
 // idioma pedido, sin saltos de línea ni caracteres de control, que no termina
 // en salto (la terminal decide si manda Enter). Pide leer RENDER_ERRORS.md y
-// corregirlo editando ese mismo archivo con update_checkpoint (file=fileName).
+// corregirlo editando ese mismo archivo con edit_checkpoint (file=fileName).
 //
 // fileName se sanea con SafeFileName: un nombre con caracteres raros nunca
 // rompe la línea ni inyecta nada. Empieza por "ScadLab:" a propósito: un
@@ -349,9 +366,9 @@ func Nudge(fileName string, errorCount int, lang string) string {
 		}
 	}
 	if es {
-		fmt.Fprintf(&b, ". Lee RENDER_ERRORS.md y corrígelo editando ese mismo archivo con update_checkpoint (file=%s); la versión rota queda en su historial.", parent)
+		fmt.Fprintf(&b, ". Lee RENDER_ERRORS.md y corrígelo editando ese mismo archivo con edit_checkpoint (file=%s); la versión rota queda en su historial.", parent)
 	} else {
-		fmt.Fprintf(&b, ". Read RENDER_ERRORS.md and fix it by editing that same file with update_checkpoint (file=%s); the broken version stays in its history.", parent)
+		fmt.Fprintf(&b, ". Read RENDER_ERRORS.md and fix it by editing that same file with edit_checkpoint (file=%s); the broken version stays in its history.", parent)
 	}
 	return b.String()
 }

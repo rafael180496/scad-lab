@@ -63,7 +63,10 @@ type agentData struct {
 	References []string
 }
 
-var agentTemplates = map[string]*template.Template{}
+var (
+	agentTemplates        = map[string]*template.Template{}
+	agentCompactTemplates = map[string]*template.Template{}
+)
 
 func init() {
 	for _, lang := range []string{"es", "en"} {
@@ -72,15 +75,26 @@ func init() {
 			panic("prompts: falta la plantilla embebida del agente " + lang + ": " + err.Error())
 		}
 		agentTemplates[lang] = template.Must(template.New("agent-" + lang).Option("missingkey=error").Parse(string(raw)))
+		raw, err = assets.FS.ReadFile("prompts/agent-compact." + lang + ".md")
+		if err != nil {
+			panic("prompts: falta la plantilla compacta del agente " + lang + ": " + err.Error())
+		}
+		agentCompactTemplates[lang] = template.Must(template.New("agent-compact-" + lang).Option("missingkey=error").Parse(string(raw)))
 	}
 }
 
 // AgentSystemPrompt arma el prompt de sistema de Hermes. Con Tools describe el
 // bucle de herramientas (crear checkpoint → render → preview → measure →
-// corregir en un checkpoint nuevo), las skills disponibles y cómo tratar las
+// corregir editando el mismo archivo), las skills disponibles y cómo tratar las
 // referencias y fotos adjuntas. Sin Tools devuelve el prompt de S5
 // (SystemPrompt): el modelo no tiene herramientas, así que entrega bloques de
 // código que el usuario guarda como checkpoint.
+//
+// Con Context.Compact (S17) usa la plantilla agent-compact.<idioma>.md: las mismas
+// reglas en ≤ 1 200 tokens, para un modelo de contexto chico. Supone el perfil de
+// herramientas esencial (mcp.ProfileEssential): solo nombra las que ese perfil
+// ofrece, no incluye el código del checkpoint abierto (el modelo lo lee por
+// partes) y deja de lado las skills, las referencias y las imágenes.
 func AgentSystemPrompt(c AgentContext) string {
 	if !c.Tools {
 		return SystemPrompt(c.Context)
@@ -109,8 +123,12 @@ func AgentSystemPrompt(c AgentContext) string {
 			d.References = append(d.References, p)
 		}
 	}
+	tpl := agentTemplates[lang]
+	if c.Compact {
+		tpl = agentCompactTemplates[lang]
+	}
 	var b bytes.Buffer
-	if err := agentTemplates[lang].Execute(&b, d); err != nil {
+	if err := tpl.Execute(&b, d); err != nil {
 		panic(fmt.Sprintf("prompts: render agente %s: %v", lang, err))
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"

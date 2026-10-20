@@ -107,6 +107,10 @@ Límite: con algún `color()`, el OFF escribe las caras sin color con el amarill
 `#F9D72C` explícito; se lee como «sin color» (parte `Default`), así que un
 `color("#F9D72C")` deliberado se confunde con el defecto.
 
+**S17:** el motor integrado recibe también `--enable=lazy-union` cuando `parts.Load3MF` pide el segundo render (partes
+abiertas al partir por color); la conversión OFF → 3MF (`ConvertOFFTo3MF`) da los mismos sólidos que el nativo
+(`backend/scadwasm/maceta_test.go`).
+
 ## Cancelación y rendimiento
 
 `WithCloseOnContextDone(true)`: cancelar el contexto corta la instancia aunque

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"scadlab/backend/checkpoint"
 	"scadlab/backend/detect"
 )
 
@@ -55,7 +56,22 @@ func TestGetAndSetParameters(t *testing.T) {
 	tb, ws := newToolbox(t, false)
 	a := tb.create(t, "caja", paramsModel, nil)
 
-	got := tb.mustJSON(t, "get_parameters", map[string]any{"file": a})
+	// Compacto por defecto: por sección, con rango como min:step:max.
+	compact := tb.mustJSON(t, "get_parameters", map[string]any{"file": a})
+	secs := compact["sections"].([]any)
+	if compact["count"].(float64) != 5 || len(secs) != 2 || secs[0].(map[string]any)["section"] != "Caja" || secs[1].(map[string]any)["section"] != "Hidden" {
+		t.Fatalf("get_parameters compacto: %v", compact)
+	}
+	w0 := secs[0].(map[string]any)["params"].([]any)[0].(map[string]any)
+	if w0["name"] != "width" || w0["value"] != 20.0 || w0["range"] != "5:1:100" || w0["desc"] != "Ancho en mm" || w0["line"] != 4.0 {
+		t.Errorf("width compacto: %v", w0)
+	}
+	lid := secs[0].(map[string]any)["params"].([]any)[3].(map[string]any)
+	if lid["name"] != "lid" || lid["options"].([]any)[1] != "slide" {
+		t.Errorf("lid compacto: %v", lid)
+	}
+
+	got := tb.mustJSON(t, "get_parameters", map[string]any{"file": a, "verbose": true})
 	if got["count"].(float64) != 5 {
 		t.Fatalf("get_parameters: %v", got)
 	}
@@ -74,42 +90,81 @@ func TestGetAndSetParameters(t *testing.T) {
 	}
 	// Un checkpoint sin parámetros lo dice.
 	plain := tb.create(t, "lisa", srcCube, nil)
-	if g := tb.mustJSON(t, "get_parameters", map[string]any{"file": plain}); g["count"].(float64) != 0 || g["note"] == nil {
+	if g := tb.mustJSON(t, "get_parameters", map[string]any{"file": plain}); g["count"].(float64) != 0 || g["note"] == nil || g["sections"] != nil && len(g["sections"].([]any)) != 0 {
 		t.Errorf("sin parámetros: %v", g)
 	}
 
-	// set_parameters: un hijo nuevo; el padre no cambia.
+	// set_parameters EN EL LUGAR (S17): ningún hijo, el archivo cambia y la versión
+	// anterior queda en su historial.
+	filesBefore := scadCount(t, ws)
 	parentBefore, _ := os.ReadFile(filepath.Join(ws, a))
 	set := tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 35, "lid": "slide", "tall": "8"}})
-	child, _ := set["file"].(string)
-	if child == "" || set["parent"] != a || len(set["changes"].([]any)) != 3 || set["warnings"] != nil {
+	if set["file"] != a || set["updated"] != true || set["created"] != nil || len(set["changes"].([]any)) != 3 || set["warnings"] != nil {
 		t.Fatalf("set_parameters: %v", set)
 	}
-	if after, _ := os.ReadFile(filepath.Join(ws, a)); string(after) != string(parentBefore) {
-		t.Error("set_parameters modificó el checkpoint original")
+	if scadCount(t, ws) != filesBefore {
+		t.Error("set_parameters en el lugar no crea checkpoints")
 	}
-	src := tb.must(t, "read_checkpoint", map[string]any{"file": child}).Text
-	if !strings.HasPrefix(src, "// @checkpoint parent="+a+` desc="Parameters: `) {
-		t.Errorf("cabecera: %q", strings.SplitN(src, "\n", 2)[0])
+	if r, _ := set["render"].(map[string]any); r["ok"] != true {
+		t.Errorf("render del resultado: %v", set["render"])
+	}
+	src := tb.must(t, "read_checkpoint", map[string]any{"file": a}).Text
+	if !strings.HasPrefix(src, `// @checkpoint parent= desc="caja"`) {
+		t.Errorf("la cabecera no se toca: %q", strings.SplitN(src, "\n", 2)[0])
 	}
 	for _, want := range []string{"width = 35; // [5:1:100]", `lid = "slide"; // [snap, slide]`, "tall = 8;   // [1:1:50]", "depth = 10; // [5:1:100]", "eps = 0.01;", "// Ancho en mm"} {
 		if !strings.Contains(src, want) {
 			t.Errorf("falta %q en:\n%s", want, src)
 		}
 	}
-	// Por defecto parte del padre activo; el activo avanzó al hijo.
-	set2 := tb.mustJSON(t, "set_parameters", map[string]any{"values": `{"depth": 50}`})
-	if set2["parent"] != child {
-		t.Errorf("sin file debía partir de %s: %v", child, set2["parent"])
+	hist, err := checkpoint.History(ws, a)
+	if err != nil || len(hist) != 1 || hist[0].Tool != "set_parameters" || !strings.Contains(hist[0].Note, "width 20 → 35") {
+		t.Fatalf("historial: %+v %v", hist, err)
+	}
+	if v, _ := checkpoint.ReadVersion(ws, a, hist[0].ID); v != string(parentBefore) {
+		t.Errorf("respaldo: %q", v)
+	}
+	// Un segundo cambio: otra versión.
+	tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": `{"depth": 50}`})
+	if h, _ := checkpoint.History(ws, a); len(h) != 2 {
+		t.Errorf("historial tras el segundo cambio: %+v", h)
 	}
 	// Fuera de rango: se aplica con aviso.
-	set3 := tb.mustJSON(t, "set_parameters", map[string]any{"values": map[string]any{"width": 500}})
+	set3 := tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 500}})
 	if w, _ := set3["warnings"].([]any); len(w) != 1 || !strings.Contains(w[0].(string), "outside") {
 		t.Errorf("fuera de rango: %v", set3)
 	}
+	// Sin `file` parte del padre activo (el más nuevo si no hay): se edita ese, no se crea nada.
+	tb.mustJSON(t, "set_active_parent", map[string]any{"file": a})
+	before2 := scadCount(t, ws)
+	if got := tb.mustJSON(t, "set_parameters", map[string]any{"values": map[string]any{"width": 21}}); got["file"] != tb.e.defaultParent() || got["updated"] != true {
+		t.Errorf("sin file: %v", got)
+	}
+	if scadCount(t, ws) != before2 {
+		t.Error("sin file tampoco crea un checkpoint")
+	}
 
-	// Errores: no crean nada.
+	// variant=true: el comportamiento de antes (un hijo nuevo; el original no cambia).
+	aBefore, _ := os.ReadFile(filepath.Join(ws, a))
+	v := tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 60}, "variant": true})
+	child, _ := v["file"].(string)
+	if child == "" || child == a || v["created"] != true || v["updated"] != nil || v["parent"] != a || len(v["changes"].([]any)) != 1 {
+		t.Fatalf("variante: %v", v)
+	}
+	if after, _ := os.ReadFile(filepath.Join(ws, a)); string(after) != string(aBefore) {
+		t.Error("variant=true modificó el checkpoint original")
+	}
+	csrc := tb.must(t, "read_checkpoint", map[string]any{"file": child}).Text
+	if !strings.HasPrefix(csrc, "// @checkpoint parent="+a+` desc="Parameters: `) || !strings.Contains(csrc, "width = 60;") {
+		t.Errorf("hijo: %q", strings.SplitN(csrc, "\n", 2)[0])
+	}
+	if h, _ := checkpoint.History(ws, child); len(h) != 0 {
+		t.Errorf("el hijo nace sin historial: %+v", h)
+	}
+
+	// Errores: no crean ni cambian nada.
 	before := scadCount(t, ws)
+	snapshot, _ := os.ReadFile(filepath.Join(ws, a))
 	for _, vals := range []any{
 		map[string]any{}, nil, "no es json",
 		map[string]any{"nada": 1}, map[string]any{"eps": 1}, map[string]any{"width": "ancho"}, map[string]any{"lid": 3},
@@ -120,7 +175,14 @@ func TestGetAndSetParameters(t *testing.T) {
 		}
 		tb.fails(t, "set_parameters", args)
 	}
-	tb.fails(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 20}}) // igual al actual: nada que cambiar
+	cur := tb.mustJSON(t, "get_parameters", map[string]any{"file": a, "verbose": true})
+	var curWidth float64
+	for _, p := range cur["parameters"].([]any) {
+		if m := p.(map[string]any); m["name"] == "width" {
+			curWidth = m["value"].(float64)
+		}
+	}
+	tb.fails(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": curWidth}}) // igual al actual: nada que cambiar
 	for _, f := range []string{"../" + a, "/etc/passwd", "sub/" + a, "no-existe.scad", a + "\x00"} {
 		tb.fails(t, "set_parameters", map[string]any{"file": f, "values": map[string]any{"width": 1}})
 		tb.fails(t, "get_parameters", map[string]any{"file": f})
@@ -128,22 +190,34 @@ func TestGetAndSetParameters(t *testing.T) {
 	if scadCount(t, ws) != before {
 		t.Error("un set_parameters que falla creó un checkpoint")
 	}
+	if after, _ := os.ReadFile(filepath.Join(ws, a)); string(after) != string(snapshot) {
+		t.Error("un set_parameters que falla modificó el archivo")
+	}
 }
 
-// El hijo de set_parameters renderiza con los valores nuevos.
-func TestSetParametersChildRendersWithNewValues(t *testing.T) {
+// set_parameters renderiza con los valores nuevos, en el lugar y como variante, en los dos motores.
+func TestSetParametersRendersWithNewValues(t *testing.T) {
 	eachEngine(t, func(t *testing.T, tb *Toolbox, ws string) {
 		a := tb.create(t, "caja", paramsModel, nil)
 		if x, y, z := tb.meshSize(t, a); x != 20 || y != 10 || z != 5 {
 			t.Fatalf("original: %v×%v×%v", x, y, z)
 		}
-		child := tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 42, "tall": 7.5}})["file"].(string)
+		// Variante: el original queda igual.
+		child := tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 42, "tall": 7.5}, "variant": true})["file"].(string)
 		if x, y, z := tb.meshSize(t, child); x != 42 || y != 10 || z != 7.5 {
 			t.Errorf("hijo: %v×%v×%v", x, y, z)
 		}
-		// Y el original sigue igual.
 		if x, _, _ := tb.meshSize(t, a); x != 20 {
 			t.Errorf("el original cambió: %v", x)
+		}
+		// En el lugar: el mismo archivo ahora mide otra cosa, y el resultado ya lo dice.
+		got := tb.mustJSON(t, "set_parameters", map[string]any{"file": a, "values": map[string]any{"width": 30}})
+		size := got["render"].(map[string]any)["mesh"].(map[string]any)["sizeMm"].(map[string]any)
+		if got["file"] != a || size["x"] != 30.0 || size["y"] != 10.0 {
+			t.Errorf("resultado en el lugar: %v", got)
+		}
+		if x, _, _ := tb.meshSize(t, a); x != 30 {
+			t.Errorf("en el lugar: %v", x)
 		}
 	})
 }
@@ -239,9 +313,9 @@ func TestCreateFromTemplateRendersWithParameters(t *testing.T) {
 		if x < 43.5 || x > 44.5 || y < 43.5 || y > 44.5 || z < 19.9 || z > 20.1 {
 			t.Errorf("knob 44×20: %v×%v×%v", x, y, z)
 		}
-		// Y set_parameters sobre el resultado.
-		child := tb.mustJSON(t, "set_parameters", map[string]any{"values": map[string]any{"knob_d": 30}})["file"].(string)
-		if x, _, _ := tb.meshSize(t, child); x < 29.5 || x > 30.5 {
+		// Y set_parameters sobre el resultado (en el lugar).
+		file := tb.mustJSON(t, "set_parameters", map[string]any{"values": map[string]any{"knob_d": 30}})["file"].(string)
+		if x, _, _ := tb.meshSize(t, file); x < 29.5 || x > 30.5 {
 			t.Errorf("knob 30: %v", x)
 		}
 	})

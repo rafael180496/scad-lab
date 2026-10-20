@@ -121,7 +121,11 @@ func TestPrinterInfoFilamentDiameter(t *testing.T) {
 
 func listPrinters(t *testing.T, tb *Toolbox, args map[string]any) (int, []map[string]any) {
 	t.Helper()
-	out := tb.mustJSON(t, "list_printers", args)
+	full := map[string]any{"verbose": true}
+	for k, v := range args {
+		full[k] = v
+	}
+	out := tb.mustJSON(t, "list_printers", full)
 	var rows []map[string]any
 	for _, r := range out["printers"].([]any) {
 		rows = append(rows, r.(map[string]any))
@@ -191,7 +195,7 @@ func TestListPrintersMarksTheCurrentOne(t *testing.T) {
 	if err := st.SetWorkspaceConfig(w.ID, "creality-k1c", nil, store.WorkspacePrint{}); err != nil {
 		t.Fatal(err)
 	}
-	out := tb.mustJSON(t, "list_printers", nil)
+	out := tb.mustJSON(t, "list_printers", map[string]any{"verbose": true})
 	if out["currentPrinter"] != "creality-k1c" {
 		t.Errorf("currentPrinter: %v", out["currentPrinter"])
 	}
@@ -489,4 +493,42 @@ func zipOpen(path string) (map[string]bool, error) {
 		has[f.Name] = true
 	}
 	return has, nil
+}
+
+// Sin verbose, list_printers no vuelca el catálogo (decenas de KB): sin filtro cuenta
+// por marca y con filtro da filas cortas.
+func TestListPrintersIsCompactByDefault(t *testing.T) {
+	tb, _, st, w := registeredToolbox(t)
+	if err := st.SetWorkspaceConfig(w.ID, "creality-k1c", nil, store.WorkspacePrint{}); err != nil {
+		t.Fatal(err)
+	}
+	out := tb.must(t, "list_printers", nil)
+	if len(out.Text) > 2<<10 {
+		t.Errorf("sin filtro: %d bytes", len(out.Text))
+	}
+	var sum map[string]any
+	if err := json.Unmarshal([]byte(out.Text), &sum); err != nil {
+		t.Fatal(err)
+	}
+	brands, _ := sum["brands"].([]any)
+	if len(brands) != 7 || sum["printers"] != nil || sum["currentPrinter"] != "creality-k1c" || !strings.Contains(str(sum, "note"), "filter with `brand`") {
+		t.Errorf("resumen por marca: %v", sum)
+	}
+	out = tb.must(t, "list_printers", map[string]any{"brand": "bambu"})
+	var rows map[string]any
+	if err := json.Unmarshal([]byte(out.Text), &rows); err != nil {
+		t.Fatal(err)
+	}
+	ps, _ := rows["printers"].([]any)
+	if len(ps) != 12 || len(out.Text) > 4<<10 {
+		t.Fatalf("bambu: %d filas, %d bytes", len(ps), len(out.Text))
+	}
+	first := ps[0].(map[string]any)
+	if first["id"] == nil || first["name"] == nil || first["volumeMm"] == nil || first["colors"] == nil || first["slicer"] != nil || first["brandSkill"] != nil {
+		t.Errorf("fila corta: %v", first)
+	}
+	out = tb.must(t, "list_printers", map[string]any{"query": "k1c"})
+	if !strings.Contains(out.Text, `"current":true`) {
+		t.Errorf("la actual va marcada: %s", out.Text)
+	}
 }

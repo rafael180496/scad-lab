@@ -71,7 +71,7 @@ func TestAutoIterateNudgesOncePerFailure(t *testing.T) {
 		t.Fatalf("se esperaban 2 escrituras (texto y Enter), hubo %v", f.writes)
 	}
 	text := strings.TrimPrefix(f.writes[0], "term-1:")
-	for _, want := range []string{"004-usb-c.scad", "1 error", "RENDER_ERRORS.md", "update_checkpoint"} {
+	for _, want := range []string{"004-usb-c.scad", "1 error", "RENDER_ERRORS.md", "edit_checkpoint"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("el aviso no menciona %q: %s", want, text)
 		}

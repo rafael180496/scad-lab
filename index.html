@@ -1780,6 +1780,9 @@ color("SteelBlue") difference() {
   <p><strong>“Query only” keeps working.</strong> The rules are global —the same in Agent and in Query only—, so ScadLab's own server enforces the mode: during a Query-only turn
   the chat leaves a mark in the project (<code>.scadlab/turn-mode</code>, removed when the turn ends, with an expiry so it is never left behind) and the server refuses the tools that change the project
   with the reason, so Antigravity hands you the design in a block. In Agent mode everything goes through. The shell stays denied and <code>--dangerously-skip-permissions</code> is never used.</p>
+  <p><strong>The shell.</strong> In non-interactive mode Antigravity refuses any terminal command (<code>run_command</code>) and, just like with a tool without permission, <strong>ends the turn</strong>: the command never runs.
+  ScadLab asks the model not to try; if it does, the chat message names the blocked command and says nothing was run. <code>--sandbox</code> is not used (it would run the commands inside a sandbox, the opposite of blocking them), nor
+  global shell rules that would also affect your terminal. A turn that ends without writing anything no longer says just “finished without an answer”: it tells which tools it ran, which files were changed and what the last one returned.</p>
   <div class="note"><span class="lbl">They are global</span><p>The rules apply to <strong>every</strong> use of Antigravity, also when you open it yourself (in ScadLab's terminal or anywhere else): its permission prompts
   will not ask for ScadLab's tools, the ones that write included. If you prefer to approve them one by one, remove them as explained next.</p></div>
 
@@ -2001,7 +2004,8 @@ Fix 004-add-hinge.scad in place with the update_checkpoint tool.</code></pre></d
     <li><strong>Message box.</strong> The shortcuts are shown under the box: <kbd>Enter</kbd> sends, <kbd>Shift+Enter</kbd> adds a line and <kbd>⌘/Ctrl+Enter</kbd> also sends.
       Pending attachments show above the box and <strong>Stop</strong> shows a clock.</li>
     <li><strong>Context counter.</strong> Next to the shortcuts, the <em>estimated</em> tokens of the draft plus the conversation (4 characters ≈ 1 token) against the model's window, when the provider
-      reports it; it turns amber at 70 % and red at 90 %, and it is the cue to start a new chat. It does not count the system instructions or the attachments.</li>
+      reports it; it turns amber at 70 % and red at 90 %, and it is the cue to start a new chat. With a server it measures against the effective window of the last turn and adds the prompt and the tools
+      (see <a href="#ia-hermes--chicos">Small models</a>); it does not count the attachments.</li>
   </ul>
 
   <h2 id="ia-hermes--agente">The modes: Ask only and Agent</h2>
@@ -2091,11 +2095,40 @@ Fix 004-add-hinge.scad in place with the update_checkpoint tool.</code></pre></d
     <li>The conversations are saved <strong>per project</strong>. When you open ScadLab again you resume the last one. The list's search box looks at the <strong>title and what was said</strong>
       (from 2 letters, in the 60 most recent conversations) and highlights the match. You can <strong>rename</strong> one (up to 120 characters; also by clicking the title in the bar) and
       <strong>delete</strong> it, with a confirmation: the checkpoints you saved from it are not touched.</li>
-    <li>Below each answer you see the <strong>tokens</strong> of the turn (input and output) and, if the provider publishes prices, the
-      <strong>cost</strong>. If the server does not report it, no cost is shown: a missing cost is not “free”.</li>
+    <li>Below each answer you see the <strong>turn footer</strong>: the tokens (input and output), the peak context, the time and, if the provider publishes prices, the
+      <strong>cost</strong> (see <a href="#ia-hermes--tokens">Time and tokens of each turn</a>). If the server does not report the cost, none is shown: a missing cost is not “free”.</li>
     <li>After reopening the app the model <strong>remembers the conversation</strong> (what you wrote, what it answered and the references you attached), but not the
       detail of its earlier steps: those are in the checkpoints. A CLI also resumes the session it kept itself.</li>
   </ul>
+
+  <h2 id="ia-hermes--tokens">Time and tokens of each turn</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-turn-stats.png" alt="An Ollama turn with four cards —read the outline, search the code, edit the checkpoint and render— each one with its time, “ctx 7.2k” and “+880”; under the answer, the footer “Peak context 12k · ↑ 48k over 5 rounds · ↓ 2k · model 41 s · tools 2.6 s”" loading="lazy"><figcaption>Each card says how long it took and how much context there was; the turn footer, the peak context, the input sum, and the time in the model and in the tools.</figcaption></figure>
+  <p>To see where time and context go, every step card shows, besides how long it took, <strong><code>ctx 7.2k</code></strong> —the context of the round that asked for that step: what the model had in front of it— and
+  <strong><code>+880</code></strong> —what the tool sent back to the model, estimated—. Unfolded, the card gives the full measurements. Under every answer, the <strong>turn footer</strong>:</p>
+  <ul>
+    <li><strong>Peak context</strong> is the round with the most input in the turn: what really filled the model's window. It is the number to compare with its limit.</li>
+    <li><strong>↑</strong> is the <em>sum</em> of the input of all the rounds (<em>“over 5 rounds”</em>): every round resends the whole context, so a 5-round turn with 10k of context adds up to ~50k. It used to be read as if it were the
+      context; it is not, and it should not be compared with the window. <strong>↓</strong> is what the model wrote.</li>
+    <li><strong>model</strong> and <strong>tools</strong> are the time spent waiting for the model and running the tools.</li>
+    <li>A value the provider did not report is not shown; with <strong>≈</strong> it is an estimate (the server did not report the input). The CLIs report whatever their stream carries: Claude Code gives the usage of each message (so there is a peak context and rounds);
+      the others, only the total —which now also counts what was read from the cache— and the time.</li>
+  </ul>
+
+  <h2 id="ia-hermes--chicos">Small models: essential tools and context</h2>
+  <figure class="shot"><img src="docs/screenshots/chat-tools.png" alt="The tools selector open in the chat bar with an 8k Ollama: “Auto (essential)”, “Essential” —checked— and “All”, each with its explanation" loading="lazy"><figcaption>The tools selector in the bar: Auto, Essential or All, for each conversation.</figcaption></figure>
+  <p>A local model with 8,000 or 32,000 tokens of context does not fit ScadLab's whole tool catalog, long instructions and the code of a 600-line planter. So, with a model server:</p>
+  <ul>
+    <li><strong>Tools.</strong> The bar selector (only with servers and in Agent mode; in a narrow panel it is in the “…” menu) picks which tools are declared to the model in <strong>that conversation</strong>:
+      <strong>Essential</strong> (read by parts, search, edit a few lines, parameters, render, preview and measuring, with short descriptions and compact instructions), <strong>All</strong>, or <strong>Auto</strong>, which uses the essential ones
+      when the model's window is under 32,768 tokens and all of them if it is larger or unknown. If the model asks for another tool of the catalog, it runs anyway.</li>
+    <li><strong>Ollama's window.</strong> ScadLab asks Ollama for the server's window if you set it in Settings; otherwise the model's, capped at 32,768 with a minimum of 8,192 (without this, Ollama cuts the start of the prompt without telling you).</li>
+    <li><strong>Inside the turn</strong> the model does not pile up extra context: what a tool sends back has a cap proportional to the window, a repeated read of the same unchanged file is replaced by a note with its version,
+      and old results shrink to a note. <strong>Between turns</strong>, old messages that no longer fit are reduced to an automatic summary (what was asked, what was answered, which files were touched) and the latest messages travel whole.</li>
+  </ul>
+  <figure class="shot"><img src="docs/screenshots/chat-context.png" alt="The chat with an 8k Ollama at 75% of the window: above the message box, an amber notice “The conversation already takes 75% of the model window” with the New conversation with summary button; the counter reads 6.1k / 8.2k" loading="lazy"><figcaption>Past 70% of the window, the chat offers to continue in a new conversation that starts with a summary.</figcaption></figure>
+  <p>The <strong>context counter</strong> measures against the effective window and adds what every round carries (the prompt and the tools, which the last turn reported). Two notices above the box: if <strong>the prompt and the tools alone pass 60%</strong>
+  of the window, it says so and offers <em>Use essential</em>; if <strong>the conversation reaches 70%</strong>, it offers <strong>New conversation with summary</strong>: the model writes a summary of about 300 tokens (if the server fails, an automatic one is built) and a new
+  conversation opens, with the same provider, model, mode and tools, starting with that summary. The earlier conversation is kept as it was.</p>
 
   <h2 id="ia-hermes--contexto">What the model knows about your workspace</h2>
   <ul>
@@ -2510,14 +2543,21 @@ description: Hole sizes for heat-set inserts and M3 screws from my shop.
     <li>Open the file in Bambu Studio (with <strong>Open in Bambu Studio</strong> or with <strong>File → Import</strong>
     or by dragging it into the window).</li>
     <li>If it asks whether to load it as one object with several parts, answer yes.</li>
+    <li>Bambu Studio 02.08.02 first shows <em>“The 3mf file has invalid config, load geometry data only”</em>: it is a quirk
+    of that version with any 3MF that does not come from Bambu Studio, and the file loads anyway. Accept it. (From
+    02.08.03 on it is only a notice.)</li>
+    <li>Then the <strong>Standard 3mf Import color</strong> window opens with the model's colors. By default
+    (<strong>Append</strong>) it adds them as new filaments; <strong>Color match</strong> matches them to the ones you
+    already have in the AMS. Click <strong>OK</strong>.</li>
     <li>Check the object list: you should see <strong>one object with a part per color</strong>, each part with its
-    extruder (1, 2…) and its color's name.</li>
+    extruder (1, 2…) and its filament's color.</li>
     <li><strong>Assign the AMS filaments</strong> to each extruder and slice. No geometry errors should
     appear.</li>
   </ol>
-  <p>A model without <code>color()</code> comes out as a single-part object.</p>
+  <p>A model without <code>color()</code> comes out as a single-part object. If you close the colors window without
+  accepting it, the second part keeps its extruder only if the project already has two or more filaments.</p>
   <div class="note"><span class="lbl">You set the filament colors</span><p>The 3MF carries each part's color
-  as a reference, but you choose the real filament in Bambu Studio's AMS.</p></div>
+  so Bambu Studio can match it to a filament, but you choose the real filament in the AMS.</p></div>
 </article>
 
 <article class="topic" id="imprimir-multicolor" data-title="Multicolor with the AMS">

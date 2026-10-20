@@ -330,6 +330,10 @@ export function NewChat(arg1, arg2, arg3) {
   return window['go']['main']['App']['NewChat'](arg1, arg2, arg3);
 }
 
+export function NewChatWithSummary(arg1) {
+  return window['go']['main']['App']['NewChatWithSummary'](arg1);
+}
+
 export function OpenInSlicer(arg1, arg2) {
   return window['go']['main']['App']['OpenInSlicer'](arg1, arg2);
 }
@@ -560,6 +564,10 @@ export function SetChatMode(arg1, arg2) {
 
 export function SetChatModel(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetChatModel'](arg1, arg2, arg3);
+}
+
+export function SetChatToolProfile(arg1, arg2) {
+  return window['go']['main']['App']['SetChatToolProfile'](arg1, arg2);
 }
 
 export function SetCheckpointUI(arg1, arg2, arg3, arg4) {

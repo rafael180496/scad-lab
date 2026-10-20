@@ -89,3 +89,27 @@ ImportMiniToolsServers(dryRun bool) (MiniToolsImport, error)    // dryRun=true n
 el modo es el de la conversación (`chat.mode`; `SendOptions.Agent`, si viene, lo fuerza en ese turno) y `maxSteps` se ignora; los eventos son los de S12 (`chat:delta`,
 `chat:step`, `chat:usage`, `chat:done`, `chat:error`). `store.Chat` gana `cliSession` (el id de conversación del CLI).
 Un proveedor caído o un CLI ausente **no** son error de `ProviderHealth`: viajan con `ok=false` y el motivo en `error`.
+
+## Ventana, herramientas, resumen y tiempos — `app_chat_context.go`, `app_chat.go` (S17, 17.3)
+
+Detalle y decisiones: [35-edicion-compacta.md](35-edicion-compacta.md).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `SetChatToolProfile(chatId, profile)` | — | `profile`: `""`/`"auto"` (esenciales si la ventana efectiva es < 32 768 tokens, todas si no), `"essential"` o `"full"`. Se guarda en `chats.tools` y vale **solo para esa conversación**; no toca `updated_at`. Un perfil desconocido o un chat inexistente fallan sin cambiar nada. Un CLI lo ignora. Un turno en curso termina con el perfil con que empezó |
+| `NewChatWithSummary(chatId)` | `store.Chat` | Abre una conversación nueva en el mismo proyecto, con el mismo servidor, modelo, modo y perfil, **sembrada con un resumen** de la actual (un mensaje `user` que lo contiene; título «<título> (continuación)»). El resumen lo escribe el modelo en una vuelta sin herramientas, ≤ ~300 tokens; si el servidor falla o devuelve vacío es el extractivo (`hermes.ExtractiveSummary`). Solo servidores (un CLI guarda su sesión); falla con el chat respondiendo (`ErrBusy`) o sin mensajes |
+
+> **Desvío del contrato del plan**: el plan escribía `chatID string`; como todos los bindings de chat (`GetChat`, `SetChatMode`…) el id es un `int64`.
+
+`store.Chat` ganó `tools` (`""` = Auto). `ChatView` ganó `context` (`ChatContextEvent` o `null`: lo último que se supo de la ventana en esta sesión).
+
+**Eventos nuevos y ampliados** (los nombres JSON son contrato con `components/chat/chatStreams.ts` y `lib/chatTypes.ts`):
+
+```go
+// chat:context — al empezar cada turno con un servidor (también en modo texto: perfil "" y toolsTokens 0)
+type ChatContextEvent struct { ChatID int64; NumCtx, PromptTokens, ToolsTokens int; Profile string; Auto, OverBudget bool }
+// chat:usage — a lo anterior suma el tiempo y el contexto del turno
+type ChatUsageEvent struct { …; ModelMs, ToolMs int64; Rounds int; PeakInput, LastInput int64; InputEstimated bool }
+```
+
+`NumCtx` es la ventana efectiva (la que se le pide a Ollama como `options.num_ctx`; 0 = no se sabe); `PromptTokens` y `ToolsTokens` son estimaciones (caracteres ÷ 4) de lo fijo de cada vuelta; `OverBudget` = pasan del 60 % de la ventana. `hermes.Step` ganó `roundInput`, `roundOutput`, `resultChars` y `resultTokens`; `hermes.Usage`, `modelMs`, `toolMs`, `rounds`, `peakInput`, `lastInput` e `inputEstimated`; `Parts` guarda el `usage` completo del turno. Todos los campos nuevos en 0 significan «el proveedor no lo informó».

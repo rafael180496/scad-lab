@@ -73,6 +73,13 @@ type Options struct {
 	WASM           WASMRunner
 	Backend        string // "manifold" | "cgal"
 	TimeoutSeconds int    // 0 = 300
+	// LazyUnion pide el 3MF con los objetos del nivel superior SIN fundir entre sí
+	// (`--enable=lazy-union`). Solo lo usa RenderArtifact. OpenSCAD funde por defecto todo
+	// lo del nivel superior en un solo sólido y, al repartir esa malla por color, las dos
+	// partes que se tocaban quedan como cáscaras abiertas (claude/11-exportacion.md);
+	// con LazyUnion cada color() del nivel superior llega como su propio sólido cerrado.
+	// No se usa para el STL del visor: ahí la unión es lo que se quiere.
+	LazyUnion bool
 }
 
 // Result es el resultado de un render.

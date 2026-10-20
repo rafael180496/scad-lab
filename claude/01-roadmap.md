@@ -254,3 +254,15 @@ Plan: [.claude/specs/s16-ia-edita-con-historial.md](../.claude/specs/s16-ia-edit
 | 16.2 | Bindings de historial, evento `checkpoint:updated` (chat y watcher), prompt CLI con ruta absoluta y archivo seleccionado, indicador «Editado por la IA», «Deshacer cambio de la IA», «Ver diferencias», historial, tope en Configuración; pruebas por proveedor con CLIs falsos y Hermes simulado; capturas, ayuda, CHANGELOG, `claude/34` | FS | ✅ |
 | 16.3 | Integración y verificación completa | architect | ✅ |
 | 16.4 | Probar con el `agy` real (y los demás CLIs) el pedido «modifica 002-….scad» y «hazme una variante» | usuario | ⬜ |
+
+## S17 — Edición compacta, salidas cortas y modelos chicos ✅ (falta 17.5, prueba del usuario con el `agy` real, un Ollama real y Bambu Studio)
+
+Plan: [.claude/specs/s17-edicion-compacta-modelos-chicos.md](../.claude/specs/s17-edicion-compacta-modelos-chicos.md). Detalle: [35-edicion-compacta.md](35-edicion-compacta.md); 3MF en [11-exportacion.md](11-exportacion.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 17.1 | `edit_checkpoint` (`old/new` y por líneas, todo o nada, error con la línea más parecida), `set_parameters` en el lugar con historial (`variant` = hijo), `read_checkpoint` por rango, `outline_checkpoint`, `find_in_checkpoint`, `lib/*.scad` con historial, `extract_module` (deshace si cambia el render), salidas compactas con tope de 6 KB, perfil esencial, prompt compacto, reglas y skills | OS | ✅ |
+| 17.2 | 3MF que Bambu Studio rellenaba: partes abiertas por la cara de contacto entre colores; segundo render `--enable=lazy-union` cuando una parte queda abierta, aviso en la exportación, pruebas nativo/WASM/Go | OS | ✅ |
+| 17.3 | Hermes con ventana real (`num_ctx` del modelo), perfil por conversación (migración 11, `SetChatToolProfile`), contexto acotado por turno y entre turnos, «Nueva conversación con resumen», tiempo y tokens por paso y por turno, Antigravity 1.4.x (`tool_info`), shell (prompt y mensaje), turno sin texto con resumen; capturas, ayuda, CHANGELOG, `claude/35` | FS | ✅ |
+| 17.4 | Integración y verificación completa; Ollama simulado de 8k: ninguna vuelta pasa de 3 476 tokens (antes 17 860–28 536) | architect | ✅ |
+| 17.5 | Probar con el `agy` real (stream de `tool_info`, shell rechazada, `result.usage`), con un Ollama real de 8k y abrir el 3MF de la maceta en Bambu Studio (hueco vacío, sin soportes dentro) | usuario | ⬜ |

@@ -5,7 +5,8 @@
 //
 //   cd frontend && pnpm test
 import assert from 'node:assert/strict'
-import {compactTokens, contextUsage, estimateTokens} from '../src/lib/chatContext.ts'
+import {compactTokens, contextAdvice, contextUsage, estimateTokens, fixedOverhead, formatDuration, hasUsage, usagePieces, windowLimit} from '../src/lib/chatContext.ts'
+import {parseParts, toStep, toUsage} from '../src/lib/chatTypes.ts'
 import {isCLI, sortProviders} from '../src/lib/chatProviders.ts'
 import {snippetAround} from '../src/lib/chatSearch.ts'
 import {TIER_LIMITS, tierFor} from '../src/lib/chatTier.ts'
@@ -174,6 +175,60 @@ const goCreators = [...effects.matchAll(/"(\w+)":\s+EffectCheckpoint/g)].map((m)
 assert.ok(goCreators.length >= 5, 'no se pudo leer effects.go')
 assert.deepEqual([...CREATING_TOOLS].filter((t) => t !== 'autosave').sort(), goCreators, 'CREATING_TOOLS = EffectCheckpoint de Go (+ autosave)')
 
+// edit_checkpoint y extract_module reescriben el archivo en el lugar (S17): su `file` es el checkpoint editado.
+for (const tool of ['update_checkpoint', 'edit_checkpoint', 'extract_module']) {
+    assert.equal(CREATING_TOOLS.has(tool), true, `${tool} deja un checkpoint`)
+    assert.equal(createdCheckpoint(step(tool, 'ok', '{"file":"001-maceta.scad","updated":true}', {file: '001-maceta.scad'})), '001-maceta.scad', tool)
+}
+
+// ── Tiempo y tokens de un turno (S17) ──
+assert.equal(formatDuration(0, 'en-US'), '', 'sin dato no se muestra')
+assert.equal(formatDuration(850, 'en-US'), '850 ms')
+assert.equal(formatDuration(5400, 'en-US'), '5.4 s')
+assert.equal(formatDuration(41_200, 'en-US'), '41 s')
+assert.equal(formatDuration(125_000, 'en-US'), '2 min 5 s')
+
+const usage = toUsage({inputTokens: 48_000, outputTokens: 2000, peakInput: 12_000, rounds: 5, modelMs: 41_000, toolMs: 6000})
+assert.deepEqual(usagePieces(usage, es.chat.usage, 'en-US'), ['Contexto máx. 12k', '↑ 48k en 5 vueltas', '↓ 2k', 'modelo 41 s', 'herramientas 6 s'])
+assert.deepEqual(usagePieces(usage, en.chat.usage, 'en-US'), ['Peak context 12k', '↑ 48k over 5 rounds', '↓ 2k', 'model 41 s', 'tools 6 s'])
+assert.deepEqual(usagePieces(toUsage({inputTokens: 900, outputTokens: 40, rounds: 1}), es.chat.usage, 'en-US'), ['↑ 900', '↓ 40'], 'una vuelta no dice «en 1 vueltas» y lo no informado no se muestra')
+assert.equal(usagePieces(toUsage({peakInput: 3000, inputEstimated: true}), es.chat.usage, 'en-US')[0], 'Contexto máx. ≈ 3k', 'una estimación se marca con ≈')
+assert.equal(hasUsage(null), false)
+assert.equal(hasUsage(toUsage({})), false)
+assert.equal(hasUsage(toUsage({modelMs: 10})), true)
+assert.doesNotMatch(Object.values(es.chat.usage).join('|'), /\{\w+\}\s*\{/, 'plantillas sanas')
+
+// Un mensaje anterior a S17 (sin los campos nuevos) se lee con ceros; el uso guardado en los parts viaja entero.
+const old = toStep({id: 'a', index: 1, tool: 'render', status: 'ok'})
+assert.deepEqual([old.roundInput, old.roundOutput, old.resultChars, old.resultTokens], [0, 0, 0, 0])
+const parts = parseParts(JSON.stringify({steps: [{id: 'a', index: 1, tool: 'render', status: 'ok', roundInput: 4000, resultTokens: 300}], usage: {peakInput: 12_000, rounds: 5}}))
+assert.equal(parts.steps[0].roundInput, 4000)
+assert.equal(parts.steps[0].resultTokens, 300)
+assert.equal(parts.usage.peakInput, 12_000)
+assert.equal(parts.usage.modelMs, 0)
+assert.equal(parseParts('{"steps":[]}').usage, undefined)
+
+// ── Avisos de contexto (S17) ──
+const info = {numCtx: 8192, promptTokens: 1200, toolsTokens: 1500, profile: 'full'}
+assert.equal(windowLimit(info, 131_072), 8192, 'manda la ventana efectiva del último turno')
+assert.equal(windowLimit(null, 131_072), 131_072, 'sin turno, la del modelo')
+assert.equal(fixedOverhead(info), 2700)
+assert.equal(fixedOverhead(null), 0)
+const usageAt = (history) => contextUsage(history, '', 8192, fixedOverhead(info))
+assert.equal(contextAdvice(info, usageAt(100), true, true), null, 'de sobra: sin aviso')
+const over = contextAdvice({...info, toolsTokens: 3800}, contextUsage(0, '', 8192, 5000), true, false)
+assert.equal(over?.kind, 'over', 'el prompt y las herramientas pasan del 60 %')
+assert.equal(over?.canNarrow, true)
+assert.equal(over?.pct, 61)
+assert.equal(contextAdvice({...info, toolsTokens: 3800, profile: 'essential'}, contextUsage(0, '', 8192, 5000), true, false)?.canNarrow, false, 'ya esenciales: no hay atajo')
+const sum = contextAdvice(info, usageAt(3100), true, true)
+assert.equal(sum?.kind, 'summary', 'al 70 % se ofrece la conversación nueva con resumen')
+assert.equal(sum?.pct, 71)
+assert.equal(contextAdvice(info, usageAt(3100), true, false), null, 'sin mensajes no hay nada que resumir')
+assert.equal(contextAdvice(info, usageAt(6000), false, true), null, 'un CLI no informa la ventana: sin aviso')
+assert.equal(contextAdvice(null, contextUsage(500, '', 0), true, true), null, 'sin ventana conocida no hay aviso')
+assert.equal(contextAdvice(null, contextUsage(7000, '', 8192), true, true)?.kind, 'summary', 'sin el último turno también avisa por la conversación')
+
 // ── «Crear desde una imagen» (S15) ──
 // El mensaje estructurado: el objeto, la referencia y la skill; sin datos, pide identificar el objeto y estimar la escala.
 const full = fromImageMessage(es, {what: ' una escuadra en L ', reference: 'el ancho es 60 mm', count: 2})
@@ -189,3 +244,8 @@ assert.doesNotMatch(bare, /\{\w+\}/, 'ninguna variable sin reemplazar')
 assert.match(fromImageMessage(en, {what: 'a bracket', reference: '', count: 3}), /the 3 attached photos[\s\S]*Object: a bracket[\s\S]*estimate the scale/)
 
 console.log('chat-ux: OK')
+
+// S17: editar una librería de lib/ no es un checkpoint del árbol
+assert.equal(createdCheckpoint(step('edit_checkpoint', 'ok', '{"file":"lib/maceta-texto.scad","updated":true}', {file: 'lib/maceta-texto.scad'})), '', 'lib/ no se enlaza')
+assert.equal(createdCheckpoint(step('edit_checkpoint', 'ok', '{"file":"002-maceta.scad","updated":true}', {file: '002-maceta.scad'})), '002-maceta.scad')
+console.log('chat-ux lib/: OK')

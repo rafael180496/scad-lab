@@ -46,9 +46,9 @@ func TestUpdateCheckpointEditsInPlace(t *testing.T) {
 	if got["description"] != "la hago más larga" || got["parent"] == nil {
 		t.Errorf("descripción/padre: %v", got)
 	}
-	ver, _ := got["version"].(map[string]any)
-	if ver["id"] == "" || ver["reason"] != "ai" || ver["tool"] != "update_checkpoint" || ver["note"] != "la hago más larga" {
-		t.Errorf("versión: %v", ver)
+	verID, _ := got["version"].(string)
+	if verID == "" {
+		t.Errorf("versión: %v", got["version"])
 	}
 	if lint, ok := got["lint"].([]any); !ok {
 		t.Errorf("lint debe ser una lista: %v", got["lint"])
@@ -77,7 +77,7 @@ func TestUpdateCheckpointEditsInPlace(t *testing.T) {
 	}
 	// El respaldo es lo que había.
 	hist, err := checkpoint.History(ws, base)
-	if err != nil || len(hist) != 1 || hist[0].ID != ver["id"] {
+	if err != nil || len(hist) != 1 || hist[0].ID != verID || hist[0].Reason != "ai" || hist[0].Tool != "update_checkpoint" || hist[0].Note != "la hago más larga" {
 		t.Fatalf("historial: %+v %v", hist, err)
 	}
 	if v, _ := checkpoint.ReadVersion(ws, base, hist[0].ID); v != string(oldCode) {
@@ -94,7 +94,7 @@ func TestUpdateCheckpointEditsInPlace(t *testing.T) {
 		t.Error("otro archivo ganó historial")
 	}
 	// Es de escritura de verdad para la interfaz: refresca el archivo, no el árbol.
-	if !CreatesCheckpoint("update_checkpoint") || !UpdatesInPlace("update_checkpoint") || UpdatesInPlace("create_checkpoint") {
+	if !CreatesCheckpoint("update_checkpoint") || !UpdatesInPlace("update_checkpoint", `{"updated":true}`) || UpdatesInPlace("create_checkpoint", `{"updated":true}`) {
 		t.Error("effects.go no clasifica update_checkpoint")
 	}
 }
@@ -142,7 +142,7 @@ func TestUpdateCheckpointBrokenRenderThenFix(t *testing.T) {
 	if !foundLine {
 		t.Errorf("el render roto debe traer la línea y el código: %v", ds)
 	}
-	if msg, _ := r["message"].(string); !strings.Contains(msg, "update_checkpoint") || !strings.Contains(msg, base) {
+	if msg, _ := r["message"].(string); !strings.Contains(msg, "edit_checkpoint") || !strings.Contains(msg, base) {
 		t.Errorf("consejo: %q", msg)
 	}
 	if got["updated"] != true || got["version"] == nil {

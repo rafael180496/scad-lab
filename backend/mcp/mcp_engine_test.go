@@ -37,7 +37,7 @@ func TestWASMRenderMeasureLintExport(t *testing.T) {
 	}
 
 	name := c.create("dos colores", twoColors, nil)
-	out := c.mustOK("render", map[string]any{"file": name})
+	out := c.mustOK("render", map[string]any{"file": name, "verbose": true})
 	if out["status"] != "ok" || out["engine"] != "wasm" || out["openscadVersion"] != scadwasm.Version {
 		t.Fatalf("render: %v", out)
 	}
@@ -48,14 +48,14 @@ func TestWASMRenderMeasureLintExport(t *testing.T) {
 	if m["volumeMm3"] != 2000.0 || m["watertight"] != true {
 		t.Errorf("malla: %v", m)
 	}
-	if again := c.mustOK("render", nil); again["cacheHit"] != true || again["engine"] != "wasm" {
+	if again := c.mustOK("render", map[string]any{"verbose": true}); again["cacheHit"] != true || again["engine"] != "wasm" {
 		t.Errorf("segundo render: %v", again)
 	}
 
 	// measure: dos partes por color (vía el 3MF del integrado) y estimación.
 	// Cubos separados: cada parte es una malla cerrada con su propio volumen.
 	sep := c.create("separados", "color(\"red\") cube(10);\ntranslate([20,0,0]) color(\"blue\") cube(10);\n", nil)
-	ms := c.mustOK("measure", map[string]any{"file": sep})
+	ms := c.mustOK("measure", map[string]any{"file": sep, "verbose": true})
 	parts, _ := ms["parts"].([]any)
 	if len(parts) != 2 {
 		t.Fatalf("partes: %v", ms["parts"])
@@ -70,7 +70,7 @@ func TestWASMRenderMeasureLintExport(t *testing.T) {
 	}
 
 	// lint: error de sintaxis con línea, hecho por el integrado.
-	l := c.mustOK("lint", map[string]any{"source": "color(\"red\")\n  cube(1\n"})
+	l := c.mustOK("lint", map[string]any{"source": "color(\"red\")\n  cube(1\n", "verbose": true})
 	if l["errors"].(float64) < 1 || !strings.Contains(l["note"].(string), "built-in engine") {
 		t.Errorf("lint: %v", l)
 	}

@@ -118,6 +118,11 @@ type ChatRequest struct {
 	Model    string
 	Messages []Message
 	Tools    []ToolDef
+	// NumCtx es la ventana de contexto que se le pide a Ollama en ESTE pedido
+	// (`options.num_ctx`); 0 = la del cliente (Options.ContextTokens). Es por
+	// pedido y no por cliente porque la ventana efectiva depende del modelo (S17) y
+	// el cliente se arma antes de saber cuál. Los demás protocolos la ignoran.
+	NumCtx int
 }
 
 // Delta es un trozo de la respuesta que llega en vivo.

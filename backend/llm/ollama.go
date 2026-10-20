@@ -125,7 +125,10 @@ func (c *ollamaClient) Chat(ctx context.Context, req ChatRequest, onDelta func(D
 		return ChatResult{}, i18n.Errorf(i18n.Msg{ES: "llm: falta el modelo", EN: "llm: the model is missing"})
 	}
 	body := ollamaChatRequest{Model: req.Model, Stream: true}
-	if c.numCtx > 0 {
+	switch {
+	case req.NumCtx > 0:
+		body.Options = &ollamaOptions{NumCtx: req.NumCtx}
+	case c.numCtx > 0:
 		body.Options = &ollamaOptions{NumCtx: c.numCtx}
 	}
 	for _, m := range req.Messages {

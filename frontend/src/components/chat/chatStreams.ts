@@ -1,7 +1,7 @@
 import {EventsOn} from '../../../wailsjs/runtime/runtime'
 import type {main} from '../../../wailsjs/go/models'
 import {createStore} from '../../lib/store'
-import {toStep, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
+import {toStep, toUsage, type ChatContextInfo, type ChatStep, type ChatUsage} from '../../lib/chatTypes'
 import {createdCheckpoint} from '../../lib/chatSteps'
 
 // Estado de las respuestas en curso, por chat. Vive a nivel de módulo y no en
@@ -15,7 +15,8 @@ import {createdCheckpoint} from '../../lib/chatSteps'
 //    escrito hasta ahí; ver syncStream).
 //
 // Contrato de eventos con app_chat.go: chat:delta {chatId, text, seq},
-// chat:step {chatId, workspaceId, step}, chat:usage {chatId, inputTokens, outputTokens, costUsd},
+// chat:step {chatId, workspaceId, step}, chat:usage {chatId, inputTokens, outputTokens, costUsd, modelMs, toolMs, rounds, peakInput, lastInput, inputEstimated},
+// chat:context {chatId, numCtx, promptTokens, toolsTokens, profile, auto, overBudget} (S17),
 // chat:done {chatId, messageId, cancelled}, chat:error {chatId, message, messageId}.
 
 export type Stream = {
@@ -43,8 +44,8 @@ export type Stream = {
     startedAt: number
 }
 
-type State = {byChat: Record<number, Stream>}
-const store = createStore<State>({byChat: {}})
+type State = {byChat: Record<number, Stream>; context: Record<number, ChatContextInfo>}
+const store = createStore<State>({byChat: {}, context: {}})
 
 const fresh = (synced: boolean): Stream => ({
     running: true,
@@ -79,6 +80,11 @@ function patch(chatId: number, fn: (s: Stream) => Stream, create?: () => Stream)
     const cur = store.get().byChat[chatId] ?? create?.()
     if (!cur) return
     store.set({byChat: {...store.get().byChat, [chatId]: fn(cur)}})
+}
+
+/** Recuerda lo último que se supo de la ventana de un chat (evento `chat:context` o el `context` de GetChat). */
+export function setChatContext(info: ChatContextInfo) {
+    store.set({context: {...store.get().context, [info.chatId]: info}})
 }
 
 /** El usuario acaba de enviar un mensaje: la respuesta arranca desde cero. */
@@ -117,7 +123,7 @@ export function syncStream(chatId: number, v: main.ChatView) {
     }
     // Los pasos de la foto se mezclan con los que ya llegaron por evento.
     const steps = (v.steps ?? []).map(toStep)
-    const usage = v.usage && (v.usage.inputTokens || v.usage.outputTokens) ? {inputTokens: v.usage.inputTokens, outputTokens: v.usage.outputTokens, costUsd: v.usage.costUsd} : null
+    const usage = v.usage && (v.usage.inputTokens || v.usage.outputTokens) ? toUsage(v.usage) : null
     patch(
         chatId,
         (s) => ({
@@ -165,9 +171,10 @@ export function ensureChatEvents() {
         const file = createdCheckpoint(step)
         if (file && e.workspaceId) checkpointListeners.forEach((fn) => fn({chatId: e.chatId, workspaceId: e.workspaceId as number, file}))
     })
-    EventsOn('chat:usage', (e: {chatId: number} & ChatUsage) => {
-        patch(e.chatId, (s) => ({...s, usage: {inputTokens: e.inputTokens, outputTokens: e.outputTokens, costUsd: e.costUsd}}), () => fresh(false))
+    EventsOn('chat:usage', (e: {chatId: number} & Partial<ChatUsage>) => {
+        patch(e.chatId, (s) => ({...s, usage: toUsage(e)}), () => fresh(false))
     })
+    EventsOn('chat:context', (e: ChatContextInfo) => setChatContext(e))
     EventsOn('chat:done', (e: {chatId: number; messageId: number}) => {
         patch(e.chatId, (s) => ({...s, running: false, finished: true, messageId: e.messageId}), () => fresh(false))
     })
@@ -186,5 +193,7 @@ export const useStreamMessageId = (chatId: number | null) => store.use((s) => (c
 export const useStreamSteps = (chatId: number | null) => store.use((s) => (chatId == null ? NO_STEPS : (s.byChat[chatId]?.steps ?? NO_STEPS)))
 export const useStreamUsage = (chatId: number | null) => store.use((s) => (chatId == null ? null : (s.byChat[chatId]?.usage ?? null)))
 export const useStreamStartedAt = (chatId: number | null) => store.use((s) => (chatId == null ? 0 : (s.byChat[chatId]?.startedAt ?? 0)))
+/** La ventana y el peso del prompt y las herramientas del chat (S17); null si todavía no corrió un turno con un servidor en esta sesión. */
+export const useChatContextInfo = (chatId: number | null) => store.use((s) => (chatId == null ? null : (s.context[chatId] ?? null)))
 // Referencia estable: un selector que devolviera un [] nuevo en cada lectura redibujaría sin parar.
 const NO_STEPS: ChatStep[] = []

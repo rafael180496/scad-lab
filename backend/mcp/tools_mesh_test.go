@@ -45,7 +45,7 @@ func (tb *Toolbox) stats(t *testing.T, file string) meshStats {
 		v := m[k].(map[string]any)
 		return [3]float64{v["x"].(float64), v["y"].(float64), v["z"].(float64)}
 	}
-	return meshStats{min: vec("minMm"), max: vec("maxMm"), volume: m["volumeMm3"].(float64), watertight: m["watertight"].(bool)}
+	return meshStats{min: vec("minMm"), max: vec("maxMm"), volume: m["volumeCm3"].(float64) * 1000, watertight: m["watertight"].(bool)}
 }
 
 // importCube deja refs/soporte.stl (cubo de 20×10×5) importado y devuelve el
@@ -413,7 +413,7 @@ func TestEstimatePrintAndListMaterials(t *testing.T) {
 		t.Errorf("parámetros usados: %v", est)
 	}
 	// measure sigue usando la configuración de la app (15 % por defecto).
-	if m := tb.mustJSON(t, "measure", map[string]any{"file": box}); m["estimate"].(map[string]any)["infillPercent"] != 15.0 {
+	if m := tb.mustJSON(t, "measure", map[string]any{"file": box, "verbose": true}); m["estimate"].(map[string]any)["infillPercent"] != 15.0 {
 		t.Errorf("measure: %v", m["estimate"])
 	}
 	for _, args := range []map[string]any{

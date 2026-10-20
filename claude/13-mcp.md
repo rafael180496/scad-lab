@@ -46,7 +46,8 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 El catálogo completo —cada herramienta, qué hace, si es de lectura o de escritura y en qué superficie está— vive en
 [25-herramientas-ia.md](25-herramientas-ia.md). Resumen: workspace y árbol (`list_checkpoints`, `read_checkpoint`,
 `create_checkpoint`, `update_checkpoint`, `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `list_trash`, `restore_checkpoint`,
-`list_refs`), imágenes (`image_info`, `compare_with_image`, `trace_image_outline`, `image_to_heightmap`; S15), modelado (`render`, `lint`, `format`, `preview`, `measure`, `get_parameters`, `set_parameters`,
+`list_refs`), lectura por partes y edición sin regenerar (`outline_checkpoint`, `find_in_checkpoint`, `edit_checkpoint`,
+`extract_module`; S17), imágenes (`image_info`, `compare_with_image`, `trace_image_outline`, `image_to_heightmap`; S15), modelado (`render`, `lint`, `format`, `preview`, `measure`, `get_parameters`, `set_parameters`,
 `list_templates`, `get_template`, `create_from_template`, `list_libraries`, `install_library`, `list_skills`, `read_skill`),
 STL/3MF/OBJ (`inspect_reference`, `import_mesh`, `edit_mesh`) e impresión (`printer_info`, `list_printers`,
 `set_workspace_printer`, `estimate_print`,
@@ -55,10 +56,16 @@ catálogo**.
 
 Detalles que no son obvios:
 
-- **`update_checkpoint(file, source, note?)`** (S16) edita **en el lugar** el archivo que el usuario nombró o tiene abierto
+- **`edit_checkpoint(file, edits[], note?)`** (S17) cambia unas líneas **en el lugar** sin reescribir el archivo; **`outline_checkpoint`**,
+  **`find_in_checkpoint`** y **`read_checkpoint(from, to, full)`** leen por partes; `file` acepta también `lib/<nombre>.scad`;
+  **`extract_module`** parte un modelo grande moviendo módulos a `lib/`; `set_parameters` edita en el lugar (`variant:true` = el hijo de
+  antes). `render`, `lint`, `measure`, `update/edit/set_parameters` y `get_parameters` devuelven un **resumen corto** (JSON de una línea,
+  `verbose:true` = el detalle) y `preview` una sola vista `iso` de 384 px por defecto. Detalle, formatos y topes en
+  [25-herramientas-ia.md](25-herramientas-ia.md) (tabla y «S17»); historial de `lib/` en [34](34-historial-checkpoints.md).
+- **`update_checkpoint(file, source, note?)`** (S16; desde S17 solo para reescrituras grandes) edita **en el lugar** el archivo que el usuario nombró o tiene abierto
   (`source` = el archivo completo, ≤ 2 MB); crear uno nuevo (`create_checkpoint`) es solo para algo nuevo, una variante u «otra
   versión». Es de **escritura** y solo está en «Agente» (`EffectCheckpoint`: su resultado trae `file`, y
-  `mcp.UpdatesInPlace` la distingue porque no deja un `.scad` nuevo). Llama `checkpoint.Update` con
+  `mcp.UpdatesInPlace(tool, resultText)` la distingue por el `"updated": true` del resultado). Llama `checkpoint.Update` con
   `Settings.HistoryMaxVersions` ([claude/15](15-checkpoints.md#historial-y-edición-en-el-lugar-s16)): valida el nombre, conserva la
   cabecera, **guarda la versión anterior en el historial antes de escribir** y no escribe si el código es idéntico. Después corre
   **lint + render** sobre lo que quedó en disco y devuelve `{file, updated, unchanged, version, parent, description, lint, render:
@@ -144,6 +151,9 @@ Detalles que no son obvios:
   `rename_checkpoint`, `trash_checkpoint` y `set_active_parent` exigen `file` (vacío no es «el más nuevo»).
 - `refs/` y `lib/` se comprueban como `exports/` (una carpeta que sale del workspace no se usa); `install_library` solo baja
   lo del catálogo fijo, con SHA-256 y sin `..` ni enlaces ([25](25-herramientas-ia.md)).
+- **`file = "lib/<nombre>.scad"`** (S17: `read`, `outline`, `find`, `edit`) pasa por `checkpoint.ValidLibName`/`LibPath`: solo hijos directos
+  de `lib/`, sin `..`, rutas absolutas, `\`, `:` (unidades y flujos de Windows), subcarpetas (`lib/BOSL2/x.scad` es de solo lectura), ni
+  enlaces que salgan (el archivo, `lib/` o el historial). `TestLibPathsAreSafe` y `backend/checkpoint/lib_test.go` los prueban.
 - Nada se escribe fuera de `<ws>` salvo la caché de mallas y de exportaciones de
   `<datos>/cache/` (la misma de la app). `get_template` busca el nombre en la
   lista embebida, no arma una ruta con lo recibido.
@@ -183,6 +193,10 @@ con código 1 y el error en stderr.
   (`set_parameters` y `create_from_template` renderizan, nativo y WASM), `libraries_test.go` (zip falso: SHA-256, zip slip, enlaces,
   red caída; `SCADLAB_REAL_DOWNLOAD=1` baja las tres de verdad), `tools_mesh_test.go` (`edit_mesh` = `meshedit.Generate`,
   `suggest_orientation`, `estimate_print`, `preview` con `rotate`, `export` png, todo por `--mcp`) y `backend/scad/params_test.go`.
+- S17: `backend/textedit` (ediciones: CRLF, tabs, Unicode, solapes, todo o nada), `tools_s17_test.go` (lectura por partes y
+  `edit_checkpoint`), `tools_lib_test.go` (`lib/`, rutas hostiles), `tools_extract_test.go` (`extract_module`, incluido el deshacer),
+  `compact_test.go` y `tools_budget_test.go` (**tabla de bytes** de cada herramienta sobre `testdata/maceta.scad`, 596 líneas; se
+  imprime con `go test -v -run TestToolOutputBudgetTable`), `profiles_test.go` (perfil esencial) y `backend/checkpoint/lib_test.go`.
 - **Prueba con un CLI real** (`claude mcp list` en un workspace temporal) la hace
   el architect; los tests del repo no lanzan agentes ni slicers (regla 9).
 
@@ -194,7 +208,7 @@ con código 1 y el error en stderr.
 2. El handler resuelve cualquier archivo con `e.checkpointFile` y devuelve
    `jsonResult(...)`/`textResult(...)`; un error del dominio es un `error` (sale
    como `isError`). Mensajes con `i18n.Msg`.
-3. Clasificarla en `readTools`/`writeTools` de `backend/clichat/modes.go`, agregarla a `wantTools` en `mcp_test.go` y
+3. Si es de las que el perfil esencial ofrece, su `Short`/`ShortSchema` en `profiles.go` (`shortSpecs`). Clasificarla en `readTools`/`writeTools` de `backend/clichat/modes.go`, agregarla a `wantTools` en `mcp_test.go` y
    probarla (caso feliz, error, ruta inválida, en proceso y por `--mcp`), a la tabla de
    [25](25-herramientas-ia.md) y a la de `assets/workspace/RULES.md.tmpl`.
 

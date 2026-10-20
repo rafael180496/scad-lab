@@ -49,6 +49,11 @@ render normal OK (STL, clave K) ──► parts.Store.Ensure
   temporales de más de 2 h. Carpeta propia y no `cache/meshes`: la poda del
   motor solo conoce `<clave>.stl` + `<clave>.json`.
 
+**Desde S17** (ver [11-exportacion.md](11-exportacion.md)): si al partir el 3MF por color alguna parte queda abierta (la cara
+de contacto entre dos colores desaparece al fundir el sólido), `parts.Load3MF` renderiza otra vez con `--enable=lazy-union`
+y usa ese reparto: cada `color()` del nivel superior es un sólido cerrado. Las partes pueden **solaparse**, así que la suma
+de sus volúmenes puede pasar levemente del total (la maceta: +0,13 %). La caché de partes subió a `manifestVersion` 2.
+
 ## HTTP: `GET /parts/<clave>/NN.stl`
 
 `meshserve.MiddlewareWithParts(meshDir, partsDir)` (en `main.go`; `Middleware`

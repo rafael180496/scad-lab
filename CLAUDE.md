@@ -42,7 +42,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | Segmento | Contenido |
 |---|---|
 | [claude/00-overview.md](claude/00-overview.md) | Qué es, stack, estructura de carpetas, comandos |
-| [claude/01-roadmap.md](claude/01-roadmap.md) | **Fases S0–S10**, tareas, dueño y estado |
+| [claude/01-roadmap.md](claude/01-roadmap.md) | **Fases S0–S17**, tareas, dueño y estado |
 | [claude/02-architecture.md](claude/02-architecture.md) | Capas, flujo de datos, workspace y checkpoints |
 | [claude/03-backend.md](claude/03-backend.md) | Reglas Go: sin CGO, multiplataforma, errores, procesos |
 | [claude/04-frontend.md](claude/04-frontend.md) | Reglas React/TS/Tailwind, design system, componentes |
@@ -76,6 +76,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/32-contrato-exportacion-skills.md](claude/32-contrato-exportacion-skills.md) | Contrato Go ↔ React: exportación y slicers, descarga de OpenSCAD, skills |
 | [claude/33-contrato-servidores-chat.md](claude/33-contrato-servidores-chat.md) | Contrato Go ↔ React: servidores de modelos, llavero, chat con Hermes y CLIs como proveedores |
 | [claude/34-historial-checkpoints.md](claude/34-historial-checkpoints.md) | Historial de checkpoints (S16): la IA edita el archivo que nombras con `update_checkpoint` (respaldo previo en `.scadlab/history/`, tope, papelera), el bug de la ruta inventada y el prompt CLI con ruta absoluta, `checkpoint:updated` (chat y watcher), «Editado por la IA», deshacer, diferencias e historial, pendientes |
+| [claude/35-edicion-compacta.md](claude/35-edicion-compacta.md) | Edición compacta y modelos chicos (S17): editar sin reescribir el archivo (`edit_checkpoint`, lectura por partes), perfiles de herramientas (Auto/Esenciales/Todas, `chats.tools`), ventana de contexto y `num_ctx`, presupuesto del turno, resumen entre turnos y «Nueva conversación con resumen», tiempo y tokens por paso y por turno (cómo se lee ↑), Antigravity 1.4.x (herramienta real, shell, turno sin texto), medidas antes/después con un Ollama simulado de 8k |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

@@ -85,6 +85,14 @@ type Tool struct {
 	InputSchema map[string]any `json:"inputSchema"`
 	Annotations map[string]any `json:"annotations,omitempty"`
 	handler     handlerFunc
+
+	// Short y ShortSchema son la descripción (1-2 frases) y el esquema mínimo de
+	// las herramientas del perfil esencial (ProfileEssential, S17): un modelo de 8k
+	// de contexto no puede pagar el catálogo completo. Vacíos = la herramienta no
+	// está en el perfil esencial. No viajan por el servidor `--mcp`, que ofrece
+	// siempre el catálogo completo.
+	Short       string         `json:"-"`
+	ShortSchema map[string]any `json:"-"`
 }
 
 // toolResult es el resultado de una herramienta, en el formato de contenido de

@@ -9,10 +9,14 @@ import type {ChatStep} from './chatTypes'
  * Pasos que CREAN un checkpoint: las herramientas del servidor que dejan un `.scad` nuevo (su resultado
  * trae `file`) y el guardado automático de ScadLab. Espejo de `Effect = EffectCheckpoint` en
  * backend/mcp/effects.go: una herramienta nueva que cree checkpoints se suma allá y aquí.
+ * `edit_checkpoint`, `extract_module` y `update_checkpoint` reescriben en el lugar (S16, S17): su
+ * resultado trae `file` y la tarjeta enlaza el archivo editado.
  */
 export const CREATING_TOOLS: ReadonlySet<string> = new Set([
     'create_checkpoint',
     'update_checkpoint',
+    'edit_checkpoint',
+    'extract_module',
     'import_mesh',
     'set_parameters',
     'create_from_template',
@@ -23,7 +27,8 @@ export const CREATING_TOOLS: ReadonlySet<string> = new Set([
 /** Las que reciben un checkpoint de entrada en `file` (su base): ese argumento NO es el checkpoint que crean. */
 const FILE_ARG_IS_INPUT: ReadonlySet<string> = new Set(['set_parameters', 'edit_mesh'])
 
-const SCAD = /\.scad$/i
+// Un `lib/x.scad` (S17, edit_checkpoint sobre una librería) no es un nodo del árbol: no se enlaza ni se selecciona.
+const SCAD = /^(?!lib[/\\]).*\.scad$/i
 
 /** El resultado de una herramienta como objeto JSON, o null si no lo es. */
 export function stepResult(text: string): Record<string, unknown> | null {

@@ -77,6 +77,9 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 	// pero se pide explícito: con otro default el 3MF saldría sin colores. Una
 	// versión que no conoce -O (2021.01) lo rechaza y se reintenta sin él.
 	useColorOpt := ext == ArtifactExt3MF && !e.isUnsupported(bin, version, "-O")
+	// --enable=lazy-union: una versión que no conoce --enable lo rechaza y se reintenta sin él;
+	// una que conoce --enable pero no esa función solo avisa y lo ignora.
+	useLazy := opts.LazyUnion && ext == ArtifactExt3MF && !e.isUnsupported(bin, version, "--enable")
 	backendName := func() string {
 		if useBackend {
 			return "manifold"
@@ -84,7 +87,11 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 		return "cgal"
 	}
 	artifactKey := func() string {
-		return cacheKey(contentHash(req.WorkspaceDir, req.FileName, src), backendName()+"|"+ext, version)
+		variant := backendName() + "|" + ext
+		if useLazy {
+			variant += "|lazy"
+		}
+		return cacheKey(contentHash(req.WorkspaceDir, req.FileName, src), variant, version)
 	}
 
 	key := artifactKey()
@@ -120,8 +127,8 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 
 	var output string
 	var runErr error
-	for range 3 {
-		output, runErr = e.runArtifact(runCtx, opts, dir, req, ext, tmpPath, useBackend, useColorOpt)
+	for range 4 { // una vuelta por cada opción que una versión vieja pueda rechazar, más la definitiva
+		output, runErr = e.runArtifact(runCtx, opts, dir, req, ext, tmpPath, useBackend, useColorOpt, useLazy)
 		if runErr == nil || runCtx.Err() != nil {
 			break
 		}
@@ -133,6 +140,11 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 		if useColorOpt && rejectsOption(output, "'-o'") {
 			e.markUnsupported(bin, version, "-O")
 			useColorOpt = false
+			continue
+		}
+		if useLazy && rejectsOption(output, "enable") {
+			e.markUnsupported(bin, version, "--enable")
+			useLazy = false
 			continue
 		}
 		break
@@ -200,7 +212,7 @@ func (e *engine) renderArtifact(parent context.Context, req Request, opts Option
 // runArtifactWASM genera el 3MF con el motor integrado. Su lib3mf no puede
 // escribir 3MF (ver scadwasm/off.go), así que pide un OFF —que sí trae el color
 // de cada cara— y lo convierte a un 3MF del estilo de OpenSCAD.
-func (e *engine) runArtifactWASM(ctx context.Context, w WASMRunner, cacheDir string, req Request, ext, out string, backend bool) (string, error) {
+func (e *engine) runArtifactWASM(ctx context.Context, w WASMRunner, cacheDir string, req Request, ext, out string, backend, lazy bool) (string, error) {
 	if ext != ArtifactExt3MF {
 		return "", i18n.Errorf(i18n.Msg{ES: "formato %s no soportado por el motor integrado", EN: "format %s is not supported by the built-in engine"}, ext)
 	}
@@ -216,7 +228,11 @@ func (e *engine) runArtifactWASM(ctx context.Context, w WASMRunner, cacheDir str
 	}
 	defer os.RemoveAll(outDir)
 
-	args := []string{"-o", "/out/model.off", "--backend=" + wasmBackend(backend), req.FileName}
+	args := []string{"-o", "/out/model.off", "--backend=" + wasmBackend(backend)}
+	if lazy {
+		args = append(args, "--enable=lazy-union")
+	}
+	args = append(args, req.FileName)
 	output, code, err := w.Run(ctx, WASMSpec(req.WorkspaceDir, outDir, args...))
 	if err != nil {
 		return output, err
@@ -236,9 +252,9 @@ func (e *engine) runArtifactWASM(ctx context.Context, w WASMRunner, cacheDir str
 
 // runArtifact es run() para formatos sin --export-format: la extensión de out
 // decide el formato.
-func (e *engine) runArtifact(ctx context.Context, opts Options, cacheDir string, req Request, ext, out string, backend, colorOpt bool) (string, error) {
+func (e *engine) runArtifact(ctx context.Context, opts Options, cacheDir string, req Request, ext, out string, backend, colorOpt, lazy bool) (string, error) {
 	if opts.engineKind() == EngineWASM {
-		return e.runArtifactWASM(ctx, opts.WASM, cacheDir, req, ext, out, backend)
+		return e.runArtifactWASM(ctx, opts.WASM, cacheDir, req, ext, out, backend, lazy)
 	}
 	bin, dir, file := opts.OpenSCADPath, req.WorkspaceDir, req.FileName
 	args := []string{"-o", out}
@@ -247,6 +263,9 @@ func (e *engine) runArtifact(ctx context.Context, opts Options, cacheDir string,
 	}
 	if backend {
 		args = append(args, "--backend=manifold")
+	}
+	if lazy {
+		args = append(args, "--enable=lazy-union")
 	}
 	args = append(args, file)
 	cmd := exec.CommandContext(ctx, bin, args...)

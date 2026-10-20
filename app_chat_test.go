@@ -126,6 +126,11 @@ func TestChatSendStreamsPersistsAndTitles(t *testing.T) {
 	if err != nil || c.Model != "qwen3-coder:30b" {
 		t.Fatalf("NewChat: %+v, %v", c, err)
 	}
+	// El perfil completo (S17): con la ventana sin informar el servidor falso no dice el contexto del modelo, así que «Auto»
+	// elegiría las esenciales y su prompt compacto, que no trae el código. Este test mira el prompt de siempre.
+	if err := a.SetChatToolProfile(c.ID, "full"); err != nil {
+		t.Fatal(err)
+	}
 	um, err := a.SendChatMessage(c.ID, "  Haz un cubo de diez milímetros para mi pieza  ", "001-base.scad", nil, SendOptions{})
 	if err != nil || um.Role != "user" || um.Content != "Haz un cubo de diez milímetros para mi pieza" {
 		t.Fatalf("Send: %+v, %v", um, err)
@@ -443,5 +448,35 @@ func TestChatPromptContextRejectsPathsOutsideWorkspace(t *testing.T) {
 	}
 	if len(ctx.Checkpoints) != 1 || ctx.WorkspaceName != "Editor" || ctx.BuildVolume[0] == 0 {
 		t.Errorf("contexto: %+v", ctx)
+	}
+}
+
+// Con la ventana chica (el servidor no informa el contexto del modelo: se le piden 16 384) «Auto» declara las herramientas
+// esenciales y manda el prompt compacto (S17): nombra el archivo abierto pero no lo embebe —el modelo lo lee por partes—.
+func TestChatAutoProfileUsesEssentialToolsAndTheCompactPromptInASmallWindow(t *testing.T) {
+	f := &fakeOllama{chunks: []string{"Listo."}}
+	a, wsID, _, ev := chatApp(t, f)
+	c, err := a.NewChat(wsID, "ollama", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SendChatMessage(c.ID, "cambia algo", "001-base.scad", nil, SendOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitDone(t, ev)
+	f.mu.Lock()
+	body := f.body
+	f.mu.Unlock()
+	sys := body["messages"].([]any)[0].(map[string]any)["content"].(string)
+	if !strings.Contains(sys, "compact mode") || !strings.Contains(sys, "001-base.scad") || strings.Contains(sys, `color("red") cube(10);`) {
+		t.Errorf("prompt compacto esperado, con el archivo nombrado y sin su código: %.400q", sys)
+	}
+	var names []string
+	for _, tl := range body["tools"].([]any) {
+		fn, _ := tl.(map[string]any)["function"].(map[string]any)
+		names = append(names, fn["name"].(string))
+	}
+	if len(names) != 11 || !hasName(names, "edit_checkpoint") || hasName(names, "extract_module") {
+		t.Errorf("se esperaban las 11 herramientas esenciales: %v", names)
 	}
 }

@@ -182,6 +182,8 @@ export function MakeCheckpointRoot(arg1:number,arg2:string):Promise<void>;
 
 export function NewChat(arg1:number,arg2:string,arg3:string):Promise<store.Chat>;
 
+export function NewChatWithSummary(arg1:number):Promise<store.Chat>;
+
 export function OpenInSlicer(arg1:string,arg2:string):Promise<void>;
 
 export function OpenProject(arg1:number):Promise<main.WorkspaceView>;
@@ -297,6 +299,8 @@ export function SetAutoIterate(arg1:boolean):Promise<void>;
 export function SetChatMode(arg1:number,arg2:string):Promise<void>;
 
 export function SetChatModel(arg1:number,arg2:string,arg3:string):Promise<void>;
+
+export function SetChatToolProfile(arg1:number,arg2:string):Promise<void>;
 
 export function SetCheckpointUI(arg1:number,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 

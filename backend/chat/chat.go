@@ -397,3 +397,27 @@ func HistoryBudget(kind string) int {
 	}
 	return 200_000
 }
+
+// HistoryBudgetFor es HistoryBudget con la ventana de contexto efectiva (S17): un
+// modelo local de 8k no puede recibir 24 000 caracteres de historial además del
+// prompt y las herramientas. Con la ventana conocida (tokens) el historial puede
+// ocupar la tercera parte de lo que cuesta guardarla en caracteres (~4 por token),
+// entre 4 000 y el tope de siempre del tipo de proveedor; sin ventana (0) rige el de
+// siempre. Lo que no entra se resume (hermes.SeedHistory), no se pierde.
+func HistoryBudgetFor(kind string, window int) int {
+	max := HistoryBudget(kind)
+	if window <= 0 {
+		return max
+	}
+	if kind == llm.KindOllama {
+		max = 60_000 // el de siempre (24 000) era para 16k; con 32k cabe el doble
+	}
+	n := window * 4 * 35 / 100
+	if n < 4000 {
+		n = 4000
+	}
+	if n > max {
+		n = max
+	}
+	return n
+}

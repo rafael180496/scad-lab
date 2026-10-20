@@ -55,16 +55,12 @@ func (e *env) tools() []Tool {
 			Annotations: annotations(annReadOnly),
 			handler:     e.listCheckpoints,
 		},
-		{
-			Name:        "read_checkpoint",
-			Description: "Return the OpenSCAD source of a checkpoint, by its file name (e.g. 003-add-hinge.scad; no paths). This is the way to read a .scad: never use the CLI's own file tools or a path for it. Read the file before changing it with update_checkpoint.",
-			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
-			Annotations: annotations(annReadOnly),
-			handler:     e.readCheckpoint,
-		},
+		e.readCheckpointTool(),
+		e.outlineCheckpointTool(),
+		e.findInCheckpointTool(),
 		{
 			Name: "create_checkpoint",
-			Description: "Create a NEW checkpoint file NNN-slug.scad from the given source. It never overwrites an existing file. Use it for something new, a variant or «another version»; when the user names an existing file (or the open/selected one) and asks for changes, edit that file with update_checkpoint instead. " +
+			Description: "Create a NEW checkpoint file NNN-slug.scad from the given source. It never overwrites an existing file. Use it for something new, a variant or «another version»; when the user names an existing file (or the open/selected one) and asks for changes, edit that file instead (edit_checkpoint, set_parameters, or update_checkpoint for a full rewrite). " +
 				"The @checkpoint header line is written for you (an existing first-line header in source is replaced). " +
 				"Every top-level part must use color(). Then call render to validate it. Use root=true to start a new, unrelated design as a root checkpoint in a workspace that already has others.",
 			InputSchema: obj(map[string]any{
@@ -77,6 +73,8 @@ func (e *env) tools() []Tool {
 			handler:     e.createCheckpoint,
 		},
 		e.updateCheckpointTool(),
+		e.editCheckpointTool(),
+		e.extractModuleTool(),
 		{
 			Name: "import_mesh",
 			Description: "Make a 3D model the user put in refs/ (STL, 3MF or OBJ) EDITABLE: creates a NEW root checkpoint NNN-slug.scad that does import(\"refs/x.stl\") inside color(). " +
@@ -93,19 +91,19 @@ func (e *env) tools() []Tool {
 		},
 		{
 			Name: "render",
-			Description: "Render a checkpoint with OpenSCAD (same engine and cache as the ScadLab app; if no OpenSCAD is installed it uses the built-in WebAssembly engine, reported in `engine`). Returns the status, diagnostics with line numbers (and the offending code line), duration, " +
-				"mesh size/volume/triangle count/watertightness and whether it fits the printer plate. Updates RENDER_ERRORS.md like the app does (newest checkpoint only). " +
-				"On errors, fix the model with update_checkpoint on this same file (the previous version stays in its history).",
-			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
+			Description: "Render a checkpoint with OpenSCAD (same engine and cache as the ScadLab app; if no OpenSCAD is installed it uses the built-in WebAssembly engine, reported in `engine`). Returns a short summary: status, duration, bounding box (size/min/max), volume, triangles, watertightness, whether it fits the printer plate, the color parts when known, and up to 5 errors or warnings with their line number and code. " +
+				"Updates RENDER_ERRORS.md like the app does (newest checkpoint only). On errors, fix the marked lines with edit_checkpoint on this same file (the previous version stays in its history). verbose=true gives every diagnostic and the full mesh detail.",
+			InputSchema: obj(map[string]any{"file": strProp(fileHelp), "verbose": verboseProp}),
 			Annotations: annotations(annWrite),
 			handler:     e.renderTool,
 		},
 		{
 			Name:        "lint",
-			Description: "Check OpenSCAD code without rendering it: syntax/semantic errors reported by OpenSCAD plus ScadLab rules SL001-SL009 (checkpoint header, missing color(), missing includes, high $fn, nested minkowski, reassigned variables, Customizer ranges). Give a checkpoint file or raw source.",
+			Description: "Check OpenSCAD code without rendering it: syntax/semantic errors reported by OpenSCAD plus ScadLab rules SL001-SL009 (checkpoint header, missing color(), missing includes, high $fn, nested minkowski, reassigned variables, Customizer ranges). Give a checkpoint file or raw source. Returns the counts and up to 5 diagnostics with line (verbose=true: all of them).",
 			InputSchema: obj(map[string]any{
-				"file":   strProp("Checkpoint to check (defaults to the newest). With `source`, it is only used as the file name for the header rules."),
-				"source": strProp("Code to check instead of a file on disk."),
+				"file":    strProp("Checkpoint to check (defaults to the newest). With `source`, it is only used as the file name for the header rules."),
+				"source":  strProp("Code to check instead of a file on disk."),
+				"verbose": verboseProp,
 			}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.lintTool,
@@ -120,22 +118,24 @@ func (e *env) tools() []Tool {
 		{
 			Name: "measure",
 			Description: "Measure a checkpoint's rendered mesh: bounding box and size (mm), volume, surface area, triangles, watertightness, and whether it fits the workspace printer's build plate (overflowMm per axis if not). " +
-				"Also returns the model's parts (one per color(), each with size and volume) and a print ESTIMATE per part and in total: weight, filament length and cost, computed with the infill, perimeters, line width and filament diameter from the app settings " +
-				"(shell = min(volume, area x wall) + interior x infill; no supports, brim or color-change purge). The estimate's assumptions are listed in the result; the slicer gives the exact figure.",
-			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
+				"Also returns the model's parts (one per color(), each with color, size, volume and estimated weight) and the total print ESTIMATE (weight): computed with the infill, perimeters, line width and filament diameter from the app settings " +
+				"(shell = min(volume, area x wall) + interior x infill; no supports, brim or color-change purge); the slicer gives the exact figure. verbose=true adds filament length, cost, the settings used and the assumptions.",
+			InputSchema: obj(map[string]any{"file": strProp(fileHelp), "verbose": verboseProp}),
 			Annotations: annotations(annWrite),
 			handler:     e.measureTool,
 		},
 		{
 			Name: "preview",
-			Description: "Render a PNG picture of a checkpoint with OpenSCAD so you can SEE the part (colors from color() are kept). " +
+			Description: "Render a PNG picture of a checkpoint with OpenSCAD so you can SEE the part (colors from color() are kept). By default ONE 384 px picture in the `iso` view (cheap); ask for more only when you need them: `views` = a list of views, `all`=true for every view, `size` for a bigger picture. " +
 				"Views: iso (default), iso-back, front (seen from -Y), back, right (seen from +X), left, top, bottom. Look at it after rendering to catch shapes that are valid but wrong.",
 			InputSchema: obj(map[string]any{
 				"file":   strProp(fileHelp),
 				"view":   enumProp("Camera view. Default iso.", viewNames...),
+				"views":  map[string]any{"type": "array", "description": "Several views in one call, e.g. [\"front\", \"top\"] (at most 8). Overrides `view`.", "items": map[string]any{"type": "string", "enum": viewNames}, "maxItems": 8},
+				"all":    map[string]any{"type": "boolean", "description": "Every view (8 pictures). Default false."},
 				"rotate": map[string]any{"type": "array", "description": "Free camera instead of `view`: three angles [rx, ry, rz] in degrees (OpenSCAD's --camera rotation; [60,0,30] is a high three-quarter view, [90,0,0] looks from the front). Overrides `view`.", "items": map[string]any{"type": "number"}, "minItems": 3, "maxItems": 3},
 				"ortho":  map[string]any{"type": "boolean", "description": "Orthogonal projection (no perspective). The named views top/bottom/front/back/left/right are already orthogonal; default false for a free `rotate`."},
-				"size":   map[string]any{"type": "integer", "description": "Image side in pixels, 256-1024. Default 640.", "minimum": minPreviewSize, "maximum": maxPreviewSize},
+				"size":   map[string]any{"type": "integer", "description": "Image side in pixels, 256-1024. Default 384.", "minimum": minPreviewSize, "maximum": maxPreviewSize},
 			}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.previewTool,
@@ -181,7 +181,7 @@ func (e *env) tools() []Tool {
 	for _, g := range [][]Tool{e.workspaceTools(), e.parameterTools(), e.libraryTools(), e.meshTools(), e.printTools(), e.printerTools(), e.contextTools(), e.imageTools()} {
 		tools = append(tools, g...)
 	}
-	return tools
+	return applyShort(tools)
 }
 
 // --- utilidades de salida ---------------------------------------------------
@@ -398,18 +398,6 @@ func checkpointTree(list []checkpointOut, active string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (e *env) readCheckpoint(_ context.Context, args map[string]any) (*toolResult, error) {
-	_, path, err := e.checkpointFile(strArg(args, "file"))
-	if err != nil {
-		return nil, err
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return textResult(string(raw)), nil
-}
-
 // maxSourceBytes acota el código de un checkpoint: un fuente de 2 MB no es un
 // modelo, es un volcado.
 const maxSourceBytes = 2 << 20
@@ -603,8 +591,8 @@ func (e *env) renderFailure(name string, res render.Result) map[string]any {
 			out["logTail"] = tailLines(res.Log, 15)
 		}
 		out["message"] = msgf(i18n.Msg{
-			ES: "El modelo no renderiza. Corrígelo con update_checkpoint sobre este archivo (%s): la versión rota queda en su historial.",
-			EN: "The model does not render. Fix it with update_checkpoint on this file (%s): the broken version stays in its history.",
+			ES: "El modelo no renderiza. Corrígelo con edit_checkpoint sobre este archivo (%s): la versión rota queda en su historial.",
+			EN: "The model does not render. Fix it with edit_checkpoint on this file (%s): the broken version stays in its history.",
 		}, name)
 	}
 	return out
@@ -630,14 +618,30 @@ func (e *env) renderTool(ctx context.Context, args map[string]any) (*toolResult,
 	if err != nil {
 		return nil, err
 	}
+	verbose := verboseArg(args)
 	if res.Status != render.StatusOK {
-		return e.failedRender(name, res)
+		if verbose {
+			return e.failedRender(name, res)
+		}
+		r, err := compactResult(e.compactRenderFailure(name, res))
+		if err != nil {
+			return nil, err
+		}
+		r.IsError = true
+		return r, nil
 	}
-	out, err := e.renderSummary(name, res, s)
+	if verbose {
+		out, err := e.renderSummary(name, res, s)
+		if err != nil {
+			return nil, err
+		}
+		return jsonResult(out)
+	}
+	out, err := e.compactRenderOK(name, res, s)
 	if err != nil {
 		return nil, err
 	}
-	return jsonResult(out)
+	return compactResult(out)
 }
 
 // renderSummary es el resultado de un render que salió bien: malla, medidas,
@@ -723,6 +727,16 @@ func (e *env) lintTool(ctx context.Context, args map[string]any) (*toolResult, e
 	for _, d := range ds {
 		counts[d.Severity]++
 	}
+	if !verboseArg(args) {
+		note := ""
+		if !tool.Found && !e.usesWASM(tool) {
+			note = msgf(i18n.Msg{
+				ES: "OpenSCAD no está disponible: solo se aplicaron las reglas propias de ScadLab (sin chequeo de sintaxis).",
+				EN: "OpenSCAD is not available: only ScadLab's own rules were applied (no syntax check).",
+			})
+		}
+		return compactResult(lintSummary(fileName, ds, counts, note))
+	}
 	out := map[string]any{
 		"file":        fileName,
 		"errors":      counts[scad.SeverityError],
@@ -806,6 +820,10 @@ func (e *env) measureTool(ctx context.Context, args map[string]any) (*toolResult
 	}
 	mat, partList, est, opts, warns := pe.mat, pe.parts, pe.est, pe.opts, pe.warns
 
+	if !verboseArg(args) {
+		warns = append(warns, meshWarnings(info)...)
+		return compactResult(compactMeasure(name, info, ok, over, mat.Name, est, partList, warns))
+	}
 	out := map[string]any{
 		"file":             name,
 		"mesh":             meshOf(info),

@@ -135,7 +135,42 @@ type Renderer interface {
 // por color. dir es la caché de los 3MF (<datos>/cache/exports). Devuelve
 // siempre el render.Result; si el render no salió bien, el error es el de
 // RenderFailure.
+//
+// Cada parte tiene que ser un sólido cerrado: Bambu Studio lamina cada una por
+// separado. OpenSCAD, en cambio, funde todo lo del nivel superior en un solo
+// sólido antes de exportar, y la cara por la que dos colores se tocaban (un
+// relieve sobre una pared, un texto sobre una placa) desaparece: al repartir esa
+// malla por color, cada parte queda como una cáscara con un hueco (claude/11).
+// Si eso pasa con más de un color, se vuelve a renderizar con
+// `--enable=lazy-union`, que entrega cada color() del nivel superior como su
+// propio sólido, y se usa ese reparto si deja menos bordes abiertos. Un modelo
+// de un solo color, o cuyos colores no se tocan, no paga el segundo render ni
+// cambia de forma.
 func Load3MF(ctx context.Context, eng Renderer, req render.Request, opts render.Options, dir string) ([]threemf.Part, render.Result, error) {
+	split, res, err := load3MF(ctx, eng, req, opts, dir)
+	if err != nil || len(split) < 2 || opts.LazyUnion {
+		return split, res, err
+	}
+	open := threemf.OpenEdgeCount(split)
+	if open == 0 {
+		return split, res, nil
+	}
+	lazy := opts
+	lazy.LazyUnion = true
+	lsplit, lres, lerr := load3MF(ctx, eng, req, lazy, dir)
+	if lerr != nil {
+		if ctx.Err() != nil {
+			return nil, lres, lerr
+		}
+		return split, res, nil // el modelo se exporta como salió, con el aviso de partes abiertas
+	}
+	if len(lsplit) >= len(split) && threemf.OpenEdgeCount(lsplit) < open {
+		return lsplit, lres, nil
+	}
+	return split, res, nil
+}
+
+func load3MF(ctx context.Context, eng Renderer, req render.Request, opts render.Options, dir string) ([]threemf.Part, render.Result, error) {
 	res, err := eng.RenderArtifact(ctx, req, opts, render.ArtifactExt3MF, dir)
 	if err != nil {
 		return nil, res, err

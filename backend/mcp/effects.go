@@ -1,6 +1,10 @@
 package mcp
 
-import "sort"
+import (
+	"encoding/json"
+	"regexp"
+	"sort"
+)
 
 // Effect es qué le hace al proyecto una herramienta de ESCRITURA del catálogo.
 // Es la única definición: la red de seguridad del chat (backend/hermes y
@@ -45,6 +49,10 @@ var effects = map[string]Effect{
 	// historial: no hay archivo nuevo, pero el resultado trae `file` y la tarjeta
 	// del chat enlaza el archivo editado.
 	"update_checkpoint": EffectCheckpoint,
+	// S17: cambian unas líneas del archivo (edit_checkpoint) o mueven módulos a
+	// lib/ (extract_module) en el lugar, con respaldo. Igual que update_checkpoint.
+	"edit_checkpoint": EffectCheckpoint,
+	"extract_module":  EffectCheckpoint,
 
 	"set_active_parent":  EffectTree,
 	"rename_checkpoint":  EffectTree,
@@ -69,12 +77,40 @@ func EffectOf(tool string) Effect { return effects[tool] }
 // nuevo (su resultado trae `file`).
 func CreatesCheckpoint(tool string) bool { return effects[tool] == EffectCheckpoint }
 
-// UpdatesInPlace dice si la herramienta reescribe un `.scad` que ya existía (hoy
-// solo update_checkpoint) en vez de crear uno nuevo. Sigue siendo EffectCheckpoint
-// —su resultado trae `file`—, pero la interfaz no debe contarlo como un
-// checkpoint nuevo: refresca el archivo y su indicador «editado por la IA» en vez
-// de seleccionar un nodo recién aparecido.
-func UpdatesInPlace(tool string) bool { return tool == "update_checkpoint" }
+// inPlaceTools son las herramientas que PUEDEN reescribir un `.scad` que ya
+// existía. Solo el resultado dice si lo hicieron: set_parameters edita en el
+// lugar salvo con variant=true (crea un hijo), y edit_checkpoint sin cambios no
+// escribe nada.
+var inPlaceTools = map[string]bool{
+	"update_checkpoint": true,
+	"edit_checkpoint":   true,
+	"set_parameters":    true,
+	"extract_module":    true,
+}
+
+var updatedTrueRe = regexp.MustCompile(`"updated"\s*:\s*true`)
+
+// UpdatesInPlace dice si el paso de la herramienta, ya terminado, reescribió un
+// `.scad` que ya existía en vez de crear uno nuevo. Se decide por el RESULTADO
+// (`"updated": true`) y no solo por el nombre: set_parameters hace las dos cosas.
+// Sigue siendo EffectCheckpoint —el resultado trae `file`—, pero la interfaz no
+// debe contarlo como un checkpoint nuevo: refresca el archivo y su indicador
+// «editado por la IA» en vez de seleccionar un nodo recién aparecido.
+//
+// `updated` va entre las primeras claves del resultado a propósito: si el texto
+// llega recortado, la clave sigue ahí.
+func UpdatesInPlace(tool, resultText string) bool {
+	if !inPlaceTools[tool] {
+		return false
+	}
+	var v struct {
+		Updated bool `json:"updated"`
+	}
+	if json.Unmarshal([]byte(resultText), &v) == nil {
+		return v.Updated
+	}
+	return updatedTrueRe.MatchString(resultText)
+}
 
 // ChangesTree dice si la herramienta cambia el árbol sin crear un `.scad`: tras
 // un paso bueno hay que reescanear el workspace y avisar a la interfaz.

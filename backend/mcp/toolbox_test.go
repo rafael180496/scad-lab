@@ -356,7 +356,7 @@ func TestToolboxRenderMeasurePreviewExportNative(t *testing.T) {
 		t.Fatalf("render roto: no es JSON: %s", truncate(out.Text))
 	}
 	ds, _ := diag["diagnostics"].([]any)
-	if len(ds) == 0 || !strings.Contains(out.Text, "line") || !strings.Contains(out.Text, "update_checkpoint") {
+	if len(ds) == 0 || !strings.Contains(out.Text, "line") || !strings.Contains(out.Text, "edit_checkpoint") {
 		t.Errorf("render roto sin línea o sin la instrucción de corregir: %s", truncate(out.Text))
 	}
 	if _, err := os.Stat(filepath.Join(ws, "RENDER_ERRORS.md")); err != nil {

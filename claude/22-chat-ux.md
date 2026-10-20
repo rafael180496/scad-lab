@@ -12,13 +12,13 @@ portó su código, se portó lo que hace.
 |---|---|
 | `ChatPanel.tsx` | orquesta: chat abierto, proveedor/modelo/modo, enviar, «Abrir en el editor» |
 | `ChatHeader.tsx` | barra de **una línea**: título, proveedor, píldora, modelo, chip del workspace, modo, «…» |
-| `ProviderPicker.tsx` · `ModelPicker.tsx` · `ModeControl.tsx` | los tres selectores propios (sobre `Popover.tsx`) |
+| `ProviderPicker.tsx` · `ModelPicker.tsx` · `ModeControl.tsx` · `ToolsControl.tsx` | los cuatro selectores propios (sobre `Popover.tsx`); el último es el perfil de herramientas (S17) |
 | `ConversationsMenu.tsx` · `useChatSearch.ts` | lista de conversaciones con búsqueda |
-| `Composer.tsx` · `ContextMeter.tsx` | caja de mensaje, atajos, contador de contexto |
+| `Composer.tsx` · `ContextMeter.tsx` · `ContextNotice.tsx` | caja de mensaje, atajos, contador de contexto y el aviso sobre la caja cuando el contexto se acaba (S17) |
 | `EmptyChat.tsx` | estado vacío con sugerencias |
 | `ToolCallCard.tsx` · `CodeBlock.tsx` · `Markdown.tsx` | pasos, bloques de código, Markdown |
 | `useChatProviders.ts` · `lib/chatHealth.ts` · `lib/chatTier.ts` | proveedores, salud, escalones de ancho |
-| `lib/chatContext.ts` · `lib/chatSearch.ts` · `lib/chatProviders.ts` | lo puro (probado con `pnpm test`) |
+| `lib/chatContext.ts` · `lib/chatSearch.ts` · `lib/chatProviders.ts` | lo puro (probado con `pnpm test`); `chatContext.ts` también tiene el pie del turno (`usagePieces`, `formatDuration`) y los avisos (`contextAdvice`) |
 
 ## Proveedor, salud y modelo
 
@@ -40,6 +40,16 @@ portó su código, se portó lo que hace.
   que se pueda resolver solo (un CLI, o un servidor con predeterminado o con modelo recordado); si no, el
   chat sigue como estaba hasta que se elige el modelo (`switching`).
 - **Último proveedor y modelo** por proyecto: `GetLastModel`/`SetLastModel` (+ `localStorage` de respaldo).
+
+## Perfil de herramientas (S17)
+
+`ToolsControl` es el selector compacto de **qué herramientas de ScadLab declara el chat** al modelo: «Auto (esenciales)» /
+«Auto (todas)» (el rótulo dice en qué se resolvió el último turno), «Esenciales» y «Todas». Es de **cada conversación**
+(`chats.tools`, `Chat.tools`, `SetChatToolProfile`); sin chat abierto es un borrador (`draftTools`) que se guarda al crearla.
+Solo con servidores **y** en «Agente» (sin herramientas no hay nada que declarar); un CLI no lo tiene. En la barra va
+con rótulo en `wide`, solo ícono en `mid` y **en el menú «…»** en `narrow` y `tiny` (a 480–719 px la barra ya va justa: lo
+encontró `uishot-fit.sh` con un 498 > 490 en el dock de 1024 px). Detalle de qué hace cada perfil:
+[35-edicion-compacta.md](35-edicion-compacta.md).
 
 ## Modos
 
@@ -102,14 +112,29 @@ quedaba cortado por su `overflow-clip`.
   de mini-tools (la referencia) y el de S12 ya eran así y un mensaje de diseño suele ser una frase.
   Los atajos se escriben bajo la caja (`↵` / `Enter`, según la plataforma).
 - **Contador de contexto** (`lib/chatContext.ts`): `ceil(caracteres / 4)` del borrador más cada mensaje de
-  la conversación, contra `ModelInfo.contextTokens` si se conoce (ámbar al 70 %, rojo al 90 %; sin ventana,
-  solo el número). Es una estimación y el `title` lo dice: no cuenta el prompt de sistema ni los adjuntos.
+  la conversación, contra la ventana (ámbar al 70 %, rojo al 90 %; sin ventana, solo el número). Es una
+  estimación y el `title` lo dice. **Desde S17** la ventana es la **efectiva** del último turno con un servidor
+  (`chat:context.numCtx`: lo que se le pide a Ollama; antes del primer turno, la del modelo) y suma lo fijo de
+  cada vuelta que ese evento informó —prompt de sistema y herramientas declaradas, `promptTokens + toolsTokens`—:
+  con un modelo de 8k eso es lo que decide si hay sitio. Sigue sin contar los adjuntos.
+- **Aviso sobre la caja** (`ContextNotice`, `contextAdvice`): con un servidor y la ventana conocida, un solo aviso a
+  la vez. **La conversación ocupa el 70 % o más** → «Nueva conversación con resumen» (`NewChatWithSummary`: el modelo
+  resume y se sigue en una conversación nueva; la actual se conserva) — pesa más porque ya no hay sitio. **El prompt
+  y las herramientas solos pasan del 60 %** (`OverBudget`) → lo dice y, si no se usan ya, ofrece «Usar esenciales»
+  (`SetChatToolProfile`). La X lo oculta para esa conversación y ese tipo de aviso.
 - **Estado vacío** (`EmptyChat`): proveedor, modelo y modo activos y cuatro sugerencias que **rellenan** la
   caja (no envían). Con menos de 380 px de alto se aprieta (sin ícono ni texto largo): el panel suele ser bajo
   y la lista de mensajes no se pega al fondo cuando está vacía, para no cortar el título.
 
 ## Pasos, código y Markdown
 
+- **Tiempo y tokens** (S17). La línea de cada tarjeta suma, a la duración, `ctx 7,2k` (el contexto de la vuelta que pidió el paso: lo
+  que el modelo tenía delante) y `+880` (lo que la herramienta devolvió al modelo, estimado); los dos se esconden en una tarjeta
+  angosta (`@min-[24rem]`) y están completos en el detalle desplegado (`StepStats`: tiempo, contexto, salida de esa vuelta y
+  resultado en tokens y caracteres). Lo que el proveedor no informó (0) no se muestra. **El pie del turno** (`UsageLine` en `Messages`)
+  dice «Contexto máx. 12k · ↑ 48k en 5 vueltas · ↓ 2k · modelo 41 s · herramientas 6 s»: ↑ es la **suma** de la entrada de todas las
+  vueltas, no el contexto —cada vuelta reenvía todo—, y su `title` lo explica; con `≈` cuando el servidor no informó la entrada y es
+  una estimación. Cómo se calcula con cada proveedor: [35-edicion-compacta.md](35-edicion-compacta.md).
 - **`ToolCallCard`** muestra sin abrir: el checkpoint (un enlace → `onCheckpointCreated`, que lo selecciona
   en el árbol y el editor y el visor lo siguen), los datos de la malla de `render`/`measure` (lee el JSON
   real de `backend/mcp`: `mesh.sizeMm {x,y,z}`, `triangles`, `watertight`, `fitsBuildVolume`, `estimatedWeightG`),
@@ -137,6 +162,9 @@ lista sin buscar no cuesta nada. Si un día pesa, el camino es un `SearchChats` 
   `public/uishot/starter-{all,base,knob}.stl`, generados una vez con la geometría de `starter.scad.*.tmpl`). `chat-code` y `chat-query-only` ponen la
   conversación abierta en `mode: 'ask'` (`hermesChatMode`; el banco ya no toca `localStorage`) y el chat 1 de la lista de ejemplo también
   está en consulta, para que se vea que el modo es de cada conversación.
+- Vistas de S17: `chat-turn-stats` (un Ollama de 30b: cuatro tarjetas con su tiempo y tokens y el pie del turno), `chat-tools` (un Ollama de 8k,
+  con «Esenciales» elegido y el selector abierto) y `chat-context` (el mismo, al 75 % de la ventana, con el aviso «Nueva conversación con resumen»).
+  `chat-sw<N>` es el chat solo (como `chat-w<N>`) pero con un servidor, para que `uishot-fit.sh` recorra el selector de herramientas y el aviso de 320 a 1200 px.
 - Vistas nuevas en `uishot.tsx`: `chat-providers`, `chat-cli-models`, `chat-empty`, `chat-no-providers`,
   `chat-code`, `settings-import-minitools`, y el chat solo en un panel de N px: `chat-narrow` (360) y
   `chat-wN` (cualquier N). El ancho se fija en el contenedor: Chrome headless no baja de ~500 px de ventana.
@@ -155,6 +183,6 @@ lista sin buscar no cuesta nada. Si un día pesa, el camino es un `SearchChats` 
 
 ## Regla de sincronización
 
-Un CLI nuevo en `backend/clichat` suma su ícono en `providerIcons.ts`. Un modo o un texto de modo nuevo, en
+Un perfil de herramientas nuevo se suma en `mcp.ToolProfile`, en `store.ChatToolsValue`, en `TOOL_PROFILES` de `ToolsControl.tsx` y en `t.chat.tools`. Un campo nuevo del uso de un turno, en `hermes.Usage`, `ChatUsageEvent`, `lib/chatTypes.ts` y `usagePieces`. Un CLI nuevo en `backend/clichat` suma su ícono en `providerIcons.ts`. Un modo o un texto de modo nuevo, en
 `t.chat.mode` (los dos tipos). Una herramienta nueva de ScadLab, su etiqueta (`steps.tools`) y su ícono
 (`ICONS` de `ToolCallCard.tsx`). Un ancho nuevo en la barra se prueba con `uishot-fit.sh`, no a ojo.
