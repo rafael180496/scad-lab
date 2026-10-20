@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Bot, Settings as SettingsIcon} from 'lucide-react'
-import {CancelChat, ChatCheckpointParent, DeleteChat, EnsureAntigravityMCP, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatMode, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
+import {CancelChat, ChatCheckpointParent, DeleteChat, EnsureAntigravityMCP, GetChat, GetLastModel, ListChats, ListWorkspaces, NewChat, RemoveChatAttachment, RenameChat, SaveChatCheckpoint, SendChatMessage, SetChatMode, SetChatModel, SetLastModel} from '../../../wailsjs/go/main/App'
 import type {store} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
@@ -10,7 +10,8 @@ import {useProviderHealth} from '../../lib/chatHealth'
 import {chatModeValue, isAgentMode} from '../../lib/chatMode'
 import {isCLI} from '../../lib/chatProviders'
 import {openProvidersSettings} from '../../lib/modelServers'
-import {onChatDraft, onOpenChat, onProjectClosed, takePendingChat, takePendingDraft, type ChatDraft} from '../../lib/sessionBridge'
+import {fromImageShot} from '../../lib/fromImageShot'
+import {onChatDraft, onFromImage, onOpenChat, onProjectClosed, takePendingChat, takePendingDraft, takePendingFromImage, type ChatDraft, type FromImageRequest} from '../../lib/sessionBridge'
 import type {VisionInfo} from '../../lib/chatAttachments'
 import {SaveCheckpointDialog} from '../editor/SaveCheckpointDialog'
 import {showPanel} from '../dock/dock'
@@ -21,9 +22,11 @@ import {DropOverlay} from './AttachmentChips'
 import {ChatHeader} from './ChatHeader'
 import {Composer, type AgentControl} from './Composer'
 import {EmptyChat} from './EmptyChat'
+import {FromImageDialog} from './FromImageDialog'
 import {HealthBanner} from './HealthIndicators'
 import {withVault} from '../../lib/vault'
 import {MessageList} from './Messages'
+import {NoVisionNotice} from './NoVisionNotice'
 import {SwitchAgentNotice} from './SwitchAgentNotice'
 import {clearStream, ensureChatEvents, startStream, syncStream, useStreamFinished, useStreamRunning, useStreamStartedAt} from './chatStreams'
 import {useChatAttachments} from './useChatAttachments'
@@ -150,6 +153,11 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     // El guardado en curso del último cambio de modo: un envío inmediato espera a que termine.
     const modeSaving = useRef<Promise<unknown>>(Promise.resolve())
     const [maxSteps, setMaxSteps] = useState(rememberedSteps)
+    // «Crear desde una imagen» (S15): el diálogo, la señal que abre el selector de modelos filtrado a los que ven imágenes
+    // (aviso sin visión) y el envío automático del pedido que armó el diálogo (ver más abajo).
+    const [fromImageOpen, setFromImageOpen] = useState(() => !!fromImageShot.open)
+    const [visionSignal, setVisionSignal] = useState(0)
+    const [autoSendBy, setAutoSendBy] = useState(0)
 
     useEffect(() => ensureChatEvents(), [])
 
@@ -387,10 +395,13 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
     const context = contextUsage(historyTokens, text, activeInfo?.contextTokens ?? 0)
 
     // ── Enviar / detener ────────────────────────────────────────────────────
-    const send = async () => {
-        const body = text.trim()
+    // `asFiles` (S15, «Usar trazado de contorno»): las fotos viajan solo como archivos de refs/images y el mensaje pide
+    // usar trace_image_outline; se envía aunque el modelo haya informado que no ve imágenes.
+    const doSend = async (asFiles: boolean) => {
+        const typed = text.trim()
+        const body = asFiles ? [typed, t.chat.noVision.traceInstruction].filter(Boolean).join('\n\n') : typed
         const att = attach.takeReady()
-        if ((!body && att.ids.length === 0) || workspaceId == null || running || attach.sendBlocked) return
+        if ((!body && att.ids.length === 0) || workspaceId == null || running || attach.uploading || (attach.sendBlocked && !asFiles)) return
         let id = chatId
         try {
             await modeSaving.current
@@ -420,17 +431,19 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
             // una vez (lib/vault.ts). Cancelarlo deja el error y conserva lo escrito.
             const sendId = id
             // Sin `agent` el backend usa el modo de la conversación; solo se fuerza cuando el modelo no llama herramientas.
-            const um = await withVault(() => SendChatMessage(sendId, body, currentFile ?? '', att.ids, effectiveAgent === agentOn ? {maxSteps} : {agent: effectiveAgent, maxSteps}))
+            const base = effectiveAgent === agentOn ? {maxSteps} : {agent: effectiveAgent, maxSteps}
+            const um = await withVault(() => SendChatMessage(sendId, body, currentFile ?? '', att.ids, asFiles ? {...base, imagesAsFiles: true} : base))
             // Go ya tomó los adjuntos: los chips se sueltan sin pedir borrarlos.
             attach.consume(att.keys)
             setMessages((prev) => (prev.some((m) => m.id === um.id) ? prev : [...prev, um]))
             void reloadChats(workspaceId) // el primer mensaje ya le puso título al chat
         } catch (e) {
             if (id != null) clearStream(id)
-            setText((cur) => cur || body) // que no se pierda lo que se escribió
+            setText((cur) => cur || typed) // que no se pierda lo que se escribió
             toast.error(errorText(e))
         }
     }
+    const send = () => void doSend(false)
 
     const stop = () => chatId != null && void CancelChat(chatId)
 
@@ -591,6 +604,51 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         }
     }, [])
 
+    // «Crear desde una imagen» (S15): el diálogo entrega las fotos (ya adjuntas en Go) y el mensaje estructurado. Se abre una
+    // conversación nueva en «Agente», las fotos quedan como chips, el texto en la caja y, en cuanto el proveedor y el
+    // modelo están listos, se envía. Con un modelo que informó que no ve imágenes NO se envía solo: queda todo en la
+    // caja y el aviso ofrece las dos salidas (cambiar de modelo, o el trazado de contorno).
+    const fromImageRef = useRef<(r: FromImageRequest) => void>(() => {})
+    fromImageRef.current = (r) => {
+        if (r.workspaceId !== workspaceId) {
+            // Era de otro proyecto: sus fotos se borran, no se cuelan en este.
+            for (const a of r.attachments) void RemoveChatAttachment(a.id).catch(() => {})
+            return
+        }
+        setChatId(null)
+        setDraftAgent(true)
+        setText(r.text)
+        for (const a of r.attachments) attach.addReady(a)
+        setAutoSendBy(Date.now() + 5000)
+    }
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            const pending = takePendingFromImage()
+            if (pending) fromImageRef.current(pending)
+        }, 0)
+        const off = onFromImage((r) => fromImageRef.current(r))
+        return () => {
+            window.clearTimeout(timer)
+            off()
+        }
+    }, [])
+    // Sin lista de dependencias a propósito: espera a que el estado esté completo (conversación nueva elegida, texto y
+    // fotos puestos, modelo resuelto y su visión conocida) y envía UNA vez; pasados 5 s se rinde y deja todo en la caja.
+    const sendRef = useRef(send)
+    sendRef.current = send
+    useEffect(() => {
+        if (!autoSendBy) return
+        if (Date.now() > autoSendBy) {
+            setAutoSendBy(0)
+            return
+        }
+        const modelReady = chatId == null && !!providerId && (cli || !!model.trim())
+        const visionKnown = cli || !!activeInfo || !!modelsError || (!modelsLoading && models.length > 0)
+        if (workspaceId == null || !modelReady || !visionKnown || attach.uploading || text.trim() === '') return
+        setAutoSendBy(0)
+        if (!attach.sendBlocked) sendRef.current()
+    })
+
     // ── Antigravity: ScadLab en su configuración global ─────────────────────
     // Antigravity solo lee MCP de su configuración global: al elegirlo (o abrir un chat suyo) el backend registra a
     // ScadLab si falta y avisa por el evento mcp:antigravity (App lo muestra como toast). Sin esa entrada no tiene
@@ -644,7 +702,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 chats={chats}
                 current={current}
                 provider={{providers, id: pickerProviderId, onChange: onProvider, onAdd: openProviders, onOpen: () => refresh(true), health, onRecheck: recheckHealth}}
-                model={{value: pickerModel, models, defaultHint, loading: modelsLoading, error: modelsError, onChange: onModel, onReload: reloadModels}}
+                model={{value: pickerModel, models, defaultHint, loading: modelsLoading, error: modelsError, onChange: onModel, onReload: reloadModels, openSignal: visionSignal, visionOnly: true}}
                 mode={{agent: agentOn, onChange: setAgent, unavailable: noTools ? t.chat.agent.noTools : '', kind: cli ? 'cli' : 'server', disabled: false}}
                 modeKind={cli ? 'cli' : 'server'}
                 workspaceName={workspaceName}
@@ -658,10 +716,11 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 chatId={chatId}
                 messages={messages}
                 actions={actions}
-                empty={<EmptyChat provider={provider} modelLabel={modelLabel} agent={effectiveAgent} onPick={setText} />}
+                empty={<EmptyChat provider={provider} modelLabel={modelLabel} agent={effectiveAgent} onPick={setText} onFromImage={() => setFromImageOpen(true)} />}
             />
             {showBanner ? <HealthBanner health={health} name={provider?.name ?? pickerProviderId} onRetry={recheckHealth} /> : null}
             {showSwitch ? <SwitchAgentNotice onSwitch={() => setAgent(true)} onDismiss={() => setNoticeDismissed(askText)} /> : null}
+            {attach.blockedCount > 0 ? <NoVisionNotice disabled={running} onSwitch={() => setVisionSignal((n) => n + 1)} onTrace={() => void doSend(true)} /> : null}
             <Composer
                 value={text}
                 onChange={setText}
@@ -678,6 +737,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
                 tier={tier}
             />
             {attach.dragging ? <DropOverlay /> : null}
+            <FromImageDialog open={fromImageOpen} workspaceId={workspaceId} onClose={() => setFromImageOpen(false)} />
             <SaveCheckpointDialog
                 open={!!saving}
                 parent={saving?.parent ?? ''}

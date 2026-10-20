@@ -73,7 +73,8 @@ corre al arrancar para borrar las preferencias globales de antes (`scadlab.chat.
   auto-render esté apagado) si es el proyecto activo y no hay cambios sin guardar ni una edición de STL sucia. El botón y los
   pasos usan el mismo camino (`onCheckpointCreated` de `ChatPanel` → `PanelHost.onChatCheckpoint`).
 - **Antigravity**: `ChatPanel` llama `EnsureAntigravityMCP` al mostrar `cli:antigravity`; el toast sale del evento
-  `mcp:antigravity` en `App.tsx` (también cuando lo dispara el backend). Ver [13-mcp.md](13-mcp.md).
+  `mcp:antigravity` en `App.tsx` (también cuando lo dispara el backend); si Antigravity bloquea una herramienta, el evento `mcp:antigravity-denied` abre un
+  aviso con «Reparar permisos de Antigravity». Ver [13-mcp.md](13-mcp.md) y [26-antigravity-permisos.md](26-antigravity-permisos.md).
 - **«Crear un modelo de inicio»** (`components/workspace/StarterAction.tsx`): en el visor y en Código cuando el proyecto no
   tiene ningún checkpoint (`emptyWorkspace`); `CreateStarterCheckpoint` lo escribe aunque la papelera tenga algo.
 

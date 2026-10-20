@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,18 +32,23 @@ var (
 
 // treeHash es un hash del contenido de una carpeta: rutas y bytes de sus
 // archivos, sin la marca de ScadLab ni basura del sistema.
-func treeHash(dir string) (string, error) {
+func treeHash(dir string) (string, error) { return treeHashFS(os.DirFS(dir), ".") }
+
+// treeHashFS es treeHash sobre cualquier sistema de archivos (la skill incluida
+// vive en el binario). Con la misma forma de hash, la copia instalada de una
+// skill incluida y su original dan el mismo valor.
+func treeHashFS(fsys fs.FS, root string) (string, error) {
 	var files []string
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() || ignoredFiles[d.Name()] {
 			return nil
 		}
-		rel, err := filepath.Rel(dir, p)
-		if err != nil {
-			return err
+		rel := p
+		if root != "." {
+			rel = strings.TrimPrefix(p, root+"/")
 		}
 		files = append(files, rel)
 		return nil
@@ -53,11 +59,11 @@ func treeHash(dir string) (string, error) {
 	sort.Strings(files)
 	h := sha256.New()
 	for _, rel := range files {
-		raw, err := os.ReadFile(filepath.Join(dir, rel))
+		raw, err := fs.ReadFile(fsys, path.Join(root, rel))
 		if err != nil {
 			return "", err
 		}
-		h.Write([]byte(filepath.ToSlash(rel)))
+		h.Write([]byte(rel))
 		h.Write([]byte{0})
 		h.Write(raw)
 		h.Write([]byte{0})

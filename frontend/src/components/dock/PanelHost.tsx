@@ -199,7 +199,7 @@ export function PanelHost(p: PanelHostProps) {
                     </Suspense>
                 )
             case 'problems':
-                return <ProblemsPanel file={p.file} problems={p.file ? problems : []} />
+                return <ProblemsPanel workspaceId={p.workspaceId} file={p.file} problems={p.file ? problems : []} />
             case 'print':
                 return (
                     <PrintPanel

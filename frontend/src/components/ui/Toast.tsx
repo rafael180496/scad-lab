@@ -7,7 +7,7 @@ import {Button, IconButton} from './Button'
 // cualquier lado, incluidos callbacks fuera de React.
 // Un aviso puede traer acciones (p. ej. «Mostrar en el Finder» tras exportar):
 // vive más tiempo, porque hay que alcanzar a leer y decidir, y se cierra a mano.
-export type ToastAction = {label: string; title: string; run: () => void}
+export type ToastAction = {label: string; title: string; run: () => void; /** Se ve pero no se puede pulsar; el `title` explica por qué. */ disabled?: boolean}
 type Toast = {id: number; kind: 'ok' | 'error'; text: string; key?: string; actions?: ToastAction[]; closeLabel?: string}
 
 let items: Toast[] = []
@@ -34,7 +34,8 @@ export const toast = {
     ok: (text: string, key?: string) => push('ok', text, key),
     error: (text: string, key?: string) => push('error', text, key),
     // Aviso con botones; `closeLabel` es el `title` de la X que lo cierra.
-    withActions: (text: string, actions: ToastAction[], closeLabel: string, key?: string) => push('ok', text, key, actions, closeLabel),
+    // `kind: 'error'` para un aviso que advierte de un problema y ofrece repararlo.
+    withActions: (text: string, actions: ToastAction[], closeLabel: string, key?: string, kind: Toast['kind'] = 'ok') => push(kind, text, key, actions, closeLabel),
 }
 
 export function Toaster() {
@@ -68,6 +69,7 @@ export function Toaster() {
                                     <Button
                                         key={a.label}
                                         title={a.title}
+                                        disabled={a.disabled}
                                         onClick={() => {
                                             dismiss(x.id)
                                             a.run()

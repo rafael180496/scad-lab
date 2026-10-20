@@ -21,6 +21,7 @@ import (
 	"scadlab/backend/prompts"
 	"scadlab/backend/store"
 	"scadlab/backend/workspace"
+	"scadlab/backend/wsconfig"
 )
 
 // Chat de diseño con modelos (S5, bloque 5.B) y Hermes (S12): conversación con
@@ -113,9 +114,16 @@ type ChatView struct {
 // turno no puede ser «Agente» aunque la conversación lo sea; no cambia lo guardado.
 // false = modo texto de S5 (bloques de código y «Guardar como checkpoint»);
 // true = Hermes con herramientas, o el CLI con las de escritura.
+//
+// ImagesAsFiles (S15) manda las fotos adjuntas SOLO como archivos en refs/images/ del
+// workspace, sin pasarlas al modelo como imagen, y no rechaza el envío aunque el modelo
+// haya informado que no ve. Es el «Usar trazado de contorno» del aviso sin visión:
+// trace_image_outline trabaja con el archivo y no necesita ojos. Solo lo tiene en cuenta
+// un servidor de modelos; un CLI recibe siempre las rutas de las fotos y decide él.
 type SendOptions struct {
-	Agent    *bool `json:"agent,omitempty"`
-	MaxSteps int   `json:"maxSteps"`
+	Agent         *bool `json:"agent,omitempty"`
+	MaxSteps      int   `json:"maxSteps"`
+	ImagesAsFiles bool  `json:"imagesAsFiles,omitempty"`
 }
 
 // agentFor resuelve si el turno de la conversación c corre en «Agente»: el
@@ -368,11 +376,13 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 	}
 	agent := opts.agentFor(c)
 	caps := a.modelCapabilities(p, client, c.Model, agent || len(pending) > 0)
-	if err := hermes.CheckVision(pending, caps.Vision, caps.VisionKnown, p.Name+" · "+c.Model); err != nil {
-		return store.ChatMessage{}, err
+	if !opts.ImagesAsFiles {
+		if err := hermes.CheckVision(pending, caps.Vision, caps.VisionKnown, p.Name+" · "+c.Model); err != nil {
+			return store.ChatMessage{}, err
+		}
 	}
 
-	ot, err := a.openChatTurn(c, text, pending, attachmentIDs, caps.assumeVision())
+	ot, err := a.openChatTurn(c, text, pending, attachmentIDs, hermes.PrepareOptions{Vision: caps.assumeVision(), WorkspaceDir: w.Path, ImagesAsFiles: opts.ImagesAsFiles})
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
@@ -382,6 +392,7 @@ func (a *App) SendChatMessage(chatID int64, text, currentFile string, attachment
 		turn: turn, chat: c, server: p, client: client, workspace: w, caps: caps,
 		currentFile: currentFile, user: hermes.UserMessage(prepared), agent: agent,
 		maxSteps: hermes.ClampSteps(opts.MaxSteps), history: seedFrom(stored, p.Kind), refs: referencePaths(stored, prepared.Metas),
+		imageRefs: prepared.ImageRefs,
 	}
 	a.chatSvc().beginLive(chatID)
 	go a.runChatTurn(job)
@@ -398,10 +409,12 @@ type openedTurn struct {
 }
 
 // openChatTurn reserva el turno del chat, prepara los adjuntos, guarda el
-// mensaje del usuario y le pone título al chat si es el primero. vision dice si
-// la vista previa de un modelo de referencia viaja como imagen. Si algo falla
+// mensaje del usuario y le pone título al chat si es el primero. po dice si la
+// vista previa de un modelo de referencia viaja como imagen (Vision), a qué
+// workspace se copian las fotos (WorkspaceDir) y si viajan como imagen
+// (ImagesAsFiles); la carpeta del chat la pone esta función. Si algo falla
 // libera el turno y no queda nada a medias.
-func (a *App) openChatTurn(c store.Chat, text string, pending []*hermes.Pending, attachmentIDs []string, vision bool) (openedTurn, error) {
+func (a *App) openChatTurn(c store.Chat, text string, pending []*hermes.Pending, attachmentIDs []string, po hermes.PrepareOptions) (openedTurn, error) {
 	var ot openedTurn
 	turn, err := a.chatSvc().mgr.Begin(a.appCtx(), c.ID)
 	if err != nil {
@@ -414,7 +427,8 @@ func (a *App) openChatTurn(c store.Chat, text string, pending []*hermes.Pending,
 		turn.End()
 		return ot, err
 	}
-	prepared, err := hermes.Prepare(text, pending, vision, a.chatDir(c.ID))
+	po.Dir = a.chatDir(c.ID)
+	prepared, err := hermes.PrepareIn(text, pending, po)
 	if err != nil {
 		turn.End()
 		return ot, err
@@ -490,6 +504,10 @@ type chatJob struct {
 	maxSteps    int
 	history     []llm.Message
 	refs        []string
+	// imageRefs son las fotos de ESTE mensaje en refs/images/ (relativas al workspace):
+	// el prompt de sistema las nombra para que el modelo las pase a las herramientas de
+	// imagen. Las de mensajes anteriores quedan en el historial (hermes.AttachmentNote).
+	imageRefs []string
 	// cli es lo propio de un turno con un CLI agéntico (S12.b); nil en un turno
 	// con un servidor de modelos.
 	cli *cliJob
@@ -574,7 +592,7 @@ func (a *App) concludeChatTurn(c store.Chat, res hermes.Result, err error, errTe
 // puede usar, y el historial.
 func (a *App) hermesConfig(j chatJob) hermes.Config {
 	c, p, w := j.chat, j.server, j.workspace
-	pctx := chatPromptContext(w, j.currentFile)
+	pctx := chatPromptContext(w, j.currentFile, j.imageRefs...)
 	vision := j.caps.assumeVision()
 	base := prompts.AgentContext{Context: pctx, Vision: vision, MaxSteps: j.maxSteps, References: j.refs}
 	toolsCtx := base
@@ -780,12 +798,29 @@ func chatParent(dir, currentFile string) string {
 // código del archivo abierto, leído del DISCO —no del editor— con el mismo
 // control de nombre que ReadCheckpoint, para que la interfaz no pueda hacer
 // leer un archivo fuera del workspace.
-func chatPromptContext(w store.Workspace, currentFile string) prompts.Context {
+//
+// images son las fotos del mensaje (rutas relativas al workspace): el prompt las nombra
+// y la skill openscad-from-image se activa.
+func chatPromptContext(w store.Workspace, currentFile string, images ...string) prompts.Context {
 	ctx := prompts.Context{Lang: i18n.Lang(), WorkspaceName: w.Name}
-	if pr, ok := printers.ByID(w.PrinterID); ok {
+	ctx.Images = images
+	if _, ok := printers.ByID(w.PrinterID); ok {
+		// La impresora efectiva del workspace (S14): ColorSlots son SUS colores, no
+		// el máximo de la máquina. El diámetro del filamento: el que fijó el
+		// workspace o el de la máquina; sin ninguno queda en 0 y rige el global
+		// (aquí no se lee la configuración).
+		pr := wsconfig.EffectivePrinter(w)
 		ctx.PrinterName = pr.Name
 		ctx.BuildVolume = [3]float64{pr.BuildVolume.X, pr.BuildVolume.Y, pr.BuildVolume.Z}
 		ctx.ColorSlots = pr.MulticolorSlots
+		ctx.Brand = pr.BrandName
+		ctx.MulticolorSystem = pr.MulticolorSys
+		ctx.SlicerName = recommendedSlicerName(pr)
+		ctx.NozzleMM = pr.NozzleMM
+		ctx.FilamentDiameterMm = pr.FilamentDiameterMM
+		if v := w.Print.FilamentDiameterMm; v != nil && *v > 0 {
+			ctx.FilamentDiameterMm = *v
+		}
 	}
 	if files, err := workspace.Scan(w.Path); err == nil {
 		for _, f := range files {

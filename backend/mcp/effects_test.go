@@ -47,6 +47,16 @@ func TestEffectsCoverTheWriteTools(t *testing.T) {
 	if got := ToolsWithEffect(EffectTree); !slices.Equal(got, wantTree) {
 		t.Errorf("cambian el árbol: %v, esperaba %v", got, wantTree)
 	}
+	// Escriben fuera del árbol (exports/, lib/, refs/): nada que enlazar ni refrescar.
+	wantFiles := []string{"export", "image_to_heightmap", "install_library", "trace_image_outline"}
+	if got := ToolsWithEffect(EffectFiles); !slices.Equal(got, wantFiles) {
+		t.Errorf("escriben archivos: %v, esperaba %v", got, wantFiles)
+	}
+	for _, n := range wantFiles {
+		if CreatesCheckpoint(n) || ChangesTree(n) || ChangesConfig(n) {
+			t.Errorf("%s solo escribe archivos: no crea checkpoints ni cambia el árbol ni la configuración", n)
+		}
+	}
 	for _, n := range wantCreate {
 		if !CreatesCheckpoint(n) || ChangesTree(n) {
 			t.Errorf("%s: CreatesCheckpoint/ChangesTree no coinciden con la tabla", n)
@@ -127,5 +137,27 @@ func TestDeclaredEffectsMatchWhatTheToolsDo(t *testing.T) {
 	back := tb.mustJSON(t, "restore_checkpoint", map[string]any{"trashed_name": trashed[0].(string)})["file"].(string)
 	if !slices.Contains(known, back) {
 		t.Errorf("restore_checkpoint devolvió un nombre nuevo: %s", back)
+	}
+}
+
+// EffectConfig (S14) lo declara una sola herramienta, set_workspace_printer, y no
+// puede colarse en las listas de los otros efectos.
+func TestEffectConfigIsOnlySetWorkspacePrinter(t *testing.T) {
+	if EffectConfig == EffectNone || EffectConfig == EffectCheckpoint || EffectConfig == EffectTree || EffectConfig == EffectFiles {
+		t.Fatalf("EffectConfig repite el valor de otro efecto: %d", EffectConfig)
+	}
+	if got := ToolsWithEffect(EffectConfig); !slices.Equal(got, []string{"set_workspace_printer"}) {
+		t.Errorf("EffectConfig lo declara solo set_workspace_printer: %v", got)
+	}
+	if !ChangesConfig("set_workspace_printer") || CreatesCheckpoint("set_workspace_printer") || ChangesTree("set_workspace_printer") {
+		t.Error("set_workspace_printer cambia la configuración, no el árbol ni crea checkpoints")
+	}
+	if ChangesConfig("render") || ChangesConfig("no_existe") {
+		t.Error("ChangesConfig devolvió true para una herramienta que no cambia la configuración")
+	}
+	for _, name := range ToolsWithEffect(EffectTree) {
+		if ChangesConfig(name) {
+			t.Errorf("%s cambia el árbol, no la configuración", name)
+		}
 	}
 }

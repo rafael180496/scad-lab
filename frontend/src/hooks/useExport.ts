@@ -1,37 +1,46 @@
 import {useCallback, useEffect, useRef, useState} from 'react'
-import type {main, render} from '../../wailsjs/go/models'
+import type {main, printers, render} from '../../wailsjs/go/models'
 import {DetectSlicers, ExportCheckpoint} from '../../wailsjs/go/main/App'
 import {toast} from '../components/ui/Toast'
 import {fmt, useT} from '../i18n'
 import {errorText} from '../lib/errors'
-import {openInBambu, toastSaved} from '../lib/saved'
+import {openInSlicer, toastSaved, type SlicerTarget} from '../lib/saved'
+import {installedSlicer, recommendedSlicer} from '../lib/printerInfo'
 import {isMod} from '../lib/platform'
 import {captureViewer} from '../lib/viewerBridge'
-
-const BAMBU = 'bambu-studio'
+import type {ExportFormat} from '../components/export/ExportDialog'
 
 // useExport reúne lo que la cabecera necesita para exportar el checkpoint
 // elegido (S9): si se puede y, si no, por qué; el STL directo, el PNG del visor
-// y el diálogo de 3MF. Bambu Studio se detecta al arrancar y cada vez que
-// cambia su ruta en Configuración.
+// y el diálogo de 3MF. Los slicers se detectan al arrancar y cada vez que cambia
+// una ruta en Configuración (`slicerKey`); «Abrir en <slicer>» usa el primero
+// instalado de los de la impresora del workspace (S14).
 export function useExport({
     workspaceId,
     file,
     result,
     running,
-    bambuPath,
+    slicerKey,
+    printer,
 }: {
     workspaceId: number | null
     file: string | null
     result: render.Result | undefined
     running: boolean
-    bambuPath: string
+    /** Cambia cuando cambia alguna ruta de slicer de Configuración: vuelve a detectar. */
+    slicerKey: string
+    /** La impresora del workspace: de ahí salen sus slicers. */
+    printer: printers.Printer | undefined
 }) {
     const t = useT()
     const [slicers, setSlicers] = useState<main.Slicer[]>([])
     const [dialog, setDialog] = useState(false)
     const [busy, setBusy] = useState(false)
-    const bambu = slicers.find((s) => s.id === BAMBU && s.found)
+    const installed = installedSlicer(printer, slicers)
+    const recommended = recommendedSlicer(printer, slicers)
+    // Lo que el aviso de guardado y el diálogo saben del slicer; sin ninguno que nombrar, nada que ofrecer.
+    const slicer: SlicerTarget | undefined =
+        installed || recommended ? {installed: installed ? {id: installed.id, name: installed.name} : undefined, recommendedName: recommended?.name} : undefined
 
     useEffect(() => {
         let alive = true
@@ -41,7 +50,7 @@ export function useExport({
         return () => {
             alive = false
         }
-    }, [bambuPath])
+    }, [slicerKey])
 
     // Por qué no se puede exportar ('' = se puede). Exportar necesita un render
     // correcto: el STL sale de su malla y el 3MF se renderiza con colores aparte.
@@ -67,13 +76,13 @@ export function useExport({
         setBusy(true)
         try {
             const res = await ExportCheckpoint(workspaceId, file, 'stl')
-            if (res.path) toastSaved(t, t.export.saved, res.path, {bambuId: bambu?.id})
+            if (res.path) toastSaved(t, t.export.saved, res.path, {slicer})
         } catch (e) {
             toast.error(errorText(e))
         } finally {
             setBusy(false)
         }
-    }, [workspaceId, file, busy, t, bambu?.id])
+    }, [workspaceId, file, busy, t, slicer])
 
     const exportPng = useCallback(async () => {
         try {
@@ -84,15 +93,15 @@ export function useExport({
         }
     }, [t])
 
-    // Tras exportar desde el diálogo; `open` = «Exportar y abrir en Bambu Studio».
+    // Tras exportar desde el diálogo; `open` = «Exportar y abrir en <slicer>».
     const exported = useCallback(
         (path: string, open: boolean) => {
-            if (open && bambu) {
+            if (open && slicer?.installed) {
                 toast.ok(fmt(t.export.saved, {path}))
-                void openInBambu(t, bambu.id, path)
-            } else toastSaved(t, t.export.saved, path, {bambuId: bambu?.id})
+                void openInSlicer(t, slicer.installed, path)
+            } else toastSaved(t, t.export.saved, path, {slicer})
         },
-        [t, bambu],
+        [t, slicer],
     )
 
     // Atajos: ⌘/Ctrl+E = 3MF, ⌘/Ctrl+⇧+E = STL. En captura sobre window, porque
@@ -119,7 +128,10 @@ export function useExport({
     return {
         why,
         busy,
-        bambu,
+        slicers,
+        slicer,
+        /** El formato con que arranca el diálogo: PrusaSlicer lee su propio 3MF; Cura no asigna extrusores desde un 3MF de partes. */
+        preferred: (recommended?.id === 'prusaslicer' ? '3mf-prusa' : recommended?.id === 'ultimaker-cura' ? 'stl-per-color' : '3mf') as ExportFormat,
         dialog,
         openDialog,
         closeDialog,

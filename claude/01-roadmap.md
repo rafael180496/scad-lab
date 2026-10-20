@@ -207,6 +207,7 @@ Plan: [.claude/specs/s12-hermes-proveedores.md](../.claude/specs/s12-hermes-prov
 | 12.18 | S12.c T11: auditoría del MCP — 31 herramientas con lectura y escritura (parámetros, plantillas, librerías, `edit_mesh`, estimación, orientación, árbol y papelera) | OS | ✅ |
 | 12.19 | S12.c T12: modo Agente por defecto, por conversación (migración 9, `chats.mode`) | FS | ✅ |
 | 12.20 | S12.c T13: las herramientas nuevas en la app y el chat — etiquetas e íconos, `mcp.CreatesCheckpoint`/`ChangesTree` (una sola definición), refresco del árbol tras set_active_parent/rename/trash/restore, `PrepareMeshEdit` sobre `meshedit.ResolveBase` | FS | ✅ |
+| 12.21 | S12.c T14: Antigravity usa las herramientas de ScadLab en `agy --print` — reglas `mcp(scadlab/<herramienta>)` en `permissions.allow` del `settings.json` global de Antigravity (los hooks no sirven: medido), sincronizadas al registrar el MCP y en cada turno, Quitar/Volver a agregar en Configuración, «Solo consulta» hecho cumplir por el servidor `--mcp` con la marca `.scadlab/turn-mode`, mensaje accionable y «Reparar permisos de Antigravity» si igual se bloquea, `call_mcp_tool` desenvuelto. Detalle: [26-antigravity-permisos.md](26-antigravity-permisos.md). Falta probarlo con el `agy` real (lo hace el usuario) | FS | ✅ código · ⬜ sesión real |
 
 ## S13 — Editar un STL (editor 3D y con IA) ✅ (falta 13.4, prueba del usuario en la ventana real)
 
@@ -218,3 +219,27 @@ Plan: [.claude/specs/s13-edicion-stl.md](../.claude/specs/s13-edicion-stl.md). N
 | 13.2 | Interfaz: importar (barra lateral y arrastrar), modo «Editar» del visor (gizmo mover/rotar/escalar, espejar, centrar, apoyar, apoyar sobre una cara, cortar con plano, primitivas unión/agujero, color por pieza, deshacer/rehacer, aplicar/descartar), «Modificar con IA». Detalle: [24-editor-3d.md](24-editor-3d.md) | FS | ✅ |
 | 13.3 | Integración, verificación y prueba de humo (`wails dev`): importar un STL (centrado y apoyado), editar con agujero y corte en dos colores, render cerrado, 3MF con 2 partes, STL original intacto, «Modificar con IA» con servidor simulado; adjuntar un STL que ya está en `refs/` lo reutiliza (sin copia `-2`) | architect | ✅ |
 | 13.4 | Probar en la ventana real: arrastrar un archivo a la ventana (`OnFileDrop`), «Importar…» con el diálogo nativo y el gizmo con el ratón en WKWebView/WebView2 | usuario | ⬜ |
+
+## S14 — Impresoras multimarca y configuración por workspace ✅ (falta 14.5, prueba del usuario en los slicers)
+
+Plan: [.claude/specs/s14-impresoras-multimarca.md](../.claude/specs/s14-impresoras-multimarca.md). Detalle: [27-impresoras-workspace.md](27-impresoras-workspace.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 14.0 | Investigación con fichas oficiales: 47 impresoras de 7 marcas con `sources` y `verify`, apps de los slicers en macOS/Windows, qué lee cada slicer de un 3MF | investigación | ✅ |
+| 14.1 | Núcleo Go: catálogo v2 por marca, `backend/slicers`, migración 10 (skills y ajustes por workspace, backfill de skills y de colores), `backend/wsconfig`, skills por workspace (retira solo copias sin editar), bindings `GetWorkspaceConfig`/`SaveWorkspaceConfig`/`CreateWorkspaceWith`, evento `workspace:config` | FS | ✅ |
+| 14.2 | Catálogo verificado, skills de marca (Creality, Prusa, Elegoo, Anycubic, Snapmaker, UltiMaker) y Bambu al día, `openscad-3mf-multicolor` genérica, formato `3mf-prusa` (`Slic3r_PE_model.config`), `RULES.md.tmpl` y prompts con la impresora del workspace, `printer_info`/`list_printers`/`set_workspace_printer` | OS | ✅ |
+| 14.3 | Interfaz: selector de impresoras, «Nuevo workspace» con impresora/colores/skills, «Configuración del workspace», slicers en Configuración → Impresión, «Abrir en <slicer>», barra de estado y panel Impresión con valores del workspace; capturas, ayuda, README, CHANGELOG; `claude/06` partido en 29–33 | FS | ✅ |
+| 14.4 | Integración y verificación (`go test -race`, build de Windows, frontend, i18n, uishot-fit/persist, `wails build`, todas las capturas regeneradas) y humo con la Prusa MK4S (solo sus skills instaladas, prompt y reglas con la impresora, `measure` con placa 250×210×220). `extruder_nr` de Cura apagado en el 3MF normal | architect | ✅ |
+| 14.5 | Abrir un 3MF/3MF para PrusaSlicer/STL por color en cada slicer instalado y probar «Abrir en <slicer>» (regla 9: no se automatiza) | usuario | ⬜ |
+
+## S15 — Crear modelos a partir de imágenes ✅ (falta 15.4, prueba del usuario con un modelo real con visión)
+
+Plan: [.claude/specs/s15-modelo-desde-imagen.md](../.claude/specs/s15-modelo-desde-imagen.md). Detalle: [28-modelo-desde-imagen.md](28-modelo-desde-imagen.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 15.1 | `backend/imagetools` (Go puro, límites de 20 MB / 40 MP / 10 s), herramientas `image_info`, `compare_with_image` (L), `trace_image_outline`, `image_to_heightmap` (E), `list_refs` con imágenes, skill `openscad-from-image` (método, casos, `standard-sizes.md`, plantillas renderizadas), prompts y reglas con las imágenes del turno | OS | ✅ |
+| 15.2 | Fotos del chat a `refs/images/` (deduplicadas), rutas en el turno de Hermes y de los CLIs, «Crear desde una imagen», tarjetas de comparación y trazado, aviso sin visión con «Cambiar a un modelo con visión» / «Usar trazado de contorno»; capturas, ayuda, CHANGELOG | FS | ✅ |
+| 15.3 | Integración: una foto grande se reduce al adjuntar (≤ 2048 px y ≤ 5 MB al modelo; el original a `refs/images/`; entrada hasta 20 MB), verificación completa y humo con servidor simulado (foto sintética de 3000 px → checkpoint renderizado → `compare_with_image` en vista frontal, IoU 1) | architect | ✅ |
+| 15.4 | Probar con un modelo real con visión, fotos reales de una pieza y un logo, y con un CLI (Claude Code / Codex) leyendo `refs/images/` | usuario | ⬜ |

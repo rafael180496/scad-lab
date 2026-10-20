@@ -151,7 +151,13 @@ func AttachmentNote(metas []AttachmentMeta) string {
 	}
 	var names, reports []string
 	for _, m := range metas {
-		names = append(names, m.Name)
+		name := m.Name
+		// Una foto copiada al workspace (S15) dice dónde quedó: el turno siguiente
+		// todavía tiene que poder pasarla a las herramientas de imagen.
+		if m.Kind == KindImage && m.RefPath != "" {
+			name += " (" + m.RefPath + ")"
+		}
+		names = append(names, name)
 		if m.Kind == KindModel && m.Summary != "" {
 			reports = append(reports, m.Summary)
 		}

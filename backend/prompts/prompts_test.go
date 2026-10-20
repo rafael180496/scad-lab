@@ -268,3 +268,70 @@ func TestSystemPromptFallbackContract(t *testing.T) {
 		}
 	}
 }
+
+// S14: el prompt de sistema nombra la impresora, su marca, el sistema multicolor, la
+// boquilla, el filamento y el slicer del workspace, y nunca habla del AMS ni de Bambu
+// Studio como algo universal.
+func prusaContext(lang string) Context {
+	return Context{
+		Lang:               lang,
+		WorkspaceName:      "Soporte",
+		PrinterName:        "Original Prusa MK4S",
+		BuildVolume:        [3]float64{250, 210, 220},
+		ColorSlots:         1,
+		Brand:              "Prusa Research",
+		MulticolorSystem:   "Prusa MMU3 (opcional)",
+		SlicerName:         "PrusaSlicer",
+		NozzleMM:           0.4,
+		FilamentDiameterMm: 1.75,
+	}
+}
+
+func TestSystemPromptNamesThePrusaPrinter(t *testing.T) {
+	for lang, wants := range map[string][]string{
+		"es": {"Original Prusa MK4S (Prusa Research)", "250 × 210 × 220 mm", "Sistema multicolor: Prusa MMU3 (opcional)", "Boquilla de 0.4 mm y filamento de 1.75 mm", "Slicer: PrusaSlicer", "Máximo **1 color** en total"},
+		"en": {"Original Prusa MK4S (Prusa Research)", "250 × 210 × 220 mm", "Multicolor system: Prusa MMU3 (opcional)", "Nozzle of 0.4 mm and filament of 1.75 mm", "Slicer: PrusaSlicer", "At most **1 color** in total"},
+	} {
+		got := SystemPrompt(prusaContext(lang))
+		for _, w := range wants {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: falta %q:\n%s", lang, w, got)
+			}
+		}
+		for _, bad := range []string{"AMS", "Bambu", "A1 mini"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("%s: el prompt de una Prusa dice %q", lang, bad)
+			}
+		}
+	}
+	// Una UltiMaker: 2,85 mm y dos colores.
+	u := prusaContext("es")
+	u.PrinterName, u.Brand, u.MulticolorSystem, u.SlicerName = "UltiMaker S5", "UltiMaker", "Doble extrusión (print cores AA/BB)", "UltiMaker Cura"
+	u.BuildVolume, u.ColorSlots, u.FilamentDiameterMm = [3]float64{330, 240, 300}, 2, 2.85
+	got := SystemPrompt(u)
+	for _, w := range []string{"UltiMaker S5 (UltiMaker)", "330 × 240 × 300 mm", "filamento de 2.85 mm", "Slicer: UltiMaker Cura", "**2 colores**"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("UltiMaker: falta %q", w)
+		}
+	}
+}
+
+// Sin datos de la impresora (o sin impresora) nada se inventa: no se nombra marca,
+// sistema, boquilla ni slicer, y el texto de «sin impresora» ya no dice A1 mini.
+func TestSystemPromptWithoutPrinterDetailsOmitsThem(t *testing.T) {
+	for lang, want := range map[string]string{"es": "Impresora sin definir (asume una placa pequeña y 4 colores como máximo)", "en": "Printer not set (assume a small plate and at most 4 colors)"} {
+		got := SystemPrompt(Context{Lang: lang})
+		if !strings.Contains(got, want) {
+			t.Errorf("%s: falta %q", lang, want)
+		}
+		for _, bad := range []string{"Sistema multicolor", "Multicolor system", "Boquilla de", "Nozzle of", "Slicer:", "A1 mini", "AMS"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("%s: no debía decir %q:\n%s", lang, bad, got)
+			}
+		}
+	}
+	// Sin brand ni sistema, la impresora se nombra sola (compatibilidad con S5).
+	if got := SystemPrompt(fullContext("es")); !strings.Contains(got, "Bambu Lab A1 mini. Volumen de impresión") {
+		t.Errorf("la impresora debe nombrarse sin paréntesis cuando no hay marca:\n%s", got)
+	}
+}

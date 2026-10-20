@@ -90,6 +90,31 @@ func TestSL002Parent(t *testing.T) {
 	expectLines(t, "disco no existe", own(t, "// @checkpoint parent=003-b.scad desc=\"x\"\n", disk, CodeParentMissing), 1)
 }
 
+// El padre que está en la papelera se dice distinto: no se perdió, se puede
+// restaurar.
+func TestSL002ParentInTrash(t *testing.T) {
+	dir := t.TempDir()
+	trash := filepath.Join(dir, ".scadlab", "trash")
+	if err := os.MkdirAll(trash, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(trash, "20261015-100000-001-prueba.scad"), []byte(okHeader), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o := LintOptions{FileName: "002-x.scad", WorkspaceDir: dir}
+	got := own(t, "// @checkpoint parent=001-prueba.scad desc=\"x\"\n", o, CodeParentMissing)
+	expectLines(t, "en la papelera", got, 1)
+	if !strings.Contains(got[0].Message, "papelera") && !strings.Contains(got[0].Message, "trash") {
+		t.Errorf("el mensaje debía decir que está en la papelera: %q", got[0].Message)
+	}
+	// Otro nombre que no está en ningún lado: el mensaje de siempre.
+	got = own(t, "// @checkpoint parent=009-z.scad desc=\"x\"\n", o, CodeParentMissing)
+	expectLines(t, "ausente", got, 1)
+	if strings.Contains(got[0].Message, "papelera") || strings.Contains(got[0].Message, "trash") {
+		t.Errorf("no está en la papelera: %q", got[0].Message)
+	}
+}
+
 func TestSL003Color(t *testing.T) {
 	positives := []struct {
 		name, src string

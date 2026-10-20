@@ -4,12 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/xml"
 	"io"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -335,8 +337,25 @@ func TestNamesAndExtensions(t *testing.T) {
 	if got := SuggestedName(`a:b/c`, "001-x.scad", FormatSTLPerColor); got != "a-b-c-001-x.zip" {
 		t.Errorf("sugerido: %q", got)
 	}
-	if Ext(FormatSTL) != ".stl" || Ext(Format3MF) != ".3mf" || Ext(FormatSTLPerColor) != ".zip" {
+	if Ext(FormatSTL) != ".stl" || Ext(Format3MF) != ".3mf" || Ext(FormatSTLPerColor) != ".zip" || Ext(Format3MFPrusa) != ".3mf" {
 		t.Error("extensiones")
+	}
+	// El 3MF de PrusaSlicer es otro archivo con la misma extensión: no pisa al normal.
+	if got := SuggestedName("mi-placa", "003-soporte.scad", Format3MFPrusa); got != "mi-placa-003-soporte-prusa.3mf" {
+		t.Errorf("sugerido para PrusaSlicer: %q", got)
+	}
+	if Format3MFPrusa != "3mf-prusa" {
+		t.Errorf("el valor del formato es parte del contrato con la interfaz y el MCP: %q", Format3MFPrusa)
+	}
+	for _, f := range []string{FormatSTL, Format3MF, FormatSTLPerColor, Format3MFPrusa} {
+		if !IsFileFormat(f) {
+			t.Errorf("%s es un formato de archivo", f)
+		}
+	}
+	for _, f := range []string{FormatPNG, "", "obj", "3MF"} {
+		if IsFileFormat(f) {
+			t.Errorf("%q no es un formato de archivo de Prepare", f)
+		}
 	}
 	if SafeName("  ") != "scadlab" || SafeName("x. ") != "x" {
 		t.Error("SafeName")
@@ -371,4 +390,161 @@ func checkPackage(t *testing.T, path string, nParts int) {
 	if strings.Count(have["Metadata/model_settings.config"], "<part ") != nParts {
 		t.Errorf("model_settings sin %d partes", nParts)
 	}
+}
+
+// El 3MF de PrusaSlicer de la placa de dos colores, con OpenSCAD real: una sola
+// malla, dos volúmenes (blanco y rojo) con rangos contiguos que cubren la malla
+// entera, extrusores 1 y 2, y el mismo volumen total que el STL.
+func TestNameplatePrusa3MF(t *testing.T) {
+	r := newRig(t)
+	r.nameplate()
+	ctx := context.Background()
+
+	stl, err := Prepare(ctx, r.job("001-nameplate.scad"), FormatSTL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stlInfo, err := mesh.InfoFromFile(stl.meshPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Prepare(ctx, r.job("001-nameplate.scad"), Format3MFPrusa)
+	if err != nil {
+		t.Fatal(err)
+	}
+	infos := p.Infos()
+	if len(infos) != 2 || infos[0].Color != "#FFFFFF" || infos[1].Color != "#D32F2F" {
+		t.Fatalf("partes: %+v", infos)
+	}
+	dest := filepath.Join(t.TempDir(), "placa-prusa.3mf")
+	if err := p.Write(dest); err != nil {
+		t.Fatal(err)
+	}
+
+	zr, err := zip.OpenReader(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	have := map[string]string{}
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		have[f.Name] = string(b)
+		dec := xml.NewDecoder(strings.NewReader(string(b)))
+		for {
+			if _, err := dec.Token(); err == io.EOF {
+				break
+			} else if err != nil {
+				t.Errorf("%s no es XML válido: %v", f.Name, err)
+				break
+			}
+		}
+	}
+	for _, n := range []string{"[Content_Types].xml", "_rels/.rels", "3D/3dmodel.model", "Metadata/Slic3r_PE_model.config"} {
+		if have[n] == "" {
+			t.Errorf("falta %s", n)
+		}
+	}
+	if _, ok := have["Metadata/model_settings.config"]; ok {
+		t.Error("el 3MF de PrusaSlicer no lleva model_settings.config")
+	}
+	m := have["3D/3dmodel.model"]
+	if strings.Count(m, "<mesh>") != 1 || strings.Contains(m, "<component") || strings.Count(m, "<object ") != 1 {
+		t.Errorf("tiene que ser un solo objeto con una sola malla y sin componentes")
+	}
+
+	var cfg struct {
+		Objects []struct {
+			Volumes []struct {
+				First int `xml:"firstid,attr"`
+				Last  int `xml:"lastid,attr"`
+				Meta  []struct {
+					Key   string `xml:"key,attr"`
+					Value string `xml:"value,attr"`
+				} `xml:"metadata"`
+			} `xml:"volume"`
+		} `xml:"object"`
+	}
+	if err := xml.Unmarshal([]byte(have["Metadata/Slic3r_PE_model.config"]), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Objects) != 1 || len(cfg.Objects[0].Volumes) != 2 {
+		t.Fatalf("config: %+v", cfg)
+	}
+	next := 0
+	for i, v := range cfg.Objects[0].Volumes {
+		if v.First != next || v.Last < v.First || v.Last-v.First+1 != infos[i].Triangles {
+			t.Errorf("volumen %d: rango [%d,%d], esperaba empezar en %d y tener %d triángulos", i, v.First, v.Last, next, infos[i].Triangles)
+		}
+		next = v.Last + 1
+		for _, md := range v.Meta {
+			if md.Key == "extruder" && md.Value != strconv.Itoa(i+1) {
+				t.Errorf("volumen %d: extrusor %s", i, md.Value)
+			}
+		}
+	}
+	if next != stlInfo.Triangles {
+		t.Errorf("los rangos cubren %d triángulos, el STL tiene %d", next, stlInfo.Triangles)
+	}
+
+	// Mismo volumen que el STL: se relee el 3MF escrito y se vuelca a un STL.
+	back, err := threemf.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var all threemf.Part
+	all.Vertices = back.Vertices
+	for _, tr := range back.Triangles {
+		all.Triangles = append(all.Triangles, tr.V)
+	}
+	var buf bytes.Buffer
+	if err := threemf.WriteSTL(&buf, all); err != nil {
+		t.Fatal(err)
+	}
+	got, err := mesh.ParseSTL(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rel := math.Abs(got.VolumeMM3-stlInfo.VolumeMM3) / stlInfo.VolumeMM3; rel > 1e-4 {
+		t.Errorf("volumen del 3MF %.3f, del STL %.3f (dif. relativa %.2g)", got.VolumeMM3, stlInfo.VolumeMM3, rel)
+	}
+}
+
+// El 3MF normal NO lleva extruder_nr para Cura (apagado por defecto: no se probó
+// en ningún slicer) y conserva lo que leen Bambu Studio y Orca
+// (model_settings.config, extrusores 1-based).
+func TestNameplateNormal3MFHasNoCuraExtruders(t *testing.T) {
+	r := newRig(t)
+	r.nameplate()
+	p, err := Prepare(context.Background(), r.job("001-nameplate.scad"), Format3MF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "placa.3mf")
+	if err := p.Write(dest); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.OpenReader(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	have := map[string]string{}
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		have[f.Name] = string(b)
+	}
+	m := have["3D/3dmodel.model"]
+	if strings.Contains(m, "extruder_nr") {
+		t.Error("el 3MF normal no debe llevar extruder_nr")
+	}
+	cfg := have["Metadata/model_settings.config"]
+	if !strings.Contains(cfg, `<metadata key="extruder" value="1"/>`) || !strings.Contains(cfg, `<metadata key="extruder" value="2"/>`) {
+		t.Errorf("model_settings.config cambió:\n%s", cfg)
+	}
+	checkPackage(t, dest, 2)
 }

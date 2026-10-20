@@ -32,6 +32,11 @@ type WriteOptions struct {
 	// Se ignora si Place es false.
 	BedCenter [2]float64
 	Place     bool
+	// CuraExtruders agrega a cada parte `extruder_nr` (0-based) dentro de un
+	// <metadatagroup>, que es donde UltiMaker Cura lee a qué extrusor va cada
+	// objeto. Orca, Bambu Studio y Creality Print ignoran ese bloque (leen
+	// model_settings.config). Solo se escribe en Write; WritePrusa no lo usa.
+	CuraExtruders bool
 }
 
 // Bounds es el cajón que envuelve las partes.
@@ -149,32 +154,15 @@ func writeModel(w *bufio.Writer, parts []Part, opts WriteOptions) {
 	}
 	w.WriteString(`  </basematerials>` + "\n")
 
-	var buf []byte
 	for i, p := range parts {
 		w.WriteString(`  <object id="` + strconv.Itoa(partIDs[i]) + `" name="` + esc(p.Name) + `" type="model" pid="1" pindex="` + strconv.Itoa(i) + `">` + "\n")
-		w.WriteString(`   <mesh>` + "\n    <vertices>\n")
-		for _, v := range p.Vertices {
-			buf = append(buf[:0], `     <vertex x="`...)
-			buf = strconv.AppendFloat(buf, v[0], 'f', -1, 64)
-			buf = append(buf, `" y="`...)
-			buf = strconv.AppendFloat(buf, v[1], 'f', -1, 64)
-			buf = append(buf, `" z="`...)
-			buf = strconv.AppendFloat(buf, v[2], 'f', -1, 64)
-			buf = append(buf, "\"/>\n"...)
-			w.Write(buf)
+		if opts.CuraExtruders {
+			// Va antes de <mesh>: es el orden del esquema 3MF (metadatagroup, luego
+			// mesh o components). Cura resta 1: su primer extrusor es el 0.
+			w.WriteString(`   <metadatagroup><metadata name="extruder_nr">` + strconv.Itoa(max(p.Extruder-1, 0)) + `</metadata></metadatagroup>` + "\n")
 		}
-		w.WriteString("    </vertices>\n    <triangles>\n")
-		for _, t := range p.Triangles {
-			buf = append(buf[:0], `     <triangle v1="`...)
-			buf = strconv.AppendInt(buf, int64(t[0]), 10)
-			buf = append(buf, `" v2="`...)
-			buf = strconv.AppendInt(buf, int64(t[1]), 10)
-			buf = append(buf, `" v3="`...)
-			buf = strconv.AppendInt(buf, int64(t[2]), 10)
-			buf = append(buf, "\"/>\n"...)
-			w.Write(buf)
-		}
-		w.WriteString("    </triangles>\n   </mesh>\n  </object>\n")
+		writeMesh(w, p.Vertices, p.Triangles)
+		w.WriteString("  </object>\n")
 	}
 	w.WriteString(`  <object id="` + strconv.Itoa(container) + `" name="` + esc(opts.Title) + `" type="model">` + "\n   <components>\n")
 	for _, id := range partIDs {
@@ -183,6 +171,34 @@ func writeModel(w *bufio.Writer, parts []Part, opts WriteOptions) {
 	w.WriteString("   </components>\n  </object>\n </resources>\n <build>\n")
 	w.WriteString(`  <item objectid="` + strconv.Itoa(container) + `" transform="` + itemTransform(parts, opts) + `" printable="1"/>` + "\n")
 	w.WriteString(" </build>\n</model>\n")
+}
+
+// writeMesh escribe un <mesh> (vértices y triángulos) con sangría de objeto.
+func writeMesh(w *bufio.Writer, verts [][3]float64, tris [][3]int32) {
+	var buf []byte
+	w.WriteString(`   <mesh>` + "\n    <vertices>\n")
+	for _, v := range verts {
+		buf = append(buf[:0], `     <vertex x="`...)
+		buf = strconv.AppendFloat(buf, v[0], 'f', -1, 64)
+		buf = append(buf, `" y="`...)
+		buf = strconv.AppendFloat(buf, v[1], 'f', -1, 64)
+		buf = append(buf, `" z="`...)
+		buf = strconv.AppendFloat(buf, v[2], 'f', -1, 64)
+		buf = append(buf, "\"/>\n"...)
+		w.Write(buf)
+	}
+	w.WriteString("    </vertices>\n    <triangles>\n")
+	for _, t := range tris {
+		buf = append(buf[:0], `     <triangle v1="`...)
+		buf = strconv.AppendInt(buf, int64(t[0]), 10)
+		buf = append(buf, `" v2="`...)
+		buf = strconv.AppendInt(buf, int64(t[1]), 10)
+		buf = append(buf, `" v3="`...)
+		buf = strconv.AppendInt(buf, int64(t[2]), 10)
+		buf = append(buf, "\"/>\n"...)
+		w.Write(buf)
+	}
+	w.WriteString("    </triangles>\n   </mesh>\n")
 }
 
 // itemTransform mueve la pieza al centro de la cama y la apoya en Z=0. Los

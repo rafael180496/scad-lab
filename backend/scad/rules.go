@@ -108,11 +108,39 @@ func ruleHeader(a *analysis) {
 		a.add(SeverityWarning, CodeParentMissing, 1, 1, 0, 0, i18n.Msg{
 			ES: "parent=%s apunta al propio checkpoint", EN: "parent=%s points to this same checkpoint",
 		}, parent)
+	case !a.fileExists(parent) && a.inTrash(parent):
+		// Distinto mensaje porque cambia qué hacer: el padre no se perdió, se
+		// mandó a la papelera, y se puede traer de vuelta o hacer principal a este.
+		a.add(SeverityWarning, CodeParentMissing, 1, 1, 0, 0, i18n.Msg{
+			ES: "parent=%s está en la papelera: restáuralo o haz principal a este checkpoint",
+			EN: "parent=%s is in the trash: restore it or make this checkpoint a root",
+		}, parent)
 	case !a.fileExists(parent):
 		a.add(SeverityWarning, CodeParentMissing, 1, 1, 0, 0, i18n.Msg{
 			ES: "parent=%s no existe en el workspace", EN: "parent=%s does not exist in the workspace",
 		}, parent)
 	}
+}
+
+var trashedNameRe = regexp.MustCompile(`^\d{8}-\d{6}-(.+)$`)
+
+// inTrash dice si name está en la papelera del workspace (.scadlab/trash, con la
+// marca de fecha delante). Solo mira esa carpeta; sin WorkspaceDir (o con la
+// lista de archivos inyectada por un test) responde false.
+func (a *analysis) inTrash(name string) bool {
+	if a.opts.WorkspaceDir == "" || name != filepath.Base(name) {
+		return false
+	}
+	ents, err := os.ReadDir(filepath.Join(a.opts.WorkspaceDir, ".scadlab", "trash"))
+	if err != nil {
+		return false
+	}
+	for _, e := range ents {
+		if m := trashedNameRe.FindStringSubmatch(e.Name()); m != nil && m[1] == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *analysis) fileExists(name string) bool {

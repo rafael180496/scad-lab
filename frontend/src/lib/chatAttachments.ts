@@ -9,7 +9,8 @@ import {locale} from '../i18n'
 
 export type AttachmentKind = 'image' | 'model'
 
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+// Lo que se acepta al adjuntar (Go reduce lo que pase de 2048 px o 5 MB antes de mandarlo al modelo).
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 export const MAX_MODEL_BYTES = 64 * 1024 * 1024
 export const MAX_ATTACHMENTS = 10
 

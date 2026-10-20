@@ -2,11 +2,12 @@
 
 ## Commits / PRs — regla dura
 
-**Solo el usuario hace commits.** Ni Claude ni los sub-agentes (`architect`,
-`fullstack-dev`, `openscad-dev`) ejecutan `git add`, `git commit`, `git push`,
-tags, `gh pr create` ni nada que escriba en el historial o en el remoto. Una
-autorización dada en otra conversación no se extiende a esta. Al terminar, se
-avisa qué archivos quedaron listos para que el usuario los revise y commitee.
+**Commits solo con permiso explícito, cada vez.** Por defecto nunca `git add`, `commit`, `push`, merge, tags ni PRs —ni Claude ni ningún sub-agente—: los cambios quedan en el árbol de trabajo. La única excepción es que el usuario lo autorice **en esa misma conversación y para ese cambio**; un permiso no vale para el siguiente, y Claude **siempre pregunta antes** (nunca lo hace por iniciativa propia). Con el permiso, el flujo es fijo: commit en `develop` → merge de `develop` en `main` → tag `vX.Y.Z` sobre `main` (si es una versión) → push de `develop`, `main` y el tag.
+
+- **Preguntar siempre.** Aunque el usuario haya dado permiso antes (en esta u otra conversación), cada commit/merge/tag/push se confirma con él antes de ejecutarlo.
+- **Flujo con permiso:** `git add` + commit en `develop` (Conventional Commits, mensaje en español) → `git checkout main && git merge develop` (sin rebase ni force) → `git tag vX.Y.Z` sobre `main` cuando es una versión → `git push origin develop main` y `git push origin vX.Y.Z` → volver a `develop`.
+- **Nunca** `push --force`, reescribir historia, borrar ramas ni tags, ni tocar otra rama.
+- Los sub-agentes (`architect`, `fullstack-dev`, `openscad-dev`) **nunca** commitean: solo Claude, con el permiso.
 
 La misma regla está en las reglas de cada workspace (`CLAUDE.md`/`AGENTS.md`):
 los agentes que diseñan modelos tampoco commitean.

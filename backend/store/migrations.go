@@ -286,6 +286,48 @@ ALTER TABLE chats ADD COLUMN cli_session TEXT NOT NULL DEFAULT '';
 ALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT '';
 `,
 	},
+	{
+		version: 10,
+		desc:    "configuración por workspace (S14): skills activas, ajustes de impresión y colores existentes",
+		sql: `
+-- Skills activas del workspace: JSON ["nombre", …]. '' = «sin definir»: se
+-- resuelve por defecto en tiempo de ejecución (las encendidas en Configuración
+-- que no son de marca + la de la marca de su impresora). Un workspace nuevo ya
+-- nace con la lista explícita.
+ALTER TABLE workspaces ADD COLUMN skills TEXT NOT NULL DEFAULT '';
+-- Ajustes de impresión propios del workspace: JSON WorkspacePrint (colores,
+-- material, relleno, perímetros, ancho de línea, diámetro de filamento). '' = nada
+-- fijado: todo se hereda de Configuración → Impresión y de la impresora.
+ALTER TABLE workspaces ADD COLUMN print_settings TEXT NOT NULL DEFAULT '';
+-- Backfill SOLO de la columna nueva: cada workspace existente queda con la lista
+-- de skills que estaban encendidas en este momento (lo que ya tenía instalado), así
+-- que cambiar Configuración → Skills después no lo altera. Si la tabla skills está
+-- vacía (una base que nunca la pobló) no hay nada que congelar y queda ''. No se
+-- reescribe ninguna otra columna.
+UPDATE workspaces SET skills = (
+	SELECT json_group_array(name) FROM (SELECT name FROM skills WHERE enabled = 1 ORDER BY name)
+) WHERE EXISTS (SELECT 1 FROM skills);
+-- Backfill de los colores: antes de S14 la cantidad de colores de un workspace era
+-- el multicolor_slots de su impresora; ahora el valor de fábrica es default_colors
+-- (4 en una Bambu de la serie A, 1 en una Prusa MK4S…). Sin esto una P1S o X1C ya
+-- guardada pasaría de 16 a 4 colores. Se congela lo que tenía cada una (los
+-- números son los del catálogo anterior), solo donde el workspace no fijó nada, y
+-- un id que no está en la lista no se toca (queda con el valor de fábrica de su
+-- impresora). Los workspaces nuevos siguen naciendo con default_colors.
+UPDATE workspaces SET print_settings = CASE printer_id
+	WHEN 'bambu-a1-mini' THEN '{"colors":4}'
+	WHEN 'bambu-a1'      THEN '{"colors":4}'
+	WHEN 'bambu-p1p'     THEN '{"colors":16}'
+	WHEN 'bambu-p1s'     THEN '{"colors":16}'
+	WHEN 'bambu-p2s'     THEN '{"colors":16}'
+	WHEN 'bambu-x1c'     THEN '{"colors":16}'
+	WHEN 'bambu-x1e'     THEN '{"colors":16}'
+	WHEN 'bambu-h2d'     THEN '{"colors":24}'
+	WHEN 'bambu-h2s'     THEN '{"colors":24}'
+END
+WHERE print_settings = '' AND printer_id IN ('bambu-a1-mini','bambu-a1','bambu-p1p','bambu-p1s','bambu-p2s','bambu-x1c','bambu-x1e','bambu-h2d','bambu-h2s');
+`,
+	},
 }
 
 func (s *Store) migrate() error {

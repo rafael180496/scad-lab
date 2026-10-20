@@ -12,6 +12,7 @@ import (
 	"scadlab/backend/store"
 	"scadlab/backend/watch"
 	"scadlab/backend/workspace"
+	"scadlab/backend/wsconfig"
 )
 
 // WorkspaceView es un workspace abierto con su índice de checkpoints.
@@ -59,55 +60,24 @@ func (a *App) PreviewWorkspacePath(name, parentDir string) string {
 
 // CreateWorkspaceIn crea la carpeta del workspace dentro de parentDir (vacío = la
 // predeterminada), escribe las reglas, un primer checkpoint por defecto e
-// instala las skills. parentDir debe ser
-// absoluta y se crea si no existe; si el destino <padre>/<slug> ya existe y no
-// está vacío devuelve un error que nombra la carpeta, sin tocar nada.
+// instala las skills por defecto de la impresora (la lista queda guardada en el
+// workspace; ver CreateWorkspaceWith para elegir colores, skills y ajustes).
+// parentDir debe ser absoluta y se crea si no existe; si el destino
+// <padre>/<slug> ya existe y no está vacío devuelve un error que nombra la
+// carpeta, sin tocar nada.
 func (a *App) CreateWorkspaceIn(name, printerID, parentDir string) (store.Workspace, error) {
-	if err := a.ready(); err != nil {
-		return store.Workspace{}, err
-	}
-	name = strings.TrimSpace(name)
-	dir, err := workspace.Create(a.workspaceParent(parentDir), name, printerID)
-	if err != nil {
-		return store.Workspace{}, err
-	}
-	w := store.Workspace{Name: name, Path: dir, PrinterID: printerID}
-	if w.ID, err = a.store.InsertWorkspace(w); err != nil {
-		return store.Workspace{}, err
-	}
-	a.writeStarter(dir, name)
-	a.syncWorkspaceMCPQuiet(w)
-	if err := a.syncSkills(dir); err != nil {
-		return w, i18n.Errorf(i18n.Msg{ES: "workspace creado, pero falló la instalación de skills: %v", EN: "workspace created, but installing skills failed: %v"}, err)
-	}
-	return a.store.GetWorkspace(w.ID)
+	return a.CreateWorkspaceWith(NewWorkspaceInput{Name: name, PrinterID: printerID, ParentDir: parentDir})
 }
 
 // ImportWorkspace registra una carpeta existente (p. ej. un proyecto que el
 // usuario ya tenía). Escribe las reglas solo si faltan y, si la carpeta no tiene
-// ningún .scad, el checkpoint por defecto; con modelos propios no los toca.
+// ningún .scad, el checkpoint por defecto; con modelos propios no los toca. Las
+// skills son las de por defecto de la impresora, guardadas en el workspace.
 func (a *App) ImportWorkspace(dir, printerID string) (store.Workspace, error) {
 	if err := a.ready(); err != nil {
 		return store.Workspace{}, err
 	}
-	st, err := os.Stat(dir)
-	if err != nil || !st.IsDir() {
-		return store.Workspace{}, i18n.New(i18n.Msg{ES: "la carpeta no existe", EN: "the folder does not exist"})
-	}
-	name := filepath.Base(dir)
-	// Las reglas van en su bloque marcado: un CLAUDE.md propio de la carpeta se
-	// conserva debajo (ver workspace.mergeRules).
-	if err := workspace.WriteRules(dir, name, printerID); err != nil {
-		return store.Workspace{}, err
-	}
-	w := store.Workspace{Name: name, Path: dir, PrinterID: printerID}
-	if w.ID, err = a.store.InsertWorkspace(w); err != nil {
-		return store.Workspace{}, err
-	}
-	a.writeStarter(dir, name)
-	_ = a.syncSkills(dir)
-	a.syncWorkspaceMCPQuiet(w)
-	return a.store.GetWorkspace(w.ID)
+	return a.importWorkspace(dir, printerID)
 }
 
 // skipStarter apaga el checkpoint por defecto. Es un gancho de PRUEBAS: lo sube
@@ -136,7 +106,7 @@ func (a *App) writeStarter(dir, name string) {
 // no tiene ningún .scad (S12.c). Nunca pisa nada (WriteStarter crea con O_EXCL) y
 // no resucita el modelo en un workspace que alguien vació a propósito: si la
 // papelera (.scadlab/trash/) guarda algo, hubo trabajo y se lo mandó a la
-// basura — ahí la interfaz ofrece «Crear un modelo de inicio» (CreateStarterCheckpoint).
+// basura; y si el usuario la vació a propósito (StarterDeclined) tampoco — ahí la interfaz ofrece «Crear un modelo de inicio» (CreateStarterCheckpoint).
 func (a *App) ensureStarter(w store.Workspace) {
 	if skipStarter {
 		return
@@ -145,7 +115,7 @@ func (a *App) ensureStarter(w store.Workspace) {
 		return
 	}
 	files, err := workspace.Scan(w.Path)
-	if err != nil || len(files) > 0 || !checkpoint.TrashEmpty(w.Path) {
+	if err != nil || len(files) > 0 || !checkpoint.TrashEmpty(w.Path) || checkpoint.StarterDeclined(w.Path) {
 		return
 	}
 	a.writeStarter(w.Path, w.Name)
@@ -191,7 +161,11 @@ func (a *App) UpdateWorkspace(w store.Workspace) error {
 		return err
 	}
 	if prev.PrinterID != w.PrinterID || prev.Name != w.Name {
-		return workspace.WriteRules(prev.Path, w.Name, w.PrinterID)
+		// La impresora efectiva: con los colores y la configuración que el
+		// workspace ya tenía, recortados al máximo de la impresora nueva.
+		next := prev
+		next.Name, next.PrinterID = w.Name, w.PrinterID
+		return workspace.WriteRules(prev.Path, w.Name, wsconfig.EffectivePrinter(next))
 	}
 	return nil
 }
@@ -233,7 +207,7 @@ func (a *App) openWorkspaceView(w store.Workspace) (WorkspaceView, error) {
 		a.syncWorkspaceMCPQuiet(w)
 		// Las reglas de la app pueden haber cambiado desde que se creó el
 		// workspace (MCP, ramas, papelera): se actualiza solo su bloque.
-		if err := workspace.WriteRules(w.Path, w.Name, w.PrinterID); err != nil {
+		if err := workspace.WriteRules(w.Path, w.Name, wsconfig.EffectivePrinter(w)); err != nil {
 			log.Printf("scadlab: actualizar reglas de %s: %v", w.Path, err)
 		}
 	}

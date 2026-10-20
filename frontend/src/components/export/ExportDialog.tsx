@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from 'react'
-import {Box, Download, ExternalLink, FileArchive, Loader2, RefreshCw, Settings, TriangleAlert} from 'lucide-react'
+import {Box, Download, ExternalLink, FileArchive, Loader2, Package, RefreshCw, Settings, TriangleAlert} from 'lucide-react'
 import type {exporter} from '../../../wailsjs/go/models'
 import {ExportCheckpoint, PreviewExportParts} from '../../../wailsjs/go/main/App'
 import {Dialog} from '../ui/Dialog'
@@ -8,8 +8,11 @@ import {toast} from '../ui/Toast'
 import {fmt, locale, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {errorText} from '../../lib/errors'
+import type {SlicerTarget} from '../../lib/saved'
 
-type Format = '3mf' | 'stl-per-color'
+// `3mf-prusa` es el 3MF que lee PrusaSlicer (S14): mismo reparto por colores, pero los extrusores van donde él los busca.
+export type ExportFormat = '3mf' | '3mf-prusa' | 'stl-per-color'
+type Format = ExportFormat
 
 // Diálogo de exportación 3MF (S9): muestra qué va a salir —una parte por color,
 // con el extrusor que le toca— y los avisos, antes de elegir dónde guardar. La
@@ -20,7 +23,8 @@ export function ExportDialog({
     onClose,
     workspaceId,
     fileName,
-    bambuFound,
+    slicer,
+    preferred,
     onExported,
     onOpenSettings,
 }: {
@@ -28,9 +32,11 @@ export function ExportDialog({
     onClose: () => void
     workspaceId: number | null
     fileName: string | null
-    /** Hay Bambu Studio detectado: se ofrece «Exportar y abrir». */
-    bambuFound: boolean
-    /** Ya se guardó: `open` = el usuario pidió abrirlo en Bambu Studio. */
+    /** El slicer de la impresora del workspace: el primero instalado (se ofrece «Exportar y abrir») o, si ninguno, el recomendado. */
+    slicer: SlicerTarget | undefined
+    /** El formato con que arranca: el 3MF de PrusaSlicer si ese es el slicer recomendado, un STL por color si es Cura. */
+    preferred: Format
+    /** Ya se guardó: `open` = el usuario pidió abrirlo en el slicer. */
     onExported: (path: string, open: boolean) => void
     onOpenSettings: () => void
 }) {
@@ -58,10 +64,10 @@ export function ExportDialog({
         }
     }, [open, workspaceId, fileName, nonce])
 
-    // Cada apertura vuelve al formato de Bambu: el otro es la excepción.
+    // Cada apertura vuelve al formato de la impresora: elegir otro es la excepción.
     useEffect(() => {
-        if (open) setFormat('3mf')
-    }, [open])
+        if (open) setFormat(preferred)
+    }, [open, preferred])
 
     const run = useCallback(
         async (andOpen: boolean) => {
@@ -89,6 +95,8 @@ export function ExportDialog({
     const num = (n: number) => n.toLocaleString(locale())
     const ready = !!preview && !loading && parts.length > 0
     const perColor = format === 'stl-per-color'
+    const openable = !perColor && !!slicer && (!!slicer.installed || !!slicer.recommendedName)
+    const slicerName = slicer?.installed?.name ?? slicer?.recommendedName ?? ''
 
     return (
         <Dialog
@@ -96,20 +104,25 @@ export function ExportDialog({
             onClose={onClose}
             title={t.export.title}
             closeLabel={t.export.close}
-            className="w-[640px]"
+            className="w-[720px]"
             footer={
                 <>
                     <Button title={t.export.cancel} onClick={onClose}>
                         {t.export.cancel}
                     </Button>
-                    <Button variant={bambuFound && !perColor ? 'outline' : 'primary'} title={t.export.exportHint} disabled={!ready || busy} onClick={() => void run(false)}>
+                    <Button variant={openable ? 'outline' : 'primary'} title={t.export.exportHint} disabled={!ready || busy} onClick={() => void run(false)}>
                         {busy ? <Loader2 className="icon-ui-14 animate-spin" /> : <Download className="icon-ui-14" />}
                         {busy ? t.export.exporting : t.export.export}
                     </Button>
-                    {bambuFound && !perColor ? (
-                        <Button variant="primary" title={t.export.exportOpenHint} disabled={!ready || busy} onClick={() => void run(true)}>
+                    {openable ? (
+                        <Button
+                            variant="primary"
+                            title={slicer?.installed ? fmt(t.export.exportOpenHint, {name: slicerName}) : fmt(t.export.noSlicerHint, {name: slicerName})}
+                            disabled={!ready || busy || !slicer?.installed}
+                            onClick={() => void run(true)}
+                        >
                             <ExternalLink className="icon-ui-14" />
-                            {t.export.exportOpen}
+                            {fmt(t.export.exportOpen, {name: slicerName})}
                         </Button>
                     ) : null}
                 </>
@@ -122,13 +135,20 @@ export function ExportDialog({
 
                 <div className="flex flex-col gap-1.5">
                     <span className="font-mono text-ui-10-5 tracking-wider text-muted uppercase">{t.export.format}</span>
-                    <div role="radiogroup" aria-label={t.export.format} className="grid grid-cols-2 gap-2">
+                    <div role="radiogroup" aria-label={t.export.format} className="grid grid-cols-3 gap-2">
                         <FormatCard
                             checked={format === '3mf'}
                             icon={<Box className="icon-ui-16" />}
                             label={t.export.format3mf}
                             desc={t.export.format3mfDesc}
                             onSelect={() => setFormat('3mf')}
+                        />
+                        <FormatCard
+                            checked={format === '3mf-prusa'}
+                            icon={<Package className="icon-ui-16" />}
+                            label={t.export.format3mfPrusa}
+                            desc={t.export.format3mfPrusaDesc}
+                            onSelect={() => setFormat('3mf-prusa')}
                         />
                         <FormatCard
                             checked={perColor}
@@ -226,12 +246,12 @@ export function ExportDialog({
                     </div>
                 ) : null}
 
-                {!bambuFound && !perColor ? (
+                {openable && !slicer?.installed ? (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-ui-11-5 leading-snug text-faint">
-                        <span className="min-w-0 flex-1 basis-60">{t.export.noBambu}</span>
+                        <span className="min-w-0 flex-1 basis-60">{fmt(t.export.noSlicer, {name: slicerName})}</span>
                         <Button
                             variant="ghost"
-                            title={t.export.openSettingsHint}
+                            title={fmt(t.export.openSettingsHint, {name: slicerName})}
                             onClick={() => {
                                 onClose()
                                 onOpenSettings()

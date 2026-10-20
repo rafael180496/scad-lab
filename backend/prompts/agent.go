@@ -132,7 +132,7 @@ func SafeRefPath(p string) string {
 	p = strings.TrimSpace(p)
 	// Una referencia es siempre relativa y de adentro del workspace: una ruta
 	// absoluta o con «..» no es una y no se le muestra al modelo como tal.
-	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) || strings.Contains(p, "..") {
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) || strings.Contains(p, "..") || (len(p) > 1 && p[1] == ':') {
 		return ""
 	}
 	var b strings.Builder

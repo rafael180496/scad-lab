@@ -13,6 +13,9 @@ import {parseInline, parseMarkdown} from '../src/components/chat/markdownParse.t
 import {asksToCreate} from '../src/lib/chatIntent.ts'
 import {CREATING_TOOLS, createdCheckpoint} from '../src/lib/chatSteps.ts'
 import {readFileSync} from 'node:fs'
+import es from '../src/i18n/es.ts'
+import en from '../src/i18n/en.ts'
+import {fromImageMessage} from '../src/lib/fromImage.ts'
 
 import {LEGACY_MODE_KEYS, chatModeValue, clearLegacyChatMode, isAgentMode} from '../src/lib/chatMode.ts'
 
@@ -170,5 +173,19 @@ const effects = readFileSync(new URL('../../backend/mcp/effects.go', import.meta
 const goCreators = [...effects.matchAll(/"(\w+)":\s+EffectCheckpoint/g)].map((m) => m[1]).sort()
 assert.ok(goCreators.length >= 5, 'no se pudo leer effects.go')
 assert.deepEqual([...CREATING_TOOLS].filter((t) => t !== 'autosave').sort(), goCreators, 'CREATING_TOOLS = EffectCheckpoint de Go (+ autosave)')
+
+// ── «Crear desde una imagen» (S15) ──
+// El mensaje estructurado: el objeto, la referencia y la skill; sin datos, pide identificar el objeto y estimar la escala.
+const full = fromImageMessage(es, {what: ' una escuadra en L ', reference: 'el ancho es 60 mm', count: 2})
+assert.match(full, /las 2 fotos adjuntas/)
+assert.match(full, /`openscad-from-image`/, 'nombra la skill')
+assert.match(full, /- Objeto: una escuadra en L$/m, 'recorta los espacios')
+assert.match(full, /- Medida de referencia: el ancho es 60 mm$/m)
+const bare = fromImageMessage(es, {what: '  ', reference: '', count: 1})
+assert.match(bare, /la foto adjunta/)
+assert.match(bare, /identifícalo tú/, 'sin «qué es»: que lo identifique')
+assert.match(bare, /estima la escala/, 'sin medida: que estime y lo diga')
+assert.doesNotMatch(bare, /\{\w+\}/, 'ninguna variable sin reemplazar')
+assert.match(fromImageMessage(en, {what: 'a bracket', reference: '', count: 3}), /the 3 attached photos[\s\S]*Object: a bracket[\s\S]*estimate the scale/)
 
 console.log('chat-ux: OK')

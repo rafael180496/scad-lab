@@ -1,16 +1,27 @@
-import {useEffect, useId, useRef, useState} from 'react'
-import type {printers} from '../../../wailsjs/go/models'
-import {ChooseDirectory, CreateWorkspaceIn, EffectiveWorkspacesRoot, PreviewWorkspacePath, SetWorkspacesRoot} from '../../../wailsjs/go/main/App'
+import {useEffect, useId, useMemo, useRef, useState} from 'react'
+import {main, store, type printers} from '../../../wailsjs/go/models'
+import {
+    ChooseDirectory,
+    CreateWorkspaceWith,
+    DefaultWorkspaceSkills,
+    EffectiveWorkspacesRoot,
+    ListSkills,
+    PreviewWorkspacePath,
+    SetWorkspacesRoot,
+} from '../../../wailsjs/go/main/App'
 import {Dialog} from '../ui/Dialog'
 import {Button} from '../ui/Button'
 import {Field, Input, Select} from '../ui/Field'
 import {toast} from '../ui/Toast'
-import {useT} from '../../i18n'
+import {fmt, useT} from '../../i18n'
 import {errorText} from '../../lib/errors'
 import {cn} from '../../lib/cn'
+import {colorsCount, colorsLine, defaultColorsOf, maxColorsOf, swapBrandSkill, volumeLine} from '../../lib/printerInfo'
+import {PrinterPicker} from '../printer/PrinterPicker'
+import {SkillsChecklist} from './SkillsChecklist'
 
-/** Solo el banco de capturas: el diálogo abierto con un nombre y una ubicación ya escritos. */
-export type NewWorkspaceShot = {name?: string; parent?: string}
+/** Solo el banco de capturas: el diálogo abierto con un nombre y una ubicación ya escritos, y la impresora y los colores elegidos. */
+export type NewWorkspaceShot = {name?: string; parent?: string; printer?: string; colors?: number; printerOpen?: boolean; printerQuery?: string}
 
 // Qué muestra la vista previa: la ruta exacta, o por qué todavía no hay una.
 type Preview = {path: string; problem: 'name' | 'location' | null}
@@ -19,6 +30,7 @@ export function NewWorkspaceDialog({
     open,
     onClose,
     printerList,
+    brands,
     defaultPrinter,
     onCreated,
     onDefaultRootChanged,
@@ -27,6 +39,7 @@ export function NewWorkspaceDialog({
     open: boolean
     onClose: () => void
     printerList: printers.Printer[]
+    brands: printers.Brand[]
     defaultPrinter: string
     onCreated: (id: number) => void
     /** Se guardó «Usar esta carpeta como predeterminada»: Configuración tiene que ver la nueva. */
@@ -37,6 +50,13 @@ export function NewWorkspaceDialog({
     const checkId = useId()
     const [name, setName] = useState('')
     const [printer, setPrinter] = useState(defaultPrinter)
+    // Colores elegidos; null = los de fábrica de la impresora (cambiar de impresora los vuelve a null).
+    const [colors, setColors] = useState<number | null>(null)
+    // Skills: las de por defecto de la impresora mientras nadie toque una casilla; después, lo que eligió el usuario.
+    const [skillList, setSkillList] = useState<main.SkillView[]>([])
+    const [skills, setSkills] = useState<string[]>([])
+    const touched = useRef(false)
+    const brandOf = useRef('')
     // Carpeta padre que se muestra en el campo; defaultRoot, la predeterminada de hoy.
     const [parent, setParent] = useState('')
     const [defaultRoot, setDefaultRoot] = useState('')
@@ -50,7 +70,10 @@ export function NewWorkspaceDialog({
         if (!open) return
         let alive = true
         setName(shotRef.current?.name ?? '')
-        setPrinter(defaultPrinter)
+        setPrinter(shotRef.current?.printer ?? defaultPrinter)
+        setColors(shotRef.current?.colors ?? null)
+        touched.current = false
+        brandOf.current = ''
         setAsDefault(false)
         setParent(shotRef.current?.parent ?? '')
         EffectiveWorkspacesRoot()
@@ -60,10 +83,46 @@ export function NewWorkspaceDialog({
                 setParent((p) => p || r)
             })
             .catch(() => {})
+        ListSkills()
+            .then((l) => alive && setSkillList(l ?? []))
+            .catch((e) => alive && toast.error(errorText(e)))
         return () => {
             alive = false
         }
     }, [open, defaultPrinter])
+
+    const chosen = printerList.find((p) => p.id === printer)
+    const maxColors = maxColorsOf(chosen)
+    const shownColors = Math.min(colors ?? defaultColorsOf(chosen), maxColors)
+    const brandSkills = useMemo(() => new Set(brands.map((b) => b.skill).filter(Boolean)), [brands])
+    const existing = useMemo(() => new Set(skillList.map((s) => s.name)), [skillList])
+
+    // Las skills de la impresora elegida: mientras no se toque una casilla se recalculan enteras
+    // (las encendidas en Configuración + la de la marca); una vez tocadas solo se cambia la de
+    // marca, para no deshacer lo que el usuario eligió.
+    useEffect(() => {
+        if (!open || !printer || skillList.length === 0) return
+        let alive = true
+        const brand = chosen?.skill ?? ''
+        DefaultWorkspaceSkills(printer)
+            .then((def) => {
+                if (!alive) return
+                // `from` se lee ya: la función de setSkills corre después y brandOf ya valdría la marca nueva.
+                const from = brandOf.current
+                if (!touched.current) setSkills(def ?? [])
+                else setSkills((cur) => swapBrandSkill(cur, from, brand, existing))
+                brandOf.current = brand
+            })
+            .catch((e) => alive && toast.error(errorText(e)))
+        return () => {
+            alive = false
+        }
+    }, [open, printer, chosen?.skill, skillList.length, existing])
+
+    const choosePrinter = (id: string) => {
+        setPrinter(id)
+        setColors(null) // los de fábrica de la impresora nueva (otra puede tener otro máximo)
+    }
 
     // La ruta final la calcula Go (mismo Slug que al crear): lo que se ve es lo que se crea.
     // Un nombre vacío no tiene ruta; si Go devuelve vacío con un nombre escrito, se
@@ -105,7 +164,18 @@ export function NewWorkspaceDialog({
         if (!canCreate) return
         setBusy(true)
         try {
-            const w = await CreateWorkspaceIn(name.trim(), printer, parent.trim())
+            const w = await CreateWorkspaceWith(
+                main.NewWorkspaceInput.createFrom({
+                    name: name.trim(),
+                    parentDir: parent.trim(),
+                    printerId: printer,
+                    // Sin tocar las casillas se deja que Go resuelva las de por defecto (la lista que se ve es la misma); así un clic en Crear
+                    // antes de que cargue la lista no crea un workspace sin skills.
+                    skills: touched.current ? skills : undefined,
+                    // 0 = los colores de fábrica de la impresora (se heredan, no se congelan).
+                    print: store.WorkspacePrint.createFrom({colors: colors ?? 0}),
+                }),
+            )
             toast.ok(t.workspaces.created)
             if (asDefault && !sameAsDefault) {
                 try {
@@ -131,7 +201,7 @@ export function NewWorkspaceDialog({
             onClose={onClose}
             title={t.workspaces.new}
             closeLabel={t.workspaces.cancel}
-            className="w-[520px]"
+            className="w-[640px]"
             footer={
                 <>
                     <Button title={t.workspaces.cancel} onClick={onClose}>
@@ -153,15 +223,63 @@ export function NewWorkspaceDialog({
                 <Field label={t.workspaces.name}>
                     <Input data-autofocus value={name} placeholder={t.workspaces.namePlaceholder} onChange={(e) => setName(e.target.value)} />
                 </Field>
-                <Field label={t.workspaces.printer}>
-                    <Select value={printer} onChange={(e) => setPrinter(e.target.value)}>
-                        {printerList.map((p) => (
-                            <option key={p.id} value={p.id}>
-                                {p.name} — {p.build_volume.x}×{p.build_volume.y}×{p.build_volume.z} mm
-                            </option>
-                        ))}
-                    </Select>
-                </Field>
+                <div className="flex flex-col gap-1.5">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                        {/* Sin <label>: el selector abre una lista y un clic dentro de ella no debe volver a pulsar el botón. */}
+                        <div className="flex min-w-0 flex-col gap-1">
+                            <span className="font-mono text-ui-10-5 tracking-wider text-muted uppercase">{t.workspaces.printer}</span>
+                            <PrinterPicker
+                                value={printer}
+                                onChange={choosePrinter}
+                                printerList={printerList}
+                                brands={brands}
+                                initialOpen={shot?.printerOpen}
+                                initialQuery={shot?.printerQuery}
+                            />
+                        </div>
+                        {maxColors > 1 ? (
+                            <label className="flex w-[148px] flex-col gap-1" title={fmt(t.workspaces.colorsHint, {system: chosen?.multicolor_system || t.printers.multicolor, max: maxColors})}>
+                                <span className="font-mono text-ui-10-5 tracking-wider text-muted uppercase">{t.workspaces.colors}</span>
+                                <Select value={String(shownColors)} title={t.workspaces.colorsTitle} onChange={(e) => setColors(Number(e.target.value))}>
+                                    {Array.from({length: maxColors}, (_, i) => i + 1).map((n) => (
+                                        <option key={n} value={n}>
+                                            {colorsCount(t, n)}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </label>
+                        ) : null}
+                    </div>
+                    {chosen ? (
+                        <p className="font-mono text-ui-11 leading-snug text-faint" data-testid="printer-summary">
+                            {volumeLine(t, chosen)} · {colorsLine(t, chosen)}
+                            {chosen.verify?.length ? (
+                                <span className="ml-1.5 text-warn" title={fmt(t.printers.verifyHint, {items: chosen.verify.join('; ')})}>
+                                    · {t.printers.verifyBadge}
+                                </span>
+                            ) : null}
+                        </p>
+                    ) : null}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <span className="font-mono text-ui-10-5 tracking-wider text-muted uppercase">{t.workspaces.skills}</span>
+                        <span className="font-mono text-ui-10-5 text-faint">{fmt(t.workspaces.skillsCount, {n: skills.length, total: skillList.length})}</span>
+                    </div>
+                    <SkillsChecklist
+                        skills={skillList}
+                        value={skills}
+                        onChange={(next) => {
+                            touched.current = true
+                            setSkills(next)
+                        }}
+                        printerSkill={chosen?.skill ?? ''}
+                        brandSkills={brandSkills}
+                        compact
+                        className="max-h-[220px]"
+                    />
+                    <span className="text-ui-11-5 leading-snug text-faint">{t.workspaces.skillsHint}</span>
+                </div>
                 <Field label={t.workspaces.location} hint={t.workspaces.locationHint}>
                     <div className="flex gap-2">
                         <Input

@@ -31,6 +31,7 @@ import (
 	"scadlab/assets"
 	"scadlab/backend/i18n"
 	"scadlab/backend/printers"
+	"scadlab/backend/slicers"
 )
 
 var (
@@ -101,8 +102,9 @@ func TargetDir(parent, name string) string {
 
 // Create arma la carpeta del workspace bajo root (que se crea si no existe) y
 // escribe sus archivos base. root tiene que ser absoluta; el destino
-// <root>/<slug> puede existir solo si está vacío.
-func Create(root, name, printerID string) (string, error) {
+// <root>/<slug> puede existir solo si está vacío. p es la impresora EFECTIVA del
+// workspace (wsconfig.EffectivePrinter): con sus colores ya elegidos.
+func Create(root, name string, p printers.Printer) (string, error) {
 	slug := Slug(name)
 	if slug == "" {
 		return "", errNameRequired
@@ -127,7 +129,7 @@ func Create(root, name, printerID string) (string, error) {
 			return "", err
 		}
 	}
-	if err := WriteRules(dir, name, printerID); err != nil {
+	if err := WriteRules(dir, name, p); err != nil {
 		return "", err
 	}
 	gi, err := fs.ReadFile(assets.FS, "workspace/gitignore.tmpl")
@@ -230,9 +232,10 @@ func writeFileAtomic(path string, data []byte) error {
 }
 
 // WriteRules (re)escribe CLAUDE.md, AGENTS.md y printer.json. Se vuelve a
-// llamar cuando cambia la impresora del workspace.
-func WriteRules(dir, name, printerID string) error {
-	p, _ := printers.ByID(printerID)
+// llamar cuando cambia la impresora o la configuración del workspace. p es la
+// impresora EFECTIVA (wsconfig.EffectivePrinter): su MulticolorSlots son los
+// colores que eligió ese workspace y MaxColors el tope de la máquina.
+func WriteRules(dir, name string, p printers.Printer) error {
 	tplRaw, err := fs.ReadFile(assets.FS, "workspace/RULES.md.tmpl")
 	if err != nil {
 		return err
@@ -241,16 +244,9 @@ func WriteRules(dir, name, printerID string) error {
 	if err != nil {
 		return err
 	}
-	slots := p.MulticolorSlots
-	if slots == 0 {
-		slots = 1
-	}
+	data := rulesData(name, p)
 	var buf bytes.Buffer
-	if err := tpl.Execute(&buf, map[string]any{
-		"Name": name, "PrinterName": p.Name,
-		"BuildX": p.BuildVolume.X, "BuildY": p.BuildVolume.Y, "BuildZ": p.BuildVolume.Z,
-		"ColorSlots": slots,
-	}); err != nil {
+	if err := tpl.Execute(&buf, data); err != nil {
 		return err
 	}
 	for _, f := range []string{"CLAUDE.md", "AGENTS.md"} {
@@ -258,14 +254,42 @@ func WriteRules(dir, name, printerID string) error {
 			return err
 		}
 	}
+	// multicolor_slots conserva su clave de siempre con los colores del workspace;
+	// colors es lo mismo con el nombre que lee la IA, y max_colors el tope.
 	pj, err := json.MarshalIndent(map[string]any{
-		"printer": p.ID, "name": p.Name, "build_volume": p.BuildVolume,
-		"nozzle_mm": p.NozzleMM, "multicolor_slots": p.MulticolorSlots,
+		"printer": p.ID, "name": p.Name, "brand": p.BrandName, "model": p.Model,
+		"build_volume": p.BuildVolume, "nozzle_mm": p.NozzleMM,
+		"multicolor_slots": data["ColorSlots"], "colors": data["ColorSlots"], "max_colors": data["MaxColors"],
+		"multicolor_system":    p.MulticolorSys,
+		"filament_diameter_mm": data["FilamentDiameter"], "slicer": data["Slicer"],
 	}, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "printer.json"), append(pj, '\n'), 0o644)
+}
+
+// rulesData son las variables de RULES.md.tmpl. Las que no vienen del catálogo
+// (colores, slicer) se resuelven aquí una sola vez para que las reglas y
+// printer.json digan lo mismo. Una plantilla que no nombra alguna no cambia.
+func rulesData(name string, p printers.Printer) map[string]any {
+	colors := max(p.MulticolorSlots, 1)
+	slicer := ""
+	if d, ok := slicers.Recommended(p.Slicers); ok {
+		slicer = d.Name
+	}
+	filament := p.FilamentDiameterMM
+	if filament <= 0 {
+		filament = 1.75
+	}
+	return map[string]any{
+		"Name": name, "PrinterName": p.Name,
+		"BuildX": p.BuildVolume.X, "BuildY": p.BuildVolume.Y, "BuildZ": p.BuildVolume.Z,
+		"ColorSlots": colors,
+		"Brand":      p.BrandName, "PrinterModel": p.Model, "MulticolorSystem": p.MulticolorSys,
+		"MaxColors": max(p.MaxColors, colors), "NozzleMM": p.NozzleMM, "FilamentDiameter": filament,
+		"Slicer": slicer, "BrandSkill": p.Skill,
+	}
 }
 
 func writeIfMissing(path string, data []byte) error {

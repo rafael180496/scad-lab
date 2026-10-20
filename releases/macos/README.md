@@ -9,12 +9,12 @@ comprueba que su SHA-256 aparezca en este README.
 
 | Campo | Valor |
 |---|---|
-| Versión | **0.1.0** (la primera) |
-| Archivo | `ScadLab-v0.1.0.dmg` |
-| Tamaño | 18 272 653 bytes (17,4 MB) |
-| SHA-256 | `fa509e2ef6fc20c876ff4484163ff5074e185495152cafecb2bdfd6aa5e91cde` |
+| Versión | **0.2.0** |
+| Archivo | `ScadLab-v0.2.0.dmg` |
+| Tamaño | 19 313 894 bytes (18,4 MB) |
+| SHA-256 | `5b943a17a7734716ff029cc5236610dcb7c13443d533c647188001a3a8f43655` |
 | Arquitectura | arm64 (Apple Silicon) |
-| Descarga | https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0.dmg |
+| Descarga | https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg |
 
 ### Compatibilidad verificada
 
@@ -47,7 +47,7 @@ que hace Wails). Gatekeeper avisa «desarrollador no identificado» o que la app
 
 ## Instalación
 
-1. Descarga `ScadLab-v0.1.0.dmg` desde el Release.
+1. Descarga `ScadLab-v0.2.0.dmg` desde el Release.
 2. Ábrelo y arrastra `ScadLab.app` a **Aplicaciones**.
 3. La primera vez, **clic derecho → Abrir** (no doble clic) y confirma.
 4. Si macOS dice que está dañada: `xattr -cr /Applications/ScadLab.app`.
@@ -65,10 +65,10 @@ que hace Wails). Gatekeeper avisa «desarrollador no identificado» o que la app
 ## Regenerar este artefacto
 
 ```bash
-cat VERSION                          # 0.1.0
+cat VERSION                          # 0.2.0
 ./scripts/package-all.sh             # .dmg + .exe en build/bin/
-cp build/bin/ScadLab-v0.1.0.dmg releases/macos/
-shasum -a 256 releases/macos/ScadLab-v0.1.0.dmg
+cp build/bin/ScadLab-v0.2.0.dmg releases/macos/
+shasum -a 256 releases/macos/ScadLab-v0.2.0.dmg
 ```
 
 `package-macos.sh` solo corre en macOS (usa `hdiutil`). Una recompilación no da un

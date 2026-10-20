@@ -32,6 +32,9 @@ import {McpSettings} from './McpSettings'
 import {OpenSCADSettings} from './OpenSCADSettings'
 import {ProvidersSettings} from './providers/ProvidersSettings'
 import {SkillsSettings} from './SkillsSettings'
+import {SlicerSettings} from './SlicerSettings'
+import {PrinterPicker} from '../printer/PrinterPicker'
+import {colorsLine, volumeLine} from '../../lib/printerInfo'
 
 export type SettingsTab = 'general' | 'openscad' | 'ai' | 'providers' | 'printing' | 'skills' | 'about'
 type Tab = SettingsTab
@@ -62,6 +65,7 @@ export function SettingsDialog({
     onClose,
     boot,
     printerList,
+    brands,
     onSaved,
     appearance,
     onAppearance,
@@ -81,6 +85,7 @@ export function SettingsDialog({
     onClose: () => void
     boot: main.Bootstrap
     printerList: printers.Printer[]
+    brands: printers.Brand[]
     onSaved: (s: store.Settings) => void
     // Apariencia y diseño se aplican y guardan al instante, fuera de «Guardar»:
     // el diálogo recibe el valor vigente y avisa de cada cambio.
@@ -112,7 +117,16 @@ export function SettingsDialog({
 
     useEffect(() => {
         if (!open) return
-        setS(boot.settings)
+        // La ruta de Bambu Studio de antes de S14 (`bambuStudioPath`) pasa a ser una más de `slicerPaths`: el campo
+        // viejo ya no tiene control propio y, al guardar, queda vacío.
+        const migrated = store.Settings.createFrom(boot.settings)
+        const legacy = (migrated.bambuStudioPath ?? '').trim()
+        if (legacy) {
+            migrated.slicerPaths = {...(migrated.slicerPaths ?? {})}
+            if (!(migrated.slicerPaths['bambu-studio'] ?? '').trim()) migrated.slicerPaths['bambu-studio'] = legacy
+            migrated.bambuStudioPath = ''
+        }
+        setS(migrated)
         setTab(initialTab)
         EffectiveWorkspacesRoot().then(setDefaultRoot).catch(() => {})
         ListProviders().then(setProviders).catch((e) => toast.error(errorText(e)))
@@ -392,24 +406,27 @@ export function SettingsDialog({
 
                     {tab === 'printing' && (
                         <div className="flex flex-col gap-4">
-                            <Field label={t.settings.defaultPrinter}>
-                                <Select value={s.defaultPrinter} onChange={(e) => set('defaultPrinter', e.target.value)}>
-                                    {printerList.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name}
-                                        </option>
-                                    ))}
-                                </Select>
-                            </Field>
-                            {(() => {
-                                const p = printerList.find((x) => x.id === s.defaultPrinter)
-                                return p ? (
-                                    <p className="-mt-2 font-mono text-ui-11-5 text-faint">
-                                        {fmt(t.settings.buildVolume, {x: p.build_volume.x, y: p.build_volume.y, z: p.build_volume.z})} ·{' '}
-                                        {fmt(t.settings.colors, {n: p.multicolor_slots || 1})}
-                                    </p>
-                                ) : null
-                            })()}
+                            <p className="text-ui-12 leading-relaxed text-muted">{t.settings.printingIntro}</p>
+                            {/* Sin <label>: el selector abre una lista y un clic dentro de ella no debe volver a pulsar el botón. */}
+                            <div className="flex flex-col gap-1">
+                                <span className="font-mono text-ui-10-5 tracking-wider text-muted uppercase">{t.settings.defaultPrinter}</span>
+                                <PrinterPicker
+                                    value={s.defaultPrinter}
+                                    onChange={(id) => set('defaultPrinter', id)}
+                                    printerList={printerList}
+                                    brands={brands}
+                                    testId="default-printer-picker"
+                                />
+                                {(() => {
+                                    const p = printerList.find((x) => x.id === s.defaultPrinter)
+                                    return p ? (
+                                        <span className="font-mono text-ui-11-5 text-faint">
+                                            {volumeLine(t, p)} · {colorsLine(t, p)}
+                                        </span>
+                                    ) : null
+                                })()}
+                                <span className="text-ui-11-5 text-faint">{t.settings.defaultPrinterHint}</span>
+                            </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <Field label={t.settings.material}>
                                     <Select value={s.defaultMaterial} onChange={(e) => set('defaultMaterial', e.target.value)}>
@@ -475,45 +492,11 @@ export function SettingsDialog({
                                     </Select>
                                 </Field>
                             </div>
-                            <Field label={t.settings.bambuPath} hint={t.settings.bambuPathHint}>
-                                <div className="flex gap-2">
-                                    <Input
-                                        value={s.bambuStudioPath}
-                                        title={t.settings.bambuPath}
-                                        onChange={(e) => set('bambuStudioPath', e.target.value)}
-                                    />
-                                    <Button
-                                        title={t.settings.choose}
-                                        onClick={async () => {
-                                            const f = await ChooseFile(t.settings.bambuPath)
-                                            if (f) set('bambuStudioPath', f)
-                                        }}
-                                    >
-                                        {t.settings.choose}
-                                    </Button>
-                                </div>
-                            </Field>
-                            {(() => {
-                                const b = slicers.find((x) => x.id === 'bambu-studio')
-                                return b ? (
-                                    <div className="-mt-1 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
-                                        <span className="font-mono text-ui-12">{t.settings.bambuStudio}</span>
-                                        {b.found ? (
-                                            <span className="selectable flex min-w-0 items-center gap-1.5 text-ui-11-5 text-ok" title={b.path}>
-                                                <CheckCircle2 className="icon-ui-14 shrink-0" />
-                                                <span className="truncate">
-                                                    {t.settings.found} · {b.path}
-                                                </span>
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center gap-1.5 text-ui-11-5 text-faint">
-                                                <CircleDashed className="icon-ui-14" />
-                                                {t.settings.notFound}
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : null
-                            })()}
+                            <SlicerSettings
+                                detected={slicers}
+                                paths={s.slicerPaths ?? {}}
+                                onChange={(id, path) => set('slicerPaths', {...(s.slicerPaths ?? {}), [id]: path})}
+                            />
                             <h3 className="mt-2 text-ui-13 font-semibold">{t.settings.materials}</h3>
                             <div className="divide-y divide-line rounded-lg border border-line">
                                 <div className="grid grid-cols-[1fr_140px_140px] gap-3 px-3 py-1.5 font-mono text-ui-10-5 tracking-wider text-faint uppercase">

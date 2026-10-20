@@ -45,7 +45,7 @@ func contentHash(workspaceDir, fileName string, main []byte) string {
 	var walk func(path string, data []byte)
 	walk = func(path string, data []byte) {
 		h.Write([]byte("\x00file\x00"))
-		h.Write(data)
+		h.Write(skipHeader(data))
 		for _, dep := range findDeps(data) {
 			resolved := resolveDep(workspaceDir, filepath.Dir(path), dep)
 			if resolved == "" {
@@ -72,6 +72,35 @@ func contentHash(workspaceDir, fileName string, main []byte) string {
 	visited[mainPath] = true
 	walk(mainPath, main)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+var checkpointHeaderRe = regexp.MustCompile(`^\s*//\s*@checkpoint\b`)
+
+// skipHeader quita la línea `// @checkpoint parent=… desc="…"` del contenido
+// que entra en el hash. Es un comentario: no cambia la geometría, y el padre
+// SÍ puede cambiar sin que el modelo cambie (al mandar a la papelera un
+// checkpoint, sus hijos se re-cuelgan del abuelo reescribiendo esa línea). Con
+// ella en la clave, cada re-colgado invalidaría el render de los hijos —minutos,
+// en un modelo pesado— por nada. Dos checkpoints con el mismo código y distinta
+// descripción comparten entrada de caché, y está bien: el resultado se devuelve
+// con el nombre de quien lo pide. Las líneas siguientes (y sus números, que usan
+// los diagnósticos) no se tocan.
+func skipHeader(data []byte) []byte {
+	d := data
+	if len(d) >= 3 && d[0] == 0xEF && d[1] == 0xBB && d[2] == 0xBF {
+		d = d[3:]
+	}
+	end := len(d)
+	for i, c := range d {
+		if c == '\n' {
+			end = i
+			break
+		}
+	}
+	if !checkpointHeaderRe.Match(d[:end]) {
+		return data
+	}
+	return d[end:]
 }
 
 // findDeps lista los include<>/use<> del código, sin los comentados (un

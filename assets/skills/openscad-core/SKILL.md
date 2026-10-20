@@ -101,8 +101,11 @@ Orden fijo: metadatos → parámetros (con secciones) → `[Hidden]` (constantes
     va en `[Hidden]`.
 - **Ubicación**: el modelo apoya en `z = 0` (cara de impresión sobre la placa) y
   centrado aproximadamente en el origen en XY.
-- **Imprimible**: si el workspace tiene `printer.json`, respeta su volumen (ver
-  skill `bambu-lab-printers`, que incluye `assert_fits_plate()`).
+- **Imprimible**: si el workspace tiene `printer.json`, respeta su volumen y su
+  máximo de colores (`colors`). La skill de marca de esa impresora
+  (`bambu-lab-printers`, `prusa-printers`, `creality-printers`, `elegoo-printers`,
+  `anycubic-printers`, `snapmaker-printers` o `ultimaker-printers`) trae su
+  `assert_fits_plate()`, sus reglas FDM y qué formato exportar.
 
 ## 4. Resolución de curvas: `$fn`, `$fa`, `$fs`
 
@@ -220,4 +223,4 @@ Lee el **número de línea** del mensaje y revisa también la línea anterior (l
 - [ ] `eps` en todos los cortes; sin caras coplanares.
 - [ ] Apoya en z=0, cabe en la placa (`printer.json`).
 - [ ] Renderizado sin `ERROR` ni `WARNING`.
-- [ ] Reglas FDM revisadas (skill `bambu-lab-printers`).
+- [ ] Reglas FDM revisadas (skill de marca de la impresora y `references/fdm-design-rules.md`).

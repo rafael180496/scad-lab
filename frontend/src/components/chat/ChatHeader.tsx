@@ -43,6 +43,9 @@ export type ModelControl = {
     error: string
     onChange: (id: string) => void
     onReload: () => void
+    /** S15: abre la lista de modelos sola cada vez que cambia (y no es 0), filtrada a los que ven imágenes con `visionOnly`. */
+    openSignal?: number
+    visionOnly?: boolean
 }
 
 // El título de la conversación abierta: un clic lo edita en el lugar (Enter
@@ -235,6 +238,8 @@ export function ChatHeader({
                 cli={cli}
                 iconOnly={small}
                 className={small ? undefined : 'max-w-[10.5rem] min-w-[4.5rem]'}
+                openSignal={model.openSignal}
+                visionOnly={model.visionOnly}
             />
             {showChip ? (
                 <span title={t.chat.workspaceHint} className="flex h-7 max-w-[9rem] min-w-0 shrink items-center gap-1.5 rounded-md border border-line px-2 text-ui-11-5 text-muted">

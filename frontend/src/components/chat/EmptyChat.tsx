@@ -1,8 +1,9 @@
 import {useEffect, useRef, useState} from 'react'
-import {Bot, Box, Camera, Cpu, Eye, Palette, Sparkles, Wrench, type LucideIcon} from 'lucide-react'
+import {Bot, Box, Camera, Cpu, Eye, ImagePlus, Palette, Sparkles, Wrench, type LucideIcon} from 'lucide-react'
 import {useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {isCLI, type ChatProviderItem} from '../../lib/chatProviders'
+import {Button} from '../ui/Button'
 import {modeTexts} from './ModeControl'
 import {providerIcon} from './providerIcons'
 
@@ -34,17 +35,21 @@ function useScrollHeight(): [number, React.RefObject<HTMLDivElement | null>] {
 // Las sugerencias son pedidos de OpenSCAD listos para usar: un clic rellena la caja
 // de mensaje (no envía: casi todos piden completar un dato, el modelo o la pieza).
 // Arriba, el proveedor, el modelo y el modo activos —lo que más se olvida antes de
-// escribir— con la explicación del modo.
+// escribir— con la explicación del modo. «Crear desde una imagen» (S15) es el otro
+// camino de entrada: abre el diálogo que arma el pedido con las fotos.
 export function EmptyChat({
     provider,
     modelLabel,
     agent,
     onPick,
+    onFromImage,
 }: {
     provider: ChatProviderItem | undefined
     modelLabel: string
     agent: boolean
     onPick: (text: string) => void
+    /** Abre el diálogo «Crear desde una imagen». */
+    onFromImage?: () => void
 }) {
     const t = useT()
     const [height, ref] = useScrollHeight()
@@ -84,6 +89,13 @@ export function EmptyChat({
                 </div>
             ) : null}
             {provider ? <p className="mx-auto max-w-[480px] text-ui-11-5 leading-snug text-muted">{tight ? mode.note : mode.hint}</p> : null}
+
+            {onFromImage ? (
+                <Button variant="primary" data-testid="chat-from-image" title={t.fromImage.hint} onClick={onFromImage}>
+                    <ImagePlus className="icon-ui-14" />
+                    {t.fromImage.button}
+                </Button>
+            ) : null}
 
             <div className="w-full">
                 {tight ? null : <p className="mb-1.5 font-mono text-ui-10 tracking-[0.12em] text-faint uppercase">{t.chat.empty.try}</p>}

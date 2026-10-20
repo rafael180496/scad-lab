@@ -73,3 +73,21 @@ export function requestChatDraft(d: ChatDraft) {
     showPanel('chat')
     if (drafts.emit(d)) pendingDraft = null
 }
+
+// «Crear desde una imagen» (S15): las fotos ya adjuntas en Go y el mensaje estructurado que arma el diálogo. El
+// panel Chat abre una conversación nueva en «Agente», pone los adjuntos como chips y lo envía. Como el panel entra con
+// lazy(), el pedido queda pendiente hasta que se monta y lo toma (igual que openChat y el borrador).
+export type FromImageRequest = {workspaceId: number; text: string; attachments: hermes.Attachment[]}
+const fromImages = channel<FromImageRequest>()
+let pendingFromImage: FromImageRequest | null = null
+export const onFromImage = fromImages.on
+export function takePendingFromImage(): FromImageRequest | null {
+    const r = pendingFromImage
+    pendingFromImage = null
+    return r
+}
+export function requestFromImage(r: FromImageRequest) {
+    pendingFromImage = r
+    showPanel('chat')
+    if (fromImages.emit(r)) pendingFromImage = null
+}

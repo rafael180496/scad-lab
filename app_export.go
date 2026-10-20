@@ -11,9 +11,11 @@ import (
 
 	"scadlab/backend/exporter"
 	"scadlab/backend/i18n"
-	"scadlab/backend/printers"
 	"scadlab/backend/render"
+	"scadlab/backend/slicers"
+	"scadlab/backend/store"
 	"scadlab/backend/workspace"
+	"scadlab/backend/wsconfig"
 )
 
 // Bindings de exportación (S9). La lógica vive en backend/export; acá solo se
@@ -41,7 +43,9 @@ func (a *App) exportJob(id int64, fileName string) (exporter.Job, string, string
 	if err != nil {
 		return exporter.Job{}, "", "", err
 	}
-	pr, _ := printers.ByID(w.PrinterID)
+	// La impresora efectiva: los avisos de colores de más se miden contra los
+	// colores que el workspace eligió, no contra el máximo de la máquina.
+	pr := wsconfig.EffectivePrinter(w)
 	job := exporter.Job{
 		Engine: a.engine,
 		// Cola propia: exportar no cancela el render del visor ni al revés.
@@ -69,7 +73,7 @@ func (a *App) PreviewExportParts(id int64, fileName string) (exporter.Preview, e
 	return p.Preview(), nil
 }
 
-// ExportCheckpoint exporta un checkpoint ("stl" | "3mf" | "stl-per-color") y
+// ExportCheckpoint exporta un checkpoint ("stl" | "3mf" | "3mf-prusa" | "stl-per-color") y
 // pide dónde guardarlo con el diálogo nativo. Devuelve la ruta (vacía si el
 // usuario cancela), las partes y los avisos. «stl-per-color» escribe un ZIP con
 // un STL por color. Un OpenSCAD que falla vuelve como error con la línea.
@@ -81,9 +85,7 @@ func (a *App) ExportCheckpoint(id int64, fileName, format string) (exporter.Resu
 type pickFunc func(defaultDir, suggested, format string) (string, error)
 
 func (a *App) exportCheckpoint(id int64, fileName, format string, pick pickFunc) (exporter.Result, error) {
-	switch format {
-	case exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor:
-	default:
+	if !exporter.IsFileFormat(format) {
 		return exporter.Result{}, i18n.Errorf(i18n.Msg{ES: "formato de exportación desconocido: %q", EN: "unknown export format: %q"}, format)
 	}
 	job, wsPath, slug, err := a.exportJob(id, fileName)
@@ -123,7 +125,10 @@ func (a *App) pickExportPath(defaultDir, suggested, format string) (string, erro
 	switch format {
 	case exporter.Format3MF:
 		filter = wruntime.FileFilter{DisplayName: "3MF (*.3mf)", Pattern: "*.3mf"}
-		title = i18n.T(i18n.Msg{ES: "Exportar 3MF para Bambu Studio", EN: "Export 3MF for Bambu Studio"})
+		title = i18n.T(i18n.Msg{ES: "Exportar 3MF multicolor", EN: "Export multicolor 3MF"})
+	case exporter.Format3MFPrusa:
+		filter = wruntime.FileFilter{DisplayName: "3MF (*.3mf)", Pattern: "*.3mf"}
+		title = i18n.T(i18n.Msg{ES: "Exportar 3MF para PrusaSlicer", EN: "Export 3MF for PrusaSlicer"})
 	case exporter.FormatSTLPerColor:
 		filter = wruntime.FileFilter{DisplayName: "ZIP (*.zip)", Pattern: "*.zip"}
 		title = i18n.T(i18n.Msg{ES: "Exportar un STL por color (ZIP)", EN: "Export one STL per color (ZIP)"})
@@ -136,22 +141,21 @@ func (a *App) pickExportPath(defaultDir, suggested, format string) (string, erro
 	})
 }
 
-// --- Abrir en un slicer (S9.B) ---------------------------------------------
+// --- Abrir en un slicer (S9.B, S14) ----------------------------------------
 //
-// «Abrir en Bambu Studio» abre la **aplicación** con el archivo, desacoplada y
-// solo por un clic del usuario. Nunca se invoca la CLI de Bambu (--slice,
-// --export-3mf…): se cae y le abre al usuario el diálogo de «se cerró
-// inesperadamente» (regla 9 de .claude/rules/technical.md).
+// «Abrir en <slicer>» abre la **aplicación** con el archivo, desacoplada y solo
+// por un clic del usuario. Nunca se invoca la CLI del slicer (--slice,
+// --export-3mf…): Bambu Studio se cae con ella y le abre al usuario el diálogo de
+// «se cerró inesperadamente» (regla 9 de .claude/rules/technical.md). El registro
+// de slicers y dónde se instala cada uno está en backend/slicers.
 
-// slicerBambuStudio es el id del único slicer soportado hoy.
-const slicerBambuStudio = "bambu-studio"
-
-// Slicer es una aplicación de laminado detectada (o no) en esta máquina.
+// Slicer es una aplicación de laminado del registro y si está en esta máquina.
 type Slicer struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Path  string `json:"path"` // vacía si no se encontró
-	Found bool   `json:"found"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Path       string `json:"path"` // la que se usaría; vacía si no se encontró
+	Found      bool   `json:"found"`
+	Configured string `json:"configured"` // la ruta que el usuario fijó en Configuración ("" = autodetectar)
 }
 
 // launchApp arranca un proceso sin esperarlo ni usar shell. Es una variable de
@@ -168,86 +172,40 @@ var launchApp = func(name string, args ...string) error {
 	return nil
 }
 
-// bambuStudioCandidates son las rutas de instalación habituales por sistema.
-func bambuStudioCandidates(goos, home, programFiles string) []string {
-	switch goos {
-	case "darwin":
-		out := []string{"/Applications/BambuStudio.app"}
-		if home != "" {
-			out = append(out, filepath.Join(home, "Applications", "BambuStudio.app"))
-		}
-		return out
-	case "windows":
-		if programFiles == "" {
-			programFiles = `C:\Program Files`
-		}
-		return []string{filepath.Join(programFiles, "Bambu Studio", "bambu-studio.exe")}
-	}
-	return nil
-}
+// slicerEnv es el entorno en que se buscan los slicers (carpetas de programas,
+// carpeta personal). Variable de paquete para que los tests apunten a carpetas
+// temporales: la máquina de quien corre las pruebas puede tener slicers de verdad.
+var slicerEnv = slicers.CurrentEnv
 
-// appBundlePath lleva una ruta dentro de un .app (p. ej. el ejecutable de
-// Contents/MacOS) al propio .app, que es lo que `open -a` espera.
-func appBundlePath(p string) string {
-	if i := strings.Index(strings.ToLower(p), ".app"+string(filepath.Separator)); i >= 0 {
-		return p[:i+len(".app")]
-	}
-	return p
-}
-
-// detectBambuStudio devuelve la ruta de Bambu Studio: la configurada si existe
-// y, si no, la primera de las rutas habituales que exista. "" si no hay.
-func detectBambuStudio(goos, configured string, candidates []string) string {
-	if configured = strings.TrimSpace(configured); configured != "" {
-		if goos == "darwin" {
-			configured = appBundlePath(configured)
-		}
-		if _, err := os.Stat(configured); err == nil {
-			return configured
-		}
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
-		}
-	}
-	return ""
-}
-
-// DetectSlicers lista los slicers conocidos y si están instalados. La ruta de
-// Configuración → Impresión (bambuStudioPath) gana sobre la autodetección.
+// DetectSlicers lista TODOS los slicers del registro y si están instalados. La
+// ruta de Configuración → Impresión (settings.slicerPaths, y bambuStudioPath para
+// Bambu Studio) gana sobre la autodetección.
 func (a *App) DetectSlicers() []Slicer {
-	configured := ""
+	var s store.Settings
 	if a.store != nil {
-		if s, err := a.store.GetSettings(); err == nil {
-			configured = s.BambuStudioPath
+		if got, err := a.store.GetSettings(); err == nil {
+			s = got
 		}
 	}
-	home, _ := os.UserHomeDir()
-	path := detectBambuStudio(runtime.GOOS, configured, bambuStudioCandidates(runtime.GOOS, home, os.Getenv("ProgramFiles")))
-	return []Slicer{{ID: slicerBambuStudio, Name: "Bambu Studio", Path: path, Found: path != ""}}
-}
-
-// slicerLaunch arma el comando que abre `file` con la app del slicer, según el
-// sistema. Sin shell y sin flags de la CLI del slicer.
-func slicerLaunch(goos, appPath, file string) (string, []string, error) {
-	switch goos {
-	case "darwin":
-		return "open", []string{"-a", appPath, file}, nil
-	case "windows":
-		return appPath, []string{file}, nil
+	env := slicerEnv()
+	out := make([]Slicer, 0, len(slicers.Registry))
+	for _, d := range slicers.Registry {
+		path := slicers.Find(d, env, s.SlicerPath(d.ID))
+		out = append(out, Slicer{ID: d.ID, Name: d.Name, Path: path, Found: path != "", Configured: s.SlicerPath(d.ID)})
 	}
-	return "", nil, i18n.New(i18n.Msg{ES: "abrir en un slicer solo está disponible en macOS y Windows", EN: "opening in a slicer is only available on macOS and Windows"})
+	return out
 }
 
-// OpenInSlicer abre un .3mf o .stl con la aplicación del slicer, desacoplada
-// (no espera a que termine). Valida que el archivo exista y la extensión.
+// OpenInSlicer abre un .3mf o .stl con la aplicación del slicer (cualquiera del
+// registro), desacoplada (no espera a que termine). Valida que el archivo exista
+// y la extensión, y dice el nombre del slicer en cada mensaje.
 func (a *App) OpenInSlicer(slicerID, filePath string) error {
-	if slicerID != slicerBambuStudio {
+	def, ok := slicers.ByID(slicerID)
+	if !ok {
 		return i18n.Errorf(i18n.Msg{ES: "slicer desconocido: %q", EN: "unknown slicer: %q"}, slicerID)
 	}
 	if ext := strings.ToLower(filepath.Ext(filePath)); ext != ".3mf" && ext != ".stl" {
-		return i18n.New(i18n.Msg{ES: "solo se pueden abrir archivos .3mf o .stl en el slicer", EN: "only .3mf or .stl files can be opened in the slicer"})
+		return i18n.Errorf(i18n.Msg{ES: "solo se pueden abrir archivos .3mf o .stl en %s", EN: "only .3mf or .stl files can be opened in %s"}, def.Name)
 	}
 	// Una ruta absoluta nunca empieza con «-»: no se puede colar como opción.
 	if !filepath.IsAbs(filePath) {
@@ -263,14 +221,17 @@ func (a *App) OpenInSlicer(slicerID, filePath string) error {
 		}
 	}
 	if found == nil {
-		return i18n.New(i18n.Msg{ES: "Bambu Studio no está instalado; indica su ruta en Configuración → Impresión", EN: "Bambu Studio is not installed; set its path in Settings → Printing"})
+		return i18n.Errorf(i18n.Msg{
+			ES: "%s no está instalado; indica su ruta en Configuración → Impresión",
+			EN: "%s is not installed; set its path in Settings → Printing",
+		}, def.Name)
 	}
-	name, args, err := slicerLaunch(runtime.GOOS, found.Path, filePath)
+	name, args, err := slicers.LaunchCommand(runtime.GOOS, found.Path, filePath)
 	if err != nil {
 		return err
 	}
 	if err := launchApp(name, args...); err != nil {
-		return i18n.Errorf(i18n.Msg{ES: "no se pudo abrir Bambu Studio: %v", EN: "could not open Bambu Studio: %v"}, err)
+		return i18n.Errorf(i18n.Msg{ES: "no se pudo abrir %s: %v", EN: "could not open %s: %v"}, def.Name, err)
 	}
 	return nil
 }

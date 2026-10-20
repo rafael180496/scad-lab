@@ -49,8 +49,10 @@ var (
 		"lint", "format", "render", "preview", "measure", "get_parameters", "list_templates", "get_template", "list_libraries",
 		// Referencias 3D
 		"inspect_reference",
+		// Imágenes (S15): miran y comparan; no tocan el diseño
+		"image_info", "compare_with_image",
 		// Impresión
-		"printer_info", "estimate_print", "list_materials", "suggest_orientation",
+		"printer_info", "list_printers", "estimate_print", "list_materials", "suggest_orientation",
 		// Contexto
 		"list_skills", "read_skill",
 	}
@@ -61,6 +63,10 @@ var (
 		"create_checkpoint", "set_parameters", "create_from_template", "import_mesh", "edit_mesh",
 		"set_active_parent", "rename_checkpoint", "trash_checkpoint", "restore_checkpoint",
 		"install_library", "export",
+		// Escriben el SVG o el mapa de alturas en refs/ (S15).
+		"trace_image_outline", "image_to_heightmap",
+		// Cambia la impresora y los colores del workspace (S14).
+		"set_workspace_printer",
 	}
 )
 

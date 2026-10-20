@@ -16,7 +16,7 @@ Mismo catálogo que mini-tools.
   (argon2id) de la contraseña maestra, que se recuerda en el llavero del SO solo si el usuario lo
   elige (`backend/vaultgate`, [21-llavero.md](21-llavero.md)), o se leen de la variable de entorno que
   nombra `apiKeyEnv`. Nunca viajan al frontend ni se escriben en un log o error. Ver
-  [19-hermes.md](19-hermes.md) y [06-go-react-contract.md](06-go-react-contract.md#servidores-de-modelos--app_serversgo-s12-121).
+  [19-hermes.md](19-hermes.md) y [33-contrato-servidores-chat.md](33-contrato-servidores-chat.md#servidores-de-modelos--app_serversgo-s12-121).
 - Cada workspace lleva `CLAUDE.md` y `AGENTS.md` con las mismas reglas
   (generadas de `assets/workspace/RULES.md.tmpl`), entre ellas: nunca
   sobrescribir checkpoints, color obligatorio, validar, respetar la placa y
@@ -105,7 +105,7 @@ Mismo catálogo que mini-tools.
 | `SendChatMessage(chatId, text, currentFile, attachmentIds, opts)` | `store.ChatMessage` (el del usuario) | `opts` = `SendOptions{agent?, maxSteps}`; respuesta por eventos `chat:delta/step/usage/done/error`. Sin `agent` manda el modo de la conversación; modo texto (Solo consulta): prompt de `prompts.SystemPrompt` (S5); Agente: `prompts.AgentSystemPrompt` + `mcp.Toolbox`. `agent` es un override de ese turno |
 | `CancelChat(chatId)` / `DeleteChat(chatId)` | — | cancelar conserva el texto y los pasos; borrar también quita las imágenes del chat |
 | `RenameChat(chatId, title)` / `SetChatModel(chatId, serverId, model)` | — | renombrar (≤ 120 letras) y cambiar de servidor/modelo a mitad |
-| `AddChatAttachment` / `AddChatAttachmentData` / `ChooseChatAttachment` / `RemoveChatAttachment` | ver [06](06-go-react-contract.md#chat-con-hermes--app_chatgo-app_chat_attachgo-s12-124126) | adjuntos: imágenes y modelos STL/3MF/OBJ |
+| `AddChatAttachment` / `AddChatAttachmentData` / `ChooseChatAttachment` / `ChooseChatImages` / `RemoveChatAttachment` | ver [33](33-contrato-servidores-chat.md#chat-con-hermes--app_chatgo-app_chat_attachgo-s12-124126) | adjuntos: imágenes y modelos STL/3MF/OBJ |
 | `ListProviderModels(providerId)` | `[]string` | alias de `ListServerModels` (los ids) |
 | `ChatCheckpointParent(workspaceId, currentFile)` | `string` | padre para «Guardar como checkpoint»: el abierto o el último |
 

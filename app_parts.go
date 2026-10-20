@@ -11,6 +11,7 @@ import (
 	"scadlab/backend/printers"
 	"scadlab/backend/render"
 	"scadlab/backend/store"
+	"scadlab/backend/wsconfig"
 )
 
 // Bindings de medición e impresión (S7): las partes del modelo por color y la
@@ -88,7 +89,10 @@ func (a *App) partsFor(id int64, fileName string) (partsContext, error) {
 	if err != nil {
 		return partsContext{}, err
 	}
-	pr, _ := printers.ByID(w.PrinterID)
+	// La impresora y los ajustes del workspace (S14): la placa y los colores de su
+	// impresora, y el material, relleno, perímetros y filamento que él fijó o
+	// heredó. Es la misma definición que lee el servidor MCP.
+	pr := wsconfig.EffectivePrinter(w)
 	return partsContext{
 		src: parts.Source{
 			Engine: a.engine,
@@ -101,7 +105,7 @@ func (a *App) partsFor(id int64, fileName string) (partsContext, error) {
 		},
 		store:    partsStoreFor(a.dataDir),
 		printer:  pr,
-		settings: s,
+		settings: wsconfig.EffectiveSettings(s, w, pr),
 	}, nil
 }
 

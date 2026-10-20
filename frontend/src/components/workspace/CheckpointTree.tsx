@@ -2,7 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {ChevronDown, ChevronRight, Ellipsis, FileCode2, GitBranch, Loader2, TriangleAlert} from 'lucide-react'
 import type {render, store} from '../../../wailsjs/go/models'
 import {RenameCheckpoint} from '../../../wailsjs/go/main/App'
-import {activePath, buildTree, countDescendants, effectiveActive, indexTree, type TreeNode} from '../../lib/checkpointTree'
+import {activePath, buildTree, effectiveActive, indexTree, type TreeNode} from '../../lib/checkpointTree'
 import {checkpointTitle} from '../../lib/checkpointInfo'
 import {renderTone, summary, type RenderTone} from '../../lib/render'
 import {errorText} from '../../lib/errors'
@@ -115,6 +115,7 @@ export function CheckpointTree({
     renders,
     running,
     shotMenu,
+    shotConfirm,
 }: {
     workspaceId: number
     checkpoints: store.Checkpoint[]
@@ -131,6 +132,8 @@ export function CheckpointTree({
     onCompare: (file: string) => void
     /** Solo el banco de capturas: archivo cuyo menú se abre al montar. */
     shotMenu?: string
+    /** Solo el banco de capturas: archivo cuyo diálogo de «mover a la papelera» se abre al montar. */
+    shotConfirm?: string
 }) {
     const t = useT()
     const roots = useMemo(() => buildTree(checkpoints), [checkpoints])
@@ -155,6 +158,17 @@ export function CheckpointTree({
         }, 300)
         return () => window.clearTimeout(timer)
     }, [shotMenu, roots, rowOf])
+
+    // Banco de capturas: abre la confirmación de mandar ese nodo a la papelera.
+    useEffect(() => {
+        if (!shotConfirm) return
+        const timer = window.setTimeout(() => {
+            const hit = index.get(shotConfirm)
+            if (hit) void actions.trash(hit.node, hit.parent, false)
+        }, 300)
+        return () => window.clearTimeout(timer)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [shotConfirm])
 
     if (checkpoints.length === 0) {
         return <p className="px-3 py-2 text-ui-12 leading-relaxed text-faint">{t.checkpoints.empty}</p>
@@ -226,7 +240,7 @@ export function CheckpointTree({
                             setRenaming(cp.fileName)
                         } else if (e.key === 'Delete' || e.key === 'Backspace') {
                             e.preventDefault()
-                            void actions.trash(cp, countDescendants(n), false)
+                            void actions.trash(n, index.get(cp.fileName)?.parent ?? null, false)
                         } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                             e.preventDefault()
                             focusRow(el, e.key === 'ArrowDown' ? 1 : -1)
@@ -280,10 +294,9 @@ export function CheckpointTree({
                         <span className={cn('truncate font-mono', isActive && 'font-semibold')}>{display(cp)}</span>
                     )}
                     {n.orphan ? (
-                        <TriangleAlert
-                            className="icon-ui-12 shrink-0 text-warn"
-                            aria-label={fmt(t.checkpoints.orphan, {parent: cp.parentFile})}
-                        />
+                        <span className="flex shrink-0" title={fmt(t.checkpoints.orphan, {parent: cp.parentFile})}>
+                            <TriangleAlert className="icon-ui-12 text-warn" aria-label={fmt(t.checkpoints.orphan, {parent: cp.parentFile})} />
+                        </span>
                     ) : null}
                     {isActive ? (
                         <span
@@ -336,6 +349,7 @@ export function CheckpointTree({
                     label={fmt(t.checkpoints.menuLabel, {name: display(target.node.cp)})}
                     entries={actions.menuEntries({
                         node: target.node,
+                        parent: target.parent,
                         isActive: menu.file === active,
                         onView,
                         onCompare,

@@ -31,9 +31,9 @@ import App, {type ShotOptions} from './App'
 import type {SettingsTab} from './components/settings/SettingsDialog'
 import {loadMesh, loadParts, loadRawMesh} from './lib/mesh'
 import {loadCodeEditor, loadSkillCodeEditor} from './components/editor/lazy'
-import {setLanguage} from './i18n'
+import {fmt, setLanguage, t as dict} from './i18n'
 import {ConfirmHost} from './components/ui/Dialog'
-import {Toaster} from './components/ui/Toast'
+import {Toaster, toast} from './components/ui/Toast'
 import {VaultHost} from './components/vault/VaultHost'
 import {APPEARANCE_DEFAULTS, applyAppearance} from './lib/appearance'
 import {setPlatform} from './lib/platform'
@@ -46,6 +46,7 @@ import {installScrollGuard} from './lib/scrollGuard'
 import {skillsShot} from './lib/skillsShot'
 import {prepareSession} from './lib/meshEditSession'
 import {slugify} from './lib/slug'
+import {fromImageShot} from './lib/fromImageShot'
 // El catálogo real del lenguaje (el mismo que embebe Go): autocompletado y
 // hover del banco con los textos de verdad.
 import catalog from '../../assets/scad/catalog.json'
@@ -64,7 +65,7 @@ const scale = [90, 100, 115, 130, 150].includes(Number(q.get('scale'))) ? Number
 // herramienta, y con el guardado automático). `chat-query-only`: «Solo consulta» con «Crear checkpoint y renderizar» y el
 // aviso «Cambiar a Agente».
 const starterShot = view === 'workspace-starter'
-const createsShot = view === 'chat-agent-creates' || view === 'chat-autosave'
+const createsShot = view === 'chat-agent-creates' || view === 'chat-autosave' || view === 'chat-agy-denied'
 const firstShot = starterShot || createsShot
 
 type Scenario = 'ok' | 'error' | 'missing' | 'empty' | 'wasm'
@@ -123,6 +124,9 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'chat-agent-creates': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'chat-autosave': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'chat-query-only': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
+    // S12.c T14: Antigravity bloqueó una herramienta de ScadLab por permisos (en --print termina el turno): el mensaje
+    // dice cuál, dónde aprueba ScadLab sus herramientas y qué hacer, y el aviso trae «Reparar permisos de Antigravity».
+    'chat-agy-denied': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'workspace-starter': {scenario: 'ok'},
     // S13 (editar un STL): el diálogo de importar con una malla abierta, el modo «Editar» con el gizmo de mover y la pila,
     // el plano de corte partiendo en dos colores, un cilindro como agujero (rojo translúcido) y «Modificar con IA» (el
@@ -172,6 +176,14 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     // S12.b: el chat nuevo con sugerencias (chat-empty), el selector de proveedor abierto con los CLIs detectados y
     // un servidor (chat-providers), los modelos de un CLI (chat-cli-models) y el aviso sin ningún proveedor.
     'chat-empty': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    // S15, modelo desde una imagen: el diálogo «Crear desde una imagen» con dos fotos, la medida y qué es (sobre el chat vacío);
+    // la tarjeta de `compare_with_image` (la foto y el modelo lado a lado con la vista, las proporciones y el IoU) y la de
+    // `trace_image_outline` (la silueta trazada y el SVG que dejó). Las fotos son imágenes sintéticas de frontend/public/uishot/.
+    'chat-from-image': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    'chat-compare': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    'chat-trace': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
+    // Una foto adjunta con un modelo que no ve imágenes: el aviso con «Cambiar a un modelo con visión» y «Usar trazado de contorno».
+    'chat-no-vision': {scenario: 'ok', shot: {panel: 'chat', dock: 'chat'}},
     'chat-providers': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'chat-cli-models': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
     'chat-no-providers': {scenario: 'ok', shot: {panel: 'chat', dock: 'tall'}},
@@ -216,6 +228,11 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     'tree-menu': {scenario: 'ok', shot: {treeMenu: '003-vent-slots.scad'}},
     'tree-active-branch': {scenario: 'ok'},
     trash: {scenario: 'ok', shot: {trash: true}},
+    // Papelera (borrado permanente): los dos diálogos de confirmación, y la de mandar a la papelera un checkpoint con hijos.
+    'trash-empty-confirm': {scenario: 'ok', shot: {trash: 'empty'}},
+    'tree-trash-confirm': {scenario: 'ok', shot: {treeConfirm: '002-sliding-lid.scad'}},
+    // Un hijo cuyo padre está en la papelera: el ⚠ del árbol y, en Problemas, el aviso con «Hacer principal».
+    'problems-orphan': {scenario: 'ok', shot: {select: '007-snap-case-v2.scad', panel: 'problems'}},
     'diff-parent': {scenario: 'ok', shot: {select: '006-two-color-logo.scad', compare: '006-two-color-logo.scad', panel: 'source', dock: 'diff'}},
     // Pestañas de proyecto (S8): tres proyectos abiertos (uno con un render en curso y
     // cambios sin guardar, otro con un agente vivo y su último render fallido), el menú «+»
@@ -226,6 +243,14 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     empty: {scenario: 'empty'},
     // «Nuevo workspace» con la ubicación elegida y la vista previa de la ruta final.
     newworkspace: {scenario: 'empty', shot: {newWorkspace: {name: es ? 'Soporte de auriculares' : 'Headphone stand', parent: '/Users/maker/Documents/Modelos 3D/Impresiones'}}},
+    // Impresoras multimarca y configuración por workspace (S14): «Nuevo workspace» con una Prusa MK4S, cuatro colores (MMU3) y sus
+    // skills; el selector abierto con las marcas agrupadas; y «Configuración del workspace» de un workspace con una Creality K1 Max
+    // (sección Impresora con su ficha; `-skills` y `-print` son las otras dos secciones, para revisarlas).
+    'workspace-new-printer': {scenario: 'empty', shot: {newWorkspace: {name: es ? 'Soporte para auriculares' : 'Headphone stand', parent: '/Users/maker/Documents/Modelos 3D/Impresiones', printer: 'prusa-mk4s', colors: 4}}},
+    'printer-picker': {scenario: 'empty', shot: {newWorkspace: {name: es ? 'Soporte para auriculares' : 'Headphone stand', parent: '/Users/maker/Documents/Modelos 3D/Impresiones', printer: 'prusa-mk4s', printerOpen: true}}},
+    'workspace-config': {scenario: 'ok', shot: {workspaceConfig: {section: 'printer'}}},
+    'workspace-config-skills': {scenario: 'ok', shot: {workspaceConfig: {section: 'skills'}}},
+    'workspace-config-print': {scenario: 'ok', shot: {workspaceConfig: {section: 'print'}}},
     // Barra lateral con nombres larguísimos (workspace y cadena de checkpoints): ver uishot-fit.sh.
     'sidebar-long': {scenario: 'ok'},
     // «Cerrar y abrir» (scripts/uishot-persist.sh): el modelo bicolor, con todos los paneles, y
@@ -255,6 +280,16 @@ skillsShot.mode = SKILLS_VIEWS[view]
 const meshWidth = Number(/^mesh-edit-w(\d+)$/.exec(view)?.[1] ?? 0)
 const meshHarness = meshWidth > 0
 const cfg = VIEWS[view] ?? (meshHarness ? VIEWS['mesh-edit'] : VIEWS.main)
+// S15: el diálogo «Crear desde una imagen» ya abierto, con dos fotos inventadas (lib/fromImageShot.ts).
+if (view === 'chat-from-image') {
+    fromImageShot.open = true
+    fromImageShot.reference = es ? 'El ancho total es 60 mm; la moneda de 25 centavos mide 24 mm' : 'The total width is 60 mm; the 25-cent coin is 24 mm across'
+    fromImageShot.what = es ? 'Una escuadra en L de metal para sostener un estante' : 'A metal L-bracket to hold up a shelf'
+    fromImageShot.photos = [
+        {id: 'att-front', name: es ? 'escuadra-frente.jpg' : 'bracket-front.jpg', size: 1_420_000, thumb: '/uishot/photo-bracket-front.png'},
+        {id: 'att-side', name: es ? 'escuadra-lado.jpg' : 'bracket-side.jpg', size: 960_000, thumb: '/uishot/photo-bracket-side.png'},
+    ]
+}
 // S12.b: el chat solo, en un panel de N px de ancho (chat-narrow = 360), para ver y comprobar que la barra no se desborda.
 const chatWidth = view === 'chat-narrow' ? 360 : Number(/^chat-w(\d+)$/.exec(view)?.[1] ?? 0)
 const chatHarness = chatWidth > 0
@@ -362,6 +397,8 @@ function persist(change: (p: Persisted) => void) {
 }
 const saveSetting = (key: string, value: unknown) => persist((p) => (p.settings[key] = value))
 
+// S14: las vistas de configuración por workspace usan una impresora multicolor de otra marca (Creality K1 Max con CFS).
+const printerWsShot = view === 'workspace-config' || view === 'workspace-config-skills' || view === 'workspace-config-print'
 // Pestañas de proyecto (S8): tres proyectos abiertos y un cuarto workspace sin abrir.
 const projectsShot = view.startsWith('projects-')
 const sidebarLong = view === 'sidebar-long'
@@ -370,7 +407,7 @@ const workspaces = (
     cfg.scenario === 'empty'
         ? []
         : [
-              {id: 1, name: sidebarLong ? (es ? 'Caja de la Raspberry Pi 5 con un nombre de workspace realmente largo para probar el recorte' : 'Raspberry Pi 5 case with a really long workspace name to test the clipping') : starterShot ? (es ? 'Mi primer proyecto' : 'My first project') : es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/${starterShot ? 'my-first-project' : 'rpi5-case'}`, printerId: 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
+              {id: 1, name: sidebarLong ? (es ? 'Caja de la Raspberry Pi 5 con un nombre de workspace realmente largo para probar el recorte' : 'Raspberry Pi 5 case with a really long workspace name to test the clipping') : starterShot ? (es ? 'Mi primer proyecto' : 'My first project') : es ? 'Caja Raspberry Pi 5' : 'Raspberry Pi 5 case', path: `${home}/${starterShot ? 'my-first-project' : 'rpi5-case'}`, printerId: printerWsShot ? 'creality-k1-max' : 'bambu-a1-mini', description: '', lastOpened: 0, createdAt: 0},
               {id: 2, name: es ? 'Soporte de auriculares' : 'Headphone stand', path: `${home}/headphone-stand`, printerId: 'bambu-a1', description: '', lastOpened: 0, createdAt: 0},
               {id: 3, name: es ? 'Organizador Gridfinity' : 'Gridfinity organizer', path: `${home}/gridfinity`, printerId: 'bambu-p1s', description: '', lastOpened: 0, createdAt: 0},
               ...(projectsShot
@@ -381,7 +418,7 @@ const workspaces = (
 
 // Vínculos y rótulos del árbol (S3): solo en las vistas de checkpoints avanzados,
 // para que el resto de las capturas conserve el árbol de siempre.
-const treeShot = ['tree-menu', 'tree-active-branch', 'trash', 'diff-parent'].includes(view)
+const treeShot = ['tree-menu', 'tree-active-branch', 'trash', 'trash-empty-confirm', 'tree-trash-confirm', 'problems-orphan', 'diff-parent'].includes(view)
 const SESSION = 'b6f1c0de-2d3a-4c55-9e0a-7a1d5c3e8f21'
 const treeExtra: Record<string, {label?: string; agentId?: string; sessionId?: string; chatId?: number}> = treeShot
     ? {
@@ -393,7 +430,7 @@ const treeExtra: Record<string, {label?: string; agentId?: string; sessionId?: s
     : {}
 // Padre activo explícito: en el árbol de la rama activa, el 003 (se quiere probar
 // otra variante desde ahí); en el resto, ninguno (rige el más nuevo).
-const activeParent = view === 'tree-active-branch' || view === 'trash' ? '003-vent-slots.scad' : ''
+const activeParent = view === 'tree-active-branch' || view === 'trash' || view === 'trash-empty-confirm' ? '003-vent-slots.scad' : ''
 const cp = (n: number, file: string, parent: string, desc: string) => ({
     id: n, workspaceId: 1, fileName: file, parentFile: parent, label: '', description: desc,
     sessionId: '', agentId: '', chatId: 0, collapsed: false, fileMtime: treeShot ? 1792080000 + n * 5400 : 0, createdAt: 0,
@@ -426,6 +463,8 @@ const checkpoints = sidebarLong ? longCheckpoints : firstShot ? firstCheckpoints
     cp(4, '004-usb-c-cutout.scad', '003-vent-slots.scad', es ? 'Recorte USB-C y HDMI' : 'USB-C and HDMI cutouts'),
     cp(5, '005-snap-lid.scad', '002-sliding-lid.scad', es ? 'Rama: tapa a presión' : 'Branch: snap-fit lid'),
     cp(6, '006-two-color-logo.scad', '005-snap-lid.scad', es ? 'Logo bicolor para el AMS' : 'Two-color logo for the AMS'),
+    // `problems-orphan`: su padre (008) se mandó a la papelera con una versión anterior de la app.
+    ...(view === 'problems-orphan' ? [cp(7, '007-snap-case-v2.scad', '008-draft-lid.scad', es ? 'Caja a presión, segunda versión' : 'Snap-fit case, second version')] : []),
 ]
 // Los otros proyectos de las vistas `projects-*`: árboles cortos con otros nombres, para que
 // se note a simple vista en qué proyecto se está.
@@ -616,7 +655,9 @@ const sourceFor = (id: number, file: string) =>
     id === 1
         ? file === '004-usb-c-cutout.scad'
             ? brokenSource
-            : source
+            : file === '007-snap-case-v2.scad'
+              ? source.replace('parent=005-snap-lid.scad', 'parent=008-draft-lid.scad')
+              : source
         : `// ${workspaces.find((w) => w.id === id)?.name ?? ''} · ${file}\nwidth = ${40 + id * 7};   // [20:1:120]\ncube([width, width / 2, 10]);\n`
 
 // Lo que devolvería LintCheckpointSource (backend/scad) sobre cada código:
@@ -625,7 +666,14 @@ const diag = (severity: string, line: number, col: number, endCol: number, code:
     severity, line, col, endLine: line, endCol, code, source: code === 'syntax' ? 'openscad' : 'scadlab', message: es ? msg[0] : msg[1],
 })
 const lintFor = (file: string) =>
-    file === '004-usb-c-cutout.scad'
+    file === '007-snap-case-v2.scad'
+        ? [
+              diag('warning', 1, 1, 0, 'SL002', [
+                  'parent=008-draft-lid.scad está en la papelera: restáuralo o haz principal a este checkpoint',
+                  'parent=008-draft-lid.scad is in the trash: restore it or make this checkpoint a root',
+              ]),
+          ]
+        : file === '004-usb-c-cutout.scad'
         ? [
               diag('warning', 2, 9, 30, 'SL005', [
                   'un checkpoint no debe incluir a otro (003-vent-slots.scad): cada checkpoint es autocontenido; copia lo que necesites',
@@ -648,13 +696,48 @@ const lintFor = (file: string) =>
               ]),
           ]
 
-const printers = [
-    ['bambu-a1-mini', 'Bambu Lab A1 mini', 180, 180, 180, 4],
-    ['bambu-a1', 'Bambu Lab A1', 256, 256, 256, 4],
-    ['bambu-p1s', 'Bambu Lab P1S', 256, 256, 256, 16],
-    ['bambu-x1c', 'Bambu Lab X1 Carbon', 256, 256, 256, 16],
-    ['bambu-h2d', 'Bambu Lab H2D', 350, 320, 325, 24],
-].map(([id, name, x, y, z, slots]) => ({id, name, build_volume: {x, y, z}, nozzle_mm: 0.4, multicolor_slots: slots, multicolor_system: 'AMS', enclosed: false, heated_chamber: false, notes: '', verify: []}))
+// Catálogo de impresoras (S14): INVENTADO pero con las cifras reales de la ficha de cada fabricante (volumen, boquilla,
+// temperaturas máximas, sistema multicolor). `max` = multicolor_slots del catálogo, `def` = default_colors. El orden de
+// marcas es el de la app: Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker, Ultimaker.
+type ShotPrinter = {
+    id: string; name: string; model: string; brand: string; vol: [number, number, number]; nozzle?: number; nozzles?: number; fil?: number
+    kind: string; sys: string; max: number; def: number; closed?: boolean; heated?: boolean; bed: string; tn: number; tb: number
+    slicers: string[]; verify?: string[]; src: string
+}
+const BRANDS = [
+    {id: 'bambu', name: 'Bambu Lab', skill: 'bambu-lab-printers'},
+    {id: 'prusa', name: 'Prusa Research', skill: 'prusa-printers'},
+    {id: 'creality', name: 'Creality', skill: 'creality-printers'},
+    {id: 'elegoo', name: 'Elegoo', skill: 'elegoo-printers'},
+    {id: 'anycubic', name: 'Anycubic', skill: 'anycubic-printers'},
+    {id: 'snapmaker', name: 'Snapmaker', skill: 'snapmaker-printers'},
+    {id: 'ultimaker', name: 'UltiMaker', skill: 'ultimaker-printers'},
+]
+const SHOT_PRINTERS: ShotPrinter[] = [
+    {id: 'bambu-a1-mini', name: 'Bambu Lab A1 mini', model: 'A1 mini', brand: 'bambu', vol: [180, 180, 180], kind: 'ams', sys: 'AMS lite', max: 16, def: 4, bed: (es ? 'PEI texturizado' : 'Textured PEI'), tn: 300, tb: 80, slicers: ['bambu-studio', 'orcaslicer'], src: 'https://bambulab.com/en/a1-mini'},
+    {id: 'bambu-p1s', name: 'Bambu Lab P1S', model: 'P1S', brand: 'bambu', vol: [256, 256, 256], kind: 'ams', sys: 'AMS', max: 16, def: 4, closed: true, bed: (es ? 'PEI texturizado' : 'Textured PEI'), tn: 300, tb: 100, slicers: ['bambu-studio', 'orcaslicer'], src: 'https://bambulab.com/en/p1'},
+    {id: 'bambu-x1c', name: 'Bambu Lab X1 Carbon', model: 'X1C', brand: 'bambu', vol: [256, 256, 256], kind: 'ams', sys: 'AMS', max: 16, def: 4, closed: true, bed: (es ? 'PEI texturizado' : 'Textured PEI'), tn: 0, tb: 0, slicers: ['bambu-studio', 'orcaslicer'], verify: ['max_nozzle_temp_c', 'max_bed_temp_c'], src: 'https://bambulab.com/en/x1'},
+    {id: 'bambu-h2d', name: 'Bambu Lab H2D', model: 'H2D', brand: 'bambu', vol: [325, 320, 325], nozzles: 2, kind: 'ams', sys: 'AMS 2 Pro / AMS HT', max: 25, def: 4, closed: true, heated: true, bed: (es ? 'PEI texturizado' : 'Textured PEI'), tn: 350, tb: 120, slicers: ['bambu-studio', 'orcaslicer'], src: 'https://bambulab.com/en/h2d'},
+    {id: 'prusa-mk4s', name: 'Prusa MK4S', model: 'MK4S', brand: 'prusa', vol: [250, 210, 220], fil: 1.75, kind: 'mmu', sys: 'Prusa MMU3', max: 5, def: 1, bed: (es ? 'Hoja de acero con PEI' : 'PEI spring-steel sheet'), tn: 290, tb: 120, slicers: ['prusaslicer', 'orcaslicer'], src: 'https://www.prusa3d.com/product/original-prusa-mk4s-3d-printer-5/'},
+    {id: 'prusa-core-one', name: 'Prusa CORE One+', model: 'CORE One+', brand: 'prusa', vol: [250, 220, 270], fil: 1.75, kind: 'mmu', sys: 'Prusa MMU3 / INDX', max: 5, def: 1, closed: true, heated: true, bed: (es ? 'Hoja de acero con PEI' : 'PEI spring-steel sheet'), tn: 290, tb: 120, slicers: ['prusaslicer', 'orcaslicer'], src: 'https://www.prusa3d.com/product/prusa-core-one/'},
+    {id: 'prusa-mini', name: 'Prusa MINI+', model: 'MINI+', brand: 'prusa', vol: [180, 180, 180], fil: 1.75, kind: 'none', sys: '', max: 1, def: 1, bed: (es ? 'Hoja de acero con PEI' : 'PEI spring-steel sheet'), tn: 280, tb: 100, slicers: ['prusaslicer', 'orcaslicer'], src: 'https://www.prusa3d.com/product/original-prusa-mini-semi-assembled-3d-printer-9/'},
+    {id: 'creality-k1-max', name: 'Creality K1 Max', model: 'K1 Max', brand: 'creality', vol: [300, 300, 300], fil: 1.75, kind: 'cfs', sys: 'Creality CFS-C', max: 4, def: 1, closed: true, bed: (es ? 'PEI flexible' : 'Flexible PEI'), tn: 300, tb: 100, slicers: ['creality-print', 'orcaslicer'], src: 'https://www.creality.com/support/k1-max'},
+    {id: 'creality-ender-3-v3', name: 'Creality Ender-3 V3', model: 'Ender-3 V3', brand: 'creality', vol: [220, 220, 250], fil: 1.75, kind: 'none', sys: '', max: 1, def: 1, bed: (es ? 'PEI texturizado' : 'Textured PEI'), tn: 300, tb: 110, slicers: ['creality-print', 'orcaslicer'], src: 'https://www.creality.com/support/ender-3-v3'},
+    {id: 'elegoo-centauri-carbon', name: 'Elegoo Centauri Carbon', model: 'Centauri Carbon', brand: 'elegoo', vol: [256, 256, 256], fil: 1.75, kind: 'cfs', sys: 'Elegoo CANVAS', max: 4, def: 1, closed: true, bed: (es ? 'PEI texturizado' : 'Textured PEI'), tn: 320, tb: 110, slicers: ['elegoo-slicer', 'orcaslicer'], src: 'https://www.elegoo.com/products/centauri-carbon'},
+    {id: 'anycubic-kobra-3', name: 'Anycubic Kobra 3', model: 'Kobra 3', brand: 'anycubic', vol: [250, 250, 260], fil: 1.75, kind: 'ace', sys: 'Anycubic ACE Pro', max: 8, def: 4, bed: (es ? 'PEI flexible' : 'Flexible PEI'), tn: 300, tb: 110, slicers: ['anycubic-slicer-next', 'orcaslicer'], src: 'https://store.anycubic.com/products/kobra-3-combo'},
+    {id: 'snapmaker-u1', name: 'Snapmaker U1', model: 'U1', brand: 'snapmaker', vol: [270, 270, 270], nozzles: 4, fil: 1.75, kind: 'toolchanger', sys: (es ? '4 cabezales independientes' : '4 independent toolheads'), max: 4, def: 4, bed: (es ? 'PEI flexible' : 'Flexible PEI'), tn: 300, tb: 100, slicers: ['snapmaker-orca', 'orcaslicer'], src: 'https://www.snapmaker.com/snapmaker-u1'},
+    {id: 'ultimaker-s7', name: 'UltiMaker S7', model: 'S7', brand: 'ultimaker', vol: [330, 240, 300], fil: 2.85, kind: 'dual', sys: (es ? 'Doble extrusión (dos print cores)' : 'Dual extrusion (two print cores)'), max: 2, def: 2, closed: true, bed: (es ? 'Vidrio' : 'Glass'), tn: 280, tb: 0, slicers: ['ultimaker-cura'], verify: ['max_bed_temp_c'], src: 'https://ultimaker.com/3d-printers/s-series/ultimaker-s7/'},
+]
+const printers = SHOT_PRINTERS.map((p) => {
+    const brand = BRANDS.find((b) => b.id === p.brand)!
+    return {
+        id: p.id, name: p.name, model: p.model, brand_id: brand.id, brand_name: brand.name, skill: brand.skill,
+        build_volume: {x: p.vol[0], y: p.vol[1], z: p.vol[2]}, nozzle_mm: p.nozzle ?? 0.4, nozzle_count: p.nozzles ?? 1, filament_diameter_mm: p.fil ?? 1.75,
+        multicolor_kind: p.kind, multicolor_system: p.sys, multicolor_slots: p.max, max_colors: p.max, default_colors: p.def,
+        enclosed: !!p.closed, heated_chamber: !!p.heated, bed_surface: p.bed, max_nozzle_temp_c: p.tn, max_bed_temp_c: p.tb,
+        slicers: p.slicers, notes: '', sources: [p.src], verify: p.verify ?? [],
+    }
+})
 
 // Diseños propios inventados (los que lista «Diseños guardados…»). Cada uno es el
 // sobre de un diseño real: se arma al vuelo con el predeterminado como base.
@@ -672,6 +755,8 @@ const settings = {
     defaultPrinter: 'bambu-a1-mini', defaultMaterial: 'pla', infillPercent: 15, defaultAgent: 'claude',
     wallLoops: 2, lineWidthMm: 0.42, filamentDiameterMm: 1.75, currency: 'USD',
     autoRender: true, renderTimeoutSec: 300, autoIterate: true, bambuStudioPath: '',
+    // S14: una ruta fijada a mano (la de Creality Print) para que Configuración → Impresión la muestre.
+    slicerPaths: {'creality-print': platform === 'windows' ? 'C:\\Tools\\Creality Print\\CrealityPrint.exe' : '/Applications/Creality Print.app'} as Record<string, string>,
     editorIndent: 4, editorFontSize: 13, editorWordWrap: false, editorMinimap: false,
     uiScale: scale, terminalFontSize: 13, chatFontSize: 13,
     layout: {sidebarWidth: 264, sidebarCollapsed: view === 'dock-hidden', codeWidth: 440, bottomHeight: 220, dimsCollapsed: view === 'viewer-split', statusBarHidden: false, workspacesHeight: 150},
@@ -845,7 +930,7 @@ const chatItems = [
 const noProviders = view === 'chat-no-providers'
 const serverFixtures = [
     {id: 'ollama', kind: 'ollama', preset: 'ollamaLocal', name: 'MacOS · Ollama', baseUrl: 'http://localhost:11434', apiKeyEnv: '', hasToken: false, defaultModel: 'qwen3-coder:30b', contextTokens: 0, enabled: !noProviders, sortOrder: 5, updatedAt: 1_790_000_000},
-    {id: 'srv-4f1a9c2e7b30', kind: 'openai', preset: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: '', hasToken: true, defaultModel: 'anthropic/claude-sonnet-5-5', contextTokens: 0, enabled: !noProviders, sortOrder: 6, updatedAt: 1_790_000_100},
+    {id: 'srv-4f1a9c2e7b30', kind: 'openai', preset: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: '', hasToken: true, defaultModel: view === 'chat-no-vision' ? 'deepseek/deepseek-chat' : 'anthropic/claude-sonnet-5-5', contextTokens: 0, enabled: !noProviders, sortOrder: 6, updatedAt: 1_790_000_100},
     {id: 'srv-8c3d5e1f0a92', kind: 'openai', preset: 'gemini', name: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKeyEnv: 'GEMINI_API_KEY', hasToken: false, defaultModel: 'gemini-2.5-pro', contextTokens: 0, enabled: !noProviders, sortOrder: 7, updatedAt: 1_790_000_200},
     {id: 'anthropic', kind: 'anthropic', preset: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com', apiKeyEnv: '', hasToken: true, defaultModel: 'claude-sonnet-5-5', contextTokens: 0, enabled: !noProviders, sortOrder: 8, updatedAt: 1_790_000_300},
     {id: 'srv-2b7e6d4a1c58', kind: 'openai', preset: 'lmstudio', name: es ? 'LM Studio del taller' : 'Workshop LM Studio', baseUrl: 'http://192.168.1.40:1234/v1', apiKeyEnv: '', hasToken: false, defaultModel: '', contextTokens: 0, enabled: !noProviders, sortOrder: 9, updatedAt: 1_790_000_400},
@@ -947,7 +1032,9 @@ const miniToolsImport = {
 const lastModelShot =
     view === 'chat-models'
         ? {serverId: 'srv-4f1a9c2e7b30', model: 'anthropic/claude-sonnet-5-5'}
-        : view === 'chat-providers' || view === 'chat-empty'
+        : view === 'chat-no-vision'
+          ? {serverId: 'srv-4f1a9c2e7b30', model: 'deepseek/deepseek-chat'}
+        : view === 'chat-providers' || view === 'chat-empty' || view === 'chat-from-image'
           ? {serverId: 'cli:claude', model: ''}
           : view === 'chat-cli-models'
             ? {serverId: 'cli:antigravity', model: ''}
@@ -1024,14 +1111,14 @@ const streamParts = es
 // Las imágenes del «preview» y las miniaturas se DIBUJAN aquí con un canvas
 // (cajas isométricas sombreadas): el banco no tiene OpenSCAD, y una captura
 // real traería el modelo y las carpetas de alguien. Todo es inventado.
-const hermesView = view === 'chat' || createsShot || view === 'chat-query-only' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || chatHarness
+const hermesView = view === 'chat' || createsShot || view === 'chat-query-only' || view === 'chat-agent-steps' || view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-code' || view === 'mesh-ai' || view === 'chat-compare' || view === 'chat-trace' || chatHarness
 // El chat del banco corre sobre OpenRouter; el panel angosto (chat-narrow, chat-w*), sobre un CLI: sus pasos usan las mismas tarjetas.
 // chat-code y chat-query-only: la conversación abierta está en «Solo consulta», elegido a mano. El modo es de cada
 // conversación (chats.mode, S12.c T12): ya no hay nada que fijar en localStorage, y el predeterminado es «Agente».
 const hermesChatMode = view === 'chat-code' || view === 'chat-query-only' ? 'ask' : ''
 // chat-agent-creates: Claude Code con el MCP de ScadLab; chat-autosave: un modelo local SIN herramientas (Ollama); chat-query-only: Codex en consulta.
-const hermesServerId = chatHarness ? 'cli:codex' : view === 'chat-agent-creates' ? 'cli:claude' : view === 'chat-autosave' ? 'ollama' : view === 'chat-query-only' ? 'cli:codex' : 'srv-4f1a9c2e7b30'
-const hermesModel = chatHarness ? 'gpt-5-codex' : view === 'chat-agent-creates' ? 'opus' : view === 'chat-autosave' ? 'llama3.2:3b' : view === 'chat-query-only' ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
+const hermesServerId = chatHarness ? 'cli:codex' : view === 'chat-agy-denied' ? 'cli:antigravity' : view === 'chat-agent-creates' ? 'cli:claude' : view === 'chat-autosave' ? 'ollama' : view === 'chat-query-only' ? 'cli:codex' : 'srv-4f1a9c2e7b30'
+const hermesModel = chatHarness ? 'gpt-5-codex' : view === 'chat-agy-denied' ? 'gemini-4-argon-high' : view === 'chat-agent-creates' ? 'opus' : view === 'chat-autosave' ? 'llama3.2:3b' : view === 'chat-query-only' ? 'gpt-5-codex' : 'anthropic/claude-sonnet-5-5'
 
 const shadeHex = (hex: string, f: number) => {
     const n = parseInt(hex.slice(1), 16)
@@ -1167,11 +1254,68 @@ const stepsAuto = [
     hermesStep(1, 'autosave', {label: es ? 'Caja con tapa a presión para una Raspberry Pi 5' : 'Snap-fit box for a Raspberry Pi 5', parent: '', file: firstFile}, 'ok', `{"file":"${firstFile}","parent":"","message":"${autoSaved}${firstFile}"}`, 12, autoText.length),
     hermesStep(2, 'render', {file: firstFile}, 'ok', renderOk, 1204, autoText.length),
 ]
+// chat-agy-denied: lo que arma cliTurnText (app_chat_cli.go) cuando Antigravity bloqueó una herramienta: la nota de «sin
+// respuesta» y la explicación de msgCLIAgyDenied (app_agyperms.go) con la herramienta, la ruta y el detalle.
+const agySettings = '/Users/maker/.gemini/antigravity-cli/settings.json'
+const agyDetail = 'permission check failed for mcp "scadlab/printer_info": user denied permission for mcp(scadlab/printer_info)\nDo not attempt to circumvent this denial.'
+const agyDeniedText = es
+    ? `_Antigravity CLI terminó el turno sin responder nada._\n\nAntigravity bloqueó la herramienta «printer_info» de ScadLab: en modo no interactivo no puede pedirte permiso y termina el turno. ScadLab la aprueba con una regla \`mcp(scadlab/…)\` en \`permissions.allow\` de ${agySettings}. Usa «Reparar permisos de Antigravity» (en el aviso, o en Configuración → Proveedores de IA) y vuelve a pedirlo. Detalle: ${agyDetail}`
+    : `_Antigravity CLI finished the turn without saying anything._\n\nAntigravity blocked ScadLab's “printer_info” tool: in non-interactive mode it cannot ask you for permission and ends the turn. ScadLab approves it with an \`mcp(scadlab/…)\` rule in \`permissions.allow\` of ${agySettings}. Use “Repair Antigravity permissions” (in the notice, or in Settings → AI providers) and ask again. Detail: ${agyDetail}`
+const stepsAgyDenied = [hermesStep(1, 'printer_info', {}, 'error', agyDetail, 22, 0)]
 const queryText = es
     ? `Te propongo esta caja para la **Raspberry Pi 5**, con paredes de 2 mm:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- Si quieres la tapa a presión, la hago como otro checkpoint.`
     : `Here is a box proposal for the **Raspberry Pi 5**, with 2 mm walls:\n\n\`\`\`openscad\n${chatScad}\`\`\`\n\n- If you want the snap-fit lid, I will make it as another checkpoint.`
+// ── S15: modelo desde una imagen ────────────────────────────────────────────────────────────────────────────────────────
+// Lo que arma el diálogo (lib/fromImage.ts) y lo que contestan las herramientas de imagen. Los nombres de los campos de los
+// resultados JSON son los que lee ToolCallCard (compare_with_image: view, modelAspect, photoAspect, silhouetteIoU;
+// trace_image_outline: files, contours, areaMm2, sizeMm).
+const frontRef = 'refs/images/escuadra-frente-3f9a1c7e.jpg'
+const sideRef = 'refs/images/escuadra-lado-b1042d9a.jpg'
+const logoRef = 'refs/images/logo-club-8e5d20c4.png'
+const fromImageAsk = (what: string, reference: string, n: number, refs: string[]) =>
+    es
+        ? `Crea un modelo 3D en OpenSCAD a partir de ${n === 1 ? 'la foto adjunta' : `las ${n} fotos adjuntas`}. Sigue la skill \`openscad-from-image\` (léela con \`read_skill\` antes de empezar).\n- Objeto: ${what}\n- Medida de referencia: ${reference}`
+        : `Create a 3D model in OpenSCAD from ${n === 1 ? 'the attached photo' : `the ${n} attached photos`}. Follow the \`openscad-from-image\` skill (read it with \`read_skill\` before you start).\n- Object: ${what}\n- Reference measurement: ${reference}`
+const bracketAsk = fromImageAsk(es ? 'Una escuadra en L de metal para sostener un estante' : 'A metal L-bracket to hold up a shelf', es ? 'El ancho total es 60 mm; la moneda de 25 centavos mide 24 mm' : 'The total width is 60 mm; the 25-cent coin is 24 mm across', 2, [frontRef, sideRef])
+const bracketAtt = [
+    {kind: 'image', name: es ? 'escuadra-frente.jpg' : 'bracket-front.jpg', mime: 'image/jpeg', size: 1_420_000, refPath: frontRef, thumb: '/uishot/photo-bracket-front.png'},
+    {kind: 'image', name: es ? 'escuadra-lado.jpg' : 'bracket-side.jpg', mime: 'image/jpeg', size: 960_000, refPath: sideRef, thumb: '/uishot/photo-bracket-side.png'},
+]
+const bracketFile = es ? '001-escuadra-en-l.scad' : '001-l-bracket.scad'
+const rcmp = es
+    ? {sentence: 'Leo el método para modelar desde fotos, mido la foto y creo la escuadra con los 60 mm de ancho y la moneda como escala.', done: `Listo: **${bracketFile}** es una escuadra de 60 × 42 × 40 mm con dos agujeros de 8,4 mm. Al compararla con la foto, la silueta coincide al 93 %: la placa vertical me quedó 1,5 mm más alta que la de la foto. ¿La ajusto a 40 mm exactos?`}
+    : {sentence: 'I read the method for modeling from photos, measure the photo and create the bracket with the 60 mm width and the coin as scale.', done: `Done: **${bracketFile}** is a 60 × 42 × 40 mm bracket with two 8.4 mm holes. Compared with the photo, the silhouette matches 93%: the vertical plate came out 1.5 mm taller than the one in the photo. Shall I adjust it to exactly 40 mm?`}
+const stepsCompare = [
+    hermesStep(1, 'read_skill', {name: 'openscad-from-image'}, 'ok', '{"name":"openscad-from-image","source":"builtin"}', 9, rcmp.sentence.length),
+    hermesStep(2, 'image_info', {image: frontRef}, 'ok', `{"image":"${frontRef}","width":1600,"height":1200,"aspect":1.333,"format":"jpeg","dominant":["#9d7346","#9aa3b2","#e9e6e0"],"foreground":[0.22,0.14,0.52,0.7]}`, 61, rcmp.sentence.length),
+    hermesStep(3, 'create_checkpoint', {label: es ? 'escuadra en L' : 'L-bracket', description: es ? 'Escuadra en L de 60 mm con dos agujeros' : '60 mm L-bracket with two holes', source: chatScad}, 'ok', `{"file":"${bracketFile}","parent":""}`, 39, rcmp.sentence.length),
+    hermesStep(4, 'render', {file: bracketFile}, 'ok', `{"file":"${bracketFile}","status":"ok","durationMs":902,"mesh":{"triangles":312,"watertight":true,"sizeMm":{"x":60,"y":42,"z":41.5}},"fitsBuildVolume":true,"printer":{"name":"Bambu Lab A1 mini"}}`, 934, rcmp.sentence.length),
+    hermesStep(5, 'compare_with_image', {image: frontRef, file: bracketFile, view: 'auto', mode: 'side'}, 'ok', '{"file":"' + bracketFile + '","view":"iso","mode":"side","modelAspect":1.19,"photoAspect":1.21,"silhouetteIoU":0.93}', 1210, rcmp.sentence.length, ['/uishot/compare-bracket.png']),
+]
+const logoFile = es ? '001-placa-logo.scad' : '001-logo-plate.scad'
+const logoAsk = fromImageAsk(es ? 'La placa con el logo de un club' : 'A plate with a club logo', es ? 'El logo mide 80 mm de ancho' : 'The logo is 80 mm wide', 1, [logoRef])
+const logoAtt = [{kind: 'image', name: es ? 'logo-club.png' : 'club-logo.png', mime: 'image/png', size: 612_000, refPath: logoRef, thumb: '/uishot/photo-logo.png'}]
+const rtr = es
+    ? {sentence: 'Es un logo plano de un solo color: trazo su contorno a 80 mm de ancho y lo extruyo.', done: `Listo: **${logoFile}** extruye el contorno del logo (anillo y estrella calada) 3 mm sobre una base de 0,6 mm. El SVG quedó en \`refs/logo-club.svg\` por si quieres reutilizarlo.`}
+    : {sentence: 'It is a flat single-color logo: I trace its outline at 80 mm wide and extrude it.', done: `Done: **${logoFile}** extrudes the logo outline (ring and cut-out star) 3 mm over a 0.6 mm base. The SVG is in \`refs/logo-club.svg\` in case you want to reuse it.`}
+const stepsTrace = [
+    hermesStep(1, 'read_skill', {name: 'openscad-from-image'}, 'ok', '{"name":"openscad-from-image","source":"builtin"}', 9, rtr.sentence.length),
+    hermesStep(2, 'trace_image_outline', {image: logoRef, width_mm: 80, name: 'logo-club'}, 'ok', '{"files":["refs/logo-club.svg"],"contours":3,"areaMm2":2315.6,"sizeMm":[80,80],"layers":1,"snippet":"linear_extrude(3) import(\\"refs/logo-club.svg\\");"}', 184, rtr.sentence.length, ['/uishot/trace-logo.png']),
+    hermesStep(3, 'create_checkpoint', {label: es ? 'placa con logo' : 'logo plate', source: chatScad}, 'ok', `{"file":"${logoFile}","parent":""}`, 38, rtr.sentence.length),
+    hermesStep(4, 'render', {file: logoFile}, 'ok', `{"file":"${logoFile}","status":"ok","durationMs":1104,"mesh":{"triangles":1480,"watertight":true,"sizeMm":{"x":80,"y":80,"z":3.6}},"fitsBuildVolume":true}`, 1139, rtr.sentence.length),
+]
 const hermesMessages =
-    view === 'chat-agent-creates'
+    view === 'chat-compare'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: bracketAsk, parts: parts({attachments: bracketAtt}), inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rcmp.sentence}\n\n${rcmp.done}`, parts: parts({steps: stepsCompare, model: hermesModel}), inputTokens: 24_310, outputTokens: 1_480, costUsd: 0.0951},
+          ]
+        : view === 'chat-trace'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: logoAsk, parts: parts({attachments: logoAtt}), inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rtr.sentence}\n\n${rtr.done}`, parts: parts({steps: stepsTrace, model: hermesModel}), inputTokens: 12_040, outputTokens: 860, costUsd: 0.0487},
+          ]
+        : view === 'chat-agent-creates'
         ? [
               {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: firstAsk, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
               {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: `${rc.sentence}\n\n${rc.done}`, parts: parts({steps: stepsCreate, model: 'claude-opus-5'}), inputTokens: 9_820, outputTokens: 640, costUsd: 0.0612},
@@ -1180,6 +1324,11 @@ const hermesMessages =
         ? [
               {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: firstAsk, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
               {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: autoText, parts: parts({steps: stepsAuto, model: 'llama3.2:3b'}), inputTokens: 1_210, outputTokens: 380, costUsd: 0},
+          ]
+        : view === 'chat-agy-denied'
+        ? [
+              {id: 1, chatId: 3, role: 'user', createdAt: 1_790_002_900, content: firstAsk, parts: '', inputTokens: 0, outputTokens: 0, costUsd: 0},
+              {id: 2, chatId: 3, role: 'assistant', createdAt: 1_790_003_000, content: agyDeniedText, parts: parts({steps: stepsAgyDenied, model: 'gemini-4-argon-high'}), inputTokens: 1_150, outputTokens: 0, costUsd: 0},
           ]
         : view === 'chat-query-only'
         ? [
@@ -1222,6 +1371,8 @@ const pickedAttachments = [
     {id: 'att-1', kind: 'image', name: es ? 'foto-repisa.jpg' : 'shelf-photo.jpg', mime: 'image/jpeg', size: 1_840_000, thumbDataUrl: photoSketch, refPath: '', summary: ''},
     {id: 'att-2', kind: 'model', name: es ? 'soporte-pared.stl' : 'wall-bracket.stl', mime: 'model/stl', size: 412_000, thumbDataUrl: previewBracket, refPath: es ? 'refs/soporte-pared.stl' : 'refs/wall-bracket.stl', summary: (es ? 'Reference: refs/soporte-pared.stl' : 'Reference: refs/wall-bracket.stl') + ' (STL, 3 812 triangles).'},
 ]
+// chat-no-vision: la foto que devuelve «Adjuntar» (una foto inventada de una escuadra, en frontend/public/uishot/).
+const noVisionPhoto = {id: 'att-nv', kind: 'image', name: es ? 'escuadra-frente.jpg' : 'bracket-front.jpg', mime: 'image/jpeg', size: 1_420_000, thumbDataUrl: '/uishot/photo-bracket-front.png', refPath: '', summary: ''}
 // «Modificar con IA» (mesh-ai): el modelo del checkpoint, ya adjunto, con el informe y la vista previa que arma Go.
 const meshAttachment = {id: 'att-ai', kind: 'model', name: es ? 'caja-rpi5.stl' : 'rpi5-case.stl', mime: 'model/stl', size: 412_000, thumbDataUrl: previewCase, refPath: es ? 'refs/caja-rpi5.stl' : 'refs/rpi5-case.stl', summary: 'Reference: refs/rpi5-case.stl (STL, 4 176 triangles).'}
 // Registro de lo que la interfaz llamó (window.__calls), para las pruebas con CDP.
@@ -1230,7 +1381,7 @@ const calls = (name: string, args: unknown[]) => {
     ;(w.__calls ||= []).push([name, args])
 }
 const chatMocks = {
-    ListChats: () => P(['chat-models', 'chat-empty', 'chat-providers', 'chat-cli-models', 'chat-no-providers'].includes(view) ? [] : chatsFor()),
+    ListChats: () => P(['chat-models', 'chat-empty', 'chat-from-image', 'chat-no-vision', 'chat-providers', 'chat-cli-models', 'chat-no-providers'].includes(view) ? [] : chatsFor()),
     GetChat: (id: number) => {
         if (hermesView) {
             return P({chat: id === 3 ? hermesChatItem : (chatItems.find((c) => c.id === id) ?? hermesChatItem), messages: id === 3 ? hermesMessages : (otherChats[id] ?? []), running: false, partial: '', partialSeq: 0, steps: [], usage: {inputTokens: 0, outputTokens: 0, costUsd: 0}})
@@ -1261,7 +1412,8 @@ const chatMocks = {
     RenameChat: (...a: unknown[]) => (calls('RenameChat', a), P(undefined)),
     SetChatMode: (...a: unknown[]) => (calls('SetChatMode', a), P(undefined)),
     SetChatModel: (...a: unknown[]) => (calls('SetChatModel', a), P(undefined)),
-    ChooseChatAttachment: () => P(pickedAttachments),
+    ChooseChatAttachment: () => P(view === 'chat-no-vision' ? [noVisionPhoto] : pickedAttachments),
+    ChooseChatImages: () => P(view === 'chat-from-image' ? [noVisionPhoto] : []),
     AddChatAttachmentData: (_ws: number, name: string) => P({...pickedAttachments[1], name}),
     AddChatAttachment: () => P(view === 'mesh-ai' ? meshAttachment : pickedAttachments[1]),
     RemoveChatAttachment: (...a: unknown[]) => (calls('RemoveChatAttachment', a), P(undefined)),
@@ -1283,6 +1435,79 @@ const exportWarnings =
           ]
         : []
 const bambuApp = platform === 'windows' ? 'C:\\Program Files\\Bambu Studio\\bambu-studio.exe' : '/Applications/BambuStudio.app'
+
+// ── S14: slicers, skills y configuración por workspace simulados ────────────
+// Los ocho del registro (backend/slicers). Los instalados cambian con la vista solo donde importa; `configured` es la ruta que fijó el usuario.
+const slicerApp = (mac: string, win: string) => (platform === 'windows' ? `C:\\Program Files\\${win}` : `/Applications/${mac}`)
+const shotSlicers = [
+    {id: 'bambu-studio', name: 'Bambu Studio', path: bambuApp, found: true},
+    {id: 'orcaslicer', name: 'OrcaSlicer', path: slicerApp('OrcaSlicer.app', 'OrcaSlicer\\orca-slicer.exe'), found: true},
+    {id: 'prusaslicer', name: 'PrusaSlicer', path: slicerApp('PrusaSlicer.app', 'Prusa3D\\PrusaSlicer\\prusa-slicer.exe'), found: true},
+    {id: 'creality-print', name: 'Creality Print', path: settings.slicerPaths['creality-print'], found: true, configured: settings.slicerPaths['creality-print']},
+    {id: 'elegoo-slicer', name: 'ElegooSlicer', path: '', found: false},
+    {id: 'anycubic-slicer-next', name: 'Anycubic Slicer Next', path: '', found: false},
+    {id: 'snapmaker-orca', name: 'Snapmaker Orca', path: '', found: false},
+    {id: 'ultimaker-cura', name: 'UltiMaker Cura', path: '', found: false},
+].map((x) => ({configured: '', ...x}))
+
+const brandSkillNames = new Set(BRANDS.map((b) => b.skill))
+const brandSkillDesc = (b: (typeof BRANDS)[number], list: string) => (es ? `Perfiles de impresoras ${b.name} (${list}), su multicolor y reglas de diseño FDM.` : `${b.name} printer profiles (${list}), their multicolor setup and FDM design rules.`)
+const shotSkills = [
+    {name: 'bambu-lab-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[0], 'A1, P1S, X1C, H2D…')},
+    {name: 'creality-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[2], 'Ender-3 V3, K1, K2…')},
+    {name: 'elegoo-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[3], 'Centauri Carbon, Neptune 4…')},
+    {name: 'anycubic-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[4], 'Kobra 3, Kobra S1…')},
+    {name: 'prusa-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[1], 'MK4S, CORE One, MINI+…')},
+    {name: 'snapmaker-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[5], 'U1, J1s, Artisan…')},
+    {name: 'ultimaker-printers', source: 'builtin', dir: '', enabled: true, description: brandSkillDesc(BRANDS[6], 'S3, S5, S7, S8…')},
+    {name: 'gear-helper', source: 'user', dir: `${skillsDir}${sep}gear-helper`, enabled: true, description: gearDescription},
+    {name: 'hinge-kit', source: 'user', dir: `${skillsDir}${sep}hinge-kit`, enabled: false, description: es ? 'Bisagras de impresión en sitio con holgura de 0,3 mm para la A1 mini.' : 'Print-in-place hinges with 0.3 mm clearance for the A1 mini.'},
+    {name: 'openscad-3mf-multicolor', source: 'builtin', dir: '', enabled: true, description: es ? 'Modelos multicolor (AMS, MMU, CFS, ACE…) y exportación 3MF.' : 'Multicolor models (AMS, MMU, CFS, ACE…) and 3MF export.'},
+    {name: 'openscad-core', source: 'builtin', dir: '', enabled: true, description: es ? 'Reglas de modelado paramétrico y del workspace.' : 'Parametric modeling and workspace rules.'},
+    {name: 'openscad-libraries', source: 'builtin', dir: '', enabled: false, description: es ? 'BOSL2, MCAD y NopSCADlib.' : 'BOSL2, MCAD and NopSCADlib.'},
+    {name: 'openscad-templates', source: 'builtin', dir: '', enabled: true, description: es ? 'Diez plantillas paramétricas listas para imprimir.' : 'Ten print-ready parametric templates.'},
+].sort((a, b) => a.name.localeCompare(b.name))
+// Las de por defecto de una impresora: las encendidas que no son de marca + la de su marca (backend/wsconfig.DefaultSkills).
+const defaultSkillsFor = (printerId: string) => {
+    const brand = printers.find((p) => p.id === printerId)?.skill
+    return shotSkills.filter((x) => x.name === brand || (x.enabled && !brandSkillNames.has(x.name))).map((x) => x.name).sort()
+}
+// Lo que cada workspace tiene fijado (se llena al guardar): impresora, colores, skills y ajustes de impresión.
+type ShotWsConf = {printerId: string; skills: string[] | null; print: Record<string, unknown>}
+const wsConf: Record<number, ShotWsConf> = {}
+const wsConfFor = (id: number): ShotWsConf => {
+    const w = workspaces.find((x) => x.id === id) ?? workspaces[0]
+    // El workspace de la captura de configuración tiene lo suyo: cuatro colores en la K1 Max, su skill de marca y un relleno propio.
+    wsConf[id] ??= {
+        printerId: w.printerId,
+        skills: printerWsShot ? ['creality-printers', 'gear-helper', 'openscad-3mf-multicolor', 'openscad-core', 'openscad-templates'] : null,
+        print: printerWsShot ? {colors: 4, infillPercent: 20} : {},
+    }
+    return wsConf[id]
+}
+const wsConfigView = (id: number) => {
+    const w = workspaces.find((x) => x.id === id) ?? workspaces[0]
+    const st = wsConfFor(id)
+    const base = printers.find((p) => p.id === st.printerId) ?? printers[0]
+    const colors = (st.print.colors as number | undefined) || base.default_colors
+    const pr = st.print as {material?: string; infillPercent?: number; wallLoops?: number; lineWidthMm?: number; filamentDiameterMm?: number}
+    const defaults = defaultSkillsFor(base.id)
+    return {
+        workspace: {...w, printerId: st.printerId, skills: st.skills, print: st.print},
+        printer: {...base, multicolor_slots: colors},
+        colors,
+        skills: st.skills ?? defaults,
+        defaultSkills: defaults,
+        print: st.print,
+        effective: {
+            material: pr.material || settings.defaultMaterial,
+            infillPercent: pr.infillPercent ?? settings.infillPercent,
+            wallLoops: pr.wallLoops ?? settings.wallLoops,
+            lineWidthMm: pr.lineWidthMm ?? settings.lineWidthMm,
+            filamentDiameterMm: pr.filamentDiameterMm ?? base.filament_diameter_mm ?? settings.filamentDiameterMm,
+        },
+    }
+}
 
 // Estado del servidor MCP: el ejecutable de ScadLab y los archivos del primer
 // workspace, todos al día (lo que ve el usuario en el caso normal).
@@ -1330,6 +1555,7 @@ const parentSource = () =>
         .replace('width  = 92;', 'width  = 88;')
         .replace(/color\("#ff7a1a"\)\n[^\n]*\n[^\n]*\n\n/, '')
 
+const agyPerms = {state: 'ok', path: '/Users/maker/.gemini/antigravity-cli/settings.json', approved: 37, total: 37, stale: 0, managed: true, detail: ''}
 const agyStatus = {state: 'missing', agyPath: '/Users/maker/.local/bin/agy', command: `${scadlabBin} --mcp`, current: '', detail: ''}
 
 // ── Editar un STL (S13) ─────────────────────────────────────────────────────
@@ -1358,7 +1584,7 @@ const fakeEditCode = (scene: Record<string, unknown>) => {
 
 const App_ = {
     // Bambu Studio detectado; abrir y mostrar no hacen nada (el banco no lanza apps).
-    DetectSlicers: () => P([{id: 'bambu-studio', name: 'Bambu Studio', path: bambuApp, found: true}]),
+    DetectSlicers: () => P(shotSlicers),
     OpenInSlicer: () => P(undefined),
     RevealPath: () => P(undefined),
     PreviewExportParts: () => P({parts: exportParts, warnings: exportWarnings}),
@@ -1366,6 +1592,21 @@ const App_ = {
     GetBootstrap: () => P({version: '0.1.0', platform, dataDir: platform === 'windows' ? 'C:\\Users\\maker\\AppData\\Roaming\\ScadLab' : '/Users/maker/Library/Application Support/ScadLab', schemaVersion: 1, initError: '', settings}),
     GetSettings: () => P(settings),
     ListPrinters: () => P(printers),
+    ListPrinterBrands: () => P(BRANDS),
+    GetWorkspaceConfig: (id: number) => P(wsConfigView(id)),
+    DefaultWorkspaceSkills: (printerId: string) => P(defaultSkillsFor(printerId || settings.defaultPrinter)),
+    // Guardar cambia la configuración en memoria y emite el evento, como Go (la barra de estado y el panel Impresión lo siguen).
+    SaveWorkspaceConfig: (id: number, input: {printerId: string; skills: string[]; print: Record<string, unknown>}) => {
+        calls('SaveWorkspaceConfig', [id, input])
+        const st = wsConfFor(id)
+        st.printerId = input.printerId || st.printerId
+        st.skills = input.skills ?? null
+        st.print = input.print ?? {}
+        const config = wsConfigView(id)
+        window.setTimeout(() => emit('workspace:config', config), 0)
+        return P({config, removed: [], kept: [], syncError: ''})
+    },
+    CreateWorkspaceWith: (input: unknown) => (calls('CreateWorkspaceWith', [input]), P(workspaces[0])),
     ListWorkspaces: () => P(workspaces),
     OpenWorkspace: (id: number) => P(viewFor(id)),
     RescanWorkspace: (id: number) => P(viewFor(id)),
@@ -1524,8 +1765,11 @@ const App_ = {
     SaveChatCheckpoint: () => P('007-lid-screws.scad'),
     // Checkpoints avanzados (S3): la papelera de la vista `trash` tiene tres
     // checkpoints de una rama que se descartó; en las demás está vacía.
-    ListTrash: () => P(view === 'trash' ? trashItems : []),
+    ListTrash: () => P(view === 'trash' || view === 'trash-empty-confirm' ? trashItems : []),
     TrashCheckpoint: () => P(['20261015-120000-001-base-box.scad']),
+    MakeCheckpointRoot: () => P(undefined),
+    DeleteTrashed: () => P(undefined),
+    EmptyTrash: () => P(trashItems.length),
     RestoreCheckpoint: (_id: number, name: string) => P(name.replace(/^\d{8}-\d{6}-/, '')),
     SetActiveParent: () => P(undefined),
     GetActiveParent: () => P(activeParent),
@@ -1568,6 +1812,10 @@ const App_ = {
     AntigravityMCPStatus: () => P(agyStatus),
     AddAntigravityMCP: () => P(agyStatus),
     RemoveAntigravityMCP: () => P(agyStatus),
+    // Permisos de ScadLab en el settings.json de Antigravity (T14): las 37 herramientas aprobadas.
+    AntigravityPermissionsStatus: () => P(agyPerms),
+    RemoveAntigravityPermissions: () => P(agyPerms),
+    RepairAntigravityPermissions: () => P(agyPerms),
     // «Descargar OpenSCAD» (S11): sin nada descargado, con la descarga en curso en la vista de Configuración.
     GetOpenSCADDownload: () =>
         P({
@@ -1597,16 +1845,7 @@ const App_ = {
             {id: 'anthropic', kind: 'anthropic', name: 'Anthropic API', command: '', config: {model: 'claude-sonnet-5-5', apiKeyEnv: 'ANTHROPIC_API_KEY'}, enabled: false, sortOrder: 7},
         ]),
     ListMaterials: () => P(materialList),
-    ListSkills: () =>
-        P([
-            {name: 'bambu-lab-printers', source: 'builtin', dir: '', enabled: true, description: es ? 'Perfiles de impresoras Bambu Lab y reglas de diseño FDM.' : 'Bambu Lab printer profiles and FDM design rules.'},
-            {name: 'gear-helper', source: 'user', dir: `${skillsDir}${sep}gear-helper`, enabled: true, description: gearDescription},
-            {name: 'hinge-kit', source: 'user', dir: `${skillsDir}${sep}hinge-kit`, enabled: false, description: es ? 'Bisagras de impresión en sitio con holgura de 0,3 mm para la A1 mini.' : 'Print-in-place hinges with 0.3 mm clearance for the A1 mini.'},
-            {name: 'openscad-3mf-multicolor', source: 'builtin', dir: '', enabled: true, description: es ? 'Modelos multicolor para el AMS y exportación 3MF.' : 'Multicolor models for the AMS and 3MF export.'},
-            {name: 'openscad-core', source: 'builtin', dir: '', enabled: true, description: es ? 'Reglas de modelado paramétrico y del workspace.' : 'Parametric modeling and workspace rules.'},
-            {name: 'openscad-libraries', source: 'builtin', dir: '', enabled: false, description: es ? 'BOSL2, MCAD y NopSCADlib.' : 'BOSL2, MCAD and NopSCADlib.'},
-            {name: 'openscad-templates', source: 'builtin', dir: '', enabled: true, description: es ? 'Diez plantillas paramétricas listas para imprimir.' : 'Ten print-ready parametric templates.'},
-        ]),
+    ListSkills: () => P(shotSkills),
     GetSkillsFolder: () => P({path: skillsDir, default: skillsDir, custom: false, exists: true, count: 2}),
     ListSkillFiles: (name: string) =>
         P(
@@ -1877,9 +2116,23 @@ if (view === 'settings-providers' || view === 'chat-models') {
     }, 100)
 }
 
+// chat-agy-denied: el aviso que emite la app cuando Antigravity bloquea una herramienta (App.tsx), con su botón.
+if (view === 'chat-agy-denied') {
+    window.setTimeout(() => {
+        const t = dict()
+        toast.withActions(
+            fmt(t.chat.antigravityDenied, {tool: 'printer_info', path: agySettings}),
+            [{label: t.chat.agyRepair, title: t.chat.agyRepairHint, run: () => {}}],
+            t.export.dismiss,
+            'agy-denied',
+            'error',
+        )
+    }, 1500)
+}
+
 // chat-attachments: se elige «Adjuntar» (el diálogo simulado devuelve una foto y un STL) y se escribe el mensaje.
 // chat-conversations: se abre la lista de conversaciones y la segunda pasa a renombrado en línea.
-if (view === 'chat-attachments' || view === 'chat-conversations') {
+if (view === 'chat-attachments' || view === 'chat-conversations' || view === 'chat-no-vision') {
     let tries = 0
     let stage = 0
     const run = window.setInterval(() => {
@@ -1887,18 +2140,18 @@ if (view === 'chat-attachments' || view === 'chat-conversations') {
         // El dock termina de repartir el alto un instante después de montar: un desplegable abierto antes se
         // posiciona sobre una barra que todavía no está en su sitio definitivo.
         if (performance.now() < 5000) return
-        if (view === 'chat-attachments') {
+        if (view === 'chat-attachments' || view === 'chat-no-vision') {
             if (stage === 0) {
                 const btn = document.querySelector<HTMLElement>('[data-testid="chat-attach"]')
                 if (btn && !btn.hasAttribute('disabled')) {
                     btn.click()
                     stage = 1
                 }
-            } else if (document.querySelectorAll('[data-attach-chip]').length >= 2) {
+            } else if (document.querySelectorAll('[data-attach-chip]').length >= (view === 'chat-no-vision' ? 1 : 2)) {
                 const ta = document.querySelector<HTMLTextAreaElement>('[data-font-area="chat"] textarea')
                 if (ta) {
                     const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
-                    set.call(ta, es ? 'Ahora encaja la repisa con este soporte de pared y mira la foto de cómo queda.' : 'Now fit the shelf to this wall bracket and look at the photo of how it ends up.')
+                    set.call(ta, view === 'chat-no-vision' ? (es ? 'Haz una escuadra como la de la foto.' : 'Make a bracket like the one in the photo.') : es ? 'Ahora encaja la repisa con este soporte de pared y mira la foto de cómo queda.' : 'Now fit the shelf to this wall bracket and look at the photo of how it ends up.')
                     ta.dispatchEvent(new Event('input', {bubbles: true}))
                     window.clearInterval(run)
                 }
@@ -2048,7 +2301,8 @@ const report = () => {
             }
         }
     }
-    const bar = document.querySelector('footer')?.getBoundingClientRect()
+    // La barra de estado, no el pie de un diálogo abierto (el de «Crear desde una imagen» vive dentro del chat, antes en el DOM).
+    const bar = [...document.querySelectorAll('footer')].find((f) => !f.closest('dialog'))?.getBoundingClientRect()
     const headEl = document.querySelector('header')
     const head = headEl?.getBoundingClientRect()
     d.dataset.docfit = JSON.stringify({

@@ -5,12 +5,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"scadlab/backend/i18n"
 	"scadlab/backend/osopen"
 	"scadlab/backend/skills"
 	"scadlab/backend/store"
+	"scadlab/backend/wsconfig"
 )
 
 // openFolder abre una carpeta en el Finder / Explorador. Es una variable para
@@ -90,8 +92,11 @@ func (a *App) ListSkills() ([]SkillView, error) {
 	return out, nil
 }
 
-// SetSkillEnabled prende o apaga una skill. Se aplica a los workspaces la
-// próxima vez que se sincronizan.
+// SetSkillEnabled prende o apaga una skill en Configuración. Desde S14 eso NO toca
+// los workspaces existentes: lo encendido es el conjunto por defecto de los
+// workspaces NUEVOS (menos las skills de marca, que se eligen por la impresora).
+// Cada workspace guarda su propia lista, que se cambia en «Configuración del
+// workspace» (SaveWorkspaceConfig).
 func (a *App) SetSkillEnabled(name string, enabled bool) error {
 	if err := a.ready(); err != nil {
 		return err
@@ -345,11 +350,15 @@ func (a *App) RenameSkill(oldName, newName string) (RenameSkillResult, error) {
 	if on, ok := enabled[oldName]; ok && !on {
 		_ = a.store.SetSkillEnabled(newName, false)
 	}
+	// Las listas de skills de los workspaces nombran la skill por su nombre: la
+	// entrada vieja pasa a llamarse como la nueva, o el workspace la perdería.
+	a.renameSkillInWorkspaces(oldName, newName)
 	out.SyncError = a.syncOpenWorkspaces(newName)
 	return out, err
 }
 
-// SyncWorkspaceSkills reinstala las skills habilitadas en un workspace.
+// SyncWorkspaceSkills reinstala en un workspace sus skills: las de SU lista (o
+// las de por defecto si no tiene una), no todas las que están encendidas.
 func (a *App) SyncWorkspaceSkills(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
@@ -358,46 +367,29 @@ func (a *App) SyncWorkspaceSkills(id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := a.syncSkills(w.Path); err != nil {
+	if err := a.syncSkills(w); err != nil {
 		return i18n.Errorf(i18n.Msg{ES: "no se pudieron instalar las skills: %v", EN: "could not install the skills: %v"}, err)
 	}
 	return nil
 }
 
-// syncSkills instala en un workspace todas las skills habilitadas.
-func (a *App) syncSkills(dir string) error { return a.syncSkillNames(dir) }
+// syncSkills instala en un workspace SUS skills efectivas (wsconfig.EffectiveSkills)
+// y retira las demás que ScadLab le instaló y nadie editó.
+func (a *App) syncSkills(w store.Workspace) error { return a.syncSkillNames(w) }
 
-// syncSkillNames instala en un workspace las skills nombradas (todas si no se
-// nombra ninguna). Sync solo reescribe las que recibe: sincronizar una skill no
-// pisa las copias de las demás.
-func (a *App) syncSkillNames(dir string, names ...string) error {
-	list, err := a.discoverSkills()
-	if err != nil {
-		return err
-	}
-	if len(names) > 0 {
-		want := map[string]bool{}
-		for _, n := range names {
-			want[n] = true
-		}
-		filtered := list[:0:0]
-		for _, s := range list {
-			if want[s.Name] {
-				filtered = append(filtered, s)
-			}
-		}
-		list = filtered
-	}
-	enabled, err := a.enabledSkills()
-	if err != nil {
-		return err
-	}
-	return skills.Sync(dir, list, func(n string) bool { return enabled[n] })
+// syncSkillNames sincroniza en un workspace las skills nombradas (todas si no se
+// nombra ninguna). Sync solo mira las que recibe: sincronizar una skill no pisa
+// las copias de las demás. Lo que se instala lo decide la lista del workspace, no
+// el interruptor global de Configuración.
+func (a *App) syncSkillNames(w store.Workspace, names ...string) error {
+	_, err := wsconfig.Install(a.store, a.userSkillsDir(), w, names...)
+	return err
 }
 
 // syncOpenWorkspaces reinstala las skills nombradas en los proyectos abiertos
-// (los demás se sincronizan al abrirse). Devuelve el texto del error, "" si todo
-// salió bien: un fallo acá no deshace el guardado que lo provocó.
+// (los demás se sincronizan al abrirse). Respeta la lista de cada workspace: una
+// skill que el workspace no tiene activa no se le instala. Devuelve el texto del
+// error, "" si todo salió bien: un fallo acá no deshace el guardado que lo provocó.
 func (a *App) syncOpenWorkspaces(names ...string) string {
 	s, err := a.store.GetSettings()
 	if err != nil {
@@ -409,7 +401,7 @@ func (a *App) syncOpenWorkspaces(names ...string) string {
 		if err != nil {
 			continue
 		}
-		if err := a.syncSkillNames(w.Path, names...); err != nil {
+		if err := a.syncSkillNames(w, names...); err != nil {
 			log.Printf("scadlab: skills de %s: %v", w.Path, err)
 			errs = append(errs, err)
 		}
@@ -418,6 +410,29 @@ func (a *App) syncOpenWorkspaces(names ...string) string {
 		return err.Error()
 	}
 	return ""
+}
+
+// renameSkillInWorkspaces cambia el nombre de una skill en la lista de cada
+// workspace que la tiene (los que no tienen lista —sin definir— no guardan
+// nombres). Un fallo se registra: el renombrado de la carpeta ya está hecho.
+func (a *App) renameSkillInWorkspaces(oldName, newName string) {
+	list, err := a.store.ListWorkspaces()
+	if err != nil {
+		log.Printf("scadlab: renombrar la skill en los workspaces: %v", err)
+		return
+	}
+	for _, w := range list {
+		i := slices.Index(w.Skills, oldName)
+		if i < 0 {
+			continue
+		}
+		next := slices.Clone(w.Skills)
+		next[i] = newName
+		next = slices.Compact(slices.Sorted(slices.Values(next)))
+		if err := a.store.SetWorkspaceConfig(w.ID, w.PrinterID, next, w.Print); err != nil {
+			log.Printf("scadlab: renombrar la skill %s en %s: %v", oldName, w.Name, err)
+		}
+	}
 }
 
 func (a *App) enabledSkills() (map[string]bool, error) {

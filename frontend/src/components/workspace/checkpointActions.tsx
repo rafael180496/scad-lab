@@ -1,6 +1,6 @@
-import {Code2, Copy, FolderSearch, GitBranch, GitCompare, History, ListCollapse, ListTree, Pencil, Trash2, WandSparkles} from 'lucide-react'
+import {Code2, Copy, FolderSearch, GitBranch, GitCompare, History, ListCollapse, ListTree, Network, Pencil, Trash2, WandSparkles} from 'lucide-react'
 import type {store} from '../../../wailsjs/go/models'
-import {ResumeCheckpointSession, RevealCheckpoint, SetActiveParent, TrashCheckpoint} from '../../../wailsjs/go/main/App'
+import {MakeCheckpointRoot, ResumeCheckpointSession, RevealCheckpoint, SetActiveParent, TrashCheckpoint} from '../../../wailsjs/go/main/App'
 import {agentName, resumeKind} from '../../lib/checkpointInfo'
 import {countDescendants, type TreeNode} from '../../lib/checkpointTree'
 import {copyText} from '../../lib/clipboard'
@@ -21,6 +21,8 @@ export function checkpointDisplay(cp: store.Checkpoint): string {
 
 export type MenuContext = {
     node: TreeNode
+    /** Su padre en el árbol (null si es raíz o su padre no está). */
+    parent: TreeNode | null
     /** Es el padre activo (ramificar desde aquí no tendría efecto). */
     isActive: boolean
     onView: (file: string) => void
@@ -35,13 +37,32 @@ export function useCheckpointActions(workspaceId: number) {
     const t = useT()
     const c = t.checkpoints
 
-    const trash = async (cp: store.Checkpoint, kids: number, branch: boolean) => {
+    // Mandar a la papelera: sin rama, los hijos DIRECTOS pasan a colgar del padre
+    // (o quedan como raíz) y el diálogo lo dice; con rama, se va todo el árbol de abajo.
+    const trash = async (node: TreeNode, parent: TreeNode | null, branch: boolean) => {
+        const cp = node.cp
         const name = checkpointDisplay(cp)
-        const text = branch ? fmt(c.trashBranchConfirm, {name, n: kids}) : kids > 0 ? fmt(c.trashConfirmKids, {name, n: kids}) : fmt(c.trashConfirm, {name})
+        const kids = branch ? countDescendants(node) : node.children.length
+        const text = branch
+            ? fmt(c.trashBranchConfirm, {name, n: kids})
+            : kids > 0
+              ? parent
+                  ? fmt(c.trashConfirmKids, {name, n: kids, parent: checkpointDisplay(parent.cp)})
+                  : fmt(c.trashConfirmKidsRoot, {name, n: kids})
+              : fmt(c.trashConfirm, {name})
         if (!(await confirmDialog(text, c.trashOk, c.trashCancel))) return
         try {
             const moved = await TrashCheckpoint(workspaceId, cp.fileName, branch)
             toast.ok(fmt(c.trashed, {n: moved?.length ?? 0}))
+        } catch (e) {
+            toast.error(errorText(e))
+        }
+    }
+
+    const makeRoot = async (file: string) => {
+        try {
+            await MakeCheckpointRoot(workspaceId, file)
+            toast.ok(fmt(c.madeRoot, {file}))
         } catch (e) {
             toast.error(errorText(e))
         }
@@ -74,7 +95,7 @@ export function useCheckpointActions(workspaceId: number) {
         RevealCheckpoint(workspaceId, file).catch((e) => toast.error(errorText(e)))
     }
 
-    const menuEntries = ({node, isActive, onView, onCompare, onToggle, onRename}: MenuContext): MenuEntry[] => {
+    const menuEntries = ({node, parent, isActive, onView, onCompare, onToggle, onRename}: MenuContext): MenuEntry[] => {
         const cp = node.cp
         const file = cp.fileName
         const kids = countDescendants(node)
@@ -116,6 +137,17 @@ export function useCheckpointActions(workspaceId: number) {
                 disabled: isActive,
                 onSelect: () => void branchFrom(file),
             },
+            ...(node.orphan
+                ? [
+                      {
+                          id: 'make-root',
+                          label: m.makeRoot,
+                          title: fmt(m.makeRootHint, {parent: cp.parentFile}),
+                          icon: <Network className="icon-ui-14" />,
+                          onSelect: () => void makeRoot(file),
+                      } satisfies MenuEntry,
+                  ]
+                : []),
             {id: 'rename', label: m.rename, title: m.renameHint, icon: <Pencil className="icon-ui-14" />, keys: keys('f2'), onSelect: onRename},
             resumeEntry,
             {kind: 'separator'},
@@ -133,7 +165,7 @@ export function useCheckpointActions(workspaceId: number) {
             {id: 'copy', label: m.copy, title: m.copyHint, icon: <Copy className="icon-ui-14" />, onSelect: () => void copyName(file)},
             {id: 'reveal', label: isMac() ? m.revealMac : m.revealWin, title: m.revealHint, icon: <FolderSearch className="icon-ui-14" />, onSelect: () => reveal(file)},
             {kind: 'separator'},
-            {id: 'trash', label: m.trash, title: m.trashHint, icon: <Trash2 className="icon-ui-14" />, keys: del, danger: true, onSelect: () => void trash(cp, kids, false)},
+            {id: 'trash', label: m.trash, title: m.trashHint, icon: <Trash2 className="icon-ui-14" />, keys: del, danger: true, onSelect: () => void trash(node, parent, false)},
         )
         if (kids > 0) {
             entries.push({
@@ -142,7 +174,7 @@ export function useCheckpointActions(workspaceId: number) {
                 title: fmt(m.trashBranchHint, {n: kids}),
                 icon: <ListCollapse className="icon-ui-14" />,
                 danger: true,
-                onSelect: () => void trash(cp, kids, true),
+                onSelect: () => void trash(node, parent, true),
             })
         }
         return entries

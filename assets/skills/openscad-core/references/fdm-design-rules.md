@@ -1,8 +1,12 @@
 # Reglas de diseño FDM — detalle y snippets
 
-Complemento de [../SKILL.md](../SKILL.md). Valores para boquilla 0.4 mm, PLA/PETG,
-perfiles por defecto de Bambu Studio. Todos los snippets son OpenSCAD puro y se
-pegan dentro del checkpoint (los checkpoints son autocontenidos).
+Complemento de [../SKILL.md](../SKILL.md) y de la skill de marca de la impresora
+(`bambu-lab-printers`, `prusa-printers`, `creality-printers`, `elegoo-printers`,
+`anycubic-printers`, `snapmaker-printers`, `ultimaker-printers`), que dicen lo
+propio de cada máquina. Valores para boquilla 0.4 mm, PLA/PETG, perfiles por
+defecto de cualquier slicer; una marca puede afinarlos. Todos los snippets son
+OpenSCAD puro y se pegan dentro del checkpoint (los checkpoints son
+autocontenidos).
 
 ## Voladizos y chaflanes
 

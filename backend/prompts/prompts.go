@@ -31,7 +31,13 @@ const MaxSourceBytes = 12 * 1024
 // workspace largo, los últimos son los que importan para ramificar.
 const maxListedCheckpoints = 40
 
-// defaultColorSlots es lo que se asume sin dato: el AMS lite de la A1 mini.
+// maxPromptImages limita las imágenes que el prompt lista: más de las que un
+// modelo puede mirar bien no le sirven y agrandan el prompt.
+const maxPromptImages = 10
+
+// defaultColorSlots es lo que se asume sin dato: los 4 colores con que nace un
+// workspace de la impresora de respaldo del catálogo (la A1 mini, printers.ByID).
+// Una impresora conocida trae sus propios colores en Context.ColorSlots.
 const defaultColorSlots = 4
 
 // Context es lo que el prompt de sistema sabe del workspace.
@@ -44,27 +50,47 @@ type Context struct {
 	Checkpoints   []string // nombres existentes (para sugerir el siguiente)
 	CurrentFile   string   // checkpoint seleccionado ("" si ninguno)
 	CurrentSource string   // su código (se recorta a MaxSourceBytes)
+
+	// S15: las imágenes que el usuario adjuntó, como rutas relativas al workspace
+	// ("refs/images/foto-1a2b3c4d.jpg"). Con ellas, los prompts mandan a la skill
+	// `openscad-from-image` y al flujo crear → render → compare_with_image.
+	Images []string
+
+	// S14: la impresora efectiva del workspace (ColorSlots son sus colores, no el
+	// máximo de la máquina). Las dos plantillas nombran marca, sistema
+	// multicolor, boquilla, filamento y slicer cuando vienen; vacíos se omiten.
+	Brand              string  // "Prusa Research"
+	MulticolorSystem   string  // "Prusa MMU3"
+	SlicerName         string  // el slicer recomendado, "PrusaSlicer"
+	NozzleMM           float64 // boquilla, mm
+	FilamentDiameterMm float64 // 1,75 o 2,85
 }
 
 // tplData es lo que ven las plantillas. Todo son strings, números y bools ya
 // resueltos: así una plantilla nunca imprime "<no value>".
 type tplData struct {
-	WorkspaceName  string
-	PrinterName    string
-	HasVolume      bool
-	X, Y, Z        string
-	Slots          int
-	CheckpointList string
-	Next           string // siguiente número de checkpoint, "004"
-	CurrentFile    string
-	HasCurrent     bool
-	Parent         string // parent que debe llevar el próximo checkpoint
-	HasSource      bool
-	Source         string
-	Fence          string // cerco de código más largo que cualquier ``` del código
-	Truncated      bool
-	LinesShown     int
-	LinesTotal     int
+	WorkspaceName    string
+	PrinterName      string
+	HasVolume        bool
+	X, Y, Z          string
+	Slots            int
+	Brand            string // "Prusa Research" ("" = no se nombra)
+	MulticolorSystem string // "Prusa MMU3 (opcional)"
+	SlicerName       string
+	Nozzle           string   // "0.4"; "" si no se sabe
+	Filament         string   // "1.75" o "2.85"; "" si no se sabe
+	Images           []string // rutas de las imágenes adjuntas, ya saneadas
+	CheckpointList   string
+	Next             string // siguiente número de checkpoint, "004"
+	CurrentFile      string
+	HasCurrent       bool
+	Parent           string // parent que debe llevar el próximo checkpoint
+	HasSource        bool
+	Source           string
+	Fence            string // cerco de código más largo que cualquier ``` del código
+	Truncated        bool
+	LinesShown       int
+	LinesTotal       int
 }
 
 var templates = map[string]*template.Template{}
@@ -87,7 +113,7 @@ func normLang(lang string) string {
 }
 
 // SystemPrompt arma el prompt de sistema del chat: experto en OpenSCAD y en
-// FDM para Bambu Lab, contrato de checkpoints, color, formato de respuesta, y
+// FDM para la impresora del workspace (cualquier marca del catálogo), contrato de checkpoints, color, formato de respuesta, y
 // el estado del workspace (lista de checkpoints y código actual recortado).
 func SystemPrompt(c Context) string {
 	lang := normLang(c.Lang)
@@ -106,6 +132,15 @@ func buildData(c Context) tplData {
 		WorkspaceName: oneLine(c.WorkspaceName, 80),
 		PrinterName:   oneLine(c.PrinterName, 80),
 		Slots:         c.ColorSlots,
+		Brand:         oneLine(c.Brand, 80),
+		SlicerName:    oneLine(c.SlicerName, 80),
+	}
+	d.MulticolorSystem = oneLine(c.MulticolorSystem, 160)
+	if c.NozzleMM > 0 {
+		d.Nozzle = fmtMM(c.NozzleMM)
+	}
+	if c.FilamentDiameterMm > 0 {
+		d.Filament = fmtMM(c.FilamentDiameterMm)
 	}
 	if d.WorkspaceName == "" {
 		d.WorkspaceName = "—"
@@ -116,6 +151,12 @@ func buildData(c Context) tplData {
 	if v := c.BuildVolume; v[0] > 0 && v[1] > 0 && v[2] > 0 {
 		d.HasVolume = true
 		d.X, d.Y, d.Z = fmtMM(v[0]), fmtMM(v[1]), fmtMM(v[2])
+	}
+
+	for _, r := range c.Images {
+		if p := SafeRefPath(r); p != "" && len(d.Images) < maxPromptImages {
+			d.Images = append(d.Images, p)
+		}
 	}
 
 	names := make([]string, 0, len(c.Checkpoints))

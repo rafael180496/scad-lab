@@ -17,8 +17,10 @@ import (
 	"scadlab/backend/clichat"
 	"scadlab/backend/hermes"
 	"scadlab/backend/i18n"
+	"scadlab/backend/mcp"
 	"scadlab/backend/mcpconf"
 	"scadlab/backend/store"
+	"scadlab/backend/turnmark"
 )
 
 // CLIs como proveedores del chat (S12.b): Claude Code, Codex, Antigravity y
@@ -289,8 +291,9 @@ type cliJob struct {
 	det clichat.Detected
 	// mode sale del interruptor «Agente»: false = «Solo consulta».
 	mode clichat.Mode
-	// userText es el mensaje del usuario con el informe de las referencias 3D;
-	// images, las rutas de las imágenes adjuntas.
+	// userText es el mensaje del usuario con el informe de las referencias 3D y las
+	// rutas de las fotos; images, las rutas ABSOLUTAS de las imágenes que recibe el
+	// CLI (ver cliImages).
 	userText string
 	images   []string
 	// stored es el historial anterior a este mensaje: solo se reenvía si el CLI no
@@ -336,7 +339,7 @@ func (a *App) sendCLIMessage(c store.Chat, text, currentFile string, attachmentI
 		return store.ChatMessage{}, err
 	}
 	// Los CLIs ven imágenes (o lo dirán ellos): no hay chequeo previo de visión.
-	ot, err := a.openChatTurn(c, text, pending, attachmentIDs, true)
+	ot, err := a.openChatTurn(c, text, pending, attachmentIDs, hermes.PrepareOptions{Vision: true, WorkspaceDir: w.Path})
 	if err != nil {
 		return store.ChatMessage{}, err
 	}
@@ -346,10 +349,10 @@ func (a *App) sendCLIMessage(c store.Chat, text, currentFile string, attachmentI
 	// línea de comandos.
 	agent := opts.agentFor(c)
 	job := chatJob{
-		turn: ot.turn, chat: c, workspace: w, currentFile: currentFile, agent: agent,
+		turn: ot.turn, chat: c, workspace: w, currentFile: currentFile, agent: agent, imageRefs: ot.prepared.ImageRefs,
 		cli: &cliJob{
 			det: det, mode: clichat.ModeFor(agent),
-			userText: ot.prepared.Text, images: ot.prepared.Images, stored: ot.stored, session: c.CLISession,
+			userText: ot.prepared.Text, images: cliImages(w.Path, ot.prepared), stored: ot.stored, session: c.CLISession,
 			mcpOn: settings.MCPEnabled, mcp: a.mcpLaunchArgs(det.ID, w.Path), addDirs: a.addDirArgs(det.ID, w.ID),
 		},
 	}
@@ -369,11 +372,14 @@ func (a *App) cliPrompt(j chatJob, withHistory bool) string {
 		ES: "[ScadLab] Diseñas un modelo 3D en OpenSCAD en el proyecto «%s» (esta carpeta). Las reglas del proyecto están en CLAUDE.md y AGENTS.md. Usa las herramientas del servidor «scadlab» (render, preview, measure, lint…) para comprobar tu trabajo.",
 		EN: "[ScadLab] You are designing a 3D model in OpenSCAD in the project “%s” (this folder). The project rules are in CLAUDE.md and AGENTS.md. Use the tools of the “scadlab” server (render, preview, measure, lint…) to check your work.",
 	}, j.workspace.Name))
-	pctx := chatPromptContext(j.workspace, j.currentFile)
+	pctx := chatPromptContext(j.workspace, j.currentFile, j.imageRefs...)
 	switch j.cli.mode {
 	case clichat.ModeAsk:
 		// Solo consulta: una respuesta que se pueda guardar con un clic.
 		b.WriteString(" " + i18n.T(msgCLIPromptAsk))
+		if j.cli.mcpNote != "" {
+			b.WriteString(" " + i18n.T(msgCLIPromptNoMCPAsk))
+		}
 	default:
 		// Agente: el diseño lo crea el agente, de punta a punta.
 		b.WriteString(" " + i18n.T(msgCLIPromptAgent))
@@ -440,25 +446,65 @@ var (
 		ES: "El proyecto todavía no tiene checkpoints: crea el primero ya, sin preguntar nada (sin `parent`).",
 		EN: "The project has no checkpoints yet: create the first one right away, without asking anything (no `parent`).",
 	}
+	msgCLIPromptNoMCPAsk = i18n.Msg{
+		ES: "Atención: el servidor «scadlab» NO está conectado en este turno: no llames a sus herramientas, razona con lo que ves y entrega el bloque.",
+		EN: "Warning: the “scadlab” server is NOT connected in this turn: do not call its tools, reason from what you can see and deliver the block.",
+	}
 	msgCLIPromptNoMCP = i18n.Msg{
 		ES: "Atención: el servidor «scadlab» NO está conectado en este turno, así que no puedes crear checkpoints. Entrega el diseño en UN bloque ```openscad con el código completo y la cabecera `// @checkpoint`: ScadLab lo guardará y lo renderizará por ti.",
 		EN: "Warning: the “scadlab” server is NOT connected in this turn, so you cannot create checkpoints. Deliver the design in ONE ```openscad block with the complete code and the `// @checkpoint` header: ScadLab will save and render it for you.",
 	}
 )
 
+// cliImages son las imágenes que recibe un CLI. Las fotos adjuntas van por su copia
+// en <ws>/refs/images/ (S15), que está dentro de la carpeta donde corre el CLI: no
+// piden permiso de lectura y son las mismas rutas que las herramientas de imagen
+// reciben. Las vistas previas de los modelos de referencia siguen en la carpeta del
+// chat. Sin copias en el workspace (no se pidieron) van las de la carpeta del chat.
+func cliImages(wsDir string, p hermes.Prepared) []string {
+	if len(p.ImageRefs) == 0 {
+		return p.Images
+	}
+	root := absDir(wsDir)
+	out := make([]string, 0, len(p.ImageRefs)+len(p.Previews))
+	for _, rel := range p.ImageRefs {
+		out = append(out, filepath.Join(root, filepath.FromSlash(rel)))
+	}
+	return append(out, p.Previews...)
+}
+
+// readDirsFor son las carpetas FUERA de cwd que el CLI tiene que poder leer para abrir
+// sus imágenes: Claude Code y Antigravity piden permiso para leer fuera de su carpeta,
+// y en headless se deniega solo. Lo que está dentro de cwd no necesita nada extra.
+func readDirsFor(cwd string, images []string) []string {
+	var dirs []string
+	seen := map[string]bool{}
+	for _, img := range images {
+		d := filepath.Dir(img)
+		if seen[d] {
+			continue
+		}
+		seen[d] = true
+		if rel, err := filepath.Rel(cwd, d); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		dirs = append(dirs, d)
+	}
+	return dirs
+}
+
 // cliTurn arma el Turn de clichat para el prompt y la sesión dados.
 func (a *App) cliTurn(j chatJob, session, prompt string) clichat.Turn {
 	cwd := absDir(j.workspace.Path)
-	var readDirs []string
-	seen := map[string]bool{}
-	for _, img := range j.cli.images {
-		if d := filepath.Dir(img); !seen[d] {
-			seen[d] = true
-			readDirs = append(readDirs, d)
-		}
+	readDirs := readDirsFor(cwd, j.cli.images)
+	env := clichat.Env(j.cli.det.Path)
+	if j.cli.det.ID == "antigravity" {
+		// Su registro global del MCP no lleva carpeta: el servidor toma esta (si
+		// Antigravity le pasa el entorno) y, si no, su directorio actual.
+		env = append(env, mcp.WorkspaceEnv+"="+cwd)
 	}
 	return clichat.Turn{
-		CLI: j.cli.det.ID, Exe: j.cli.det.Path, Cwd: cwd, Env: clichat.Env(j.cli.det.Path),
+		CLI: j.cli.det.ID, Exe: j.cli.det.Path, Cwd: cwd, Env: env,
 		Prompt: prompt, Mode: j.cli.mode, Model: j.chat.Model, Session: session,
 		Images: j.cli.images, MCP: j.cli.mcp, AddDirs: j.cli.addDirs, ReadDirs: readDirs,
 		MCPEnabled: j.cli.mcpOn, Lang: i18n.Lang(),
@@ -474,12 +520,26 @@ func (a *App) runCLITurn(j chatJob) {
 	// herramienta (el CLI lo escribió él) también cuenta como un checkpoint creado.
 	before := workspaceScadSet(j.workspace.Path)
 	j.cli.mcpNote = a.prepareCLIMCP(j)
+	// «Solo consulta» con Antigravity: sus reglas de permiso son globales y aprueban
+	// también las herramientas de escritura, así que el modo lo hace cumplir el
+	// servidor MCP con una marca en el workspace que dura el turno (backend/turnmark).
+	// Si no se puede escribir la marca, el turno NO corre: sin ella el servidor
+	// dejaría escribir.
+	endMark := func() {}
+	var markErr error
+	if j.cli.mcpOn && j.cli.det.ID == "antigravity" {
+		endMark, markErr = turnmark.Begin(absDir(j.workspace.Path), turnModeOf(j.cli.mode))
+		defer endMark() // idempotente: cubre también un pánico
+	}
 	stream := j.turn.Stream(func(seq int, text string) {
 		a.emit(evChatDelta, ChatDeltaEvent{ChatID: c.ID, Text: text, Seq: seq})
 	})
 	rec := newCLIRecorder(a, c, stream)
 
 	run := func(session string) (clichat.Result, error) {
+		if markErr != nil {
+			return clichat.Result{}, i18n.Errorf(msgCLIAgyMarkFailed, markErr)
+		}
 		return clichat.Run(j.turn.Context(), a.cliTurn(j, session, a.cliPrompt(j, session == "")), rec.handle)
 	}
 	res, err := run(j.cli.session)
@@ -494,14 +554,26 @@ func (a *App) runCLITurn(j chatJob) {
 		rec.reset()
 		res, err = run("")
 	}
+	endMark()
 	out := rec.finish(res, err)
 	if err == nil && !out.Cancelled {
 		// La red de seguridad (S12.c) y, si el turno no dejó nada, la explicación.
 		made := a.cliSafetyNet(j.turn.Context(), j, before, &out)
 		out.Text = a.cliTurnText(j, out, made)
 	}
+	if err == nil && !out.Cancelled && j.cli.det.ID == "antigravity" {
+		a.emitAgyDenied(out.Steps)
+	}
 	svc.setUsage(c.ID, out.Usage)
 	a.concludeChatTurn(c, out, err, cliErrorText(j.cli.det, err))
+}
+
+// turnModeOf traduce el modo del chat al de la marca del turno.
+func turnModeOf(m clichat.Mode) turnmark.Mode {
+	if m == clichat.ModeEdit {
+		return turnmark.Agent
+	}
+	return turnmark.Ask
 }
 
 // prepareCLIMCP deja listo el servidor MCP de ScadLab para el CLI del turno y
@@ -522,6 +594,8 @@ func (a *App) prepareCLIMCP(j chatJob) string {
 		return err.Error()
 	case st.State == mcpconf.AgyDisabled:
 		return i18n.T(msgCLIAgyDisabled)
+	case st.PermissionsError != "":
+		return st.PermissionsError
 	}
 	return ""
 }
@@ -556,32 +630,99 @@ var (
 func (a *App) cliTurnText(j chatJob, res hermes.Result, made bool) string {
 	text := res.Text
 	if made {
+		// Lo guardó la red de seguridad (o el CLI escribió el archivo) porque sus
+		// herramientas de ScadLab no estaban disponibles: el usuario tiene que saber
+		// por qué, o seguirá sin ellas en cada turno (la carpeta sin confianza de
+		// Antigravity, el MCP apagado…).
+		note := a.agyDeniedNote(j, res)
+		if note == "" {
+			note = agentNote(j)
+		}
+		if note != "" && !toolCreatedCheckpoint(res.Steps) {
+			return strings.TrimRight(text, "\n") + "\n\n_⚠ " + note + "_"
+		}
 		return text
 	}
 	if strings.TrimSpace(text) == "" {
 		var b strings.Builder
 		b.WriteString("_" + i18n.T(msgCLIEmptyTurn, j.cli.det.Name) + "_")
 		shown := 0
+		denied := a.agyDeniedNote(j, res)
 		for _, st := range res.Steps {
 			if st.Status != hermes.StepError || shown >= 3 {
 				continue
 			}
+			if denied != "" && agyDeniedRe.MatchString(st.Text) {
+				continue // el rechazo de permisos lo explica la nota, una sola vez
+			}
 			shown++
 			b.WriteString("\n\n" + i18n.T(msgCLIEmptyToolFailed, st.Tool, clipText(strings.TrimSpace(st.Text), 300)))
 		}
-		if j.agent {
-			if j.cli.mcpNote != "" {
-				b.WriteString("\n\n" + j.cli.mcpNote)
-			} else {
-				b.WriteString("\n\n" + i18n.T(msgCLIEmptyHint))
-			}
+		switch {
+		case denied != "":
+			b.WriteString("\n\n" + denied)
+		case agentNote(j) != "":
+			b.WriteString("\n\n" + agentNote(j))
+		case j.agent:
+			b.WriteString("\n\n" + i18n.T(msgCLIEmptyHint))
 		}
 		return b.String()
 	}
-	if j.agent && j.cli.mcpNote != "" {
-		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + j.cli.mcpNote + "_"
+	if denied := a.agyDeniedNote(j, res); denied != "" {
+		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + denied + "_"
+	}
+	if note := agentNote(j); note != "" {
+		return strings.TrimRight(text, "\n") + "\n\n_⚠ " + note + "_"
 	}
 	return text
+}
+
+// agentNote es el motivo conocido por el que el CLI no tiene las herramientas de
+// ScadLab, solo en «Agente»: en consulta no se esperaba que crearan nada.
+func agentNote(j chatJob) string {
+	if j.agent {
+		return j.cli.mcpNote
+	}
+	return ""
+}
+
+// toolCreatedCheckpoint dice si una herramienta de ScadLab dejó un checkpoint en
+// el turno (no la red de seguridad, que va como paso `autosave`).
+func toolCreatedCheckpoint(steps []hermes.Step) bool {
+	for _, st := range steps {
+		if st.Status == hermes.StepOK && mcp.CreatesCheckpoint(st.Tool) {
+			return true
+		}
+	}
+	return false
+}
+
+// agyDeniedNote es la explicación accionable cuando Antigravity bloqueó una
+// herramienta de ScadLab por permisos (en --print nadie puede aprobarla y el turno
+// termina ahí). Vacía si no ocurrió o si el CLI es otro. Si el turno ya sabía por qué
+// no había permisos (mcpNote: el settings.json ilegible, el MCP apagado…), ese motivo
+// ES la explicación, en cualquier modo.
+func (a *App) agyDeniedNote(j chatJob, res hermes.Result) string {
+	if j.cli.det.ID != "antigravity" {
+		return ""
+	}
+	tool, detail := agyDenial(res.Steps)
+	if tool == "" {
+		return ""
+	}
+	if j.cli.mcpNote != "" {
+		return j.cli.mcpNote
+	}
+	extra := ""
+	if !a.agyPermsManaged() {
+		extra = i18n.T(msgCLIAgyDeniedOff)
+	}
+	// Solo como pista: la confianza de carpeta ya no es un requisito de ScadLab, pero
+	// si Antigravity no confía en ella puede ser la causa de un bloqueo.
+	if trusted, known := clichat.AgyTrusted(agySettingsPath(), absDir(j.workspace.Path)); known && !trusted {
+		extra += i18n.T(msgCLIAgyDeniedUntrusted)
+	}
+	return i18n.T(msgCLIAgyDenied, tool, agySettingsPath(), extra, detail)
 }
 
 // cliErrorText antepone el nombre del CLI al fallo y, si parece de autenticación,

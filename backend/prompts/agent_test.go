@@ -286,3 +286,30 @@ func TestAgentPromptMandatesCheckpoint(t *testing.T) {
 		}
 	}
 }
+
+// El prompt de Hermes (S14) nombra la impresora del workspace, su sistema multicolor,
+// el máximo de colores y el slicer, y reparte los formatos de export por slicer.
+func TestAgentPromptNamesThePrinterAndTheSlicer(t *testing.T) {
+	for lang, wants := range map[string][]string{
+		"es": {"Original Prusa MK4S (Prusa Research)", "250 × 210 × 220 mm", "Sistema multicolor: Prusa MMU3 (opcional)", "como máximo 3 color(es)", "Slicer: PrusaSlicer",
+			"`3mf-prusa` para PrusaSlicer", "`stl-per-color` para Cura", "Abrir el archivo en el slicer (PrusaSlicer) lo hace el usuario", "`set_workspace_printer`", "más colores que los de este workspace (3)"},
+		"en": {"Original Prusa MK4S (Prusa Research)", "250 × 210 × 220 mm", "Multicolor system: Prusa MMU3 (opcional)", "at most 3 color(s)", "Slicer: PrusaSlicer",
+			"`3mf-prusa` for PrusaSlicer", "`stl-per-color` for Cura", "Opening the file in the slicer (PrusaSlicer) is the user's job", "`set_workspace_printer`", "more colors than this workspace's (3)"},
+	} {
+		c := agentContext(lang)
+		c.Context = prusaContext(lang)
+		c.Context.ColorSlots = 3
+		c.Skills = []SkillInfo{{Name: "prusa-printers", Description: "Perfiles de impresoras Prusa Research"}}
+		got := AgentSystemPrompt(c)
+		for _, w := range wants {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: falta %q", lang, w)
+			}
+		}
+		for _, bad := range []string{"AMS", "Bambu Lab printers", "impresoras Bambu"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("%s: el prompt de una Prusa dice %q", lang, bad)
+			}
+		}
+	}
+}

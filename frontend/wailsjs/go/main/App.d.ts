@@ -28,6 +28,8 @@ export function AnalyzeModelFile(arg1:string):Promise<refmodel.Report>;
 
 export function AntigravityMCPStatus():Promise<main.AntigravityMCP>;
 
+export function AntigravityPermissionsStatus():Promise<main.AntigravityPermissions>;
+
 export function ApplyMeshEdit(arg1:number,arg2:string,arg3:string,arg4:meshedit.Scene):Promise<string>;
 
 export function CancelChat(arg1:number):Promise<void>;
@@ -45,6 +47,8 @@ export function ChatCheckpointParent(arg1:number,arg2:string):Promise<string>;
 export function ChatModelCatalog(arg1:string,arg2:boolean):Promise<main.ModelCatalog>;
 
 export function ChooseChatAttachment(arg1:number):Promise<Array<hermes.Attachment>>;
+
+export function ChooseChatImages(arg1:number):Promise<Array<hermes.Attachment>>;
 
 export function ChooseDirectory(arg1:string,arg2:string):Promise<string>;
 
@@ -68,6 +72,10 @@ export function CreateWorkspace(arg1:string,arg2:string):Promise<store.Workspace
 
 export function CreateWorkspaceIn(arg1:string,arg2:string,arg3:string):Promise<store.Workspace>;
 
+export function CreateWorkspaceWith(arg1:main.NewWorkspaceInput):Promise<store.Workspace>;
+
+export function DefaultWorkspaceSkills(arg1:string):Promise<Array<string>>;
+
 export function DeleteChat(arg1:number):Promise<void>;
 
 export function DeleteModelServer(arg1:string):Promise<void>;
@@ -76,6 +84,8 @@ export function DeleteSkill(arg1:string):Promise<main.DeleteSkillResult>;
 
 export function DeleteSkillFile(arg1:string,arg2:string):Promise<string>;
 
+export function DeleteTrashed(arg1:number,arg2:string):Promise<void>;
+
 export function DetectSlicers():Promise<Array<main.Slicer>>;
 
 export function DetectTools():Promise<Array<detect.Tool>>;
@@ -83,6 +93,8 @@ export function DetectTools():Promise<Array<detect.Tool>>;
 export function DownloadOpenSCAD():Promise<main.OpenSCADDownload>;
 
 export function EffectiveWorkspacesRoot():Promise<string>;
+
+export function EmptyTrash(arg1:number):Promise<number>;
 
 export function EnsureAntigravityMCP():Promise<main.AntigravityEnsure>;
 
@@ -118,6 +130,8 @@ export function GetSettings():Promise<store.Settings>;
 
 export function GetSkillsFolder():Promise<main.SkillsFolder>;
 
+export function GetWorkspaceConfig(arg1:number):Promise<main.WorkspaceConfigView>;
+
 export function ImportMiniToolsServers(arg1:boolean):Promise<main.MiniToolsImport>;
 
 export function ImportModel(arg1:number,arg2:string,arg3:main.ImportOptions):Promise<main.ImportResult>;
@@ -142,6 +156,8 @@ export function ListModelServers():Promise<Array<store.ModelServer>>;
 
 export function ListOpenProjects():Promise<main.OpenProjectsView>;
 
+export function ListPrinterBrands():Promise<Array<printers.Brand>>;
+
 export function ListPrinters():Promise<Array<printers.Printer>>;
 
 export function ListProviderModels(arg1:string):Promise<Array<string>>;
@@ -159,6 +175,8 @@ export function ListTerminals():Promise<Array<main.TerminalInfo>>;
 export function ListTrash(arg1:number):Promise<Array<checkpoint.TrashedItem>>;
 
 export function ListWorkspaces():Promise<Array<store.Workspace>>;
+
+export function MakeCheckpointRoot(arg1:number,arg2:string):Promise<void>;
 
 export function NewChat(arg1:number,arg2:string,arg3:string):Promise<store.Chat>;
 
@@ -194,6 +212,8 @@ export function RefreshChatProviders():Promise<Array<main.ChatProvider>>;
 
 export function RemoveAntigravityMCP():Promise<main.AntigravityMCP>;
 
+export function RemoveAntigravityPermissions():Promise<main.AntigravityPermissions>;
+
 export function RemoveChatAttachment(arg1:string):Promise<void>;
 
 export function RemoveDownloadedOpenSCAD():Promise<main.OpenSCADDownload>;
@@ -211,6 +231,8 @@ export function RenameSkillFile(arg1:string,arg2:string,arg3:string):Promise<str
 export function RenderCheckpoint(arg1:number,arg2:string):Promise<render.Result>;
 
 export function ReorderProjects(arg1:Array<number>):Promise<void>;
+
+export function RepairAntigravityPermissions():Promise<main.AntigravityPermissions>;
 
 export function RescanWorkspace(arg1:number):Promise<main.WorkspaceView>;
 
@@ -255,6 +277,8 @@ export function SaveSkillFile(arg1:string,arg2:string,arg3:string):Promise<main.
 export function SaveSwatches(arg1:Array<string>):Promise<void>;
 
 export function SaveViewer(arg1:store.ViewerState):Promise<store.ViewerState>;
+
+export function SaveWorkspaceConfig(arg1:number,arg2:main.WorkspaceConfigInput):Promise<main.WorkspaceConfigResult>;
 
 export function SendChatMessage(arg1:number,arg2:string,arg3:string,arg4:Array<string>,arg5:main.SendOptions):Promise<store.ChatMessage>;
 

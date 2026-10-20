@@ -1,5 +1,5 @@
 import {useEffect, useId, useMemo, useRef, useState} from 'react'
-import {Check, ChevronDown, Cpu, Eye, RefreshCw, Search, Sparkles, Wrench} from 'lucide-react'
+import {Check, ChevronDown, Cpu, Eye, EyeOff, RefreshCw, Search, Sparkles, Wrench} from 'lucide-react'
 import type {main} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
@@ -55,6 +55,8 @@ export function ModelPicker({
     iconOnly,
     align = 'end',
     className,
+    openSignal,
+    visionOnly: visionOnlyOnOpen,
 }: {
     models: main.ModelInfo[]
     /** '' = «Por defecto». */
@@ -75,24 +77,35 @@ export function ModelPicker({
     /** Con qué borde del botón se alinea la lista. */
     align?: 'start' | 'end'
     className?: string
+    /** Cada vez que cambia (y no es 0) la lista se abre sola: «Cambiar a un modelo con visión» (S15). */
+    openSignal?: number
+    /** Con `openSignal`, abre la lista ya filtrada a los modelos que informan que ven imágenes. */
+    visionOnly?: boolean
 }) {
     const t = useT()
     const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null)
     const [open, setOpen] = useState(false)
     const [q, setQ] = useState('')
+    // Solo los modelos que informan visión (S15). Se enciende al abrir desde el aviso «el modelo no ve imágenes» o con el
+    // botón de la lista, y se apaga al cerrarla: la próxima apertura normal muestra todos.
+    const [onlyVision, setOnlyVision] = useState(false)
     const [active, setActive] = useState(0)
     const list = useRef<HTMLDivElement>(null)
     const listId = useId()
 
+    useEffect(() => {
+        if (!openSignal) return
+        setOnlyVision(!!visionOnlyOnOpen)
+        setOpen(true)
+    }, [openSignal])
+
     const query = q.trim().toLowerCase()
     const typed = q.trim()
-    const filtered = useMemo(
-        () => (query ? models.filter((m) => `${m.id} ${m.label ?? ''} ${m.description ?? ''}`.toLowerCase().includes(query)) : models),
-        [models, query],
-    )
+    const pool = useMemo(() => (onlyVision ? models.filter((m) => m.vision) : models), [models, onlyVision])
+    const filtered = useMemo(() => (query ? pool.filter((m) => `${m.id} ${m.label ?? ''} ${m.description ?? ''}`.toLowerCase().includes(query)) : pool), [pool, query])
     const shown = filtered.slice(0, MAX_ROWS)
-    // «Por defecto» siempre que no se esté buscando otra cosa.
-    const showDefault = query === '' || t.chat.modelDefault.toLowerCase().includes(query)
+    // «Por defecto» siempre que no se esté buscando otra cosa (y no se filtre por visión: no se sabe qué modelo es).
+    const showDefault = !onlyVision && (query === '' || t.chat.modelDefault.toLowerCase().includes(query))
     // «Usar lo escrito» solo si no es ya un modelo de la lista.
     const canUseTyped = typed !== '' && !models.some((m) => m.id === typed)
     const rows: Row[] = useMemo(
@@ -112,6 +125,7 @@ export function ModelPicker({
         onChange(r.kind === 'default' ? '' : r.kind === 'model' ? r.m.id : r.id)
         setOpen(false)
         setQ('')
+        setOnlyVision(false)
     }
     const hint = error ? fmt(t.chat.modelsError, {msg: error}) : disabled && disabledHint ? disabledHint : value === '' ? `${t.chat.modelDefault}: ${defaultHint}` : t.chat.modelButtonHint
 
@@ -152,6 +166,7 @@ export function ModelPicker({
                     onClose={() => {
                         setOpen(false)
                         setQ('')
+                        setOnlyVision(false)
                     }}
                     width={420}
                     align={align}
@@ -173,7 +188,23 @@ export function ModelPicker({
                             onChange={(e) => setQ(e.target.value)}
                             className="h-7 border-0 bg-transparent px-0 focus:border-0"
                         />
-                        <span className="shrink-0 font-mono text-ui-10 text-faint">{loading ? t.chat.loadingModels : fmt(t.chat.modelsCount, {n: models.length})}</span>
+                        {cli ? null : (
+                            <button
+                                type="button"
+                                data-testid="model-vision-filter"
+                                aria-pressed={onlyVision}
+                                title={t.chat.visionOnly.hint}
+                                onClick={() => setOnlyVision((v) => !v)}
+                                className={cn(
+                                    'no-drag flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-ui-11 transition-colors',
+                                    onlyVision ? 'border-info/60 bg-info/10 text-info' : 'border-line text-muted hover:text-fg',
+                                )}
+                            >
+                                {onlyVision ? <Eye className="icon-ui-12" /> : <EyeOff className="icon-ui-12" />}
+                                {t.chat.visionOnly.label}
+                            </button>
+                        )}
+                        <span className="shrink-0 font-mono text-ui-10 text-faint">{loading ? t.chat.loadingModels : fmt(t.chat.modelsCount, {n: pool.length})}</span>
                         {onReload ? (
                             <button
                                 type="button"
@@ -188,7 +219,7 @@ export function ModelPicker({
                     </div>
                     <div ref={list} id={listId} role="listbox" className="min-h-0 overflow-y-auto py-1">
                         {error ? <p className="selectable px-3 py-1.5 text-ui-11-5 text-warn">{fmt(t.chat.modelsError, {msg: error})}</p> : null}
-                        {rows.length === 0 ? <p className="px-3 py-2 text-ui-12 text-faint">{fmt(t.chat.noModelMatch, {q: typed})}</p> : null}
+                        {rows.length === 0 ? <p className="px-3 py-2 text-ui-12 text-faint">{onlyVision && !typed ? t.chat.visionOnly.none : fmt(t.chat.noModelMatch, {q: typed})}</p> : null}
                         {rows.map((r, i) => {
                             if (r.kind === 'default') {
                                 return (

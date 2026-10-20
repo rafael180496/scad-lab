@@ -47,7 +47,9 @@ el mismo `Slug`) o `""` si el nombre no da slug o el padre no es absoluto: el di
 «Nuevo workspace» la muestra como «Se creará en» y distingue los dos casos de `""`
 preguntando por un nombre válido. La casilla «Usar esta carpeta como predeterminada»
 llama `SetWorkspacesRoot` **después** de crear, y `App` actualiza `boot.settings.workspacesRoot`
-para que Configuración no la pise.
+para que Configuración no la pise. Desde S14 el diálogo crea con **`CreateWorkspaceWith`** (impresora, colores, skills y ajustes elegidos; ubicación igual que
+arriba): `CreateWorkspaceIn` y `CreateWorkspace` siguen existiendo como atajos sin colores ni skills, y los tres guardan la lista de skills por defecto **explícita**. La configuración propia de
+cada workspace (impresora, colores, skills, ajustes de impresión) vive en `workspaces.skills` y `workspaces.print_settings`, no en `settings`: ver [27](27-impresoras-workspace.md).
 
 ## Pruebas
 

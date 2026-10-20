@@ -6,10 +6,12 @@ import {
     GetOpenSCADDownload,
     GetBootstrap,
     ImportWorkspace,
+    ListPrinterBrands,
     ListPrinters,
     ListWorkspaces,
     ReadCheckpoint,
     ReadCheckpointPair,
+    RepairAntigravityPermissions,
     RemoveWorkspace,
     RescanWorkspace,
     RevealWorkspace,
@@ -31,6 +33,7 @@ import {Logo} from './components/layout/Logo'
 import {Sidebar} from './components/workspace/Sidebar'
 import {ExportDialog} from './components/export/ExportDialog'
 import {NewWorkspaceDialog, type NewWorkspaceShot} from './components/workspace/NewWorkspaceDialog'
+import {WorkspaceConfigDialog, type WorkspaceConfigShot} from './components/workspace/WorkspaceConfigDialog'
 import {SettingsDialog, type SettingsTab} from './components/settings/SettingsDialog'
 import {ConfirmHost, confirmDialog} from './components/ui/Dialog'
 import {VaultHost} from './components/vault/VaultHost'
@@ -59,6 +62,7 @@ import {projectClosed} from './lib/sessionBridge'
 import {LAYOUT_DEFAULTS, LAYOUT_LIMITS, sidebarMaxFor, useLayout, useWindowWidth} from './hooks/useLayout'
 import {useAppearance} from './hooks/useAppearance'
 import {useExport} from './hooks/useExport'
+import {useWorkspaceConfig} from './hooks/useWorkspaceConfig'
 import {useModelImport} from './hooks/useModelImport'
 import {ImportDialog} from './components/meshedit/ImportDialog'
 import {isMac, isMod, setPlatform} from './lib/platform'
@@ -77,6 +81,8 @@ export type ShotOptions = {
     settingsTab?: SettingsTab
     /** Abre «Nuevo workspace»; con un objeto, ya con ese nombre y esa ubicación escritos. */
     newWorkspace?: boolean | NewWorkspaceShot
+    /** Abre «Configuración del workspace» (S14), en esa sección. */
+    workspaceConfig?: boolean | WorkspaceConfigShot
     select?: string
     viewer?: ViewerShot
     /** Panel que queda activo al abrir (agent-1, chat, problems…). */
@@ -92,8 +98,10 @@ export type ShotOptions = {
     exportDialog?: boolean
     /** Abre el menú contextual del árbol sobre este checkpoint. */
     treeMenu?: string
-    /** Abre el diálogo de la papelera de checkpoints. */
-    trash?: boolean
+    /** Abre el diálogo de la papelera de checkpoints; con `empty` o `delete`, además el diálogo de confirmación de «Vaciar papelera» o de «Eliminar» el primero. */
+    trash?: boolean | 'empty' | 'delete'
+    /** Abre el diálogo de confirmación de mandar este checkpoint a la papelera (muestra qué pasa con sus hijos). */
+    treeConfirm?: string
     /** Abre la comparación de este checkpoint con su padre. */
     compare?: string
     /** Entra al modo «Editar» del visor (S13) con unas operaciones ya hechas. */
@@ -161,6 +169,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const t = useT()
     const [boot, setBoot] = useState<main.Bootstrap | null>(null)
     const [printerList, setPrinterList] = useState<printers.Printer[]>([])
+    const [brands, setBrands] = useState<printers.Brand[]>([])
     const [workspaces, setWorkspaces] = useState<store.Workspace[]>([])
     // Proyectos abiertos: el orden de las pestañas, cuál está al frente y el estado de cada uno.
     const [order, setOrder] = useState<number[]>([])
@@ -186,6 +195,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [settingsTab, setSettingsTab] = useState<SettingsTab>('general')
     const [newOpen, setNewOpen] = useState(false)
+    const [wsConfigOpen, setWsConfigOpen] = useState(false)
     const [detectedOpenSCAD, setDetectedOpenSCAD] = useState<{version: string; missing: boolean; engine?: string} | null>(null)
     const {appearance, change: changeAppearance, reset: resetAppearance} = useAppearance(boot?.settings)
     const winW = useWindowWidth()
@@ -211,6 +221,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             setBoot(b)
         })
         ListPrinters().then(setPrinterList).catch((e) => toast.error(errorText(e)))
+        ListPrinterBrands().then((b) => setBrands(b ?? [])).catch((e) => toast.error(errorText(e)))
     }, [])
 
     useEffect(() => {
@@ -220,6 +231,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             setSettingsOpen(true)
         }
         if (shot.newWorkspace) setNewOpen(true)
+        if (shot.workspaceConfig) setWsConfigOpen(true)
     }, [boot, shot])
 
     // Banco de capturas: el estado del dock a fotografiar se arma dentro de attach
@@ -239,6 +251,21 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             return Object.keys(d).length ? {...prev, [id]: {...p, ...d}} : prev
         })
     }, [])
+
+    // La configuración del workspace al frente (S14): impresora efectiva, colores y ajustes de impresión. Se mantiene al día
+    // con el evento workspace:config (el guardado del diálogo, o la IA con set_workspace_printer); a la lista de workspaces y al
+    // proyecto abierto se les pasa el workspace nuevo para que vean la impresora de ahora sin releer nada.
+    const {config: wsConfig, reload: reloadWsConfig} = useWorkspaceConfig(
+        activeId,
+        useCallback(
+            (c: main.WorkspaceConfigView) => {
+                const w = c.workspace
+                patchProject(w.id, (p) => ({view: {...p.view, workspace: w} as main.WorkspaceView}))
+                setWorkspaces((list) => list.map((x) => (x.id === w.id ? w : x)))
+            },
+            [patchProject],
+        ),
+    )
 
     // Recordar el checkpoint elegido de cada proyecto (migración 4, workspaces.last_checkpoint):
     // al reabrir la app vuelve a ese y no al más nuevo. Con espera, porque recorrer el árbol con
@@ -606,7 +633,23 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 const sel = p.selected
                 if (!sel) return
                 const was = p.view.checkpoints.find((c) => c.fileName === sel)
-                if (!was || v.checkpoints.some((c) => c.fileName === sel)) return
+                if (!was) return
+                const now = v.checkpoints.find((c) => c.fileName === sel)
+                if (now) {
+                    // Sigue ahí, pero su encabezado pudo cambiar (se re-colgó del abuelo al
+                    // mandar su padre a la papelera, o «Hacer principal»): el código en
+                    // pantalla trae el `parent=` viejo y el linter seguiría avisando de él.
+                    // Sin cambios sin guardar se relee; con ellos, el borrador manda.
+                    if (now.parentFile !== was.parentFile && !(id === activeRef.current ? editorSession.get().dirty : p.editor?.dirty)) {
+                        ReadCheckpoint(id, sel)
+                            .then((src) => {
+                                if (projectsRef.current[id]?.selected !== sel) return
+                                patchProject(id, {source: src})
+                            })
+                            .catch(() => {})
+                    }
+                    return
+                }
                 // Con cambios sin guardar se deja el editor como está: es código del usuario.
                 if (id === activeRef.current ? editorSession.get().dirty : p.editor?.dirty) return
                 const next = v.checkpoints.find((c) => c.fileName === was.parentFile)?.fileName ?? v.checkpoints.at(-1)?.fileName ?? null
@@ -656,7 +699,8 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         file: selected,
         result: selected ? renderResults[selected] : undefined,
         running: !!(selected && renderRunning[selected]),
-        bambuPath: boot?.settings.bambuStudioPath ?? '',
+        slicerKey: JSON.stringify([boot?.settings.bambuStudioPath ?? '', boot?.settings.slicerPaths ?? {}]),
+        printer: wsConfig?.printer ?? printerList.find((p) => p.id === view?.workspace.printerId),
     })
 
     // Importar un modelo 3D (S13): el botón de la barra lateral y el arrastre de un archivo a la ventana.
@@ -804,12 +848,40 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         [],
     )
 
-    // ScadLab se registró (o no pudo) en la configuración global de Antigravity al elegirlo en el chat o abrir su terminal.
+    // ScadLab se registró (o no pudo) en la configuración global de Antigravity, y/o aprobó sus herramientas en su
+    // settings.json (reglas `mcp(scadlab/…)` en `permissions.allow`), al elegirlo en el chat o abrir su terminal.
     useEffect(
         () =>
             onEvent('mcp:antigravity', (e) => {
                 if (e.error) toast.error(e.error)
+                else if (e.added && e.permissions > 0) toast.ok(fmt(t.chat.antigravityAddedWithPermissions, {n: e.permissions, path: e.settingsPath}))
                 else if (e.added) toast.ok(t.chat.antigravityAdded)
+                else if (e.permissions > 0) toast.ok(fmt(t.chat.antigravityPermissions, {n: e.permissions, path: e.settingsPath}))
+            }),
+        [t],
+    )
+
+    // Antigravity igual bloqueó una herramienta de ScadLab por permisos: aviso con «Reparar permisos de Antigravity».
+    useEffect(
+        () =>
+            onEvent('mcp:antigravity-denied', (e) => {
+                const text = fmt(t.chat.antigravityDenied, {tool: e.tool, path: e.settingsPath}) + (e.managed ? '' : ' ' + t.chat.antigravityDeniedOff)
+                toast.withActions(
+                    text,
+                    [
+                        {
+                            label: t.chat.agyRepair,
+                            title: t.chat.agyRepairHint,
+                            run: () =>
+                                RepairAntigravityPermissions()
+                                    .then(() => toast.ok(t.chat.agyRepaired))
+                                    .catch((err) => toast.error(errorText(err))),
+                        },
+                    ],
+                    t.export.dismiss,
+                    'agy-denied',
+                    'error',
+                )
             }),
         [t],
     )
@@ -839,6 +911,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         }
     })
 
+    // La impresora del catálogo (con su volumen completo); el nombre y los colores de la barra salen de la efectiva.
     const printer = printerList.find((p) => p.id === view?.workspace.printerId)
     const bv = printer?.build_volume
     const bed = bv && bv.x > 0 && bv.y > 0 && bv.z > 0 ? bv : FALLBACK_BED
@@ -852,7 +925,13 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
     const sidebarWidth = Math.min(layout.sidebarWidth || LAYOUT_DEFAULTS.sidebarWidth, sidebarMax)
     // Lo que ven el editor y los paneles: la configuración guardada con la
     // apariencia en vivo (cambia al elegir, sin esperar a «Guardar»).
-    const liveSettings = useMemo(() => (boot ? ({...boot.settings, ...appearance} as store.Settings) : null), [boot, appearance])
+    // También los ajustes de impresión del workspace al frente (S14): el panel Impresión parte de lo que rige AHÍ, no de lo global.
+    const liveSettings = useMemo(() => {
+        if (!boot) return null
+        const e = wsConfig?.effective
+        const eff = e ? {defaultMaterial: e.material, infillPercent: e.infillPercent, wallLoops: e.wallLoops, lineWidthMm: e.lineWidthMm, filamentDiameterMm: e.filamentDiameterMm} : {}
+        return {...boot.settings, ...appearance, ...eff} as store.Settings
+    }, [boot, appearance, wsConfig])
 
     if (!boot || !liveSettings) {
         return (
@@ -932,6 +1011,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                             toast.error(errorText(e))
                         }
                     }}
+                    onConfigure={() => setWsConfigOpen(true)}
                     onSyncSkills={async () => {
                         if (!view) return
                         try {
@@ -961,7 +1041,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     onToggle={toggle}
                     onView={(f) => void viewCode(f)}
                     onCompare={(f) => void compare(f)}
-                    shot={shot ? {treeMenu: shot.treeMenu, trash: shot.trash} : undefined}
+                    shot={shot ? {treeMenu: shot.treeMenu, trash: shot.trash, treeConfirm: shot.treeConfirm} : undefined}
                     renders={renderResults}
                     running={renderRunning}
                 />
@@ -1023,12 +1103,14 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             {statusBarHidden ? null : (
                 <StatusBar
                     workspace={view?.workspace.name}
-                    printer={printer?.name}
+                    printer={wsConfig?.printer?.name ?? printer?.name}
+                    colors={wsConfig?.colors}
                     file={selected}
                     renderDiags={selected ? renderResults[selected]?.diagnostics : undefined}
                     openscad={openscad}
                     onProblems={() => showPanel('problems')}
                     onPrint={() => showPanel('print')}
+                    onPrinter={view && !view.missing ? () => setWsConfigOpen(true) : undefined}
                     onOpenSettings={() => openSettings('openscad')}
                 />
             )}
@@ -1037,6 +1119,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 open={newOpen}
                 onClose={() => setNewOpen(false)}
                 printerList={printerList}
+                brands={brands}
                 defaultPrinter={boot.settings.defaultPrinter}
                 shot={typeof shot?.newWorkspace === 'object' ? shot.newWorkspace : undefined}
                 // Configuración guarda la configuración entera: tiene que ver la carpeta nueva para no pisarla.
@@ -1052,8 +1135,21 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 onClose={exp.closeDialog}
                 workspaceId={view?.workspace.id ?? null}
                 fileName={selected}
-                bambuFound={!!exp.bambu}
+                slicer={exp.slicer}
+                preferred={exp.preferred}
                 onExported={exp.exported}
+                onOpenSettings={() => openSettings('printing')}
+            />
+            <WorkspaceConfigDialog
+                open={wsConfigOpen}
+                onClose={() => setWsConfigOpen(false)}
+                workspaceId={view?.workspace.id ?? null}
+                workspaceName={view?.workspace.name}
+                printerList={printerList}
+                brands={brands}
+                slicers={exp.slicers}
+                settings={boot.settings}
+                shot={typeof shot?.workspaceConfig === 'object' ? shot.workspaceConfig : undefined}
                 onOpenSettings={() => openSettings('printing')}
             />
             <SettingsDialog
@@ -1064,6 +1160,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                 onClose={() => setSettingsOpen(false)}
                 boot={boot}
                 printerList={printerList}
+                brands={brands}
                 appearance={appearance}
                 onAppearance={changeAppearance}
                 onResetAppearance={() => {
@@ -1075,7 +1172,11 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     resetDockLayout()
                     toast.ok(t.appearance.resetLayoutDone)
                 }}
-                onSaved={(s) => setBoot({...boot, settings: s} as main.Bootstrap)}
+                onSaved={(s) => {
+                    setBoot({...boot, settings: s} as main.Bootstrap)
+                    // Lo que el workspace hereda de Configuración cambió: se vuelve a leer lo que rige.
+                    void reloadWsConfig()
+                }}
             />
             <ConfirmHost title="ScadLab" />
             <VaultHost />

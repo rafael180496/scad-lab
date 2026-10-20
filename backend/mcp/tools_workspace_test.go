@@ -11,6 +11,7 @@ import (
 	"scadlab/backend/checkpoint"
 	"scadlab/backend/clichat"
 	"scadlab/backend/store"
+	"scadlab/backend/workspace"
 )
 
 // registeredToolbox abre una caja sobre un workspace registrado en la base (la de
@@ -80,6 +81,7 @@ func TestEveryToolIsClassifiedForTheModes(t *testing.T) {
 	mustWrite := []string{
 		"create_checkpoint", "import_mesh", "export", "set_active_parent", "rename_checkpoint", "trash_checkpoint",
 		"restore_checkpoint", "set_parameters", "create_from_template", "install_library", "edit_mesh",
+		"set_workspace_printer", "trace_image_outline", "image_to_heightmap",
 	}
 	for _, n := range mustWrite {
 		if !slices.Contains(writes, n) || slices.Contains(reads, n) {
@@ -89,7 +91,8 @@ func TestEveryToolIsClassifiedForTheModes(t *testing.T) {
 	mustRead := []string{
 		"list_checkpoints", "read_checkpoint", "list_trash", "list_refs", "lint", "format", "render", "preview", "measure",
 		"get_parameters", "list_templates", "get_template", "list_libraries", "inspect_reference", "printer_info",
-		"estimate_print", "list_materials", "suggest_orientation", "list_skills", "read_skill",
+		"estimate_print", "list_materials", "suggest_orientation", "list_skills", "read_skill", "list_printers",
+		"image_info", "compare_with_image",
 	}
 	for _, n := range mustRead {
 		if !slices.Contains(reads, n) || slices.Contains(writes, n) {
@@ -113,11 +116,14 @@ func TestMCPListsTheNewToolsWithSchemas(t *testing.T) {
 		"rename_checkpoint": {"file", "label"}, "trash_checkpoint": {"file"}, "restore_checkpoint": {"trashed_name"},
 		"set_parameters": {"values"}, "create_from_template": {"name"}, "install_library": {"name"},
 		"edit_mesh": {"operations"}, "read_skill": {"name"}, "inspect_reference": {"file"},
+		"image_info": {"image"}, "compare_with_image": {"image"}, "trace_image_outline": {"image"},
+		"image_to_heightmap": {"image", "width_mm", "max_height_mm"},
 	}
 	for _, name := range []string{
 		"set_active_parent", "rename_checkpoint", "trash_checkpoint", "list_trash", "restore_checkpoint", "list_refs",
 		"get_parameters", "set_parameters", "create_from_template", "list_libraries", "install_library", "edit_mesh",
 		"estimate_print", "list_materials", "suggest_orientation", "list_skills", "read_skill", "inspect_reference",
+		"image_info", "compare_with_image", "trace_image_outline", "image_to_heightmap",
 	} {
 		tool, ok := got[name]
 		if !ok {
@@ -439,5 +445,83 @@ func TestListRefsTool(t *testing.T) {
 	}
 	if strings.Join(names, ",") != "refs/colores.3mf,refs/soporte.stl" {
 		t.Errorf("list_refs: %v (no debe listar texto, .scad ni enlaces que salen de refs/)", names)
+	}
+}
+
+// Mandar a la papelera un checkpoint suelto re-cuelga a sus hijos directos del
+// abuelo (o los deja como raíz), y restaurarlo los devuelve. El agente lo ve en
+// la respuesta.
+func TestTrashToolRelinksChildrenAndRestoreHangsThemBack(t *testing.T) {
+	tb, ws, _, _ := registeredToolbox(t)
+	a := tb.create(t, "base", srcCube, nil)
+	b := tb.create(t, "medio", srcCube, nil)
+	c := tb.create(t, "hijo", srcCube, nil)
+	d := tb.create(t, "nieto", srcCube, nil)
+
+	parent := func(file string) string {
+		files, err := workspace.Scan(ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			if f.FileName == file {
+				return f.ParentFile
+			}
+		}
+		t.Fatalf("%s no está", file)
+		return ""
+	}
+	if parent(c) != b || parent(d) != c {
+		t.Fatalf("árbol inesperado: %s←%s←%s", parent(d), parent(c), parent(b))
+	}
+
+	got := tb.mustJSON(t, "trash_checkpoint", map[string]any{"file": b})
+	rel, _ := got["relinked"].([]any)
+	if len(rel) != 1 || rel[0] != c || got["relinkedNote"] == nil {
+		t.Fatalf("relinked: %v", got)
+	}
+	if parent(c) != a || parent(d) != c {
+		t.Errorf("c debía pasar a colgar de a y d no tocarse: %s / %s", parent(c), parent(d))
+	}
+
+	trashed := got["trashed"].([]any)[0].(string)
+	rs := tb.mustJSON(t, "restore_checkpoint", map[string]any{"trashed_name": trashed})
+	if rs["file"] != b {
+		t.Fatalf("restore: %v", rs)
+	}
+	if rel, _ := rs["relinked"].([]any); len(rel) != 1 || rel[0] != c {
+		t.Errorf("restore relinked: %v", rs)
+	}
+	if parent(c) != b {
+		t.Errorf("c debía volver a colgar de b: %s", parent(c))
+	}
+
+	// Una raíz: sus hijos quedan como raíz.
+	got = tb.mustJSON(t, "trash_checkpoint", map[string]any{"file": a})
+	if parent(b) != "" {
+		t.Errorf("b debía quedar como raíz: %q", parent(b))
+	}
+	_ = got
+}
+
+// El borrado permanente es solo del usuario: ninguna herramienta lo ofrece ni
+// acepta una bandera que lo dispare.
+func TestNoToolDeletesForGood(t *testing.T) {
+	tb, _ := newToolbox(t, false)
+	for _, tl := range tb.Tools() {
+		n := strings.ToLower(tl.Name)
+		for _, bad := range []string{"delete", "purge", "empty", "remove", "erase", "wipe"} {
+			if strings.Contains(n, bad) {
+				t.Errorf("la herramienta %s sugiere un borrado permanente", tl.Name)
+			}
+		}
+		props, _ := tl.InputSchema["properties"].(map[string]any)
+		for p := range props {
+			for _, bad := range []string{"permanent", "purge", "delete", "force", "empty"} {
+				if strings.Contains(strings.ToLower(p), bad) {
+					t.Errorf("%s acepta el parámetro %q", tl.Name, p)
+				}
+			}
+		}
 	}
 }

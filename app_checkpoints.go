@@ -257,7 +257,10 @@ func (a *App) TrashCheckpoint(id int64, file string, branch bool) ([]string, err
 		names, err = checkpoint.TrashBranch(w.Path, file)
 	} else {
 		var name string
-		name, err = checkpoint.Trash(w.Path, file)
+		// Los hijos directos pasan a colgar del abuelo (o quedan como raíz): el
+		// árbol no se queda con padres ausentes por algo que el usuario hizo a
+		// propósito. El rescan de emitView ya los ve con su padre nuevo.
+		name, _, err = checkpoint.TrashRelinked(w.Path, file)
 		if name != "" {
 			names = []string{name}
 		}
@@ -312,16 +315,76 @@ func (a *App) RestoreCheckpoint(id int64, trashedName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name, err := checkpoint.Restore(w.Path, trashedName)
-	if err != nil {
-		return "", err
+	// RestoreRelinked además devuelve a su padre los hijos que el borrado había
+	// pasado al abuelo. Si eso falla a medias el checkpoint ya volvió: se sigue y
+	// se devuelve el error al final, para que la interfaz lo muestre.
+	name, _, relinkErr := checkpoint.RestoreRelinked(w.Path, trashedName)
+	if name == "" {
+		return "", relinkErr
 	}
 	a.checkpoints().markRestored(w.ID, name)
 	if err := a.store.RestoreCheckpointMeta(w.ID, trashedName, name); err != nil {
 		log.Printf("scadlab: recuperar los datos de %s: %v", name, err)
 	}
 	a.emitView(w)
-	return name, nil
+	return name, relinkErr
+}
+
+// DeleteTrashed elimina PARA SIEMPRE un checkpoint de la papelera (por el nombre
+// que lista ListTrash) junto con su registro de re-colgado y lo que la base
+// guardaba de él. No se puede deshacer: la interfaz pide confirmación antes.
+// Es solo del usuario —no hay herramienta MCP equivalente—.
+func (a *App) DeleteTrashed(id int64, trashedName string) error {
+	w, err := a.checkpointWorkspace(id, trashedName)
+	if err != nil {
+		return err
+	}
+	if err := checkpoint.PurgeTrashed(w.Path, trashedName); err != nil {
+		return err
+	}
+	if err := a.store.ForgetCheckpointMeta(w.ID, trashedName); err != nil {
+		log.Printf("scadlab: olvidar los datos de %s: %v", trashedName, err)
+	}
+	a.emitView(w)
+	return nil
+}
+
+// EmptyTrash elimina PARA SIEMPRE todo lo que hay en .scadlab/trash del workspace
+// (checkpoints, registros de re-colgado y cualquier otro archivo que alguien haya
+// dejado allí) y devuelve cuántos checkpoints eran. No se puede deshacer. Vaciar
+// la papelera no hace reaparecer el modelo de inicio al reabrir el workspace
+// (checkpoint.StarterDeclined). Es solo del usuario, como el resto de este archivo
+// que borra: no hay herramienta MCP.
+func (a *App) EmptyTrash(id int64) (int, error) {
+	w, err := a.checkpointWorkspace(id, "")
+	if err != nil {
+		return 0, err
+	}
+	n, err := checkpoint.EmptyTrash(w.Path)
+	if ferr := a.store.ForgetCheckpointMeta(w.ID, ""); ferr != nil {
+		log.Printf("scadlab: olvidar los datos de la papelera de %s: %v", w.Path, ferr)
+	}
+	a.emitView(w)
+	return n, err
+}
+
+// MakeCheckpointRoot deja un checkpoint como principal (raíz): su `parent=` pasa
+// a vacío. Es el arreglo de un hijo cuyo padre ya no está en el workspace
+// —borrado a mano o mandado a la papelera por una versión anterior—. Reescribe
+// solo la línea de cabecera (checkpoint.SetParent).
+func (a *App) MakeCheckpointRoot(id int64, file string) error {
+	w, err := a.checkpointWorkspace(id, file)
+	if err != nil {
+		return err
+	}
+	if file == "" {
+		return i18n.New(i18n.Msg{ES: "nombre de checkpoint inválido", EN: "invalid checkpoint name"})
+	}
+	if err := checkpoint.SetParent(w.Path, file, ""); err != nil {
+		return err
+	}
+	a.emitView(w)
+	return nil
 }
 
 // SetActiveParent fija el padre activo: el checkpoint desde el que el agente (y

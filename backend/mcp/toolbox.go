@@ -106,7 +106,7 @@ func (e *env) contextTools() []Tool {
 		{
 			Name: "list_skills",
 			Description: "List the skills installed in this workspace (.claude/skills/*/SKILL.md) with the name and description of each. " +
-				"Skills hold ScadLab's modeling rules and templates (OpenSCAD conventions, Bambu Lab printers and FDM rules, multicolor 3MF, templates, libraries). Check the list before designing something a skill covers, then load it with read_skill.",
+				"Skills hold ScadLab's modeling rules and templates (OpenSCAD conventions, the printer brand's profiles and FDM rules, multicolor and the 3MF format for each slicer, templates, libraries). Check the list before designing something a skill covers, then load it with read_skill.",
 			InputSchema: obj(map[string]any{}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.listSkills,

@@ -26,7 +26,7 @@ func (e *env) printTools() []Tool {
 		{
 			Name: "estimate_print",
 			Description: "Estimate the weight, filament length and cost of printing a checkpoint, with parameters you choose: material (id from list_materials), infill percent and wall loops. Without them it uses the app settings, like measure. " +
-				"Per part (one per color) and in total, with the assumptions listed (no supports, brim or AMS purge; the slicer gives the exact figure). Use it to answer «how much does it weigh in PETG at 30 % infill?».",
+				"Per part (one per color) and in total, with the assumptions listed (no supports, brim or color-change purge; the slicer gives the exact figure). Use it to answer «how much does it weigh in PETG at 30 % infill?».",
 			InputSchema: obj(map[string]any{
 				"file":           strProp(fileHelp),
 				"material":       strProp("Material id from list_materials (e.g. pla, petg). Default: the app's default material."),

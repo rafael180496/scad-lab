@@ -10,8 +10,8 @@ description: Cuándo y cómo usar librerías externas de OpenSCAD (BOSL2, MCAD, 
 **Por defecto, código propio sin dependencias.** Un checkpoint sin librerías se
 renderiza en cualquier máquina, es más rápido y nunca cambia por una
 actualización ajena. Las plantillas de `openscad-templates` y los snippets de
-`bambu-lab-printers` cubren cajas, redondeos con `hull()`/`offset()`, lágrimas,
-insertos y engranajes rectos.
+`openscad-core/references/fdm-design-rules.md` cubren cajas, redondeos con
+`hull()`/`offset()`, lágrimas, insertos y engranajes rectos.
 
 | Necesidad | Solución |
 |---|---|

@@ -151,3 +151,29 @@ func TestNewest(t *testing.T) {
 		}
 	}
 }
+
+// .agents/ (las skills de Codex y de Antigravity, un hooks.json del usuario) no es
+// un checkpoint: crear y borrar esa carpeta y ese archivo no dispara ningún rescan,
+// ni el árbol se entera.
+func TestAgentsFolderDoesNotTriggerARescan(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "001-base.scad")
+	r := &recorder{}
+	start(t, dir, r)
+
+	agents := filepath.Join(dir, ".agents")
+	if err := os.MkdirAll(agents, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hooks := filepath.Join(agents, "hooks.json")
+	if err := os.WriteFile(hooks, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(hooks); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(Debounce * 4)
+	if c := r.snapshot(); len(c) != 0 {
+		t.Fatalf("los archivos de .agents/ no son un .scad: no deben avisar (%v)", c)
+	}
+}

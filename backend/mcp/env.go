@@ -20,6 +20,7 @@ import (
 	"scadlab/backend/render"
 	"scadlab/backend/scadwasm"
 	"scadlab/backend/store"
+	"scadlab/backend/wsconfig"
 )
 
 // env es todo lo que comparten las herramientas: el workspace, el motor de
@@ -142,6 +143,12 @@ func (e *env) close() {
 // agente sigue trabajando, y un proceso MCP dura toda su sesión. También fija
 // el idioma de los mensajes (i18n es global del proceso, y este proceso es solo
 // del servidor).
+//
+// Si el workspace está registrado en la app, los ajustes de impresión propios de
+// ese workspace (material, relleno, perímetros, ancho de línea, filamento) van
+// aplicados encima (wsconfig.EffectiveSettings): es la misma definición que usa la
+// interfaz, así `measure` y `estimate_print` no discrepan de lo que se ve en el
+// panel «Impresión».
 func (e *env) settings() store.Settings {
 	s := store.DefaultSettings()
 	if e.store != nil {
@@ -149,6 +156,9 @@ func (e *env) settings() store.Settings {
 			s = got
 			i18n.SetLang(s.Language)
 		}
+	}
+	if w, ok := e.storedWorkspace(); ok {
+		s = wsconfig.EffectiveSettings(s, w, wsconfig.EffectivePrinter(w))
 	}
 	return s
 }
@@ -225,24 +235,27 @@ func samePath(a, b string) bool {
 	return err == nil && rel == "."
 }
 
-// printer es la impresora del workspace: la registrada en la app; si no, la de
-// printer.json (que escribe ScadLab al crear el workspace); si no, la de
-// Configuración.
+// printer es la impresora del workspace: la registrada en la app, ya con los
+// colores y la configuración propios del workspace (wsconfig.EffectivePrinter);
+// si no está registrada, la de printer.json (que escribe ScadLab al crear el
+// workspace, con `colors` si lo trae); si no, la de Configuración.
 func (e *env) printer(s store.Settings) printers.Printer {
 	if w, ok := e.storedWorkspace(); ok {
-		p, _ := printers.ByID(w.PrinterID)
-		return p
+		return wsconfig.EffectivePrinter(w)
 	}
 	if raw, err := os.ReadFile(filepath.Join(e.ws, "printer.json")); err == nil {
 		var pj struct {
 			Printer string `json:"printer"`
+			Colors  int    `json:"colors"`
 		}
 		if json.Unmarshal(raw, &pj) == nil && pj.Printer != "" {
 			p, _ := printers.ByID(pj.Printer)
+			p.MulticolorSlots = p.Colors(pj.Colors)
 			return p
 		}
 	}
 	p, _ := printers.ByID(s.DefaultPrinter)
+	p.MulticolorSlots = p.Colors(0)
 	return p
 }
 

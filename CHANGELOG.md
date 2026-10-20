@@ -7,8 +7,100 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Agregado
 
+- **Crear un modelo a partir de una imagen.** Dale a ScadLab una o varias fotos de un
+  objeto —o un boceto con cotas— y la IA lo modela en OpenSCAD: averigua qué es y a qué
+  escala, lo arma con formas simples, lo renderiza y **lo compara con tu foto** hasta que
+  coincide. Sigue la skill incluida `openscad-from-image` y funciona con cualquier
+  proveedor del chat, Hermes o un CLI.
+  - **«Crear desde una imagen»**, en el chat vacío y, en un proyecto sin ningún modelo, junto a
+    «Crear un modelo de inicio». Abre un diálogo donde eliges las fotos (con el selector,
+    pegándolas o arrastrándolas; hasta 10), escribes una **medida de referencia** opcional
+    («el ancho es 80 mm», «hay una moneda de 25 centavos junto a la pieza») y **qué es** el
+    objeto. Al confirmar abre una conversación nueva en modo Agente con las fotos adjuntas y
+    un mensaje ya armado, y lo envía.
+  - **Las fotos viven en el proyecto.** Al enviar, cada foto se copia a
+    `refs/images/<nombre>-<código>.<ext>`: la misma foto enviada dos veces es un solo
+    archivo y nunca se pisa nada. Ahí la leen las herramientas de imagen, y el modelo recibe la
+    ruta al final del mensaje (los CLIs las abren desde su carpeta de trabajo, sin permisos
+    extra); no se pierden entre mensajes ni al cambiar de proveedor.
+  - **Fotos grandes, sin rechazos.** Una foto del teléfono (más de 5 MB o de 2048 px) ya no se
+    rechaza: se acepta hasta 20 MB y al modelo le llega una copia reducida, mientras que
+    `refs/images/` guarda el original entero para que el trazado y la comparación trabajen con
+    todo el detalle.
+  - **Cuatro herramientas nuevas** para la IA (también en el servidor MCP): `image_info` (lee
+    la foto, y amplía y realza una región), `compare_with_image` (la foto y el modelo lado a lado
+    desde la misma vista, con las proporciones y el solapamiento de siluetas),
+    `trace_image_outline` (la silueta a un SVG en milímetros, para placas y logos) e
+    `image_to_heightmap` (relieves y litofanías). Sus pasos en el chat son tarjetas: la
+    comparación muestra su imagen en grande con la vista, las dos proporciones y el IoU; el
+    trazado, la silueta y los archivos que creó.
+  - **Si el modelo no ve imágenes**, en vez de un «Enviar» apagado aparece un aviso con dos
+    salidas: **«Cambiar a un modelo con visión»**, que abre la lista de modelos ya filtrada a
+    los que ven (el filtro «Solo con visión» también está a mano en el selector), o **«Usar
+    trazado de contorno»**, que envía igual sin mostrarle la foto al modelo y le pide usar
+    `trace_image_outline`, que no necesita visión (sirve para siluetas y logos).
+
+- **Impresoras de siete marcas y configuración propia de cada workspace.** ScadLab ya no es
+  solo para Bambu Lab: el catálogo trae **Bambu Lab, Prusa, Creality, Elegoo, Anycubic,
+  Snapmaker y UltiMaker**, con los datos de la ficha oficial de cada modelo (volumen,
+  boquilla, filamento, temperaturas máximas, cámara, superficie de la cama y sistema
+  multicolor: AMS, MMU3, CFS, ACE, cabezales independientes…). Lo que no se pudo confirmar
+  no se inventa: la impresora lleva la marca «por confirmar» y su ficha dice qué falta.
+  - **Elegir la impresora** con un selector con búsqueda, agrupado por marca, que muestra
+    el volumen X×Y×Z y los colores máximos de cada una. Está en **Nuevo workspace**, en la
+    nueva **Configuración del workspace** y en Configuración → Impresión (la impresora de
+    los workspaces nuevos); se maneja con flechas, Enter y Esc.
+  - **Cada workspace tiene lo suyo.** «Nuevo workspace» pide además cuántos **colores o
+    extrusores** usa a la vez (de 1 al máximo de la máquina; no aparece si no es multicolor) y
+    qué **skills** instalar: vienen marcadas las encendidas en Configuración → Skills más
+    **la skill de la marca de tu impresora** (una skill por marca: `prusa-printers`,
+    `creality-printers`, `elegoo-printers`, `anycubic-printers`, `snapmaker-printers`,
+    `ultimaker-printers` y la de Bambu de siempre), y puedes cambiar lo que quieras.
+  - **Configuración del workspace**, con el engranaje junto al workspace en la barra lateral
+    o con un clic en la impresora de la barra de estado (que ahora dice «Impresora · N
+    colores»): la impresora y su ficha, las skills (con «Restablecer por defecto»; quitar una
+    retira su copia solo si nadie la editó, y si la editaste se queda y te avisa cuál) y los
+    ajustes de impresión —material, relleno, perímetros, ancho de línea y filamento—, cada uno
+    con el valor que hereda de Configuración → Impresión y «Usar el de Configuración» para
+    volver a él. El filamento es propiedad de la máquina (una UltiMaker usa 2,85 mm). Guardar
+    reescribe las reglas para la IA (`CLAUDE.md`, `AGENTS.md`, `printer.json`) y sincroniza las
+    skills de ese workspace; el panel **Impresión** parte de lo que rige en él, no de lo global.
+    La IA también puede ver y cambiar la impresora desde el chat y la pantalla se entera sola.
+  - **Configuración → Impresión** pasa a ser el valor por defecto de los workspaces nuevos, y
+    **Configuración → Skills** el conjunto con que nacen (las de marca se eligen por la
+    impresora). Cambiar cualquiera de las dos **no toca los workspaces que ya existen**: los
+    tuyos conservan su impresora y su cantidad de colores (una P1S o una X1C guardada sigue
+    con 16, no baja a 4).
+  - **Abrir en tu slicer.** «Abrir en Bambu Studio» pasa a **«Abrir en &lt;slicer&gt;»**: el primero
+    instalado de los slicers de la impresora del workspace (PrusaSlicer, OrcaSlicer, Creality
+    Print, ElegooSlicer, Anycubic Slicer Next, Snapmaker Orca, UltiMaker Cura o Bambu Studio), en
+    el diálogo de exportar y en el aviso tras guardar. Sin ninguno instalado el botón se ve
+    apagado y dice cuál falta. Configuración → Impresión → **Slicers** lista los ocho con lo
+    detectado y deja fijar la ruta de cada uno («Elegir…» y «Usar la detección»); la ruta de
+    Bambu Studio que tenías pasa sola a su fila. ScadLab abre la aplicación con el archivo y nunca
+    el slicer por su línea de comandos.
+  - **3MF para PrusaSlicer.** PrusaSlicer no lee los extrusores del 3MF de Bambu y Orca, así que
+    el diálogo de exportar suma el formato **«3MF para PrusaSlicer»**, que arranca elegido si el
+    slicer de tu impresora es PrusaSlicer. Con UltiMaker Cura, que no asigna extrusores desde un
+    3MF de partes, el formato que arranca elegido es **un STL por color**.
+- **Eliminar para siempre y vaciar la papelera.** La ventana de la papelera de
+  checkpoints tiene ahora una **✕ en cada fila** (elimina ese checkpoint) y el botón
+  **Vaciar papelera** (elimina todo lo que haya en `.scadlab/trash/` del workspace, también
+  lo que no sea un checkpoint). Las dos piden confirmación con el archivo o la cantidad y
+  avisan que **no se puede deshacer**; el registro de re-colgado de lo eliminado se va con
+  ello. Es lo único de ScadLab que borra de verdad, y es solo tuyo: **ninguna herramienta
+  de la IA** puede eliminar para siempre ni vaciar la papelera (siguen pudiendo mandar a
+  la papelera y restaurar). Vaciar la papelera de un workspace que se quedó sin modelos
+  **no hace reaparecer el modelo de inicio** al reabrirlo —lo dejaste vacío a propósito—;
+  el botón «Crear un modelo de inicio» sigue ahí.
+- **«Hacer principal»** para un checkpoint cuyo padre ya no está (el ⚠ del árbol): clic
+  derecho en el checkpoint, o el botón del aviso del panel Problemas, que además dice
+  **«parent=… está en la papelera»** cuando es el caso, para que elijas entre restaurarlo o
+  dejar este como principal. Solo se reescribe la línea de cabecera `// @checkpoint`.
 - **Pedir una pieza en el chat termina siempre en un `.scad` renderizado y a la vista.**
   La prueba real —«una caja con tapa a presión para un Raspberry Pi 5» en un workspace
   sin nada— dejaba un diseño en texto con Codex y Claude, una tarjeta de error sin
@@ -315,6 +407,51 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ### Corregido
 
+- **Mandar un checkpoint a la papelera ya no deja huérfanos a sus hijos.** Antes, borrar
+  `001-prueba.scad` dejaba a `002-…` colgando de un padre que ya no estaba: el árbol lo
+  marcaba con ⚠ y el panel Problemas decía «parent=001-prueba.scad no existe», por algo
+  que habías hecho a propósito. Ahora los **hijos directos pasan a colgar de su abuelo**, o
+  quedan como **principales** si lo borrado era una raíz; la confirmación te lo dice
+  («Sus 2 checkpoints hijos pasarán a colgar de …»). Solo cambia la línea
+  `// @checkpoint parent=…` de cada hijo (el código, la descripción, los finales de línea y
+  la fecha del archivo quedan como estaban; la escritura es atómica). **Restaurar lo
+  deshace**: los hijos que sigan donde se los dejó vuelven a colgar del restaurado, con el
+  nombre con que volvió. El padre activo pasa al padre del borrado, como antes. La herramienta
+  `trash_checkpoint` de la IA hace lo mismo y lo informa. El render de esos hijos no se
+  invalida (la caché de render ya no cuenta la línea de cabecera; la primera vez tras actualizar
+  se vuelven a calcular los renders guardados).
+- **Antigravity ya puede usar las herramientas de ScadLab desde el chat.**
+  Pedir «una caja con tapa a presión para un Raspberry Pi 5» terminaba en «Antigravity
+  terminó el turno sin responder nada»: aunque ScadLab ya estaba registrado en
+  Antigravity, en modo no interactivo (`agy --print`) **nadie puede contestar un permiso**,
+  así que Antigravity rechazaba la primera herramienta —`permission check failed for mcp
+  "scadlab/printer_info"`— y **terminaba el turno ahí**, antes de que el modelo pudiera
+  decir nada. Ahora, la primera vez que usas Antigravity en el chat (junto con el registro
+  del servidor), ScadLab agrega al archivo de configuración de Antigravity,
+  `~/.gemini/antigravity-cli/settings.json`, **una regla `mcp(scadlab/<herramienta>)` por
+  cada herramienta de ScadLab** en `permissions.allow` —el formato exacto que el propio
+  Antigravity pide—, y un aviso te dice qué agregó y dónde. Es una lista explícita de **sus
+  propias herramientas**: nunca un comodín ni una regla de otro tipo. Lo demás del archivo
+  (`trustedWorkspaces`, tus reglas, el orden) no se toca, antes se guarda una copia en la
+  carpeta de datos de ScadLab y, si el archivo no es un JSON válido, no se pisa y el chat te
+  avisa. En cada turno se mantiene al día: se agregan las herramientas nuevas y se quitan las
+  que ya no existen. **«Solo consulta» sigue valiendo**: como las reglas son globales, el
+  servidor de ScadLab rechaza las herramientas que modifican el proyecto mientras dura un
+  turno de consulta (con el motivo, para que Antigravity entregue el diseño en un bloque).
+  En Configuración → Proveedores de IA, Antigravity muestra «Permisos de ScadLab: N
+  herramientas aprobadas» con **Quitar** (borra solo esas reglas y ScadLab no las repone
+  sola) y **Volver a agregar**; y si Antigravity igual bloquea una herramienta, el mensaje
+  del chat nombra la herramienta, el archivo y el paso a seguir, con un aviso que ofrece
+  **Reparar permisos de Antigravity**. La shell sigue denegada y no se usa nunca
+  `--dangerously-skip-permissions`. **Lo que tienes que saber:** las reglas son globales, así
+  que también valen cuando abres Antigravity tú mismo: no te pedirá confirmación para las
+  herramientas de ScadLab, tampoco las que escriben. (Una primera versión lo intentó con un
+  *hook* en `.agents/hooks.json` del proyecto; con el `agy` real se comprobó que Antigravity
+  pide el permiso antes de ejecutar los hooks, así que no servía: ese mecanismo se retiró, y
+  si un turno interrumpido dejó la entrada en un proyecto, ScadLab la quita al abrirlo sin
+  tocar tus otros hooks.) De paso, las tarjetas de Antigravity ya no dicen `call_mcp_tool`
+  para todo: llevan el nombre de la herramienta de ScadLab que se llamó (`printer_info`,
+  `create_checkpoint`…).
 - **Antigravity mostraba «Sin resultado» cuando una herramienta fallaba.** La tarjeta del
   paso ahora trae el detalle real del error que informa Antigravity, y una respuesta que
   llega solo en el cierre del turno (sin los trozos en vivo) también se muestra.

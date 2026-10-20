@@ -154,11 +154,27 @@ func CreateFromTemplate(userDir, name string) (string, error) {
 	return dst, nil
 }
 
+// SyncResult es lo que pasó con las copias de las skills apagadas: los nombres
+// de las que se retiraron y de las que se dejaron porque alguien las editó a
+// mano en el workspace (una skill puede figurar en las dos si solo una de las
+// cuatro carpetas de agente estaba editada).
+type SyncResult struct {
+	Removed []string `json:"removed"`
+	Kept    []string `json:"kept"`
+}
+
 // Sync instala las skills habilitadas en las carpetas de cada CLI del
-// workspace. Reescribe solo las skills que gestiona ScadLab (las que están en
-// `managed`); una skill que el usuario agregó a mano en el workspace no se toca.
-func Sync(workspaceDir string, list []Skill, enabled func(name string) bool) error {
+// workspace y retira las apagadas. Reescribe solo las skills que gestiona
+// ScadLab (las que tienen la marca .scadlab-managed); una skill que el usuario
+// agregó a mano en el workspace no se toca.
+//
+// Una skill apagada se retira SOLO si su copia sigue siendo la que se instaló
+// (coincide con el hash de la marca, el mismo criterio de PlanInstalled al borrar
+// una skill propia): si alguien la editó, queda donde está y se informa en Kept.
+// Quitar una skill de un workspace no puede costarle un cambio hecho a mano.
+func Sync(workspaceDir string, list []Skill, enabled func(name string) bool) (SyncResult, error) {
 	var errs []error
+	removed, kept := map[string]bool{}, map[string]bool{}
 	for _, rel := range AgentDirs {
 		base := filepath.Join(workspaceDir, rel)
 		if err := os.MkdirAll(base, 0o755); err != nil {
@@ -168,9 +184,18 @@ func Sync(workspaceDir string, list []Skill, enabled func(name string) bool) err
 		for _, s := range list {
 			target := filepath.Join(base, s.Name)
 			if !enabled(s.Name) {
-				// Apagada: se retira la copia gestionada, si la había.
-				if isManaged(target) {
-					_ = os.RemoveAll(target)
+				// Apagada: se retira la copia gestionada, si la había y nadie la tocó.
+				if !isManaged(target) {
+					continue
+				}
+				if untouched(target, s) {
+					if err := os.RemoveAll(target); err != nil {
+						errs = append(errs, err)
+						continue
+					}
+					removed[s.Name] = true
+				} else {
+					kept[s.Name] = true
 				}
 				continue
 			}
@@ -185,7 +210,47 @@ func Sync(workspaceDir string, list []Skill, enabled func(name string) bool) err
 			writeMarker(target, s.Source)
 		}
 	}
-	return errors.Join(errs...)
+	return SyncResult{Removed: sortedKeys(removed), Kept: sortedKeys(kept)}, errors.Join(errs...)
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// untouched dice si la copia gestionada de s sigue igual a como se instaló. Se
+// compara con el hash que guardó la marca; una marca de antes del hash (sin él)
+// se compara con la skill original. Si no se puede calcular, se asume editada:
+// ante la duda no se borra.
+func untouched(dir string, s Skill) bool {
+	cur, err := treeHash(dir)
+	if err != nil {
+		return false
+	}
+	_, want := readMarker(dir)
+	if want == "" {
+		want = sourceHash(s)
+	}
+	return want != "" && cur == want
+}
+
+// sourceHash es el hash de la skill original, o "" si no se puede leer.
+func sourceHash(s Skill) string {
+	var h string
+	var err error
+	if s.Source == "builtin" {
+		h, err = treeHashFS(assets.FS, s.Dir)
+	} else {
+		h, err = treeHash(s.Dir)
+	}
+	if err != nil {
+		return ""
+	}
+	return h
 }
 
 // managedMarker marca una carpeta de skill como instalada por ScadLab. Guarda

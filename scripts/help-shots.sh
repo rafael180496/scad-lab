@@ -29,7 +29,10 @@ editor-edit         editor-edit       1440  900
 editor-search       editor-search     1440  900
 problems            problems          1440  900
 save-checkpoint     save-checkpoint   1440  900
-new-workspace       newworkspace      1280  800
+new-workspace       newworkspace      1280  940
+workspace-new-printer workspace-new-printer 1280 940
+printer-picker      printer-picker    1280  940
+workspace-config    workspace-config  1280  860
 settings-general    settings-general  1280  820
 settings-openscad   settings-openscad 1280  820
 settings-openscad-download settings-openscad-download 1280 1000
@@ -39,8 +42,8 @@ settings-providers-add settings-providers-add 1280 1500
 settings-import-minitools settings-import-minitools 1280 940
 vault-create        vault-create      1280  940
 vault-unlock        vault-unlock      1280  820
-settings-printing   settings-printing 1280  920
-settings-skills     settings-skills   1280 1000
+settings-printing   settings-printing 1280 1300
+settings-skills     settings-skills   1280 1300
 skills-editor       skills-editor     1440  900
 skills-editor-errors skills-editor-errors 1440 900
 skills-view         skills-view       1440  900
@@ -65,6 +68,11 @@ chat-code           chat-code         1440 1160
 chat-agent-creates  chat-agent-creates 1440 1280
 chat-autosave       chat-autosave     1440 1340
 chat-query-only     chat-query-only   1440 1100
+chat-agy-denied     chat-agy-denied   1440 1100
+chat-from-image     chat-from-image   1440  900
+chat-compare        chat-compare      1440 1500
+chat-trace          chat-trace        1440 1180
+chat-no-vision      chat-no-vision    1440  900
 workspace-starter   workspace-starter 1440  900
 chat-narrow         chat-narrow        360  760
 settings-appearance settings-appearance 1280 980
@@ -86,6 +94,9 @@ plate-overflow      plate-overflow    1440  900
 tree-menu           tree-menu         1440  900
 tree-active-branch  tree-active-branch 1440 900
 trash               trash             1440  900
+trash-empty-confirm trash-empty-confirm 1440 900
+tree-trash-confirm  tree-trash-confirm 1440 900
+problems-orphan     problems-orphan   1440  900
 diff-parent         diff-parent       1440  900
 projects-tabs       projects-tabs     1440  900
 projects-plus-menu  projects-plus-menu 1440 900

@@ -114,3 +114,17 @@ fallido; uso de `create_checkpoint`), Ollama simulado sin y con tools, tests de
 checkpoint raíz y starter al abrir; prueba de humo en la app con un workspace
 vacío: tras un mensaje queda un `.scad` renderizado con Claude (falso), Codex
 (falso), Antigravity (falso) y Hermes (sin y con tools).
+
+## Tanda 3 de S12.c
+
+**T14 — Antigravity aprueba las herramientas de ScadLab en `--print` · `fullstack-dev`**: en el chat con
+Antigravity en «Agente» el MCP ya estaba registrado pero `agy --print` rechazaba la primera herramienta MCP
+sin aprobar y **terminaba el turno** («terminó el turno sin responder nada»). Aprobar solo las herramientas
+de ScadLab, sin `--dangerously-skip-permissions` ni relajar la shell. Primer intento: hook `PreToolUse` en
+`<workspace>/.agents/hooks.json` (el documentado). **Medido con el `agy` real: no sirve**, la confirmación de permiso de
+un MCP ocurre antes de los hooks. Lo que funciona —y el propio `agy` pide— es una regla `mcp(scadlab/<herramienta>)` en
+`permissions.allow` de `~/.gemini/antigravity-cli/settings.json` (el usuario autorizó que ScadLab gestione ahí los
+permisos de sus herramientas): una regla por herramienta del catálogo, sincronizada al registrar el MCP y en cada turno,
+con Quitar/Volver a agregar en Configuración; «Solo consulta» lo hace cumplir el servidor `--mcp` con una marca en el
+workspace. Mensaje accionable si igual se bloquea y pruebas con un `agy` falso. Detalle y resultado:
+[claude/26-antigravity-permisos.md](../../claude/26-antigravity-permisos.md).

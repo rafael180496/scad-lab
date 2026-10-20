@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "units": "mm",
+  "brand": {"id": "snapmaker", "name": "Snapmaker", "skill": "snapmaker-printers"},
+  "notes": "Volumen de impresión nominal de la ficha oficial de Snapmaker. La U1 es un toolchanger de 4 cabezales; la J1s es IDEX y la Artisan tiene dos cabezales con zonas distintas según el cabezal (campos extra build_volume_*). El software oficial de J1s y Artisan es Luban, que no figura entre los slicers del registro de ScadLab. 'verify' lista lo que no se pudo confirmar.",
+  "printers": [
+    {
+      "id": "snapmaker-u1",
+      "name": "Snapmaker U1",
+      "model": "U1",
+      "build_volume": {"x": 270, "y": 270, "z": 270},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 4,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "toolchanger",
+      "multicolor_system": "SnapSwap (4 cabezales independientes precalentados)",
+      "multicolor_slots": 4,
+      "default_colors": 4,
+      "enclosed": false,
+      "heated_chamber": false,
+      "bed_surface": "Lámina flexible de acero con superficie PEI",
+      "max_nozzle_temp_c": 300,
+      "max_bed_temp_c": 100,
+      "slicers": ["snapmaker-orca", "orcaslicer"],
+      "notes": "Toolchanger de 4 cabezales, cambio en ~5 s. Marco abierto; la tapa superior (Top Cover) es opcional y crea un entorno cerrado. Boquilla de acero inoxidable (acero endurecido opcional para fibra).",
+      "sources": [
+        "https://www.snapmaker.com/snapmaker-u1/specs",
+        "https://www.snapmaker.com/snapmaker-u1"
+      ],
+      "verify": []
+    },
+    {
+      "id": "snapmaker-j1s",
+      "name": "Snapmaker J1s (y J1)",
+      "model": "J1s / J1",
+      "build_volume": {"x": 300, "y": 200, "z": 200},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "idex",
+      "multicolor_system": "IDEX (2 cabezales independientes)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Placa de vidrio con PEI",
+      "max_nozzle_temp_c": 300,
+      "max_bed_temp_c": 100,
+      "slicers": ["snapmaker-orca", "orcaslicer"],
+      "notes": "IDEX con modos Default/Backup (300x200x200), Copy (160x200x200) y Mirror (150x200x200). La J1 original comparte volumen y temperaturas según fuentes de terceros; ya no tiene ficha oficial vigente. El software oficial es Snapmaker Luban (no está en la lista de slicers del esquema).",
+      "sources": [
+        "https://www.snapmaker.com/j1s-idex-3d-printer/specs"
+      ],
+      "verify": ["slicers", "enclosed"],
+      "build_volume_copy_mode": {"x": 160, "y": 200, "z": 200},
+      "build_volume_mirror_mode": {"x": 150, "y": 200, "z": 200}
+    },
+    {
+      "id": "snapmaker-artisan",
+      "name": "Snapmaker Artisan (3-en-1)",
+      "model": "Artisan",
+      "build_volume": {"x": 350, "y": 400, "z": 400},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "dual",
+      "multicolor_system": "Doble extrusión (2 cabezales)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Lámina PEI de doble textura (zona interior 260x260)",
+      "max_nozzle_temp_c": 300,
+      "max_bed_temp_c": 110,
+      "slicers": ["snapmaker-orca", "orcaslicer"],
+      "notes": "3-en-1 (FDM, láser, CNC) con cerramiento. Área FDM oficial: 350x400x400 con doble boquilla, 375x400x400 solo izquierda, 400x400x400 solo derecha. Cama 110 °C en la zona interior y 80 °C en la exterior. El software oficial es Snapmaker Luban.",
+      "sources": [
+        "https://www.snapmaker.com/snapmaker-artisan/specs"
+      ],
+      "verify": ["slicers", "filament_diameter_mm"],
+      "build_volume_left_nozzle": {"x": 375, "y": 400, "z": 400},
+      "build_volume_right_nozzle": {"x": 400, "y": 400, "z": 400}
+    }
+  ]
+}

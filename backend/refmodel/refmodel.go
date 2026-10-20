@@ -359,6 +359,12 @@ func CopyToRefs(workspaceDir, src string) (rel string, err error) {
 func ResolveRef(workspaceDir, file string) (abs, rel string, err error) {
 	name := strings.TrimSpace(file)
 	name = strings.TrimPrefix(name, RefsDir+"/")
+	if ImageFormatOf(name) != "" {
+		return "", "", i18n.Errorf(i18n.Msg{
+			ES: "%s es una imagen, no un modelo 3D: usa image_info o compare_with_image",
+			EN: "%s is an image, not a 3D model: use image_info or compare_with_image",
+		}, file)
+	}
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\:\x00") || strings.HasPrefix(name, ".") {
 		return "", "", i18n.Errorf(i18n.Msg{
 			ES: "nombre de referencia inválido: %q (usa un archivo de refs/, p. ej. refs/pieza.stl)",

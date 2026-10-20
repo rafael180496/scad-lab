@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react'
-import {FileUp, FolderOpen, FolderPlus, Plus, RefreshCw, Sparkles, Trash2} from 'lucide-react'
+import {FileUp, FolderOpen, FolderPlus, Plus, RefreshCw, Settings, Sparkles, Trash2} from 'lucide-react'
 import type {main, render, store} from '../../../wailsjs/go/models'
 import {IconButton} from '../ui/Button'
 import {CheckpointTree} from './CheckpointTree'
@@ -34,6 +34,7 @@ export function Sidebar({
     onImportModel,
     onRescan,
     onSyncSkills,
+    onConfigure,
     onReveal,
     onRemove,
     onSelect,
@@ -67,6 +68,8 @@ export function Sidebar({
     onImportModel: () => void
     onRescan: () => void
     onSyncSkills: () => void
+    /** Abre «Configuración del workspace» (S14) del workspace al frente. */
+    onConfigure: () => void
     onReveal: () => void
     onRemove: (w: store.Workspace) => void
     onSelect: (file: string) => void
@@ -74,7 +77,7 @@ export function Sidebar({
     onView: (file: string) => void
     onCompare: (file: string) => void
     /** Solo el banco de capturas: menú del árbol y papelera abiertos. */
-    shot?: {treeMenu?: string; trash?: boolean}
+    shot?: {treeMenu?: string; trash?: boolean | 'empty' | 'delete'; treeConfirm?: string}
     renders: Record<string, render.Result>
     running: Record<string, boolean>
 }) {
@@ -136,6 +139,11 @@ export function Sidebar({
                                 />
                                 <span className="truncate text-ui-12-5">{w.name}</span>
                             </button>
+                            {w.id === current && !view?.missing ? (
+                                <IconButton title={t.wsConfig.openHint} onClick={onConfigure} className="size-6" data-testid="workspace-config-button">
+                                    <Settings className="icon-ui-14" />
+                                </IconButton>
+                            ) : null}
                             <IconButton
                                 title={t.workspaces.remove}
                                 onClick={() => onRemove(w)}
@@ -170,7 +178,7 @@ export function Sidebar({
                                     <FileUp className="icon-ui-14" />
                                 </IconButton>
                             )}
-                            {view.missing ? null : <TrashButton workspaceId={view.workspace.id} checkpoints={view.checkpoints} shotOpen={shot?.trash} />}
+                            {view.missing ? null : <TrashButton workspaceId={view.workspace.id} checkpoints={view.checkpoints} shotOpen={!!shot?.trash} shotConfirm={shot?.trash === 'empty' || shot?.trash === 'delete' ? shot.trash : undefined} />}
                             <IconButton title={t.workspaces.syncSkills} onClick={onSyncSkills}>
                                 <Sparkles className="icon-ui-14" />
                             </IconButton>
@@ -203,6 +211,7 @@ export function Sidebar({
                             onView={onView}
                             onCompare={onCompare}
                             shotMenu={shot?.treeMenu}
+                            shotConfirm={shot?.treeConfirm}
                         />
                     )
                 ) : (

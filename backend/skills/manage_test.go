@@ -13,7 +13,7 @@ import (
 // ruta de la copia.
 func install(t *testing.T, ws string, s Skill) string {
 	t.Helper()
-	if err := Sync(ws, []Skill{s}, func(string) bool { return true }); err != nil {
+	if _, err := Sync(ws, []Skill{s}, func(string) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.Join(ws, ".claude", "skills", s.Name)

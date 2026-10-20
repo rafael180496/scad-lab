@@ -6,6 +6,7 @@ import {fmt, useT} from '../../../i18n'
 import {cn} from '../../../lib/cn'
 import {providerIcon} from '../../chat/providerIcons'
 import {IconButton} from '../../ui/Button'
+import {AgyPermissions} from './AgyPermissions'
 
 // «CLIs detectados» (S12.b): los agentes de línea de comandos que ScadLab encontró
 // en este equipo —Claude Code, Codex, Antigravity, OpenCode—, con su versión. Es de
@@ -51,7 +52,7 @@ export function DetectedCLIs() {
                     {list.map((c) => {
                         const Icon = providerIcon({id: `cli:${c.id}`, kind: 'cli', baseUrl: ''})
                         return (
-                            <li key={c.id} data-cli={c.id} className={cn('flex items-center gap-2.5 px-3 py-1.5', !c.installed && 'opacity-60')} title={c.installed && c.path ? fmt(p.pathHint, {path: c.path}) : p.missing}>
+                            <li key={c.id} data-cli={c.id} className={cn('flex flex-wrap items-center gap-2.5 px-3 py-1.5', !c.installed && 'opacity-60')} title={c.installed && c.path ? fmt(p.pathHint, {path: c.path}) : p.missing}>
                                 <span className="flex icon-ui-28 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
                                     <Icon className="icon-ui-14" />
                                 </span>
@@ -68,6 +69,7 @@ export function DetectedCLIs() {
                                     <span className={cn('inline-block size-2 rounded-full', c.installed ? 'bg-ok' : 'bg-faint/60')} />
                                     {c.installed ? p.installed : p.missing}
                                 </span>
+                                {c.id === 'antigravity' && c.installed ? <AgyPermissions /> : null}
                             </li>
                         )
                     })}

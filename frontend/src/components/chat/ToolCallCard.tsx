@@ -8,9 +8,11 @@ import {
     Check,
     ChevronDown,
     CircleAlert,
+    Columns2,
     Download,
     Eye,
     FilePlus2,
+    FileImage,
     FileText,
     FileUp,
     FolderOpen,
@@ -21,6 +23,7 @@ import {
     Layers,
     Library,
     Loader2,
+    Mountain,
     Move3d,
     PackageOpen,
     Pencil,
@@ -31,6 +34,7 @@ import {
     ScanSearch,
     ShieldCheck,
     SlidersHorizontal,
+    Spline,
     Trash2,
     TriangleAlert,
     Weight,
@@ -67,6 +71,8 @@ const ICONS: Record<string, LucideIcon> = {
     measure: Ruler,
     preview: Eye,
     printer_info: Printer,
+    list_printers: Printer,
+    set_workspace_printer: Printer,
     export: PackageOpen,
     list_templates: LayoutTemplate,
     get_template: LayoutTemplate,
@@ -90,6 +96,10 @@ const ICONS: Record<string, LucideIcon> = {
     list_materials: Layers,
     suggest_orientation: Rotate3d,
     autosave: Save,
+    image_info: FileImage,
+    compare_with_image: Columns2,
+    trace_image_outline: Spline,
+    image_to_heightmap: Mountain,
 }
 
 // Las que escriben algo en el proyecto (un checkpoint nuevo, un cambio del árbol, una
@@ -108,7 +118,10 @@ const WRITES = new Set([
     'restore_checkpoint',
     'install_library',
     'export',
+    'set_workspace_printer',
     'autosave',
+    'trace_image_outline',
+    'image_to_heightmap',
 ])
 
 // Claves de los argumentos que mejor resumen la llamada, en orden de preferencia.
@@ -180,6 +193,93 @@ function diagnosticsOf(r: ToolJSON | null): Diagnostic[] {
 }
 
 const MAX_INLINE_DIAGS = 3
+
+// ── Herramientas de imagen (S15) ────────────────────────────────────────────
+// compare_with_image y trace_image_outline devuelven JSON con sus medidas y una imagen. La tarjeta lee esos campos
+// con tolerancia —varios nombres posibles, nada obligatorio—: lo que falte simplemente no se muestra como pastilla,
+// y el JSON crudo sigue a un clic en el detalle.
+type Json = Record<string, unknown>
+
+function pick(r: Json | null, ...paths: string[]): unknown {
+    for (const p of paths) {
+        let cur: unknown = r
+        for (const k of p.split('.')) cur = cur && typeof cur === 'object' ? (cur as Json)[k] : undefined
+        if (cur !== undefined && cur !== null) return cur
+    }
+    return undefined
+}
+
+const asNum = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+
+// Los archivos que dejó el trazado: una ruta, una lista de rutas o una lista de objetos con su ruta.
+function filesOf(r: Json | null): string[] {
+    const v = pick(r, 'files', 'svgFiles', 'svgs', 'svg', 'file')
+    const list = Array.isArray(v) ? v : typeof v === 'string' ? [v] : []
+    return list
+        .map((x) => (typeof x === 'string' ? x : x && typeof x === 'object' ? String((x as Json).file ?? (x as Json).path ?? '') : ''))
+        .filter((x) => x !== '')
+}
+
+// Ancho y alto de una caja en mm: [w, h], [x, y, w, h] o {w, h} / {width, height}.
+function boxOf(r: Json | null): [number, number] | null {
+    const v = pick(r, 'sizeMm', 'bboxMm', 'bbox', 'size')
+    if (Array.isArray(v)) {
+        const n = v.map(asNum)
+        if (n.length >= 4 && n[2] !== undefined && n[3] !== undefined) return [n[2], n[3]]
+        if (n.length >= 2 && n[0] !== undefined && n[1] !== undefined) return [n[0], n[1]]
+    } else if (v && typeof v === 'object') {
+        const o = v as Json
+        const w = asNum(o.w ?? o.width ?? o.x)
+        const h = asNum(o.h ?? o.height ?? o.y)
+        if (w !== undefined && h !== undefined) return [w, h]
+    }
+    return null
+}
+
+// La comparación con la foto: la vista elegida, las dos proporciones ancho/alto y el IoU de las siluetas.
+function CompareFacts({r}: {r: Json}) {
+    const t = useT()
+    const c = t.chat.steps.image
+    const view = pick(r, 'view', 'viewUsed')
+    const iou = asNum(pick(r, 'silhouetteIoU', 'silhouetteIou', 'iou'))
+    const model = asNum(pick(r, 'modelAspect', 'aspect.model', 'modelRatio', 'proportions.model'))
+    const photo = asNum(pick(r, 'photoAspect', 'aspect.photo', 'photoRatio', 'proportions.photo'))
+    const nf = (n: number) => n.toLocaleString(locale(), {maximumFractionDigits: 2})
+    const viewName = typeof view === 'string' ? ((t.viewer.viewNames as Record<string, string>)[view] ?? view) : ''
+    return (
+        <>
+            {viewName ? <Chip title={c.viewHint}>{fmt(c.view, {view: viewName})}</Chip> : null}
+            {model !== undefined || photo !== undefined ? <span className="text-ui-11 text-faint">{c.aspectLabel}</span> : null}
+            {model !== undefined ? <Chip title={c.aspectModelHint}>{fmt(c.aspectModel, {n: nf(model)})}</Chip> : null}
+            {photo !== undefined ? <Chip title={c.aspectPhotoHint}>{fmt(c.aspectPhoto, {n: nf(photo)})}</Chip> : null}
+            {iou !== undefined ? (
+                <Chip tone={iou >= 0.85 ? 'ok' : iou < 0.6 ? 'warn' : undefined} title={c.iouHint}>
+                    {fmt(c.iou, {pct: Math.round(iou * 100)})}
+                </Chip>
+            ) : null}
+        </>
+    )
+}
+
+// El trazado: los contornos, el área, la caja en mm, las capas y los archivos SVG que quedaron en refs/.
+function TraceFacts({r}: {r: Json}) {
+    const t = useT()
+    const c = t.chat.steps.image
+    const contoursRaw = pick(r, 'contours', 'contourCount')
+    const contours = Array.isArray(contoursRaw) ? contoursRaw.length : asNum(contoursRaw)
+    const area = asNum(pick(r, 'areaMm2', 'area_mm2', 'area'))
+    const box = boxOf(r)
+    const layers = asNum(pick(r, 'layers', 'layerCount'))
+    const nf = (n: number) => n.toLocaleString(locale(), {maximumFractionDigits: 1})
+    return (
+        <>
+            {box ? <Chip title={c.sizeHint}>{fmt(c.size, {w: nf(box[0]), h: nf(box[1])})}</Chip> : null}
+            {area !== undefined ? <Chip title={c.areaHint}>{fmt(c.area, {n: nf(area)})}</Chip> : null}
+            {contours !== undefined ? <Chip title={c.contoursHint}>{fmt(c.contours, {n: contours})}</Chip> : null}
+            {layers !== undefined && layers > 1 ? <Chip title={c.layersHint}>{fmt(c.layers, {n: layers})}</Chip> : null}
+        </>
+    )
+}
 
 // El checkpoint al que se refiere el paso: el que creó (su resultado lo dice) o el
 // del argumento `file`. Solo si parece un archivo de checkpoint.
@@ -319,7 +419,13 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
     const plainError = failed && diags.length === 0 ? (result?.message ?? prettyResult(step.text)).trim() : ''
     const shownDiags = diags.slice(0, MAX_INLINE_DIAGS)
     const hasFacts = step.status === 'ok' && !!result?.mesh
-    const body = !!file || hasFacts || shownDiags.length > 0 || !!plainError || step.images.length > 0
+    // Las herramientas de imagen (S15): la comparación con la foto muestra su imagen GRANDE (es lo que se vino a ver) con
+    // sus medidas; el trazado, la silueta con los SVG creados. image_info e image_to_heightmap son tarjetas normales.
+    const isCompare = step.tool === 'compare_with_image'
+    const isTrace = step.tool === 'trace_image_outline'
+    const imageFacts = step.status === 'ok' && (isCompare || isTrace) && !!result
+    const traced = isTrace && step.status === 'ok' ? filesOf(result as Json | null) : []
+    const body = !!file || hasFacts || imageFacts || traced.length > 0 || shownDiags.length > 0 || !!plainError || step.images.length > 0
     return (
         <div
             data-step={step.status}
@@ -374,6 +480,18 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
                         </div>
                     ) : null}
 
+                    {imageFacts || traced.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            {imageFacts && isCompare ? <CompareFacts r={result as Json} /> : null}
+                            {imageFacts && isTrace ? <TraceFacts r={result as Json} /> : null}
+                            {traced.map((f) => (
+                                <span key={f} data-testid="step-svg" title={c.image.filesHint} className="max-w-full truncate font-mono text-ui-11-5 text-accent">
+                                    {f}
+                                </span>
+                            ))}
+                        </div>
+                    ) : null}
+
                     {shownDiags.length > 0 ? (
                         <ul className="flex flex-col gap-1">
                             {shownDiags.map((d, i) => (
@@ -403,13 +521,23 @@ export function ToolCallCard({step, onOpenCheckpoint}: {step: ChatStep; onOpenCh
                                 <button
                                     key={i}
                                     type="button"
+                                    data-testid={isCompare ? 'step-compare-image' : isTrace ? 'step-trace-image' : undefined}
                                     title={c.zoomImage}
                                     onClick={() => setZoom(src)}
-                                    className="no-drag max-w-full overflow-hidden rounded border border-line bg-surface-2 transition-colors hover:border-accent"
+                                    className={cn(
+                                        'no-drag max-w-full overflow-hidden rounded border border-line bg-surface-2 transition-colors hover:border-accent',
+                                        isCompare && 'w-full',
+                                    )}
                                 >
-                                    <img src={src} alt={fmt(c.imageAlt, {tool: label})} draggable={false} className="block h-24 max-w-full w-auto object-contain" />
+                                    <img
+                                        src={src}
+                                        alt={fmt(c.imageAlt, {tool: label})}
+                                        draggable={false}
+                                        className={cn('block max-w-full object-contain', isCompare ? 'mx-auto h-auto max-h-72 w-auto' : isTrace ? 'h-36 w-auto' : 'h-24 w-auto')}
+                                    />
                                 </button>
                             ))}
+                            {isCompare && step.status === 'ok' ? <p className="w-full text-ui-10-5 text-faint">{c.image.sideBySide}</p> : null}
                         </div>
                     ) : null}
                 </div>

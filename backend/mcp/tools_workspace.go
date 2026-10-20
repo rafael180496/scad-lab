@@ -47,7 +47,7 @@ func (e *env) workspaceTools() []Tool {
 		},
 		{
 			Name: "trash_checkpoint",
-			Description: "Move a checkpoint to the workspace trash (.scadlab/trash/). It NEVER deletes anything: restore_checkpoint brings it back. Its children are not moved (they keep pointing at it) unless branch=true, which moves the checkpoint and everything that derives from it. " +
+			Description: "Move a checkpoint to the workspace trash (.scadlab/trash/). It NEVER deletes anything: restore_checkpoint brings it back. Its direct children are not moved: they are re-hung onto its parent (or become roots if it was a root) so the tree never points at a missing file; their grandchildren are untouched. With branch=true it moves the checkpoint and everything that derives from it instead, and nothing is re-hung. " +
 				"If it was the active parent, the active parent moves to its parent. Only trash what the user asked to discard.",
 			InputSchema: obj(map[string]any{
 				"file":   strProp("Checkpoint to move to the trash (e.g. 004-lid.scad)."),
@@ -65,15 +65,15 @@ func (e *env) workspaceTools() []Tool {
 		},
 		{
 			Name:        "restore_checkpoint",
-			Description: "Bring a checkpoint back from the trash (see list_trash). It returns to its original name if that is free; otherwise it takes the next free number with the same slug (and then its children, which reference the old name, no longer link to it). Never overwrites a checkpoint.",
+			Description: "Bring a checkpoint back from the trash (see list_trash). It returns to its original name if that is free; otherwise it takes the next free number with the same slug (children that were re-hung when it was trashed are hung back onto it, under whatever name it came back with, if they still hang where they were left). Never overwrites a checkpoint.",
 			InputSchema: obj(map[string]any{"trashed_name": strProp("Name inside the trash, as listed by list_trash (e.g. 20260101-120000-004-lid.scad).")}, "trashed_name"),
 			Annotations: annotations(annWrite),
 			handler:     e.restoreCheckpoint,
 		},
 		{
 			Name: "list_refs",
-			Description: "List the 3D models in the workspace's refs/ folder (STL, 3MF, OBJ): name, path, format, size and date. These are the models the user attached or imported; the originals are never modified. " +
-				"Analyze one with inspect_reference and make it editable with import_mesh.",
+			Description: "List the files the user put in the workspace's refs/ folder: 3D models (STL, 3MF, OBJ; `kind` \"model\") and images (PNG, JPEG, GIF, WebP in refs/ or refs/images/; `kind` \"image\"): name, path, format, kind, size and date. The originals are never modified. " +
+				"Analyze a model with inspect_reference and make it editable with import_mesh; look at an image with image_info and model from it following the openscad-from-image skill (compare_with_image, trace_image_outline, image_to_heightmap).",
 			InputSchema: obj(map[string]any{}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.listRefs,
@@ -231,12 +231,12 @@ func (e *env) trashCheckpoint(_ context.Context, args map[string]any) (*toolResu
 		return nil, err
 	}
 	branch := boolArg(args, "branch", false)
-	var names []string
+	var names, relinked []string
 	if branch {
 		names, err = checkpoint.TrashBranch(e.ws, name)
 	} else {
 		var one string
-		one, err = checkpoint.Trash(e.ws, name)
+		one, relinked, err = checkpoint.TrashRelinked(e.ws, name)
 		if one != "" {
 			names = []string{one}
 		}
@@ -256,6 +256,13 @@ func (e *env) trashCheckpoint(_ context.Context, args map[string]any) (*toolResu
 			ES: "Nada se borró: restore_checkpoint (trashed_name=%s) lo trae de vuelta.",
 			EN: "Nothing was deleted: restore_checkpoint (trashed_name=%s) brings it back.",
 		}, names[0]),
+	}
+	if len(relinked) > 0 {
+		out["relinked"] = relinked
+		out["relinkedNote"] = msgf(i18n.Msg{
+			ES: "%d hijo(s) directo(s) pasaron a colgar del padre de %s (o quedaron como raíz): %s. restore_checkpoint los devuelve.",
+			EN: "%d direct child(ren) now hang from the parent of %s (or became roots): %s. restore_checkpoint hangs them back.",
+		}, len(relinked), name, strings.Join(relinked, ", "))
 	}
 	if err != nil { // una rama que se movió a medias
 		out["error"] = err.Error()
@@ -313,18 +320,25 @@ func (e *env) restoreCheckpoint(_ context.Context, args map[string]any) (*toolRe
 	if trashed == "" {
 		return nil, i18n.New(i18n.Msg{ES: "falta `trashed_name`: el nombre dentro de la papelera (ver list_trash)", EN: "`trashed_name` is required: the name inside the trash (see list_trash)"})
 	}
-	name, err := checkpoint.Restore(e.ws, trashed)
-	if err != nil {
-		return nil, err
+	name, relinked, relinkErr := checkpoint.RestoreRelinked(e.ws, trashed)
+	if name == "" {
+		return nil, relinkErr
 	}
 	if w, ok := e.storedWorkspace(); ok {
 		if err := e.store.RestoreCheckpointMeta(w.ID, trashed, name); err != nil {
 			e.log.Printf("recuperar los datos de %s: %v", name, err)
 		}
 	}
-	return jsonResult(map[string]any{"file": name, "activeParent": checkpoint.ActiveParent(e.ws), "note": msgf(i18n.Msg{
+	out := map[string]any{"file": name, "activeParent": checkpoint.ActiveParent(e.ws), "note": msgf(i18n.Msg{
 		ES: "Restaurado como %s. No cambia el padre activo.", EN: "Restored as %s. The active parent is unchanged.",
-	}, name)})
+	}, name)}
+	if len(relinked) > 0 {
+		out["relinked"] = relinked // hijos que volvieron a colgar de él
+	}
+	if relinkErr != nil { // volvió, pero algún hijo no se pudo re-colgar
+		out["warning"] = relinkErr.Error()
+	}
+	return jsonResult(out)
 }
 
 func (e *env) listRefs(_ context.Context, _ map[string]any) (*toolResult, error) {
@@ -336,8 +350,8 @@ func (e *env) listRefs(_ context.Context, _ map[string]any) (*toolResult, error)
 	out := map[string]any{"refs": list}
 	if len(list) == 0 {
 		out["note"] = msgf(i18n.Msg{
-			ES: "refs/ está vacío: el usuario puede adjuntar un STL, 3MF u OBJ en el chat o arrastrarlo a la ventana.",
-			EN: "refs/ is empty: the user can attach an STL, 3MF or OBJ in the chat or drag it onto the window.",
+			ES: "refs/ está vacío: el usuario puede adjuntar un STL, 3MF u OBJ, o una imagen, en el chat o arrastrarlo a la ventana.",
+			EN: "refs/ is empty: the user can attach an STL, 3MF or OBJ, or an image, in the chat or drag it onto the window.",
 		})
 	}
 	return jsonResult(out)

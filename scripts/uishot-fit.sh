@@ -56,7 +56,7 @@ if [ $# -ge 3 ]; then
     COMBOS="$1 $2 $3"
 else
     COMBOS=""
-    for v in main sidebar-long projects-tabs projects-plus-menu terminal chat chat-agent-steps chat-attachments chat-conversations vault-create vault-unlock problems settings-general empty dock-custom dock-hidden dock-view-menu dock-minimized dock-move-menu viewer-parts print-panel plate-overflow tree-menu tree-active-branch trash diff-parent mesh-import mesh-edit mesh-cut mesh-hole mesh-ai; do
+    for v in main sidebar-long projects-tabs projects-plus-menu terminal chat chat-agent-steps chat-attachments chat-conversations chat-from-image chat-no-vision chat-compare chat-trace vault-create vault-unlock problems settings-general empty dock-custom dock-hidden dock-view-menu dock-minimized dock-move-menu viewer-parts print-panel plate-overflow tree-menu tree-active-branch trash diff-parent mesh-import mesh-edit mesh-cut mesh-hole mesh-ai workspace-new-printer printer-picker workspace-config settings-printing export-3mf; do
         for s in "1920 1000" "1440 900" "1280 720" "1024 640"; do
             COMBOS="$COMBOS$v $s
 "

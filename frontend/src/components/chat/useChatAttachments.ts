@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import type {DragEvent} from 'react'
-import {AddChatAttachmentData, ChooseChatAttachment, RemoveChatAttachment} from '../../../wailsjs/go/main/App'
+import {AddChatAttachmentData, ChooseChatAttachment, ChooseChatImages, RemoveChatAttachment} from '../../../wailsjs/go/main/App'
 import type {hermes} from '../../../wailsjs/go/models'
 import {fmt, useT} from '../../i18n'
 import {
@@ -48,7 +48,10 @@ let nextKey = 0
 // Estado de los adjuntos de un chat: selección, subida, compatibilidad con el
 // modelo elegido y arrastrar/soltar. Vive aparte de ChatPanel porque ese
 // componente ya es grande y esto no depende de la conversación.
-export function useChatAttachments({workspaceId, vision}: {workspaceId: number | null; vision: VisionInfo}) {
+//
+// `imagesOnly` (S15, el diálogo «Crear desde una imagen») deja pasar solo fotos: el diálogo del sistema
+// ofrece únicamente imágenes y un modelo 3D pegado o arrastrado se rechaza con su motivo.
+export function useChatAttachments({workspaceId, vision, imagesOnly = false}: {workspaceId: number | null; vision: VisionInfo; imagesOnly?: boolean}) {
     const t = useT()
     const a = t.chat.attach
     const [items, setItems] = useState<AttachItem[]>([])
@@ -118,6 +121,7 @@ export function useChatAttachments({workspaceId, vision}: {workspaceId: number |
                 const guess = guessKind(file)
                 if (guess === 'image-unsupported') return fail('image', fmt(a.errors.unsupportedImage, {name}))
                 if (guess === 'unsupported') return fail('image', fmt(a.errors.unsupported, {name}))
+                if (imagesOnly && guess === 'model') return fail('model', fmt(a.errors.notImage, {name}))
                 if (file.size === 0) return fail(guess, fmt(a.errors.empty, {name}))
                 const max = limitFor(guess)
                 if (file.size > max) {
@@ -140,7 +144,7 @@ export function useChatAttachments({workspaceId, vision}: {workspaceId: number |
                 upload(c.item, c.file)
             }
         },
-        [a, apply, enabled, upload],
+        [a, apply, enabled, imagesOnly, upload],
     )
 
     // Archivos de un portapapeles o un arrastre. Devuelve si había alguno, para que
@@ -172,7 +176,7 @@ export function useChatAttachments({workspaceId, vision}: {workspaceId: number |
         setChoosing(true)
         setChooseError('')
         try {
-            const list = (await ChooseChatAttachment(ws)) ?? []
+            const list = (await (imagesOnly ? ChooseChatImages(ws) : ChooseChatAttachment(ws))) ?? []
             if (wsRef.current !== ws) {
                 for (const att of list) void RemoveChatAttachment(att.id).catch(() => {})
                 return
@@ -187,7 +191,7 @@ export function useChatAttachments({workspaceId, vision}: {workspaceId: number |
         } finally {
             setChoosing(false)
         }
-    }, [a, apply, fromGo])
+    }, [a, apply, fromGo, imagesOnly])
 
     const remove = useCallback(
         (key: string) => {

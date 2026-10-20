@@ -96,7 +96,7 @@ backend/vaultgate/salt.go     vault.salt (0600, escritura atómica)
 backend/vaultgate/remember.go Backend (Get/Set/Delete) inyectable + OSBackend (go-keyring, con plazo)
 backend/vaultgate/vault.go    Vault: Create/Unlock/Change/Forget/SetRemember/Reset/Key/TryAutoUnlock/Encrypt/Decrypt
 backend/store/vault.go        GetVaultMeta, WriteVault (re-cifrado atómico), ResetVault; migración 7
-app_vault.go                  bindings (firmas en 06-go-react-contract.md)
+app_vault.go                  bindings (firmas en 33-contrato-servidores-chat.md)
 app_servers.go                Encrypt al guardar, Decrypt en serverToken; lo demás sin cambios
 ```
 

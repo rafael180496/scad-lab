@@ -20,7 +20,8 @@ Skills: `vercel-react-best-practices`, `react`, `tailwind-design-system`,
 - Sin fetch: todo pasa por los bindings de `wailsjs/`. Única excepción: la
   malla del visor (`GET /mesh/<clave>.stl`, ver abajo).
 - Componentes: `components/ui` (primitivas), `layout`, `workspace`, `settings`,
-  `render`, `viewer`, `editor`, `problems`, `dock`;
+  `render`, `viewer`, `editor`, `problems`, `dock`, `printer` (selector de impresoras de S14,
+  ver [27-impresoras-workspace.md](27-impresoras-workspace.md));
   helpers sin estado en `lib/`.
 - macOS: cabecera con `--wails-draggable` y 82 px a la izquierda para los
   semáforos (`TitleBarHiddenInset`); Windows usa el marco nativo.

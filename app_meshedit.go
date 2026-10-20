@@ -17,6 +17,7 @@ import (
 	"scadlab/backend/refmodel"
 	"scadlab/backend/render"
 	"scadlab/backend/store"
+	"scadlab/backend/wsconfig"
 )
 
 // Editar un STL (S13). La edición nunca toca el STL: vive intacto en refs/ y
@@ -113,7 +114,8 @@ func (a *App) ImportModel(workspaceId int64, path string, opts ImportOptions) (I
 
 func (a *App) importOptions(w store.Workspace, opts ImportOptions, source string) meshedit.ImportOptions {
 	o := meshedit.ImportOptions{CenterOnBed: opts.CenterOnBed, Label: opts.Label, Source: source}
-	if p, ok := printers.ByID(w.PrinterID); ok {
+	if _, ok := printers.ByID(w.PrinterID); ok {
+		p := wsconfig.EffectivePrinter(w)
 		o.Plate, o.PlateName = p.BuildVolume, p.Name
 	}
 	return o

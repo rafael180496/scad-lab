@@ -4,6 +4,20 @@ Proyecto de modelado 3D en **OpenSCAD** gestionado por ScadLab. Impresora
 destino: **{{.PrinterName}}** — volumen de impresión {{.BuildX}} × {{.BuildY}} × {{.BuildZ}} mm
 (ver `printer.json`). Unidades: milímetros.
 
+- **Marca y modelo**: {{.Brand}} {{.PrinterModel}}. Boquilla de {{.NozzleMM}} mm y
+  filamento de {{.FilamentDiameter}} mm.
+- **Sistema multicolor**: {{.MulticolorSystem}}. Este workspace usa
+  **{{.ColorSlots}} color(es)** (la máquina admite hasta {{.MaxColors}}); el usuario lo
+  cambia en «Configuración del workspace» y tú con `set_workspace_printer`.
+{{- if .Slicer}}
+- **Slicer recomendado**: {{.Slicer}}. Qué formato de `export` le sirve: skill
+  `openscad-3mf-multicolor`.
+{{- end}}
+{{- if .BrandSkill}}
+- **Skill de la impresora**: `{{.BrandSkill}}` (perfiles, reglas FDM propias de la
+  marca y multicolor). Léela antes de dimensionar el modelo.
+{{- end}}
+
 ## Flujo obligatorio: un pedido de diseño termina en un checkpoint renderizado
 
 Quien te escribe casi nunca sabe OpenSCAD: espera ver la pieza en el visor de
@@ -41,7 +55,10 @@ un cambio:
    slug en kebab-case que diga qué cambió — p. ej. `004-add-hinge.scad`).
    «Borrar» un checkpoint no existe para ti: si el usuario pide descartar uno,
    usa `trash_checkpoint` (lo manda a `.scadlab/trash/`; `restore_checkpoint` lo
-   trae de vuelta). No descartes nada por tu cuenta.
+   trae de vuelta; los hijos del descartado pasan a colgar de su padre, y
+   `restore_checkpoint` los devuelve). Eliminar para siempre lo de la papelera
+   solo lo hace el usuario desde la app: tú no puedes. No descartes nada por tu
+   cuenta.
 2. **Primera línea de cada checkpoint**, exactamente con este formato:
 
    ```
@@ -63,7 +80,7 @@ un cambio:
    **No edites ni borres `.scadlab/`**: lo gestiona la app.
 3. **Color en cada pieza de primer nivel**: `color("nombre_o_#hex") …`. ScadLab
    colorea el visor y exporta el 3MF multicolor por color (máximo
-   {{.ColorSlots}} colores para esta impresora).
+   {{.ColorSlots}} color(es) en este workspace; sistema: {{.MulticolorSystem}}).
 4. **Parámetros arriba**, con anotaciones del Customizer (`/* [Dimensiones] */`,
    `// [min:step:max]`).
 5. **Validar después de cada checkpoint**: con la herramienta MCP `render` de
@@ -78,7 +95,8 @@ un cambio:
    `measure` lo comprueba (`fitsBuildVolume`).
 8. **Diseñar para FDM**: voladizos ≤ 45°, pared mínima 0,8 mm (2 perímetros de
    0,4), holgura 0,2 mm a presión y 0,3–0,4 mm deslizante, chaflán de 0,5 mm en
-   la base contra la pata de elefante. Detalle en la skill `bambu-lab-printers`.
+   la base contra la pata de elefante. Detalle en la skill de tu impresora
+   {{- if .BrandSkill}} (`{{.BrandSkill}}`){{end}} y en `openscad-core`.
 9. **No hacer commits.** Nunca `git add`, `commit`, `push` ni tags: el usuario
    revisa y commitea.
 
@@ -100,7 +118,9 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 
 | Herramienta | Para qué |
 |---|---|
-| `printer_info` | impresora del workspace: volumen, boquilla, slots del AMS, reglas FDM clave, material por defecto y OpenSCAD detectado |
+| `printer_info` | impresora del workspace: marca, modelo, volumen, boquilla, sistema multicolor, colores del workspace (y máximo), filamento, slicer recomendado, skill de la marca, reglas FDM clave, material por defecto y OpenSCAD detectado |
+| `list_printers` | el catálogo de impresoras (id, marca, modelo, volumen, colores máximos, sistema, slicer); filtra por `brand` o `query` |
+| `set_workspace_printer` | cambia la impresora (y los colores) de ESTE workspace: reescribe estas reglas y `printer.json`, y cambia la skill de marca. Solo cuando el usuario lo pida |
 | `list_checkpoints` | árbol de checkpoints (también dibujado como texto: padre, descripción, rótulo, hijos), el último estado de render conocido y el padre activo (`activeParent`) |
 | `read_checkpoint` | código de un checkpoint |
 | `create_checkpoint` | crea un checkpoint **nuevo** `NNN-slug.scad` con el encabezado correcto; nunca pisa uno existente. `parent` por defecto: el padre activo si hay, y si no el más nuevo; `root=true` abre un diseño nuevo sin padre |
@@ -111,9 +131,13 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 | `preview` | **imagen PNG** de la pieza (`view`: `iso`, `front`, `top`, `right`…, o un ángulo libre con `rotate`; con los colores del modelo) para mirarla |
 | `measure` / `estimate_print` / `list_materials` | medidas, volumen, ¿cabe en la placa?, partes por color y **estimación de impresión** (peso, metros de filamento y costo); `estimate_print` con otro material, relleno o perímetros |
 | `suggest_orientation` | cómo poner la pieza en la placa (las 6 caras: tamaño, si cabe, voladizo, contacto) con las operaciones listas para `edit_mesh`; si nada cabe, escala máxima y por dónde partirla |
-| `list_refs` / `inspect_reference` / `import_mesh` | los modelos de `refs/` (STL/3MF/OBJ): listarlos, medirlos con una imagen y volverlos editables (checkpoint **raíz**; un 3MF u OBJ se convierte a STL y el original no se toca) |
+| `list_refs` / `inspect_reference` / `import_mesh` | lo que hay en `refs/`: los modelos (STL/3MF/OBJ, `kind: "model"`) y las imágenes (`kind: "image"`, en `refs/images/`); de un modelo: medirlo con una imagen y medirlos con una imagen y volverlos editables (checkpoint **raíz**; un 3MF u OBJ se convierte a STL y el original no se toca) |
+| `image_info` | describe una imagen de `refs/images/`: tamaño, proporción, colores dominantes, fondo y caja del objeto; con `region` y `enhance` devuelve un detalle ampliado y realzado |
+| `compare_with_image` | renderiza un checkpoint y lo pone **al lado de la imagen** (o su silueta encima, `mode=overlay`): elige la vista que mejor coincide (`view=auto`) y devuelve las proporciones y `silhouetteIoU` (0–1) |
+| `trace_image_outline` | traza el contorno de una forma plana de una imagen a un **SVG en mm** en `refs/` (con huecos; `layers` separa por color) para `linear_extrude(h) import("refs/x.svg");`. No necesita visión |
+| `image_to_heightmap` | convierte una imagen en un mapa de alturas `refs/x.dat` para `surface()` (relieve o litofanía con `invert`) y da el código que arma la pieza |
 | `edit_mesh` | edita el modelo 3D como un checkpoint **hijo**, con el mismo motor que el editor 3D de la app: `move`, `rotate`, `scale`, `resize`, `mirror`, `orient`, `center`, `to_bed`, `color`, `add`/`hole` (cubo, cilindro, esfera, texto) y `cut` con un plano. Sobre un checkpoint que no es un import congela su malla (una pieza de un solo color). El STL no se toca |
-| `export` | `stl`, `3mf` (multicolor para Bambu Studio), `stl-per-color` o `png` (la imagen del preview) en `exports/` |
+| `export` | `stl`, `3mf` (multicolor: Bambu Studio, Orca, Creality Print, Anycubic, Elegoo, Snapmaker Orca), `3mf-prusa` (PrusaSlicer), `stl-per-color` (Cura y cualquiera) o `png` (la imagen del preview) en `exports/` |
 | `set_active_parent` | desde qué checkpoint ramifica el próximo (el «Ramificar desde aquí» del usuario) |
 | `rename_checkpoint` | cambia el nombre que muestra el árbol (el archivo y su cabecera son inmutables) |
 | `trash_checkpoint` / `list_trash` / `restore_checkpoint` | descartar = mover a la papelera (nunca se borra), listarla y traerlo de vuelta |
@@ -122,7 +146,7 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 
 Flujo (obligatorio, ver arriba):
 
-1. `printer_info` (volumen y colores disponibles) y `list_checkpoints`. Si no
+1. `printer_info` (volumen, colores del workspace y slicer) y `list_checkpoints`. Si no
    hay checkpoints, el paso 2 es inmediato y sin preguntar.
 2. `create_checkpoint` con el código nuevo (empezando, si encaja, por
    `create_from_template`). Para cambiar una medida de un checkpoint existente,
@@ -135,8 +159,24 @@ Flujo (obligatorio, ver arriba):
 5. `measure` para confirmar que cabe en la placa y ver el peso (si no cabe,
    `suggest_orientation`).
 6. Si algo no convence, un checkpoint nuevo y vuelta al paso 3. `export` solo
-   cuando el usuario lo pida o el modelo esté terminado. Abrir el archivo en
-   Bambu Studio lo hace el usuario, no tú.
+   cuando el usuario lo pida o el modelo esté terminado, con el formato que lee
+   su slicer. Abrir el archivo en el slicer
+   {{- if .Slicer}} ({{.Slicer}}){{end}} lo hace el usuario, no tú.
+
+### Modelar a partir de una imagen
+
+Si el usuario adjunta una foto, un logo o un boceto, queda en `refs/images/`
+(`list_refs` la muestra con `kind: "image"`). Antes de modelar **lee la skill
+`openscad-from-image`** (`read_skill`): trae el método, las medidas estándar de
+monedas y tornillería y plantillas. El flujo es el mismo de arriba con un paso
+más: `image_info` → `create_checkpoint` con primitivas y parámetros → `render` →
+`compare_with_image` desde la misma vista → corregir en un checkpoint **nuevo**.
+Un logo o una placa plana: `trace_image_outline`; un relieve o una litofanía:
+`image_to_heightmap`. Una foto **no trae medidas**: usa la que dé el usuario o un
+objeto conocido de la foto como escala; sin ninguna, di que el tamaño es un
+supuesto. Si tu modelo no ve imágenes, no juzgues la forma a ojo: apóyate en
+`image_info`, en `trace_image_outline` y en el IoU de `compare_with_image`. Las
+imágenes se leen solo de `refs/` y `refs/images/`, hasta 20 MB y 40 MP.
 
 Sin el MCP (último recurso): escribe el `NNN-slug.scad` nuevo con la cabecera
 correcta, `openscad -o exports/check.stl <archivo>.scad` para validar y
@@ -147,8 +187,9 @@ para obtener una imagen.
 
 Las skills de este workspace están en `.claude/skills/` (y su copia para cada
 CLI: `.agents/skills/`, `.opencode/skills/`, `.agent/skills/`). Empezar por
-`openscad-core`; para un proyecto nuevo, copiar una plantilla de
-`openscad-templates` como `001-<slug>.scad`.
+`openscad-core`{{if .BrandSkill}} y la de tu impresora (`{{.BrandSkill}}`){{end}}; para un
+proyecto nuevo, copiar una plantilla de `openscad-templates` como `001-<slug>.scad`.
+Si hay imágenes en `refs/images/`, leer antes `openscad-from-image`.
 
 ## Carpetas
 
@@ -156,5 +197,6 @@ CLI: `.agents/skills/`, `.opencode/skills/`, `.agent/skills/`). Empezar por
 |---|---|
 | raíz | los checkpoints `NNN-slug.scad` |
 | `lib/` | librerías OpenSCAD (BOSL2, etc.): `list_libraries` / `install_library` — ver skill `openscad-libraries` |
-| `refs/` | modelos 3D de referencia (STL/3MF/OBJ): `list_refs`; nunca se modifican |
+| `refs/` | modelos 3D de referencia (STL/3MF/OBJ): `list_refs`; nunca se modifican. También los SVG y mapas de alturas que escriben `trace_image_outline` e `image_to_heightmap` (nunca pisan un archivo) |
+| `refs/images/` | las imágenes que el usuario adjuntó en el chat (PNG, JPEG, GIF, WebP): `image_info`, `compare_with_image`; skill `openscad-from-image` |
 | `exports/` | STL/3MF/PNG generados; se pueden borrar y regenerar |

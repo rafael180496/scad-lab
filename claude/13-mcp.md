@@ -46,14 +46,21 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 El catálogo completo —cada herramienta, qué hace, si es de lectura o de escritura y en qué superficie está— vive en
 [25-herramientas-ia.md](25-herramientas-ia.md). Resumen: workspace y árbol (`list_checkpoints`, `read_checkpoint`,
 `create_checkpoint`, `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `list_trash`, `restore_checkpoint`,
-`list_refs`), modelado (`render`, `lint`, `format`, `preview`, `measure`, `get_parameters`, `set_parameters`,
+`list_refs`), imágenes (`image_info`, `compare_with_image`, `trace_image_outline`, `image_to_heightmap`; S15), modelado (`render`, `lint`, `format`, `preview`, `measure`, `get_parameters`, `set_parameters`,
 `list_templates`, `get_template`, `create_from_template`, `list_libraries`, `install_library`, `list_skills`, `read_skill`),
-STL/3MF/OBJ (`inspect_reference`, `import_mesh`, `edit_mesh`) e impresión (`printer_info`, `estimate_print`,
+STL/3MF/OBJ (`inspect_reference`, `import_mesh`, `edit_mesh`) e impresión (`printer_info`, `list_printers`,
+`set_workspace_printer`, `estimate_print`,
 `list_materials`, `suggest_orientation`, `export`). El servidor `--mcp` y la caja en proceso de Hermes ofrecen **el mismo
 catálogo**.
 
 Detalles que no son obvios:
 
+- **Herramientas de imagen** (S15). `image_info` y `compare_with_image` son de **lectura**; `trace_image_outline` e
+  `image_to_heightmap` son de **escritura** (efecto `EffectFiles`: dejan un `.svg` o un `.dat` en `refs/`, nunca pisan). La
+  imagen se resuelve con `refmodel.ResolveImage` (solo `refs/` y `refs/images/`, mismo confinamiento que `ResolveRef`) y se
+  decodifica con los límites de `backend/imagetools` (20 MB, 40 MP, 2048 px, 10 s). Los resultados llevan la imagen primero y
+  un único texto JSON después (el que lee la tarjeta del chat). `list_refs` suma las imágenes con `kind: "image"`. Detalle en
+  [25](25-herramientas-ia.md#imágenes-s15).
 - **`import_mesh`** (S13) es de **escritura** (crea un checkpoint; en el chat con un CLI solo está en «Agente»). La ruta pasa por
   `refmodel.ResolveRef`, la misma puerta de `inspect_reference`: un solo nombre de `refs/`, formato conocido, un enlace
   simbólico solo si su destino sigue dentro de `refs/`. Avisa (`warnings`) de una malla abierta —importarla sola funciona,
@@ -103,8 +110,12 @@ Detalles que no son obvios:
   software, sombreado plano, **un color por parte** salido de la caché de partes,
   las mismas ocho vistas y el mismo tamaño que el nativo). Un modelo roto da el
   mismo error con su línea que el preview nativo.
-- **Impresora del workspace**: la del workspace registrado en la app (por ruta);
-  si la carpeta no está registrada, `printer.json`; si no, la de Configuración.
+- **Impresora del workspace**: la del workspace registrado en la app (por ruta), ya con sus colores y ajustes
+  (`wsconfig.EffectivePrinter`/`EffectiveSettings`); si la carpeta no está registrada, `printer.json`; si no, la de
+  Configuración. `printer_info` la describe entera (marca, modelo, sistema multicolor, `colors`/`maxColors`, filamento, slicer,
+  skill de la marca, fuentes); `list_printers` lista el catálogo de las siete marcas; `set_workspace_printer` cambia la impresora
+  y los colores de un workspace **registrado** con `wsconfig.Apply` (escribe en `scadlab.db` y reescribe reglas y skills; en una
+  carpeta no registrada falla con un mensaje claro). Detalle: [25](25-herramientas-ia.md).
 
 ## Seguridad
 
@@ -152,6 +163,8 @@ con código 1 y el error en stderr.
 - `main_mcp_test.go` — `runMCP` en proceso (códigos de salida, stderr) y, con
   `SCADLAB_MCP_SMOKE=1`, el binario real compilado y lanzado con `--mcp`.
 - `backend/checkpoint` — crear, carrera con el agente, raíz, encabezado.
+- `turnguard_test.go` + `backend/turnmark` — «Solo consulta» en Antigravity: con la marca `.scadlab/turn-mode` viva, el servidor rechaza cada herramienta de
+  `WriteTools()` y deja pasar la lectura; sin marca escribe; la caja de Hermes no la lee ([26](26-antigravity-permisos.md)).
 - Herramientas de T11 ([25](25-herramientas-ia.md)): `tools_workspace_test.go` (árbol, padre activo, rótulos, papelera y
   restaurar con rutas hostiles, `list_refs`, y que `readTools`/`writeTools` cubran el catálogo), `tools_params_test.go`
   (`set_parameters` y `create_from_template` renderizan, nativo y WASM), `libraries_test.go` (zip falso: SHA-256, zip slip, enlaces,
@@ -206,14 +219,18 @@ variables de paquete `agyExec` y `agyPath` inyectables en tests) y
   ruta, desactivada) es del usuario y no se toca; con el MCP apagado en Configuración no hace
   nada; sin `agy` tampoco. Lo disparan: la UI al mostrar `cli:antigravity` (`ChatPanel`),
   `prepareCLIMCP` al empezar un turno y `StartAgentTerminal` antes de lanzarlo. Emite
-  `mcp:antigravity {added, error}` (toast en `App.tsx`); un `agy` que no lo acepta devuelve
+  `mcp:antigravity {added, permissions, settingsPath, error}` (toast en `App.tsx`); un `agy` que no lo acepta devuelve
   `msgAgyEnsureFailed` con la salida de `agy`, y el turno lo repite en el prompt (el CLI debe
   entregar un bloque) y, si no dejó nada, en su respuesta. `agyMu` serializa los add/remove y
   `agyEnsureMu` el registro (dos clics no avisan dos veces). **Las pruebas nunca lanzan el `agy`
   real**: `TestMain` deja `agyExec` en un doble que solo contesta `mcp list` y rechaza lo demás.
-- **Entrada sin `--workspace`.** `scadlab` → `<bin> --mcp`: el servidor usa el cwd
-  (`mcp.Options.WorkspaceDir` vacío → `os.Getwd()`, ver `main_mcp.go`), y `agy` lo
-  lanza en la carpeta del proyecto, así que una entrada sirve a todos los workspaces.
+- **Permiso por herramienta (T14).** Registrar el servidor no basta: en `agy --print` cada herramienta MCP sin aprobar se rechaza y
+  el turno termina. ScadLab agrega al `settings.json` global de Antigravity una regla `mcp(scadlab/<herramienta>)` por cada herramienta
+  del catálogo (junto a este registro y en cada turno; Quitar/Volver a agregar en Configuración), y el servidor `--mcp` hace cumplir «Solo
+  consulta» con la marca `.scadlab/turn-mode`: [26-antigravity-permisos.md](26-antigravity-permisos.md). Los hooks no sirven (medido).
+- **Entrada sin `--workspace`.** `scadlab` → `<bin> --mcp`: la carpeta es, por orden, `--workspace`, la variable
+  `SCADLAB_WORKSPACE` (el chat la pone en cada turno de `agy`) y el cwd (`mcp.Options.WorkspaceDir` vacío → `os.Getwd()`, ver
+  `main_mcp.go`; la primera línea de stderr dice cuál valió), y `agy` lo lanza en la carpeta del proyecto, así que una entrada sirve a todos los workspaces.
   **Riesgo no verificado con una sesión real** (abrirla gasta cuota): si `agy` no
   lanzara el MCP con cwd = proyecto, el servidor trabajaría en otra carpeta y la
   herramienta lo diría al usarla. La ayuda lo documenta.

@@ -38,8 +38,9 @@ import (
 // extensión (el STL no tiene firma fiable) más una comprobación de la firma del
 // 3MF (un zip), y lo valida a fondo refmodel.Analyze.
 
-// Límites. El de imagen es el de la API de Anthropic; el de modelo, el de
-// refmodel.
+// Límites. MaxImageBytes es lo que va al MODELO por imagen (el de la API de
+// Anthropic): una imagen más grande no se rechaza, se reduce al adjuntar
+// (ReduceImage, hasta MaxImageInputBytes). El de modelo 3D es el de refmodel.
 const (
 	MaxImageBytes  = 5 << 20
 	MaxModelBytes  = refmodel.MaxBytes
@@ -117,7 +118,7 @@ func LimitFor(kind string) int64 {
 	if kind == KindModel {
 		return MaxModelBytes
 	}
-	return MaxImageBytes
+	return MaxImageInputBytes
 }
 
 // ErrTooBig es el error de un adjunto que pasa el tope de su tipo.
@@ -194,9 +195,13 @@ func NewID() string {
 type Pending struct {
 	Attachment
 	WorkspaceID int64
-	// Staged es el archivo de una imagen en la carpeta de preparación; "" en un
-	// modelo (ya está en refs/).
+	// Staged es el archivo de una imagen en la carpeta de preparación —la versión
+	// que va al modelo, reducida si hacía falta—; "" en un modelo (ya está en refs/).
 	Staged string
+	// Original es la imagen tal como la adjuntó el usuario, cuando Staged es una
+	// copia reducida (ReduceImage); "" si no se redujo. Es la que se guarda en
+	// refs/images/ para las herramientas.
+	Original string
 	// RefAbs es la ruta absoluta de la copia en refs/ de un modelo, y Owned dice
 	// que la creó este adjunto (quitarlo antes de enviar la borra; nunca se borra
 	// una referencia que ya existía).
@@ -274,6 +279,9 @@ func (p *Pending) Discard() {
 	if p.Staged != "" {
 		_ = os.Remove(p.Staged)
 	}
+	if p.Original != "" {
+		_ = os.Remove(p.Original)
+	}
 	if p.Owned && p.RefAbs != "" {
 		_ = os.Remove(p.RefAbs)
 	}
@@ -283,12 +291,21 @@ func (p *Pending) Discard() {
 
 // Prepared es el reparto de los adjuntos de un mensaje.
 type Prepared struct {
-	// Text es el mensaje que lee el modelo: lo que escribió la persona más el
-	// informe de cada modelo de referencia.
+	// Text es el mensaje que lee el modelo: lo que escribió la persona, el
+	// informe de cada modelo de referencia y, al final, la línea con las rutas de
+	// las fotos en refs/images/ (ImagePathsNote).
 	Text string
-	// Images son las rutas de las imágenes que viajan (las adjuntas y la vista
-	// previa de cada modelo, esta última solo si el modelo ve).
+	// Images son las rutas de las imágenes que viajan como imagen (las adjuntas
+	// y la vista previa de cada modelo, esta última solo si el modelo ve). Con
+	// ImagesAsFiles las fotos no están: solo quedan como archivos en refs/.
 	Images []string
+	// ImageRefs son las fotos adjuntas copiadas al workspace, relativas a él y con
+	// «/» ("refs/images/pieza-ab12cd34.png"), en el orden de los adjuntos. Vacío si
+	// no se pidió copiarlas (PrepareOptions.WorkspaceDir).
+	ImageRefs []string
+	// Previews son las vistas previas de los modelos de referencia que viajan como
+	// imagen (ya están en Images): los CLIs las reciben aparte de las fotos.
+	Previews []string
 	// Metas es lo que se guarda en los Parts del mensaje.
 	Metas []AttachmentMeta
 }
@@ -312,17 +329,67 @@ func CheckVision(atts []*Pending, vision, visionKnown bool, who string) error {
 	return nil
 }
 
-// Prepare arma el mensaje con los adjuntos: mueve las imágenes en preparación a
-// dir (la carpeta del chat), escribe la vista previa de los modelos si el modelo
-// ve, y reúne el texto. Llamarla consume los archivos en preparación.
+// PrepareOptions son las opciones de PrepareIn.
+type PrepareOptions struct {
+	// Dir es la carpeta del chat (<datos>/chat-attachments/<chatId>/), a donde se
+	// mueven las imágenes en preparación.
+	Dir string
+	// Vision dice que el modelo ve: la vista previa de un modelo de referencia
+	// viaja como imagen.
+	Vision bool
+	// WorkspaceDir, si no está vacío, copia cada foto a <ws>/refs/images/ (S15) y
+	// pone sus rutas en el mensaje. Vacío = no se copia (las pruebas viejas).
+	WorkspaceDir string
+	// ImagesAsFiles: las fotos NO viajan como imagen, solo como archivos en refs/.
+	// Es el envío «con trazado de contorno» a un modelo que no ve (S15): las
+	// herramientas de imagen trabajan con el archivo y no necesitan visión.
+	ImagesAsFiles bool
+}
+
+// Prepare es PrepareIn sin copiar las fotos al workspace.
 func Prepare(text string, atts []*Pending, vision bool, dir string) (Prepared, error) {
+	return PrepareIn(text, atts, PrepareOptions{Dir: dir, Vision: vision})
+}
+
+// PrepareIn arma el mensaje con los adjuntos: copia las fotos a refs/images/ del
+// workspace (si se pidió), mueve las imágenes en preparación a la carpeta del
+// chat, escribe la vista previa de los modelos si el modelo ve, y reúne el texto.
+// Llamarla consume los archivos en preparación.
+func PrepareIn(text string, atts []*Pending, o PrepareOptions) (Prepared, error) {
 	var p Prepared
 	if len(atts) > MaxAttachments {
 		return p, i18n.Errorf(i18n.Msg{ES: "se pueden adjuntar hasta %d archivos por mensaje (llegaron %d)", EN: "up to %d files can be attached per message (got %d)"}, MaxAttachments, len(atts))
 	}
 	if len(atts) > 0 {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+		if err := os.MkdirAll(o.Dir, 0o700); err != nil {
 			return p, i18n.Errorf(i18n.Msg{ES: "no se pudo preparar la carpeta de adjuntos: %w", EN: "could not prepare the attachments folder: %w"}, err)
+		}
+	}
+	gone := func(a *Pending) error {
+		return i18n.Errorf(i18n.Msg{ES: "el adjunto %q ya no está (se borra al cabo de un día); vuelve a adjuntarlo", EN: "the attachment %q is gone (they are deleted after a day); attach it again"}, a.Name)
+	}
+	// Primero lo que se puede repetir sin consecuencias: copiar las fotos al
+	// workspace. Si falla una, ninguna imagen se movió todavía y se puede reintentar.
+	refs := map[*Pending]string{}
+	if o.WorkspaceDir != "" {
+		for _, a := range atts {
+			if a.Kind != KindImage {
+				continue
+			}
+			src := a.Staged
+			if a.Original != "" {
+				src = a.Original // a refs/images/ va la foto entera, no la reducida
+			}
+			raw, err := os.ReadFile(src)
+			if err != nil {
+				return p, gone(a)
+			}
+			rel, err := CopyImageToRefs(o.WorkspaceDir, a.Name, a.Mime, raw)
+			if err != nil {
+				return p, err
+			}
+			refs[a] = rel
+			p.ImageRefs = append(p.ImageRefs, rel)
 		}
 	}
 	var reports []string
@@ -330,19 +397,28 @@ func Prepare(text string, atts []*Pending, vision bool, dir string) (Prepared, e
 		meta := AttachmentMeta{Kind: a.Kind, Name: a.Name, Mime: a.Mime, Size: a.Size, RefPath: a.RefPath, Summary: a.Summary, Thumb: a.ThumbDataURL}
 		switch a.Kind {
 		case KindImage:
-			dst := filepath.Join(dir, filepath.Base(a.Staged))
+			dst := filepath.Join(o.Dir, filepath.Base(a.Staged))
 			if err := moveFile(a.Staged, dst); err != nil {
-				return p, i18n.Errorf(i18n.Msg{ES: "el adjunto %q ya no está (se borra al cabo de un día); vuelve a adjuntarlo", EN: "the attachment %q is gone (they are deleted after a day); attach it again"}, a.Name)
+				return p, gone(a)
 			}
-			p.Images = append(p.Images, dst)
+			if a.Original != "" {
+				_ = os.Remove(a.Original) // ya está en refs/images/
+			}
+			if !o.ImagesAsFiles {
+				p.Images = append(p.Images, dst)
+			}
+			if rel := refs[a]; rel != "" {
+				meta.RefPath = rel
+			}
 		case KindModel:
 			if a.Summary != "" {
 				reports = append(reports, a.Summary)
 			}
-			if vision && len(a.Preview) > 0 {
-				path := filepath.Join(dir, "ref-"+a.ID+".png")
+			if o.Vision && len(a.Preview) > 0 {
+				path := filepath.Join(o.Dir, "ref-"+a.ID+".png")
 				if err := os.WriteFile(path, a.Preview, 0o600); err == nil {
 					p.Images = append(p.Images, path)
+					p.Previews = append(p.Previews, path)
 				}
 			}
 		}
@@ -352,7 +428,7 @@ func Prepare(text string, atts []*Pending, vision bool, dir string) (Prepared, e
 	if text == "" && len(atts) > 0 {
 		text = DefaultAttachmentPrompt()
 	}
-	p.Text = withText(text, strings.Join(reports, "\n\n"))
+	p.Text = withText(withText(text, strings.Join(reports, "\n\n")), ImagePathsNote(p.ImageRefs))
 	return p, nil
 }
 

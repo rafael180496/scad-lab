@@ -27,7 +27,9 @@ var wantTools = []string{
 	"list_libraries", "install_library",
 	"edit_mesh",
 	"estimate_print", "list_materials", "suggest_orientation",
+	"list_printers", "set_workspace_printer",
 	"list_skills", "read_skill", "inspect_reference",
+	"image_info", "compare_with_image", "trace_image_outline", "image_to_heightmap",
 }
 
 func TestInitializeNegotiatesVersion(t *testing.T) {
@@ -377,8 +379,10 @@ func TestPrinterInfoFromStoredWorkspace(t *testing.T) {
 	if vol["x"] != want.BuildVolume.X || vol["z"] != want.BuildVolume.Z {
 		t.Errorf("volumen: %v", vol)
 	}
-	if int(pr["multicolorSlots"].(float64)) != want.MulticolorSlots {
-		t.Errorf("slots: %v", pr["multicolorSlots"])
+	// Los colores son los del workspace (S14): sin ajuste, los de fábrica de la
+	// impresora, no el máximo de la máquina.
+	if int(pr["multicolorSlots"].(float64)) != want.Colors(0) {
+		t.Errorf("slots: %v, esperaba %d", pr["multicolorSlots"], want.Colors(0))
 	}
 	if out["workspace"] != "Mi Caja" {
 		t.Errorf("workspace: %v", out["workspace"])
@@ -388,6 +392,33 @@ func TestPrinterInfoFromStoredWorkspace(t *testing.T) {
 	}
 	if rules, _ := out["fdmRules"].([]any); len(rules) < 5 {
 		t.Errorf("fdmRules: %v", rules)
+	}
+}
+
+// La impresora y los ajustes de impresión son los del workspace registrado: los
+// colores que eligió y su material (wsconfig), no los de Configuración.
+func TestEnvUsesTheWorkspaceConfig(t *testing.T) {
+	infill, loops := 40.0, 3
+	c := setup(t, func(t *testing.T, st *store.Store, ws string) {
+		id, err := st.InsertWorkspace(store.Workspace{Name: "Mi Caja", Path: ws, PrinterID: "bambu-h2d"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := store.WorkspacePrint{Colors: 6, Material: "petg", InfillPercent: &infill, WallLoops: &loops}
+		if err := st.SetWorkspaceConfig(id, "bambu-h2d", nil, cfg); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.SetSetting("defaultMaterial", "pla"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	out := c.mustOK("printer_info", nil)
+	pr, _ := out["printer"].(map[string]any)
+	if pr["id"] != "bambu-h2d" || int(pr["multicolorSlots"].(float64)) != 6 {
+		t.Errorf("impresora efectiva: %v", pr)
+	}
+	if mat, _ := out["defaultMaterial"].(map[string]any); mat["id"] != "petg" {
+		t.Errorf("el material del workspace gana sobre el global: %v", mat)
 	}
 }
 

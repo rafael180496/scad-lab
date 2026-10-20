@@ -32,7 +32,10 @@ import (
 //	           chip muestra su vista previa). Todavía no es parte de ningún mensaje.
 //	enviado    SendChatMessage lo mueve a <datos>/chat-attachments/<chatId>/ y lo
 //	           pasa al modelo; de ahí en adelante solo queda su ficha (nombre, tamaño,
-//	           miniatura, informe) en los Parts del mensaje.
+//	           miniatura, informe, refPath) en los Parts del mensaje. Una imagen,
+//	           además, se copia a <workspace>/refs/images/<nombre>-<hash8>.<ext>
+//	           (S15; sin pisar, deduplicada por contenido): ahí la abren las
+//	           herramientas de imagen, y esa ruta es la que ve el modelo.
 //
 // Quitar el chip antes de enviar borra lo que se creó (la copia en refs/ solo si
 // la hizo este adjunto). Lo que quede de una sesión anterior se barre al
@@ -226,7 +229,7 @@ func (a *App) AddChatAttachment(workspaceID int64, path string) (hermes.Attachme
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return hermes.Attachment{}, err
 		}
-		raw, err := io.ReadAll(io.LimitReader(f, hermes.MaxImageBytes+1))
+		raw, err := io.ReadAll(io.LimitReader(f, hermes.MaxImageInputBytes+1))
 		if err != nil {
 			return hermes.Attachment{}, err
 		}
@@ -298,28 +301,53 @@ func (a *App) AddChatAttachmentData(workspaceID int64, name, dataBase64 string) 
 // nombra el archivo: así lo que se ve en el compositor siempre coincide con lo
 // que se eligió. Lista vacía si se cancela.
 func (a *App) ChooseChatAttachment(workspaceID int64) ([]hermes.Attachment, error) {
+	return a.chooseAttachments(workspaceID, false)
+}
+
+// ChooseChatImages es ChooseChatAttachment solo para fotos (S15, «Crear desde una
+// imagen»): el diálogo del sistema ofrece únicamente imágenes y un modelo 3D que se
+// cuele (se puede cambiar el filtro) se rechaza, igual que si no se hubiera elegido.
+func (a *App) ChooseChatImages(workspaceID int64) ([]hermes.Attachment, error) {
+	return a.chooseAttachments(workspaceID, true)
+}
+
+func (a *App) chooseAttachments(workspaceID int64, imagesOnly bool) ([]hermes.Attachment, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
 	}
-	paths, err := wruntime.OpenMultipleFilesDialog(a.appCtx(), wruntime.OpenDialogOptions{
+	opts := wruntime.OpenDialogOptions{
 		Title: i18n.T(i18n.Msg{ES: "Adjuntar imágenes o modelos 3D", EN: "Attach images or 3D models"}),
 		Filters: []wruntime.FileFilter{
 			{DisplayName: i18n.T(i18n.Msg{ES: "Imágenes y modelos 3D", EN: "Images and 3D models"}), Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.webp;*.stl;*.3mf;*.obj"},
 		},
-	})
+	}
+	if imagesOnly {
+		opts.Title = i18n.T(i18n.Msg{ES: "Elegir fotos del objeto", EN: "Choose photos of the object"})
+		opts.Filters = []wruntime.FileFilter{
+			{DisplayName: i18n.T(i18n.Msg{ES: "Imágenes", EN: "Images"}), Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.webp"},
+		}
+	}
+	paths, err := wruntime.OpenMultipleFilesDialog(a.appCtx(), opts)
 	if err != nil {
 		return nil, err
 	}
 	out := []hermes.Attachment{}
+	undo := func() {
+		for _, done := range out {
+			_ = a.RemoveChatAttachment(done.ID)
+		}
+	}
 	for _, p := range paths {
 		att, err := a.AddChatAttachment(workspaceID, p)
 		if err != nil {
-			for _, done := range out {
-				_ = a.RemoveChatAttachment(done.ID)
-			}
+			undo()
 			return nil, err
 		}
 		out = append(out, att)
+		if imagesOnly && att.Kind != hermes.KindImage {
+			undo()
+			return nil, i18n.Errorf(i18n.Msg{ES: "%q no es una imagen: elige fotos PNG, JPG, GIF o WebP", EN: "%q is not an image: choose PNG, JPG, GIF or WebP photos"}, att.Name)
+		}
 	}
 	return out, nil
 }
@@ -340,13 +368,34 @@ func (a *App) stageImage(w store.Workspace, name, mime string, raw []byte) (herm
 	if err != nil {
 		return hermes.Attachment{}, err
 	}
-	id := hermes.NewID()
-	path := filepath.Join(dir, id+hermes.ImageExt(mime))
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		return hermes.Attachment{}, i18n.Errorf(i18n.Msg{ES: "no se pudo guardar el adjunto: %w", EN: "could not save the attachment: %w"}, err)
+	// Una foto grande no se rechaza: al modelo va una copia reducida (lado ≤ 2048 px,
+	// ≤ 5 MB) y el original queda al lado, para guardarlo en refs/images/ al enviar.
+	send, sendMime, reduced, err := hermes.ReduceImage(raw, mime)
+	if err != nil {
+		return hermes.Attachment{}, i18n.Errorf(i18n.Msg{ES: "no se pudo preparar la imagen %q: %w", EN: "could not prepare the image %q: %w"}, name, err)
 	}
-	att := hermes.Attachment{ID: id, Kind: hermes.KindImage, Name: name, Mime: mime, Size: int64(len(raw)), ThumbDataURL: hermes.ThumbDataURL(raw)}
-	a.chatSvc().attachments.Add(&hermes.Pending{Attachment: att, WorkspaceID: w.ID, Staged: path})
+	id := hermes.NewID()
+	saveErr := func(err error) error {
+		return i18n.Errorf(i18n.Msg{ES: "no se pudo guardar el adjunto: %w", EN: "could not save the attachment: %w"}, err)
+	}
+	path := filepath.Join(dir, id+hermes.ImageExt(sendMime))
+	if err := os.WriteFile(path, send, 0o600); err != nil {
+		return hermes.Attachment{}, saveErr(err)
+	}
+	pending := &hermes.Pending{WorkspaceID: w.ID, Staged: path}
+	if reduced {
+		orig := filepath.Join(dir, id+"-original"+hermes.ImageExt(mime))
+		if err := os.WriteFile(orig, raw, 0o600); err != nil {
+			_ = os.Remove(path)
+			return hermes.Attachment{}, saveErr(err)
+		}
+		pending.Original = orig
+	}
+	// Size y Mime son los del archivo del usuario (el chip dice lo que adjuntó);
+	// la miniatura sale de la copia reducida, que es barata de decodificar.
+	att := hermes.Attachment{ID: id, Kind: hermes.KindImage, Name: name, Mime: mime, Size: int64(len(raw)), ThumbDataURL: hermes.ThumbDataURL(send)}
+	pending.Attachment = att
+	a.chatSvc().attachments.Add(pending)
 	return att, nil
 }
 

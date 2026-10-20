@@ -394,3 +394,28 @@ func TestWriteAndClearRenderErrors(t *testing.T) {
 		t.Error("no se borró")
 	}
 }
+
+// La clave de caché ignora la línea `// @checkpoint …`: re-colgar un checkpoint
+// (mandar su padre a la papelera) reescribe esa línea y no debe invalidar su
+// render. El resto del archivo sí cuenta, incluida la segunda línea.
+func TestContentHashIgnoresCheckpointHeader(t *testing.T) {
+	dir := t.TempDir()
+	h := func(src string) string { return contentHash(dir, "002-x.scad", []byte(src)) }
+	a := h("// @checkpoint parent=001-a.scad desc=\"x\"\ncube(1);\n")
+	if b := h("// @checkpoint parent= desc=\"x\"\ncube(1);\n"); a != b {
+		t.Error("cambiar parent= no debe cambiar la clave")
+	}
+	// Con BOM y CRLF en la cabecera: es la misma línea, y lo de abajo igual.
+	if b := h("\xEF\xBB\xBF// @checkpoint parent=009-z.scad desc=\"otra\"\r\ncube(1);\n"); a != b {
+		t.Error("el BOM y el CRLF de la cabecera no cuentan")
+	}
+	if b := h("// @checkpoint parent=001-a.scad desc=\"x\"\ncube(2);\n"); a == b {
+		t.Error("cambiar el código debe cambiar la clave")
+	}
+	if b := h("cube(1);\n"); a == b {
+		t.Error("sin cabecera es otro contenido")
+	}
+	if b := h("// otro comentario\ncube(1);\n"); h("// distinto comentario\ncube(1);\n") == b {
+		t.Error("solo la línea @checkpoint se ignora")
+	}
+}

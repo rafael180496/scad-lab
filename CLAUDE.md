@@ -10,10 +10,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 
 ## Reglas de ejecución (prioritarias)
 
-1. **Solo el usuario hace commits.** Nunca `git add`, `commit`, `push`, tags ni
-   PRs — ni Claude ni ningún sub-agente, aunque se haya pedido en otra
-   conversación. Los cambios quedan en el árbol de trabajo. Ver
-   [.claude/rules/conventions.md](.claude/rules/conventions.md).
+1. **Commits solo con permiso explícito, cada vez.** Por defecto nunca `git add`, `commit`, `push`, merge, tags ni PRs —ni Claude ni ningún sub-agente—: los cambios quedan en el árbol de trabajo. La única excepción es que el usuario lo autorice **en esa misma conversación y para ese cambio**; un permiso no vale para el siguiente, y Claude **siempre pregunta antes** (nunca lo hace por iniciativa propia). Con el permiso, el flujo es fijo: commit en `develop` → merge de `develop` en `main` → tag `vX.Y.Z` sobre `main` (si es una versión) → push de `develop`, `main` y el tag. Ver [.claude/rules/conventions.md](.claude/rules/conventions.md).
 2. **Por fases.** Todo trabajo pertenece a una fase de
    [claude/01-roadmap.md](claude/01-roadmap.md) y se descompone en una lista
    ordenada de tareas antes de tocar código; cada tarea se marca al terminarla.
@@ -34,7 +31,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
    `./scripts/package-all.sh` (`.dmg` + `.exe`), copia a `releases/<so>/`,
    SHA-256 en cada README, CHANGELOG `[Unreleased]` → versión, `index.html` y
    `es/index.html` al día—, igual que mini-tools. **Nunca antes de que lo pida.**
-   Publicar = el usuario commitea y empuja el tag `vX.Y.Z`; el workflow
+   Publicar = commit + merge a `main` + tag `vX.Y.Z` + push, solo con el permiso explícito del usuario (regla 1); el workflow
    `.github/workflows/release.yml` crea el Release con esos artefactos (no
    compila).
 7. **Documentación segmentada**: este archivo es solo un índice. Cada tema vive
@@ -50,7 +47,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/03-backend.md](claude/03-backend.md) | Reglas Go: sin CGO, multiplataforma, errores, procesos |
 | [claude/04-frontend.md](claude/04-frontend.md) | Reglas React/TS/Tailwind, design system, componentes |
 | [claude/05-i18n.md](claude/05-i18n.md) | Inglés y español en frontend y backend, chequeo |
-| [claude/06-go-react-contract.md](claude/06-go-react-contract.md) | Bindings `App` vigentes |
+| [claude/06-go-react-contract.md](claude/06-go-react-contract.md) | Índice del contrato Go ↔ React: bindings generales y eventos; los de cada área están en los segmentos 29–33 |
 | [claude/07-database.md](claude/07-database.md) | `scadlab.db`: tablas, migraciones aditivas |
 | [claude/08-openscad.md](claude/08-openscad.md) | OpenSCAD, skills de modelado, impresoras Bambu, 3MF |
 | [claude/09-agents-ai.md](claude/09-agents-ai.md) | CLIs agénticos, Ollama/OpenAI/Anthropic, MCP, workspaces |
@@ -70,6 +67,14 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/23-edicion-stl.md](claude/23-edicion-stl.md) | Editar un STL (S13): no destructivo (`import("refs/x.stl")` en un checkpoint nuevo), contrato `Scene`/`Transform`/`Cut`, convención de rotación (`rotate` de OpenSCAD = Euler `'ZYX'` de three), código generado y sus colores, import base y su marca, importar STL/3MF/OBJ, congelar la malla de un checkpoint, `import_mesh`, skill `openscad-stl-editing`, límites |
 | [claude/24-editor-3d.md](claude/24-editor-3d.md) | Interfaz de editar un STL (S13, 13.2): importar (botón y arrastrar con `OnFileDrop`), modo «Editar» del visor (sesión en un store de módulo, pila de operaciones y deshacer, gizmo sobre el centro de la caja, apoyar sobre una cara, plano de corte con recorte en GPU, piezas unión/agujero), «Modificar con IA», panel angosto, banco `mesh-*` y `uishot-fit.sh` |
 | [claude/25-herramientas-ia.md](claude/25-herramientas-ia.md) | Herramientas de la IA (S12.c, T11): tabla completa por área (workspace, modelado, STL/3MF/OBJ, impresión), lectura/escritura y superficie (Hermes, `--mcp`), decisiones (rótulos, `install_library` con SHA-256 fijado, `edit_mesh`, `suggest_orientation`) |
+| [claude/26-antigravity-permisos.md](claude/26-antigravity-permisos.md) | Aprobar las herramientas de ScadLab en Antigravity `--print` (S12.c, T14): el rechazo que termina el turno, por qué no sirven los hooks (medido), las reglas `mcp(scadlab/<herramienta>)` que ScadLab mantiene en `permissions.allow` del `settings.json` de Antigravity (combinar, copia, sincronizar, quitar/reponer), «Solo consulta» hecho cumplir por el servidor `--mcp` con una marca en el workspace, el workspace del servidor global, el mensaje cuando igual se bloquea y qué falta probar con una sesión real |
+| [claude/27-impresoras-workspace.md](claude/27-impresoras-workspace.md) | Impresoras y configuración por workspace (S14): catálogo multimarca (7 marcas), colores efectivos, skills por workspace y de marca, migración 10 y su backfill de colores, slicers (`slicerPaths`, «Abrir en <slicer>»), interfaz (selector, «Configuración del workspace», barra de estado) y banco |
+| [claude/28-modelo-desde-imagen.md](claude/28-modelo-desde-imagen.md) | Crear un modelo desde una imagen (S15): las fotos del chat copiadas a `refs/images/` (hash, sin pisar, atómico), rutas en el turno de Hermes y de los CLIs, «Crear desde una imagen», tarjetas de comparación y trazado, aviso sin visión y «Usar trazado de contorno», banco |
+| [claude/29-contrato-workspaces.md](claude/29-contrato-workspaces.md) | Contrato Go ↔ React: workspaces, `GetWorkspaceConfig`/`SaveWorkspaceConfig`/`CreateWorkspaceWith`, proyectos abiertos |
+| [claude/30-contrato-checkpoints.md](claude/30-contrato-checkpoints.md) | Contrato Go ↔ React: papelera, padre activo, sesiones, checkpoint de inicio |
+| [claude/31-contrato-render-visor-editor.md](claude/31-contrato-render-visor-editor.md) | Contrato Go ↔ React: render, visor 3D, editor, paneles acoplables, apariencia y edición de STL |
+| [claude/32-contrato-exportacion-skills.md](claude/32-contrato-exportacion-skills.md) | Contrato Go ↔ React: exportación y slicers, descarga de OpenSCAD, skills |
+| [claude/33-contrato-servidores-chat.md](claude/33-contrato-servidores-chat.md) | Contrato Go ↔ React: servidores de modelos, llavero, chat con Hermes y CLIs como proveedores |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

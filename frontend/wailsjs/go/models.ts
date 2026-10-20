@@ -375,6 +375,8 @@ export namespace main {
 	export class AntigravityEnsure {
 	    added: boolean;
 	    state: string;
+	    permissionsAdded: number;
+	    permissionsError: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AntigravityEnsure(source);
@@ -384,6 +386,8 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.added = source["added"];
 	        this.state = source["state"];
+	        this.permissionsAdded = source["permissionsAdded"];
+	        this.permissionsError = source["permissionsError"];
 	    }
 	}
 	export class AntigravityMCP {
@@ -403,6 +407,30 @@ export namespace main {
 	        this.agyPath = source["agyPath"];
 	        this.command = source["command"];
 	        this.current = source["current"];
+	        this.detail = source["detail"];
+	    }
+	}
+	export class AntigravityPermissions {
+	    state: string;
+	    path: string;
+	    approved: number;
+	    total: number;
+	    stale: number;
+	    managed: boolean;
+	    detail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AntigravityPermissions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.path = source["path"];
+	        this.approved = source["approved"];
+	        this.total = source["total"];
+	        this.stale = source["stale"];
+	        this.managed = source["managed"];
 	        this.detail = source["detail"];
 	    }
 	}
@@ -631,6 +659,26 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class EffectivePrint {
+	    material: string;
+	    infillPercent: number;
+	    wallLoops: number;
+	    lineWidthMm: number;
+	    filamentDiameterMm: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new EffectivePrint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.material = source["material"];
+	        this.infillPercent = source["infillPercent"];
+	        this.wallLoops = source["wallLoops"];
+	        this.lineWidthMm = source["lineWidthMm"];
+	        this.filamentDiameterMm = source["filamentDiameterMm"];
+	    }
 	}
 	export class ImportOptions {
 	    centerOnBed: boolean;
@@ -866,6 +914,44 @@ export namespace main {
 		}
 	}
 	
+	export class NewWorkspaceInput {
+	    name: string;
+	    parentDir: string;
+	    printerId: string;
+	    skills: string[];
+	    print: store.WorkspacePrint;
+	
+	    static createFrom(source: any = {}) {
+	        return new NewWorkspaceInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.parentDir = source["parentDir"];
+	        this.printerId = source["printerId"];
+	        this.skills = source["skills"];
+	        this.print = this.convertValues(source["print"], store.WorkspacePrint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class OpenProjectEntry {
 	    workspace: store.Workspace;
 	    missing: boolean;
@@ -1047,6 +1133,7 @@ export namespace main {
 	export class SendOptions {
 	    agent?: boolean;
 	    maxSteps: number;
+	    imagesAsFiles?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SendOptions(source);
@@ -1056,6 +1143,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.agent = source["agent"];
 	        this.maxSteps = source["maxSteps"];
+	        this.imagesAsFiles = source["imagesAsFiles"];
 	    }
 	}
 	export class ServerProbe {
@@ -1143,6 +1231,7 @@ export namespace main {
 	    name: string;
 	    path: string;
 	    found: boolean;
+	    configured: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Slicer(source);
@@ -1154,6 +1243,7 @@ export namespace main {
 	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.found = source["found"];
+	        this.configured = source["configured"];
 	    }
 	}
 	export class TerminalInfo {
@@ -1230,6 +1320,119 @@ export namespace main {
 	        this.keyringDetail = source["keyringDetail"];
 	    }
 	}
+	export class WorkspaceConfigInput {
+	    printerId: string;
+	    skills: string[];
+	    print: store.WorkspacePrint;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceConfigInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.printerId = source["printerId"];
+	        this.skills = source["skills"];
+	        this.print = this.convertValues(source["print"], store.WorkspacePrint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WorkspaceConfigView {
+	    workspace: store.Workspace;
+	    printer: printers.Printer;
+	    colors: number;
+	    skills: string[];
+	    defaultSkills: string[];
+	    print: store.WorkspacePrint;
+	    effective: EffectivePrint;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceConfigView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace = this.convertValues(source["workspace"], store.Workspace);
+	        this.printer = this.convertValues(source["printer"], printers.Printer);
+	        this.colors = source["colors"];
+	        this.skills = source["skills"];
+	        this.defaultSkills = source["defaultSkills"];
+	        this.print = this.convertValues(source["print"], store.WorkspacePrint);
+	        this.effective = this.convertValues(source["effective"], EffectivePrint);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WorkspaceConfigResult {
+	    config: WorkspaceConfigView;
+	    removed: string[];
+	    kept: string[];
+	    syncError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceConfigResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.config = this.convertValues(source["config"], WorkspaceConfigView);
+	        this.removed = source["removed"];
+	        this.kept = source["kept"];
+	        this.syncError = source["syncError"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class WorkspaceView {
 	    workspace: store.Workspace;
 	    checkpoints: store.Checkpoint[];
@@ -1581,6 +1784,22 @@ export namespace parts {
 
 export namespace printers {
 	
+	export class Brand {
+	    id: string;
+	    name: string;
+	    skill: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Brand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.skill = source["skill"];
+	    }
+	}
 	export class Volume {
 	    x: number;
 	    y: number;
@@ -1600,13 +1819,27 @@ export namespace printers {
 	export class Printer {
 	    id: string;
 	    name: string;
+	    model: string;
+	    brand_id: string;
+	    brand_name: string;
+	    skill: string;
 	    build_volume: Volume;
 	    nozzle_mm: number;
-	    multicolor_slots: number;
+	    nozzle_count: number;
+	    filament_diameter_mm: number;
+	    multicolor_kind: string;
 	    multicolor_system: string;
+	    multicolor_slots: number;
+	    max_colors: number;
+	    default_colors: number;
 	    enclosed: boolean;
 	    heated_chamber: boolean;
+	    bed_surface: string;
+	    max_nozzle_temp_c: number;
+	    max_bed_temp_c: number;
+	    slicers: string[];
 	    notes: string;
+	    sources: string[];
 	    verify: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -1617,13 +1850,27 @@ export namespace printers {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.model = source["model"];
+	        this.brand_id = source["brand_id"];
+	        this.brand_name = source["brand_name"];
+	        this.skill = source["skill"];
 	        this.build_volume = this.convertValues(source["build_volume"], Volume);
 	        this.nozzle_mm = source["nozzle_mm"];
-	        this.multicolor_slots = source["multicolor_slots"];
+	        this.nozzle_count = source["nozzle_count"];
+	        this.filament_diameter_mm = source["filament_diameter_mm"];
+	        this.multicolor_kind = source["multicolor_kind"];
 	        this.multicolor_system = source["multicolor_system"];
+	        this.multicolor_slots = source["multicolor_slots"];
+	        this.max_colors = source["max_colors"];
+	        this.default_colors = source["default_colors"];
 	        this.enclosed = source["enclosed"];
 	        this.heated_chamber = source["heated_chamber"];
+	        this.bed_surface = source["bed_surface"];
+	        this.max_nozzle_temp_c = source["max_nozzle_temp_c"];
+	        this.max_bed_temp_c = source["max_bed_temp_c"];
+	        this.slicers = source["slicers"];
 	        this.notes = source["notes"];
+	        this.sources = source["sources"];
 	        this.verify = source["verify"];
 	    }
 	
@@ -2244,6 +2491,7 @@ export namespace store {
 	    filamentDiameterMm: number;
 	    currency: string;
 	    bambuStudioPath: string;
+	    slicerPaths: Record<string, string>;
 	    autoRender: boolean;
 	    renderTimeoutSec: number;
 	    autoIterate: boolean;
@@ -2284,6 +2532,7 @@ export namespace store {
 	        this.filamentDiameterMm = source["filamentDiameterMm"];
 	        this.currency = source["currency"];
 	        this.bambuStudioPath = source["bambuStudioPath"];
+	        this.slicerPaths = source["slicerPaths"];
 	        this.autoRender = source["autoRender"];
 	        this.renderTimeoutSec = source["renderTimeoutSec"];
 	        this.autoIterate = source["autoIterate"];
@@ -2323,6 +2572,28 @@ export namespace store {
 		}
 	}
 	
+	export class WorkspacePrint {
+	    colors?: number;
+	    material?: string;
+	    infillPercent?: number;
+	    wallLoops?: number;
+	    lineWidthMm?: number;
+	    filamentDiameterMm?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspacePrint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.colors = source["colors"];
+	        this.material = source["material"];
+	        this.infillPercent = source["infillPercent"];
+	        this.wallLoops = source["wallLoops"];
+	        this.lineWidthMm = source["lineWidthMm"];
+	        this.filamentDiameterMm = source["filamentDiameterMm"];
+	    }
+	}
 	export class Workspace {
 	    id: number;
 	    name: string;
@@ -2332,6 +2603,8 @@ export namespace store {
 	    lastOpened: number;
 	    createdAt: number;
 	    lastCheckpoint: string;
+	    skills: string[];
+	    print: WorkspacePrint;
 	
 	    static createFrom(source: any = {}) {
 	        return new Workspace(source);
@@ -2347,7 +2620,27 @@ export namespace store {
 	        this.lastOpened = source["lastOpened"];
 	        this.createdAt = source["createdAt"];
 	        this.lastCheckpoint = source["lastCheckpoint"];
+	        this.skills = source["skills"];
+	        this.print = this.convertValues(source["print"], WorkspacePrint);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

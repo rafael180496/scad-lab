@@ -10,10 +10,10 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 - **Lectura / Escritura** = qué modo la habilita. **L** («Solo consulta» y «Agente») no toca el diseño: lee, o escribe solo
   caché (`render`, `measure`, `preview`, `estimate_print` y `suggest_orientation` escriben mallas en `<datos>/cache` y
   `RENDER_ERRORS.md`). **E** (solo «Agente») crea un checkpoint, cambia el árbol, escribe en `exports/` o `lib/` o deja una
-  malla congelada en `refs/`. Las listas viven en `backend/clichat/modes.go` (`readTools`/`writeTools`: de ahí salen
+  malla congelada, un SVG o un mapa de alturas en `refs/`. Las listas viven en `backend/clichat/modes.go` (`readTools`/`writeTools`: de ahí salen
   `--allowedTools` de Claude, `enabled_tools` de Codex y los permisos de OpenCode); `TestEveryToolIsClassifiedForTheModes`
   (en `backend/mcp`) exige que cubran el catálogo entero, sin solaparse, y la de la app (`TestModeToolListsMatchTheMCPCatalog`) lo repite.
-- **Fuera del catálogo a propósito:** «Abrir en Bambu Studio». Lo dispara solo el usuario (regla 9 de `technical.md`).
+- **Fuera del catálogo a propósito:** «Abrir en <slicer>» (Bambu Studio, PrusaSlicer, Cura…). Lo dispara solo el usuario (regla 9 de `technical.md`).
 
 ## Workspace y archivos
 
@@ -24,9 +24,12 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 | `create_checkpoint` | `label`, `source`, `parent` (def. padre activo o el más nuevo), `description`; `root=true` abre una raíz nueva aunque ya haya otras. Nunca pisa | E | sí | sí |
 | `set_active_parent` | el «Ramificar desde aquí» (`file`) o `clear=true`; avanza solo con cada hijo | E | sí | sí |
 | `rename_checkpoint` | `file` + `label` (≤ 80): el rótulo del árbol, en `scadlab.db`. Ver decisiones | E | sí | sí |
-| `trash_checkpoint` | `file` (+ `branch=true` con sus descendientes) a `.scadlab/trash/`. **Nunca borra** | E | sí | sí |
-| `list_trash` / `restore_checkpoint` | la papelera / traer uno de vuelta (`trashed_name`); recupera su rótulo; nunca pisa | L / E | sí | sí |
-| `list_refs` | los STL/3MF/OBJ de `refs/` (nombre, ruta, formato, bytes, fecha) | L | sí | sí |
+| `trash_checkpoint` | `file` (+ `branch=true` con sus descendientes) a `.scadlab/trash/`. **Nunca borra**; sin `branch`, los hijos directos pasan a colgar del padre (`relinked` en la respuesta, ver [15](15-checkpoints.md)) | E | sí | sí |
+| `list_trash` / `restore_checkpoint` | la papelera / traer uno de vuelta (`trashed_name`); recupera su rótulo, vuelve a colgar a los hijos re-colgados (`relinked`); nunca pisa | L / E | sí | sí |
+
+**Lo que NO es herramienta (a propósito):** eliminar para siempre un elemento de la papelera y vaciarla (`DeleteTrashed`, `EmptyTrash`) son solo del usuario, desde la interfaz, igual que «Abrir en Bambu Studio». Un agente puede mandar a la papelera y restaurar; lo irreversible no lo decide una IA. `TestNoToolDeletesForGood` (`backend/mcp`) falla si una herramienta o un parámetro sugiere borrar (`delete`, `purge`, `empty`, `permanent`…). Tampoco hay herramienta para «Hacer principal»: `trash_checkpoint` ya re-cuelga solo.
+
+| `list_refs` | los modelos (STL/3MF/OBJ) de `refs/` y las imágenes de `refs/` y `refs/images/` (nombre, ruta, formato, `kind`: `model` \| `image`, bytes, fecha) | L | sí | sí |
 
 ## Modelado
 
@@ -52,15 +55,29 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 | `import_mesh` | `file` de `refs/` → checkpoint **raíz** que lo importa (3MF/OBJ → STL; `center_on_bed`) | E | sí | sí |
 | `edit_mesh` | `operations`: `move rotate scale resize mirror orient center to_bed color add hole cut` → checkpoint **hijo**, con `meshedit.Generate`. Ver decisiones | E | sí | sí |
 
+## Imágenes (S15)
+
+Modelar a partir de una foto, un logo o un boceto. Procesa `backend/imagetools` (Go puro) y las lee **solo** de `refs/` y
+`refs/images/` (`refmodel.ResolveImage`). El método vive en la skill `openscad-from-image`.
+
+| Herramienta | Qué hace | Modo | Hermes | `--mcp` |
+|---|---|---|---|---|
+| `image_info` | `image` (+ `region` [x,y,w,h] en fracciones, `enhance`): tamaño en px, proporción, formato, colores dominantes, fondo y caja del primer plano; devuelve la imagen reducida o la región ampliada y realzada | L | sí | sí |
+| `compare_with_image` | `image`, `file`, `view` (`auto` o una de las 8, o `rotate`/`ortho`), `mode` (`side` \| `overlay`): PNG con la foto y el modelo, `view` elegida (`autoSelected`), `proportions` {`photo`, `model`, `differencePercent`}, `silhouetteIoU` (`null` si la foto no tiene primer plano separable), `viewRanking`, `advice` | L | sí | sí |
+| `trace_image_outline` | `image`, `width_mm` \| `height_mm` \| `mm_per_px`, `threshold`, `invert`, `layers` (1–6), `simplify_mm`, `min_area_mm2`, `name`: `refs/<name>.svg` por capa (mm, Y arriba, huecos par-impar). Resultado: `files`, `layers` (cuántas), `contours`, `holes`, `areaMm2`, `sizeMm` {width, height}, `mmPerPx`, `threshold`, `shape`, `snippet` y `perLayer[]` (`file`, `color`, `areaMm2`, `contours`, `snippet`, `polygon()` si es chico); devuelve también un dibujo del trazado | E | sí | sí |
+| `image_to_heightmap` | `image`, `width_mm`, `max_height_mm`, `height_mm`, `base_mm`, `invert`, `resolution` (≤ 500), `stretch`, `name`: `refs/<name>.dat` para `surface()` (0–100) y el snippet que arma base + relieve; devuelve también un dibujo del mapa | E | sí | sí |
+
 ## Impresión
 
 | Herramienta | Qué hace | Modo | Hermes | `--mcp` |
 |---|---|---|---|---|
-| `printer_info` | impresora, placa, boquilla, slots del AMS, reglas FDM, material por defecto, motor detectado | L | sí | sí |
+| `printer_info` | la impresora **efectiva** del workspace: marca, modelo, placa, boquilla, filamento, sistema multicolor, `colors` (los del workspace) y `maxColors`, slicer recomendado (`slicer`) y posibles (`slicers`), skill de la marca (`brandSkill`), superficie, temperaturas, `sources`, campos a confirmar; además reglas FDM, material por defecto y motor detectado | L | sí | sí |
+| `list_printers` | el catálogo de las siete marcas (id, marca, modelo, placa, colores máx., sistema, slicer, filamento) filtrable por `brand` y `query`; marca la actual | L | sí | sí |
+| `set_workspace_printer` | cambia la impresora y los colores de **este** workspace (`wsconfig.Apply`): reescribe `CLAUDE.md`/`AGENTS.md`/`printer.json` y, con `swap_brand_skill` (por defecto sí), cambia la skill de la marca. Efecto `EffectConfig`. Ver decisiones | E | sí | sí |
 | `estimate_print` | peso, metros y costo con `material`, `infill_percent`, `wall_loops` a elección | L | sí | sí |
 | `list_materials` | id, nombre, densidad, costo/kg y el material por defecto | L | sí | sí |
 | `suggest_orientation` | las 6 caras hacia abajo: tamaño, ¿cabe?, altura, área en voladizo (>45°), contacto; `operations` listas para `edit_mesh`; si nada cabe, escala máxima y dónde cortar | L | sí | sí |
-| `export` | `stl`, `3mf` (multicolor), `stl-per-color` o `png` (la imagen del preview; `view`/`rotate`/`size`) en `exports/` | E | sí | sí |
+| `export` | `stl`, `3mf` (Bambu/Orca/Creality/Anycubic/Elegoo/Snapmaker Orca), `3mf-prusa` (PrusaSlicer), `stl-per-color` (Cura) o `png` (la imagen del preview; `view`/`rotate`/`size`) en `exports/` | E | sí | sí |
 
 ## Decisiones
 
@@ -77,6 +94,25 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
   (los checkpoints son inmutables). Anota en `lib/LIBRARIES.txt`. Subir una versión = cambiar commit, URL, SHA y tamaño juntos.
   Un SHA que GitHub cambie al regenerar archivos falla **cerrado** («no coincide: no se instaló»). Prueba con red real:
   `SCADLAB_REAL_DOWNLOAD=1 go test ./backend/mcp -run TestRealInstallCatalog` (las tres bajan y renderizan).
+- **Imágenes (S15).** Límites duros de `imagetools`, comprobados **antes** de gastar memoria: archivo ≤ 20 MB, ≤ 40 MP leídos con
+  `image.DecodeConfig` (la cabecera, sin decodificar), trabajo reducido a ≤ 2048 px de lado y plazo de 10 s por operación (la
+  decodificación corre en una goroutine para poder abandonarla). PNG, JPEG y GIF de la biblioteca estándar y WebP con
+  `golang.org/x/image/webp` (Go puro; ya estaba en el grafo de módulos y quedó fijada como dependencia directa, v0.40.0). La orientación EXIF de un JPEG se
+  aplica al leerlo. **El primer plano** es lo que se aleja del color del borde (mediana del anillo exterior, umbral de Otsu con un piso
+  de 18); con fondo transparente es lo opaco; `Uniform` dice si el borde es de un color casi único (si no, el IoU no es fiable y la
+  herramienta lo avisa). **`view=auto`** renderiza el checkpoint una vez (caché del motor), dibuja su silueta en negro con
+  `backend/raster` desde las 8 vistas (320 px) y elige la de mayor IoU con la foto, ambas recortadas a su caja y llevadas SIN
+  deformar a un lienzo cuadrado (así la proporción cuenta); el PNG que ve la IA sale de `env.shoot` (la misma ruta que `preview`:
+  nativo con `--imgsize` o el rasterizador si no hay nativo) y, en `side`, ambas imágenes se recortan alrededor de su objeto para que
+  se vean del mismo tamaño. **Trazado:** Otsu, la forma es la clase contraria a la del borde (`invert` la cambia), apertura/cierre,
+  descarte de motas, marching squares sobre la máscara suavizada ([1 2 1]/4, contornos sub-píxel, huecos con signo de área
+  negativo), Douglas-Peucker, y `width_mm`/`height_mm` miden la **forma** (la caja de todos los contornos), no la foto; el SVG
+  lleva la esquina inferior izquierda de la forma en el origen y OpenSCAD lo importa con la Y hacia arriba (`TestSVGRendersInOpenSCAD`
+  lo comprueba con el OpenSCAD real). Las capas por color son k-medias en RGB con semilla fija (determinista) sobre el primer plano.
+  **`surface()`** pone la **última** fila del `.dat` en la Y más alta y baja un punto bajo el mínimo (medido con OpenSCAD 2026): el
+  archivo se escribe de abajo hacia arriba y el snippet recorta a z ≥ 0. Las salidas van a `refs/` con `refmodel.ReserveRef`
+  (creación exclusiva: nunca pisa, agrega `-2`, `-3`; nombres saneados). `TestImageToolsRejectHostilePaths` cubre `..`, rutas
+  absolutas, unidades de Windows, enlaces que salen y archivos fuera de `refs/`.
 - **`edit_mesh`.** Las operaciones de **pose** actúan sobre el centro de la caja del modelo (girar o agrandar no lo manda a
   otro lado); `move`/`center`/`to_bed` lo colocan. Las primitivas y el corte se colocan en el marco **final** (después de toda
   la pose, esté donde esté en la lista): `at_rel` es una fracción de la caja (`[0.5,0.5,1]` = centro de la cara de arriba), el
@@ -85,6 +121,15 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
   `Generate` de la escena armada a mano). Sobre un checkpoint que no es un import congela su malla en `refs/` (como
   `PrepareMeshEdit`): una sola pieza de un solo color, y lo avisa; si la edición falla, esa copia se quita. Una malla no
   cerrada se mueve pero no se perfora ni se corta. Lógica en `meshedit.ResolveBase` + `meshedit.BuildScene`.
+- **`set_workspace_printer`.** Sólo un workspace **registrado** en la app (la impresora vive en `scadlab.db`); en una carpeta que la app no conoce
+  falla con un mensaje claro. Valida igual que la interfaz (`wsconfig.Apply`: impresora del catálogo, colores 1..máximo; nada se toca si algo
+  falla). Con `colors` omitido, la misma impresora conserva los suyos y una impresora nueva arranca con su `default_colors`. `swap_brand_skill`
+  parte de las skills efectivas del workspace, saca la de la marca anterior y mete la de la nueva; una copia que el usuario editó queda
+  (`keptSkills`). Los checkpoints existentes no cambian: la respuesta avisa de volver a medir. Con Hermes la app emite `workspace:config`
+  tras el paso (efecto `EffectConfig`); con un CLI la herramienta corre en el `--mcp` de otro proceso y la interfaz la ve al recargar.
+- **`printer_info` y la impresora efectiva.** Los números salen de `wsconfig.EffectivePrinter`/`EffectiveSettings` (los mismos que la
+  interfaz): `colors` es lo que el workspace eligió y `maxColors` el tope de la máquina; el filamento es el del workspace, o el de la
+  impresora (una UltiMaker usa 2,85 mm), o el global. `fdmRules` ya no habla del AMS y manda a leer la skill de la marca.
 - **`suggest_orientation`.** Orden: cabe → menos voladizo → menos altura. El voladizo y el contacto salen de la malla
   renderizada (triángulos cuya normal mira hacia abajo más de 45° de la vertical, sin contar lo apoyado). No juzga
   resistencia ni dirección de capas.
@@ -99,7 +144,8 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 |---|---|---|
 | `EffectCheckpoint` (deja un `.scad` nuevo; el resultado trae `file`) | `create_checkpoint`, `import_mesh`, `set_parameters`, `create_from_template`, `edit_mesh` | `mcp.CreatesCheckpoint`: la red de seguridad de Hermes (`runner.createdCheckpoint`) y de los CLIs (`cliSafetyNet`); espejo `CREATING_TOOLS` (`lib/chatSteps.ts`): enlace de la tarjeta y selección automática del checkpoint |
 | `EffectTree` (cambia el árbol sin `.scad` nuevo) | `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `restore_checkpoint` | `mcp.ChangesTree`: `refreshTreeAfterStep` (`app_chat_tree.go`) |
-| `EffectFiles` (escribe fuera del árbol) | `export`, `install_library` | nada que refrescar |
+| `EffectFiles` (escribe fuera del árbol) | `export`, `install_library`, `trace_image_outline`, `image_to_heightmap` | nada que refrescar |
+| `EffectConfig` (cambia la impresora, los colores o las skills del workspace) | `set_workspace_printer` | `mcp.ChangesConfig`: evento `workspace:config` (S14) |
 
 `TestEffectsCoverTheWriteTools` exige que toda herramienta de `clichat.WriteTools()` tenga su entrada y que ninguna de
 lectura la tenga: una herramienta nueva que cambie el proyecto **no compila a verde** sin declarar su efecto.
@@ -118,6 +164,17 @@ renderiza solo). Es de mejor esfuerzo: con un CLI el paso puede llegar después 
 Etiquetas e íconos de las tarjetas de paso: `ICONS`/`WRITES` en `ToolCallCard.tsx` y `steps.tools` de `es.ts`/`en.ts`.
 Una tarjeta de `trash_checkpoint` no enlaza (el archivo ya no está en el árbol); la de `restore_checkpoint` enlaza al
 nombre con que volvió.
+
+## Aprobación por CLI (qué ve cada uno)
+
+Las listas `readTools`/`writeTools` de `modes.go` son **la única definición** de qué herramienta de ScadLab permite cada modo, y cada CLI
+la traduce a su propio permiso: Claude Code, `--allowedTools mcp__scadlab__<tool>`; Codex, `enabled_tools`; OpenCode,
+`permission.scadlab_<tool>`; **Antigravity**, una regla `mcp(scadlab/<herramienta>)` en `permissions.allow` de su `settings.json` global
+(`clichat.AgyRules()`, que sale de esas mismas listas: **una regla por cada herramienta, de lectura y de escritura**, y el modo lo hace cumplir el
+servidor `--mcp` con la marca del turno, que rechaza las de `effects.go` en «Solo consulta»; los hooks no sirven: medido). La shell sigue denegada en los cuatro.
+Una herramienta nueva clasificada en `modes.go` queda aprobada en los cuatro sin más cambios (en Antigravity, en la siguiente sincronización del
+settings.json); el detalle de Antigravity está en [26-antigravity-permisos.md](26-antigravity-permisos.md). En Antigravity la tarjeta de paso se llama como la herramienta
+(`unwrapAgyMCP` desenvuelve su `call_mcp_tool`), así `mcp.CreatesCheckpoint` y las etiquetas de `steps.tools` funcionan igual.
 
 ## Agregar una herramienta
 

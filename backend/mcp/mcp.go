@@ -25,6 +25,14 @@ import (
 // llevan prefijo: el cliente ya las muestra como `scadlab/<herramienta>`.
 const ServerName = "scadlab"
 
+// WorkspaceEnv es la variable de entorno que da la carpeta del workspace cuando el
+// servidor se lanza sin `--workspace`: el registro GLOBAL de Antigravity
+// (`agy mcp add -- scadlab <ScadLab> --mcp`) no puede llevar una carpeta, y de dónde
+// hereda el servidor su directorio actual depende de Antigravity. El chat de ScadLab
+// la pone en el entorno de cada turno de `agy`; la prioridad es `--workspace`, luego
+// esta variable y, por último, el directorio actual.
+const WorkspaceEnv = "SCADLAB_WORKSPACE"
+
 // Args son los argumentos con los que se lanza el servidor, tras el ejecutable
 // de ScadLab. workspaceDir tiene que ser absoluto. Lo comparten el modo `--mcp`
 // de main.go y quien escribe la configuración de los agentes (backend/mcpconf):
@@ -66,7 +74,7 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, opts Options) error
 	if version == "" {
 		version = "dev"
 	}
-	s := newServer(ServerName, version, serverInstructions, e.tools(), lg)
+	s := newServer(ServerName, version, serverInstructions, e.guardTurnMode(e.tools()), lg)
 	return s.serve(ctx, in, out)
 }
 
@@ -80,6 +88,7 @@ const serverInstructions = "ScadLab OpenSCAD tools for the current workspace. " 
 	"When unsure, pick reasonable dimensions and say so. Omit parent to continue from the active parent shown by list_checkpoints. Every top-level part needs color(). Use lint/format while writing code. " +
 	"Shortcuts: a request that resembles a template -> create_from_template; changing a measurement -> get_parameters + set_parameters (new child, not a rewrite); " +
 	"a model in refs/ (STL/3MF/OBJ) -> inspect_reference, import_mesh, then edit_mesh (move, rotate, scale, cut, holes, recolor); too big for the plate -> suggest_orientation; " +
+	"an image in refs/images/ (a photo, logo or sketch to model from) -> read_skill openscad-from-image, image_info, build it with primitives, then compare_with_image from the same view and fix; a flat logo/plaque -> trace_image_outline; a relief or lithophane -> image_to_heightmap; " +
 	"threads or rounded edges -> list_libraries / install_library; export stl/3mf/png only when asked. Discarding = trash_checkpoint (restorable); you cannot open Bambu Studio."
 
 // resolveWorkspace deja WorkspaceDir como ruta absoluta sin enlaces simbólicos.

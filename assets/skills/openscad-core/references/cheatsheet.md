@@ -158,4 +158,4 @@ Strings dentro de `-D` llevan comillas dobles escapadas por la shell.
 | agujero M3 roscado directo en plástico | Ø 2.5–2.8 |
 | cabeza M3 allen (DIN 912) | Ø 5.5 → alojamiento Ø 6.0–6.2 |
 | tuerca M3 entre caras | 5.5 → alojamiento 5.8–6.0 (`$fn = 6`, `d = ef / cos(30)`) |
-| inserto térmico M3 | ver skill `bambu-lab-printers` |
+| inserto térmico M3 | ver `fdm-design-rules.md` (esta skill) |

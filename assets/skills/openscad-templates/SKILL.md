@@ -8,8 +8,10 @@ description: Biblioteca de plantillas OpenSCAD paramétricas listas para imprimi
 Todas las plantillas de [templates/](templates/) cumplen el contrato de
 `openscad-core`: línea `@checkpoint`, parámetros de Customizer arriba, toda pieza
 de primer nivel en `color()`, `eps` en los cortes, `$fa/$fs` con `$preview`,
-apoyo en z=0, `assert` de parámetros y de tamaño de placa, y reglas FDM de
-`bambu-lab-printers`. Por defecto caben en una **A1 mini** (180×180×180).
+apoyo en z=0, `assert` de parámetros y de tamaño de placa, y reglas FDM
+(`openscad-core/references/fdm-design-rules.md` y la skill de marca de la impresora).
+Por defecto caben en una placa de **180×180×180** (A1 mini, Prusa MINI+); `create_from_template`
+los ajusta a la impresora del workspace.
 
 ## Cómo usarlas
 
@@ -28,7 +30,7 @@ activo). Los valores salen de `get_parameters` y se cambian después con
 4. Ajusta **solo los parámetros** para el primer checkpoint; los cambios de
    geometría van en checkpoints siguientes.
 5. Si hay `printer.json`, cambia `PLATE` en `[Hidden]` al volumen de esa
-   impresora (ver `bambu-lab-printers/references/printers.json`).
+   impresora (`references/printers.json` de la skill de marca de esa impresora).
 6. Renderiza y revisa warnings (ver `openscad-core`, sección 7).
 
 Nunca edites los archivos de `templates/` desde un workspace: son la fuente.
@@ -45,7 +47,7 @@ Nunca edites los archivos de `templates/` desde un workspace: son la fuente.
 | [`spur-gear.scad`](templates/spur-gear.scad) | `gear_module`, `teeth`, `thickness`, `pressure_angle`, `backlash`, `bore_d`, `hub_d/h`, `show_mate`, `mate_teeth` | Engranajes rectos con involuta propia (sin librerías). Distancia entre centros = `m*(z1+z2)/2`. |
 | [`hinge-print-in-place.scad`](templates/hinge-print-in-place.scad) | `hinge_len`, `leaf_w/t`, `knuckles` (impar), `knuckle_d`, `clearance`, `holes_per_leaf` | Bisagras que salen armadas de la impresora (conos de 45°, sin soportes). |
 | [`phone-stand.scad`](templates/phone-stand.scad) | `phone_t`, `angle`, `width`, `thickness`, `lip_h`, `back_len`, `base_depth`, `cable_slot` | Soportes de escritorio para teléfono/tablet chica, con ranura para el cable. |
-| [`nameplate-two-color.scad`](templates/nameplate-two-color.scad) | `label`, `font`, `text_size`, `text_h`, `mode` (`raised`/`inlay`), `plate_w/d/h`, `border_w`, `hole_d`, `base_color`, `text_color`, `PART` | Carteles, etiquetas y llaveros bicolor para AMS (ver `openscad-3mf-multicolor`). |
+| [`nameplate-two-color.scad`](templates/nameplate-two-color.scad) | `label`, `font`, `text_size`, `text_h`, `mode` (`raised`/`inlay`), `plate_w/d/h`, `border_w`, `hole_d`, `base_color`, `text_color`, `PART` | Carteles, etiquetas y llaveros bicolor (AMS, MMU, CFS, ACE…; ver `openscad-3mf-multicolor`). |
 | [`gridfinity-bin.scad`](templates/gridfinity-bin.scad) | `grid_x/y`, `height_units`, `wall`, `floor_t`, `dividers_x/y`, `stacking_lip`, `magnets` | Contenedores Gridfinity (celda 42 mm, unidad de altura 7 mm). A1 mini: hasta 4×4. |
 
 ## Notas por plantilla

@@ -70,7 +70,7 @@ referencias adjuntas, si el modelo ve); sin ellas, el de S5.
 
 | Tipo | Límite | Qué pasa |
 |---|---|---|
-| Imagen PNG/JPG/GIF/WebP | 5 MB | se guarda en `<datos>/chat-attachments/staging/`; al enviar pasa a `<chatId>/` y viaja como imagen |
+| Imagen PNG/JPG/GIF/WebP | 20 MB (se reduce a ≤ 2048 px y ≤ 5 MB para el modelo; el original va a `refs/images/`) | se guarda en `<datos>/chat-attachments/staging/`; al enviar se **copia a `<ws>/refs/images/<slug>-<hash8>.<ext>`** (S15: deduplicada por contenido, sin pisar, escritura atómica), pasa a `<chatId>/` y viaja como imagen; el texto del turno cierra con una línea con la ruta relativa para las herramientas de imagen |
 | Modelo STL / 3MF / OBJ | 64 MB | se copia a `<ws>/refs/` (`refmodel.CopyToRefs`), se analiza y su informe (`PromptText`) entra al mensaje; la vista previa viaja como imagen solo si el modelo ve |
 
 - Máximo **10** por mensaje. El tipo se decide **por el contenido** (un PNG llamado
@@ -80,7 +80,11 @@ referencias adjuntas, si el modelo ve); sin ellas, el de S5.
   adjunto); al cerrar la app se descartan los pendientes.
 - Imagen con un modelo que **informó** que no ve → error **antes** de guardar nada
   (`hermes.CheckVision`). Un servidor que no lo informa (`visionKnown=false`) nunca bloquea.
-- El historial guarda ficha, miniatura de 96 px y informe, nunca los bytes.
+- El historial guarda ficha, miniatura de 96 px y informe, nunca los bytes. La ficha de una **imagen** lleva `refPath` (`refs/images/…`) desde S15 y
+  `hermes.AttachmentNote` la nombra en el historial que se reenvía, para que un turno posterior pueda volver a usar la foto.
+- **Fotos en el workspace (S15)**: `hermes.PrepareIn` copia primero todas las fotos a `refs/images/` y después mueve las de staging (si una ya no está, ninguna se
+  movió). Con `SendOptions.ImagesAsFiles` las fotos **no** viajan como imagen ni pasan por `CheckVision` («Usar trazado de contorno»). Detalle y decisiones:
+  [28-modelo-desde-imagen.md](28-modelo-desde-imagen.md).
 
 ## Persistencia (migración v6)
 
@@ -137,8 +141,8 @@ Proveedores solo los muestra, de solo lectura, en «CLIs detectados» (`ListDete
 
   `*` = los flags que ya arma la terminal (`mcpLaunchArgs`, `addDirArgs` de `app_terminal.go`/`app_mcp.go`): una sola
   definición. OpenCode lee el MCP de `<ws>/opencode.json`; Antigravity solo del `agy mcp add` global. Las imágenes adjuntas se
-  nombran en el prompt (Codex: `-i`) y su carpeta (`<datos>/chat-attachments/<chat>/`) va como `--add-dir` a Claude/Antigravity
-  para que puedan leerla. `--model` y la sesión se validan (no pueden leerse como bandera).
+  nombran en el prompt (Codex: `-i`) por su copia en `<ws>/refs/images/` (S15; dentro del `cwd`, sin permiso extra); solo la vista previa de un modelo 3D
+  sigue en `<datos>/chat-attachments/<chat>/`, cuya carpeta va como `--add-dir` a Claude/Antigravity para que puedan leerla. `--model` y la sesión se validan (no pueden leerse como bandera).
 - **Eventos** (`adapters.go`, `opencode.go`): línea NDJSON → `Event` (`text`, `tool`, `toolresult`, `done`, `error`); lo que no se
   entiende se descarta. La herramienta llega como paso de Hermes (`chat:step`): el prefijo del servidor se quita
   (`mcp__scadlab__render`/`scadlab_render` → `render`); el resultado (y la imagen de `preview`, Claude) cierra el paso; un paso
@@ -193,12 +197,23 @@ termina **sin** haber creado un checkpoint y cuyo texto trae un bloque OpenSCAD 
   el NDJSON real de un error **no está documentado** y se lee por nombres probables.
 - **Modo y permisos** (`backend/clichat`): «Agente» por defecto, y **por conversación** (ver la sección de T12 abajo). En «Agente», Claude Code ya traía
   `--allowedTools mcp__scadlab__<todas>`; **Codex** pasa `mcp_servers.scadlab.enabled_tools=[todas]` y **OpenCode**
-  `permission.scadlab_<herramienta>="allow"` (en consulta, `deny` a las de escritura); Antigravity sigue con `--mode accept-edits`
-  (sin flag para listar herramientas, y `--dangerously-skip-permissions` no se pasa nunca). La shell sigue denegada en todos.
+  `permission.scadlab_<herramienta>="allow"` (en consulta, `deny` a las de escritura); **Antigravity** aprueba las de ScadLab con reglas
+  `mcp(scadlab/…)` en su `settings.json` global (sección «Antigravity: aprobar las herramientas…» abajo: `--mode accept-edits` solo cubre ediciones de
+  archivos, no las herramientas MCP) y el modo lo hace cumplir el servidor `--mcp` y `--dangerously-skip-permissions` no se pasa nunca. La shell sigue denegada en todos.
   El prompt de turno (`cliPrompt`) ordena en «Agente» *crear → renderizar → mirar → corregir en uno nuevo* y, sin checkpoints,
   crear el primero sin preguntar; en «Solo consulta» pide **un** bloque completo con la cabecera.
-- **Sin verificar con sesiones reales**: que `agy` en `--mode accept-edits` aprueba solo las herramientas MCP, y que Codex no pide
-  aprobación por herramienta MCP en `exec`; ambos se prueban con CLIs falsos (argv y NDJSON), no con una corrida.
+- **Sin verificar con sesiones reales**: que Codex no pide aprobación por herramienta MCP en `exec` (se prueba con un CLI falso, argv y
+  NDJSON, no con una corrida). Lo de Antigravity —que `accept-edits` **no** aprueba las MCP— sí se midió: ver la sección siguiente.
+
+## Antigravity: aprobar las herramientas de ScadLab en `--print` (S12.c, T14)
+
+Detalle completo en [26-antigravity-permisos.md](26-antigravity-permisos.md). En `agy --print` Antigravity rechaza la primera herramienta
+MCP sin aprobar y **termina el turno** (el chat decía «terminó el turno sin responder nada»); `--mode accept-edits` solo cubre ediciones, y los
+hooks **no sirven** (medido: el permiso se pide antes de ejecutarlos). ScadLab agrega al `settings.json` global de Antigravity
+(`~/.gemini/antigravity-cli/`) una regla `mcp(scadlab/<herramienta>)` en `permissions.allow` **por cada herramienta de su catálogo** (lectura y
+escritura; lista explícita, sin comodines), combinada sin tocar el resto del archivo, con copia previa y sincronizada al registrar el MCP y en
+cada turno. Como la regla es global, **«Solo consulta» lo hace cumplir el servidor `--mcp`** con una marca en el workspace durante el turno
+(`.scadlab/turn-mode`). Nunca `--dangerously-skip-permissions`, la shell sigue denegada.
 
 ## Modo por conversación y escritura por defecto (S12.c, T12)
 

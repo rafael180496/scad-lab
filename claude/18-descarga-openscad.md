@@ -3,7 +3,7 @@
 Plan: [.claude/specs/s11-motor-wasm-descarga.md](../.claude/specs/s11-motor-wasm-descarga.md).
 Complementa al motor integrado ([17-motor-wasm.md](17-motor-wasm.md)): el integrado
 mantiene la app usable sin OpenSCAD; esto le da al usuario, con un clic, el nativo
-(más rápido) sin salir de ScadLab. Bindings y evento: [06](06-go-react-contract.md#descarga-de-openscad--app_openscadgo-s11).
+(más rápido) sin salir de ScadLab. Bindings y evento: [32](32-contrato-exportacion-skills.md#descarga-de-openscad--app_openscadgo-s11).
 
 ## Qué se descarga
 

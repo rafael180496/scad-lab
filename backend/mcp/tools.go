@@ -25,6 +25,7 @@ import (
 	"scadlab/backend/scadwasm"
 	"scadlab/backend/store"
 	"scadlab/backend/workspace"
+	"scadlab/backend/wsconfig"
 )
 
 // Las descripciones están en inglés a propósito: los modelos las leen mejor
@@ -118,7 +119,7 @@ func (e *env) tools() []Tool {
 			Name: "measure",
 			Description: "Measure a checkpoint's rendered mesh: bounding box and size (mm), volume, surface area, triangles, watertightness, and whether it fits the workspace printer's build plate (overflowMm per axis if not). " +
 				"Also returns the model's parts (one per color(), each with size and volume) and a print ESTIMATE per part and in total: weight, filament length and cost, computed with the infill, perimeters, line width and filament diameter from the app settings " +
-				"(shell = min(volume, area x wall) + interior x infill; no supports, brim or AMS purge). The estimate's assumptions are listed in the result; the slicer gives the exact figure.",
+				"(shell = min(volume, area x wall) + interior x infill; no supports, brim or color-change purge). The estimate's assumptions are listed in the result; the slicer gives the exact figure.",
 			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
 			Annotations: annotations(annWrite),
 			handler:     e.measureTool,
@@ -139,18 +140,18 @@ func (e *env) tools() []Tool {
 		},
 		{
 			Name:        "printer_info",
-			Description: "Describe the workspace's target printer (Bambu Lab): build volume, nozzle, multicolor/AMS slots, key FDM design rules, the default material, and the detected OpenSCAD. Read it before designing.",
+			Description: "Describe the workspace's target printer (any brand: Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker, UltiMaker): brand and model, build volume, nozzle, filament diameter, multicolor system and the number of colors this workspace uses (and the printer's maximum), recommended slicer, the name of the brand skill to read, bed surface, temperatures, key FDM design rules, the default material, and the detected OpenSCAD. Read it before designing.",
 			InputSchema: obj(map[string]any{}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.printerInfo,
 		},
 		{
 			Name: "export",
-			Description: "Export a checkpoint into <workspace>/exports/: stl (one mesh), 3mf (multicolor 3MF for Bambu Studio, one part per color with its extruder), stl-per-color (zip with one STL per color) or png (the preview picture; `view`, `rotate`, `ortho` and `size` as in preview, and the view goes in the file name). " +
-				"Returns the file path, the parts and warnings (e.g. more colors than AMS slots). Overwrites a previous export of the same checkpoint, format and view. Opening it in Bambu Studio is the user's decision, not a tool.",
+			Description: "Export a checkpoint into <workspace>/exports/: stl (one mesh), 3mf (multicolor 3MF, one part per color with its extruder: for Bambu Studio, OrcaSlicer, Creality Print, Anycubic Slicer Next, ElegooSlicer and Snapmaker Orca), 3mf-prusa (the 3MF for PrusaSlicer: one mesh with one volume per color), stl-per-color (zip with one STL per color: for Cura and any slicer that reads neither 3MF) or png (the preview picture; `view`, `rotate`, `ortho` and `size` as in preview, and the view goes in the file name). " +
+				"Pick the format for the printer's slicer (printer_info -> slicer). Returns the file path, the parts and warnings (e.g. more colors than the workspace's). Overwrites a previous export of the same checkpoint, format and view. Opening it in the slicer is the user's decision, not a tool.",
 			InputSchema: obj(map[string]any{
 				"file":   strProp(fileHelp),
-				"format": enumProp("Export format. Default 3mf.", exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor, exporter.FormatPNG),
+				"format": enumProp("Export format. Default 3mf.", exporter.FormatSTL, exporter.Format3MF, exporter.Format3MFPrusa, exporter.FormatSTLPerColor, exporter.FormatPNG),
 				"view":   enumProp("png only: camera view. Default iso.", viewNames...),
 				"rotate": map[string]any{"type": "array", "description": "png only: free camera [rx, ry, rz] in degrees, overrides `view`.", "items": map[string]any{"type": "number"}, "minItems": 3, "maxItems": 3},
 				"ortho":  map[string]any{"type": "boolean", "description": "png only: orthogonal projection."},
@@ -175,7 +176,7 @@ func (e *env) tools() []Tool {
 		},
 	}
 	// El resto del catálogo, por área: cada grupo vive en su archivo.
-	for _, g := range [][]Tool{e.workspaceTools(), e.parameterTools(), e.libraryTools(), e.meshTools(), e.printTools(), e.contextTools()} {
+	for _, g := range [][]Tool{e.workspaceTools(), e.parameterTools(), e.libraryTools(), e.meshTools(), e.printTools(), e.printerTools(), e.contextTools(), e.imageTools()} {
 		tools = append(tools, g...)
 	}
 	return tools
@@ -885,21 +886,29 @@ func estimateOut(r estimate.Result, o estimate.Options) map[string]any {
 // --- printer_info -----------------------------------------------------------
 
 // fdmRules son las reglas de diseño que el workspace le da al agente (las
-// mismas de RULES.md.tmpl y de la skill bambu-lab-printers). Van en inglés: es
-// dato para el modelo.
+// mismas de RULES.md.tmpl y de las skills de marca). Van en inglés: es dato para
+// el modelo. Valen para cualquier marca; lo propio de cada una (superficie de la
+// cama, voladizos de su extrusor, multicolor) está en la skill de la marca
+// (`brandSkill` de printer_info).
 var fdmRules = []string{
 	"Overhangs up to 45 degrees; steeper needs supports or a redesign.",
-	"Minimum wall 0.8 mm (2 perimeters of a 0.4 mm nozzle).",
+	"Minimum wall 0.8-0.9 mm (2 perimeters of a 0.4 mm nozzle).",
 	"Clearance 0.2 mm for a press fit, 0.3-0.4 mm for a sliding fit.",
 	"0.5 mm chamfer on the bottom edge against elephant foot.",
 	"The whole model must fit the build volume; if it does not, split it into parts and say so.",
-	"Every top-level part needs color(); the multicolor 3MF is one part per color (max colors = multicolorSlots).",
+	"Every top-level part needs color(); the multicolor export is one part per color and the model may use at most `colors` colors (this workspace's number of colors, not the machine's maximum).",
 	"Model rests on z=0.",
+	"Read the brand skill (`brandSkill`) for the printer's own rules, its multicolor system and which export format its slicer reads.",
 }
 
 func (e *env) printerInfo(ctx context.Context, _ map[string]any) (*toolResult, error) {
 	s := e.settings()
 	pr := e.printer(s)
+	if _, registered := e.storedWorkspace(); !registered {
+		// Fuera de la app el diámetro del filamento es el de la máquina (una
+		// UltiMaker usa 2,85 mm), no el global.
+		s = wsconfig.EffectiveSettings(s, store.Workspace{}, pr)
+	}
 	mat := e.material(s)
 	tool := e.openscad(ctx, s.OpenSCADPath)
 	scadInfo := map[string]any{"found": tool.Found, "backend": s.RenderBackend}
@@ -918,20 +927,43 @@ func (e *env) printerInfo(ctx context.Context, _ map[string]any) (*toolResult, e
 	if verify == nil {
 		verify = []string{}
 	}
+	sources := pr.Sources
+	if sources == nil {
+		sources = []string{}
+	}
+	printer := map[string]any{
+		"id":                 pr.ID,
+		"name":               pr.Name,
+		"brand":              pr.BrandName,
+		"model":              pr.Model,
+		"brandSkill":         pr.Skill,
+		"buildVolumeMm":      vec3{pr.BuildVolume.X, pr.BuildVolume.Y, pr.BuildVolume.Z},
+		"nozzleMm":           pr.NozzleMM,
+		"nozzleCount":        pr.NozzleCount,
+		"filamentDiameterMm": s.FilamentDiameterMm,
+		"multicolorKind":     pr.MulticolorKind,
+		"multicolorSystem":   pr.MulticolorSys,
+		// colors = los colores de ESTE workspace; maxColors = el tope de la máquina.
+		// multicolorSlots conserva su nombre de siempre con el valor de colors.
+		"colors":            pr.MulticolorSlots,
+		"maxColors":         pr.MaxColors,
+		"multicolorSlots":   pr.MulticolorSlots,
+		"enclosed":          pr.Enclosed,
+		"heatedChamber":     pr.HeatedChamber,
+		"bedSurface":        pr.BedSurface,
+		"maxNozzleTempC":    pr.MaxNozzleTempC,
+		"maxBedTempC":       pr.MaxBedTempC,
+		"slicers":           slicersOut(pr),
+		"notes":             pr.Notes,
+		"sources":           sources,
+		"unconfirmedFields": verify,
+	}
+	if sl := slicerOut(pr); sl != nil {
+		printer["slicer"] = sl
+	}
 	return jsonResult(map[string]any{
-		"workspace": e.wsName(),
-		"printer": map[string]any{
-			"id":                pr.ID,
-			"name":              pr.Name,
-			"buildVolumeMm":     vec3{pr.BuildVolume.X, pr.BuildVolume.Y, pr.BuildVolume.Z},
-			"nozzleMm":          pr.NozzleMM,
-			"multicolorSlots":   pr.MulticolorSlots,
-			"multicolorSystem":  pr.MulticolorSys,
-			"enclosed":          pr.Enclosed,
-			"heatedChamber":     pr.HeatedChamber,
-			"notes":             pr.Notes,
-			"unconfirmedFields": verify,
-		},
+		"workspace":       e.wsName(),
+		"printer":         printer,
 		"defaultMaterial": map[string]any{"id": mat.ID, "name": mat.Name, "densityGCm3": mat.DensityGCm3},
 		"fdmRules":        fdmRules,
 		"openscad":        scadInfo,
@@ -949,10 +981,8 @@ func (e *env) exportTool(ctx context.Context, args map[string]any) (*toolResult,
 	if format == "" {
 		format = exporter.Format3MF
 	}
-	switch format {
-	case exporter.FormatSTL, exporter.Format3MF, exporter.FormatSTLPerColor, exporter.FormatPNG:
-	default:
-		return nil, i18n.Errorf(i18n.Msg{ES: "formato de exportación desconocido: %q (usa stl, 3mf, stl-per-color o png)", EN: "unknown export format: %q (use stl, 3mf, stl-per-color or png)"}, format)
+	if !exporter.IsFileFormat(format) && format != exporter.FormatPNG {
+		return nil, i18n.Errorf(i18n.Msg{ES: "formato de exportación desconocido: %q (usa stl, 3mf, 3mf-prusa, stl-per-color o png)", EN: "unknown export format: %q (use stl, 3mf, 3mf-prusa, stl-per-color or png)"}, format)
 	}
 	if format == exporter.FormatPNG {
 		return e.exportPNG(ctx, name, args)

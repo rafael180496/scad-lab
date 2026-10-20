@@ -1,6 +1,6 @@
 ---
 name: bambu-lab-printers
-description: Perfiles de impresoras Bambu Lab (A1 mini, A1, P1P, P1S, P2S, X1C, X1E, H2D, H2S) y reglas de diseño FDM para que un .scad se imprima bien. Úsala al dimensionar un modelo, cuando el workspace tenga printer.json, al definir holguras/encajes/insertos/texto o al decidir orientación y voladizos.
+description: Perfiles de impresoras Bambu Lab (A1 mini, A1, A2L, P1P, P1S, P2S, X1C, X1E, X2D, H2D, H2S, H2C) y reglas de diseño FDM para que un .scad se imprima bien, con multicolor AMS y exportación 3MF para Bambu Studio. Úsala cuando printer.json diga una impresora bambu-*, al dimensionar un modelo, al definir holguras/encajes/insertos/texto, al decidir orientación y voladizos o al preparar un archivo multicolor.
 ---
 
 # Impresoras Bambu Lab y diseño para FDM
@@ -13,28 +13,44 @@ description: Perfiles de impresoras Bambu Lab (A1 mini, A1, P1P, P1S, P2S, X1C, 
 2. Si no hay `printer.json`, asume **`bambu-a1-mini`** (la placa más chica: lo que
    cabe ahí cabe en todas).
 3. Datos legibles por máquina: [references/printers.json](references/printers.json)
-   (la app también lo lee). Los campos listados en `verify` no están confirmados.
+   (la app también lo lee). Los campos listados en `verify` no están confirmados;
+   las URLs de la ficha oficial están en `sources`.
 
-| id | Impresora | Volumen X×Y×Z (mm) | Boquilla | Multicolor | Cerrada | Notas |
+| id | Impresora | Volumen X×Y×Z (mm) | Colores (inicial / máx.) | Sistema | Cámara | A confirmar |
 |---|---|---|---|---|---|---|
-| `bambu-a1-mini` | A1 mini | 180×180×180 | 0.4 | AMS lite, 4 | no | cama móvil; PLA/PETG/TPU |
-| `bambu-a1` | A1 | 256×256×256 | 0.4 | AMS lite, 4 | no | cama móvil |
-| `bambu-p1p` | P1P | 256×256×256 | 0.4 | AMS, 4 por unidad (hasta 16) | no | CoreXY abierta |
-| `bambu-p1s` | P1S | 256×256×256 | 0.4 | AMS, hasta 16 | sí (pasiva) | ABS/ASA ok |
-| `bambu-p2s` | P2S | 256×256×256 «verificar» | 0.4 | AMS / AMS 2 Pro «verificar» | sí | sucesora de P1 |
-| `bambu-x1c` | X1 Carbon | 256×256×256 | 0.4 endurecida | AMS, hasta 16 | sí (pasiva) | lidar; fibras CF/GF |
-| `bambu-x1e` | X1E | 256×256×256 | 0.4 endurecida | AMS, hasta 16 | sí, calefaccionada (~60 °C «verificar») | lidar |
-| `bambu-h2d` | H2D | 325×320×325 una boquilla; 300×320×325 ambas; 350×320×325 total «verificar» | 2 × 0.4 | AMS 2 Pro/HT, hasta ~24 «verificar» | sí, calefaccionada (~65 °C) | doble boquilla |
-| `bambu-h2s` | H2S | 340×320×340 «verificar» | 0.4 | AMS 2 Pro/HT «verificar» | sí, calefaccionada «verificar» | una boquilla |
+| `bambu-a1-mini` | A1 mini | 180×180×180 | 4 / 16 | AMS lite (o hasta 4 AMS con el Hub de la serie A) | abierta | `multicolor_slots`, `filament_diameter_mm` |
+| `bambu-a1` | A1 | 256×256×256 | 4 / 16 | AMS lite (o hasta 4 AMS con el Hub de la serie A) | abierta | `filament_diameter_mm` |
+| `bambu-a2l` | A2L | 330×320×325 | 4 / 19 | AMS lite / AMS (hasta 4 AMS + 1 lite) | abierta | `default_colors`, `filament_diameter_mm` |
+| `bambu-p1p` | P1P | 256×256×256 | 4 / 16 | AMS (hasta 4 unidades = 16) | abierta | `filament_diameter_mm` |
+| `bambu-p1s` | P1S | 256×256×256 | 4 / 16 | AMS (hasta 4 unidades = 16) | cerrada | `filament_diameter_mm` |
+| `bambu-p2s` | P2S | 256×256×256 | 4 / 20 | AMS 2 Pro / AMS HT (hasta 20 ranuras) | cerrada | — |
+| `bambu-x1c` | X1C | 256×256×256 | 4 / 16 | AMS (hasta 4 unidades = 16) | cerrada | `max_nozzle_temp_c`, `max_bed_temp_c`, `filament_diameter_mm`, `heated_chamber`, `enclosed` |
+| `bambu-x1e` | X1E | 256×256×256 | 4 / 16 | AMS (hasta 4 unidades = 16) | cerrada, calefaccionada | `max_nozzle_temp_c`, `max_bed_temp_c`, `filament_diameter_mm`, `heated_chamber` |
+| `bambu-x2d` | X2D | 256×256×260 | 4 / 25 | AMS 2 Pro / AMS HT (hasta 25 colores con bobina externa) | cerrada, calefaccionada | — |
+| `bambu-h2d` | H2D | 325×320×325 | 4 / 25 | AMS 2 Pro / AMS HT (hasta 25 colores con bobina externa) | cerrada, calefaccionada | — |
+| `bambu-h2s` | H2S | 340×320×340 | 4 / 24 | AMS 2 Pro / AMS HT (hasta 24 colores) | cerrada, calefaccionada | — |
+| `bambu-h2c` | H2C | 305×320×320 | 4 / 25 | AMS 2 Pro / AMS HT + Vortek (6 hotends intercambiables + 1 fija) | cerrada, calefaccionada | `multicolor_slots` |
 
+- **Colores del workspace**: el máximo de colores que puedes usar es `colors` de
+  `printer.json` (lo que el usuario eligió para este workspace; nace en 4), no el
+  tope de la máquina (`max_colors`). El usuario lo cambia en «Configuración del
+  workspace» o tú con `set_workspace_printer`.
 - **Margen**: diseña dejando 2–5 mm libres respecto del volumen nominal (clips de
   placa, purga, borde/brim).
-- **H2D**: si la pieza usa las **dos** boquillas (dos materiales o soporte
-  soluble), usa el volumen "ambas boquillas"; con una sola, el de una boquilla.
+- **Doble boquilla (H2D, X2D, H2C)**: `build_volume` es el de **una** boquilla; si la
+  pieza usa las dos (dos materiales o soporte soluble), usa el de ambas
+  (`build_volume_dual_nozzle`: H2D 300×320×325; X2D 235,5×256×256; H2C 300×320×325).
+  La H2C añade el sistema **Vortek** (cambio de hotend sin contacto): con menos de
+  7 filamentos casi no hay purga.
 - **Cama móvil (A1/A1 mini)**: piezas altas y finas oscilan. Orienta el lado
   largo en Y, agrega orejas (`mouse ears`) o base más ancha.
-- **Multicolor**: el número de colores simultáneos lo fija el AMS (AMS lite = 4).
-  Ver skill `openscad-3mf-multicolor`.
+- **Marco abierto (A1, A1 mini, A2L, P1P)**: ABS/ASA/PC/PA solo en piezas pequeñas.
+  Cerradas (P1S, P2S, X1C, X1E, X2D, H2*): ABS/ASA sin problema; la X2D y la serie
+  H tienen además cámara calefaccionada (hasta 65 °C).
+- **Descontinuadas**: P1P, X1C y X1E ya no están en la tienda oficial (la X2D
+  reemplaza a la X1C); sus temperaturas máximas no están confirmadas.
+- **Multicolor (AMS)**: el número de colores simultáneos lo fija el AMS (AMS lite = 4
+  por unidad; ver la columna Sistema). Ver skill `openscad-3mf-multicolor`.
 
 ## 2. Validar que cabe en la placa
 
@@ -61,7 +77,8 @@ peso con otro material o relleno, `estimate_print` (materiales en
 
 ## 3. Reglas de diseño FDM (boquilla 0.4)
 
-Detalle, tablas y snippets: [references/fdm-design-rules.md](references/fdm-design-rules.md).
+Detalle, tablas y snippets (lágrima, chaflán, insertos, texto):
+`openscad-core/references/fdm-design-rules.md`.
 
 | Tema | Regla |
 |---|---|
@@ -139,7 +156,21 @@ Fuente recomendada: `"Liberation Sans:style=Bold"`.
 Si el modelo tiene alturas críticas (relieves de color, encajes en Z), hazlas
 **múltiplo de la capa** prevista (ej. relieve de 0.6 con capa 0.2).
 
-## 4. Checklist de imprimibilidad
+## 4. Qué formato exportar
+
+La herramienta MCP `export` (y los botones de la app) escribe en `exports/`:
+
+| Para | Formato | Nota |
+|---|---|---|
+| **Bambu Studio** (recomendado) | **`3mf`** | Un objeto con una parte por color; cada parte con su extrusor (`Metadata/model_settings.config`). Los colores de los filamentos los pone el AMS del usuario. |
+| OrcaSlicer | `3mf` | Igual. |
+| Cualquiera | `stl-per-color` | Un STL por color en un zip. En Bambu Studio, importa los STL juntos y responde **Sí** a «¿cargar como un solo objeto con varias partes?»; después asigna el filamento de cada parte. |
+| Una sola pieza | `stl` | Sin color. |
+
+No uses `3mf-prusa`: es para PrusaSlicer. Detalle del formato y qué lee cada slicer:
+skill `openscad-3mf-multicolor`.
+
+## 5. Checklist de imprimibilidad
 
 - [ ] Cabe en `PRINTER` con margen (`assert_fits_plate`).
 - [ ] Apoya en z=0 sobre su cara más ancha; chaflán anti pata de elefante.
@@ -148,4 +179,5 @@ Si el modelo tiene alturas críticas (relieves de color, encajes en Z), hazlas
 - [ ] Holguras parametrizadas según el tipo de ajuste.
 - [ ] Agujeros horizontales grandes en lágrima.
 - [ ] Texto ≥ 4–6 mm, trazo ≥ 0.8.
-- [ ] Colores ≤ slots del AMS de la impresora.
+- [ ] Colores ≤ `colors` del workspace (`printer.json`), un `color()` por filamento.
+- [ ] Exportación `3mf` si el slicer es Bambu Studio (ver sección 5).

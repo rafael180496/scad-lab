@@ -46,7 +46,7 @@ func TestClassifyByContentThenExtension(t *testing.T) {
 }
 
 func TestLimitsAndNames(t *testing.T) {
-	if LimitFor(KindImage) != 5<<20 || LimitFor(KindModel) != 64<<20 {
+	if LimitFor(KindImage) != 20<<20 || LimitFor(KindModel) != 64<<20 {
 		t.Errorf("topes: %d, %d", LimitFor(KindImage), LimitFor(KindModel))
 	}
 	err := ErrTooBig("grande.png", KindImage, MaxImageBytes)

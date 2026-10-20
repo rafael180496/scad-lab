@@ -8,6 +8,7 @@ import {useProblems} from '../../hooks/useProblems'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {wasmShortVersion} from '../../lib/engine'
+import {colorsCount} from '../../lib/printerInfo'
 
 function Item({title, children, className}: {title: string; children: React.ReactNode; className?: string}) {
     return (
@@ -47,20 +48,26 @@ function Mode() {
 export function StatusBar({
     workspace,
     printer,
+    colors,
     file,
     renderDiags,
     openscad,
     onProblems,
     onPrint,
+    onPrinter,
     onOpenSettings,
 }: {
     workspace?: string
     printer?: string
+    /** Los colores del workspace (S14): «<Impresora> · N colores». */
+    colors?: number
     file: string | null
     renderDiags: render.Diagnostic[] | undefined
     openscad: {version: string; missing: boolean; engine?: string} | null
     onProblems: () => void
     onPrint: () => void
+    /** Abre la configuración del workspace (clic en la impresora). */
+    onPrinter?: () => void
     /** Abre Configuración → OpenSCAD (la insignia del motor integrado lleva ahí). */
     onOpenSettings: () => void
 }) {
@@ -79,10 +86,23 @@ export function StatusBar({
                 <span className="text-faint">{t.status.noWorkspace}</span>
             )}
             {printer ? (
-                <Item title={t.status.printerHint} className="min-w-0 shrink">
-                    <Printer className="icon-ui-12 shrink-0 text-faint" />
-                    <span className="truncate">{printer}</span>
-                </Item>
+                onPrinter ? (
+                    <button
+                        type="button"
+                        onClick={onPrinter}
+                        title={t.status.printerHint}
+                        data-testid="status-printer"
+                        className="flex min-w-0 shrink items-center gap-1.5 rounded px-1 transition-colors duration-100 hover:bg-surface-2 hover:text-fg"
+                    >
+                        <Printer className="icon-ui-12 shrink-0 text-faint" />
+                        <span className="truncate">{colors ? `${printer} · ${colorsCount(t, colors)}` : printer}</span>
+                    </button>
+                ) : (
+                    <Item title={t.status.printerHint} className="min-w-0 shrink">
+                        <Printer className="icon-ui-12 shrink-0 text-faint" />
+                        <span className="truncate">{printer}</span>
+                    </Item>
+                )
             ) : null}
             <div className="min-w-0 flex-1" />
             {file && plate && !plate.fits ? (

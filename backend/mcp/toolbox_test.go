@@ -36,7 +36,7 @@ func toolboxEnv(t *testing.T) (dataDir, ws string) {
 	t.Setenv(appdata.OverrideEnv, dataDir)
 	i18n.SetLang("en")
 	t.Cleanup(func() { i18n.SetLang("en") })
-	ws, err := workspace.Create(t.TempDir(), "Prueba caja", "bambu-a1-mini")
+	ws, err := workspace.Create(t.TempDir(), "Prueba caja", miniPrinter())
 	if err != nil {
 		t.Fatal(err)
 	}

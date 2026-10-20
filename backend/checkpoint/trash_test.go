@@ -340,18 +340,22 @@ func TestTrashBranchWithGrandchildren(t *testing.T) {
 	}
 }
 
-func TestTrashSingleLeavesChildrenOrphan(t *testing.T) {
+// Mandar un checkpoint suelto a la papelera re-cuelga a sus hijos del abuelo: el
+// árbol no se queda con padres ausentes (detalle en reparent_test.go).
+func TestTrashSingleRelinksChildren(t *testing.T) {
 	fixNow(t)
 	dir := tree(t)
 	if _, err := Trash(dir, "002-a.scad"); err != nil {
 		t.Fatal(err)
 	}
-	// 003 sigue ahí y sigue apuntando a 002: se puede listar como descendiente.
 	if !exists(dir, "003-b.scad") {
 		t.Fatal("el hijo no debía moverse")
 	}
-	if got, _ := Descendants(dir, "002-a.scad"); !reflect.DeepEqual(got, []string{"003-b.scad"}) {
-		t.Errorf("Descendants de un archivo en la papelera: %v", got)
+	if got := parentOf(t, dir, "003-b.scad"); got != "001-base.scad" {
+		t.Errorf("003 debía pasar a colgar de 001: %q", got)
+	}
+	if got, _ := Descendants(dir, "002-a.scad"); len(got) != 0 {
+		t.Errorf("nada debería colgar ya del borrado: %v", got)
 	}
 }
 

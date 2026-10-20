@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "units": "mm",
+  "brand": {"id": "elegoo", "name": "Elegoo", "skill": "elegoo-printers"},
+  "notes": "Volumen de impresión nominal de la ficha oficial de Elegoo. CANVAS (Centauri Carbon) se registra como multicolor_kind 'cfs' porque el esquema no tiene un valor propio para él. 'multicolor_slots' es el máximo de colores y 'default_colors' la configuración con que nace un workspace. 'verify' lista lo que no se pudo confirmar.",
+  "printers": [
+    {
+      "id": "elegoo-neptune-4",
+      "name": "Elegoo Neptune 4",
+      "model": "Neptune 4",
+      "build_volume": {"x": 225, "y": 225, "z": 265},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 1,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "none",
+      "multicolor_system": "Ninguno",
+      "multicolor_slots": 1,
+      "default_colors": 1,
+      "enclosed": false,
+      "heated_chamber": false,
+      "bed_surface": "Lámina de acero PEI",
+      "max_nozzle_temp_c": 300,
+      "max_bed_temp_c": 110,
+      "slicers": ["elegoo-slicer", "orcaslicer", "ultimaker-cura"],
+      "notes": "Cartesiana de cama móvil con Klipper, marco abierto, extrusor directo. Plataforma PEI 235x235.",
+      "sources": [
+        "https://www.elegoo.com/products/elegoo-neptune-4-fdm-3d-printer"
+      ],
+      "verify": ["filament_diameter_mm", "slicers"]
+    },
+    {
+      "id": "elegoo-neptune-4-pro",
+      "name": "Elegoo Neptune 4 Pro",
+      "model": "Neptune 4 Pro",
+      "build_volume": {"x": 225, "y": 225, "z": 265},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 1,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "none",
+      "multicolor_system": "Ninguno",
+      "multicolor_slots": 1,
+      "default_colors": 1,
+      "enclosed": false,
+      "heated_chamber": false,
+      "bed_surface": "Lámina de acero PEI",
+      "max_nozzle_temp_c": 300,
+      "max_bed_temp_c": 110,
+      "slicers": ["elegoo-slicer", "orcaslicer", "ultimaker-cura"],
+      "notes": "Igual que la Neptune 4 con cama calefactada segmentada y refrigeración mejorada.",
+      "sources": [
+        "https://www.elegoo.com/products/elegoo-neptune-4-pro-fdm-3d-printer"
+      ],
+      "verify": ["filament_diameter_mm", "slicers"]
+    },
+    {
+      "id": "elegoo-neptune-4-max",
+      "name": "Elegoo Neptune 4 Max",
+      "model": "Neptune 4 Max",
+      "build_volume": {"x": 420, "y": 420, "z": 480},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 1,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "none",
+      "multicolor_system": "Ninguno",
+      "multicolor_slots": 1,
+      "default_colors": 1,
+      "enclosed": false,
+      "heated_chamber": false,
+      "bed_surface": "Lámina de acero PEI",
+      "max_nozzle_temp_c": 300,
+      "max_bed_temp_c": 85,
+      "slicers": ["elegoo-slicer", "orcaslicer", "ultimaker-cura"],
+      "notes": "Gran formato, marco abierto; la cama llega a 85 °C (con 25 °C ambiente).",
+      "sources": [
+        "https://www.elegoo.com/products/neptune-4-max-fdm-3d-printer"
+      ],
+      "verify": ["filament_diameter_mm", "slicers"]
+    },
+    {
+      "id": "elegoo-centauri-carbon",
+      "name": "Elegoo Centauri Carbon",
+      "model": "Centauri Carbon",
+      "build_volume": {"x": 256, "y": 256, "z": 256},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 1,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "cfs",
+      "multicolor_system": "CANVAS (4 colores, accesorio)",
+      "multicolor_slots": 4,
+      "default_colors": 1,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Lámina de acero de doble cara (PEI texturizado + lisa para PLA)",
+      "max_nozzle_temp_c": 320,
+      "max_bed_temp_c": 110,
+      "slicers": ["elegoo-slicer", "orcaslicer", "ultimaker-cura"],
+      "notes": "CoreXY cerrada, boquilla latón/acero endurecido. Hoy el accesorio CANVAS (4 colores, 55 USD) está disponible; la ficha de la impresora aún lo marcaba 'en la hoja de ruta'. multicolor_kind=cfs porque CANVAS es un alimentador tipo CFS/AMS (no hay un valor más exacto en el esquema).",
+      "sources": [
+        "https://www.elegoo.com/products/centauri-carbon",
+        "https://www.elegoo.com/products/centauri-carbon-2-combo"
+      ],
+      "verify": ["multicolor_kind", "multicolor_slots"]
+    },
+    {
+      "id": "elegoo-centauri-carbon-2",
+      "name": "Elegoo Centauri Carbon 2",
+      "model": "Centauri Carbon 2",
+      "build_volume": {"x": 256, "y": 256, "z": 256},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 1,
+      "filament_diameter_mm": 1.75,
+      "multicolor_kind": "cfs",
+      "multicolor_system": "CANVAS (4 colores; el Combo lo incluye)",
+      "multicolor_slots": 4,
+      "default_colors": 4,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Lámina de acero de doble cara (PEI texturizado + lisa para PLA)",
+      "max_nozzle_temp_c": 350,
+      "max_bed_temp_c": 110,
+      "slicers": ["elegoo-slicer", "orcaslicer", "ultimaker-cura"],
+      "notes": "SUCESORA de la Centauri Carbon (nueva en el catálogo). Cámara cerrada con rejilla inteligente (sin calefacción activa), boquilla 350 °C, CANVAS de 4 colores. multicolor_kind=cfs por la misma razón que la CC.",
+      "sources": [
+        "https://www.elegoo.com/products/centauri-carbon-2",
+        "https://www.elegoo.com/products/centauri-carbon-2-combo"
+      ],
+      "verify": ["multicolor_kind"]
+    }
+  ]
+}

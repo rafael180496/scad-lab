@@ -1,6 +1,7 @@
 // Package export prepara y escribe lo que ScadLab entrega al slicer: el STL del
-// checkpoint, un 3MF multicolor para Bambu Studio (una parte por color con su
-// extrusor) o un STL por color. No sabe de Wails ni de diálogos: app_export.go
+// checkpoint, un 3MF multicolor (una parte por color con su extrusor: para Bambu
+// Studio, Orca, Creality Print, Anycubic Slicer Next…), el 3MF de PrusaSlicer
+// (una sola malla con un volumen por color) o un STL por color. No sabe de Wails ni de diálogos: app_export.go
 // pone el diálogo de guardar y este paquete hace el resto.
 //
 // Spec: .claude/specs/s9-exportacion.md. Notas: claude/11-exportacion.md.
@@ -27,6 +28,10 @@ const (
 	FormatSTL         = "stl"
 	Format3MF         = "3mf"
 	FormatSTLPerColor = "stl-per-color"
+	// Format3MFPrusa (S14) es el 3MF para PrusaSlicer: una sola malla con un
+	// volumen por color en Metadata/Slic3r_PE_model.config. PrusaSlicer no lee el
+	// model_settings.config del 3MF normal.
+	Format3MFPrusa = "3mf-prusa"
 	// FormatPNG no pasa por Prepare: es la imagen del visor (o el preview de las
 	// herramientas MCP), que solo necesita nombre y extensión.
 	FormatPNG = "png"
@@ -42,7 +47,7 @@ type PartInfo struct {
 	Name      string `json:"name"`
 	Color     string `json:"color"` // #RRGGBB
 	Triangles int    `json:"triangles"`
-	Extruder  int    `json:"extruder"`  // filamento 1..N que Bambu Studio le asigna
+	Extruder  int    `json:"extruder"`  // extrusor 1..N (el filamento que el slicer le asigna)
 	Uncolored bool   `json:"uncolored"` // geometría sin color(): lleva el amarillo por defecto de OpenSCAD
 }
 
@@ -102,7 +107,7 @@ func Prepare(ctx context.Context, job Job, format string) (*Prepared, error) {
 		}
 		p.meshPath = res.MeshPath
 		return p, nil
-	case Format3MF, FormatSTLPerColor:
+	case Format3MF, FormatSTLPerColor, Format3MFPrusa:
 		// El render 3MF y el reparto por color son los mismos que usa el visor
 		// para las partes del modelo (backend/parts).
 		split, _, err := parts.Load3MF(ctx, job.Engine, job.Req, job.Opts, job.CacheDir)
@@ -148,16 +153,27 @@ func (p *Prepared) Write(dest string) error {
 			return err
 		})
 	case Format3MF:
-		return threemf.WriteFile(dest, p.parts, threemf.WriteOptions{
-			Title:     p.Title,
-			Place:     p.printer.BuildVolume.X > 0 && p.printer.BuildVolume.Y > 0,
-			BedCenter: [2]float64{p.printer.BuildVolume.X / 2, p.printer.BuildVolume.Y / 2},
-		})
+		// Sin `extruder_nr` para Cura (WriteOptions.CuraExtruders): el 3MF normal es
+		// el que el usuario abre en Bambu Studio y ese bloque no se probó en ningún
+		// slicer. Para Cura se recomienda el STL por color (ver claude/11).
+		return threemf.WriteFile(dest, p.parts, p.writeOptions())
+	case Format3MFPrusa:
+		return threemf.WritePrusaFile(dest, p.parts, p.writeOptions())
 	case FormatSTLPerColor:
 		base := SafeName(strings.TrimSuffix(filepath.Base(dest), filepath.Ext(dest)))
 		return atomicWrite(dest, func(w io.Writer) error { return writeSTLZip(w, base, p.parts) })
 	}
 	return nil
+}
+
+// writeOptions son las opciones comunes a los dos 3MF: el título y dónde poner la
+// pieza en la cama de la impresora del workspace.
+func (p *Prepared) writeOptions() threemf.WriteOptions {
+	return threemf.WriteOptions{
+		Title:     p.Title,
+		Place:     p.printer.BuildVolume.X > 0 && p.printer.BuildVolume.Y > 0,
+		BedCenter: [2]float64{p.printer.BuildVolume.X / 2, p.printer.BuildVolume.Y / 2},
+	}
 }
 
 // writeSTLZip escribe un STL por parte: <base>-<color>.stl.
@@ -255,16 +271,31 @@ func SafeName(s string) string {
 }
 
 // SuggestedName es el nombre que propone el diálogo: <workspace>-<NNN-slug>.<ext>.
+// El 3MF de PrusaSlicer lleva «-prusa» antes de la extensión: es otro archivo con
+// la misma extensión, y sin la marca una exportación pisaría a la otra en exports/.
 func SuggestedName(workspace, fileName, format string) string {
 	base := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	name := SafeName(fmt.Sprintf("%s-%s", workspace, base))
+	if format == Format3MFPrusa {
+		name += "-prusa"
+	}
 	return name + Ext(format)
+}
+
+// IsFileFormat dice si format es uno de los formatos que Prepare sabe armar
+// (STL, los dos 3MF y el STL por color). El PNG no: no pasa por Prepare.
+func IsFileFormat(format string) bool {
+	switch format {
+	case FormatSTL, Format3MF, FormatSTLPerColor, Format3MFPrusa:
+		return true
+	}
+	return false
 }
 
 // Ext es la extensión (con punto) del archivo que produce cada formato.
 func Ext(format string) string {
 	switch format {
-	case Format3MF:
+	case Format3MF, Format3MFPrusa:
 		return ".3mf"
 	case FormatSTLPerColor:
 		return ".zip"

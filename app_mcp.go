@@ -28,10 +28,15 @@ import (
 // falló (toast de error). Payload: AntigravityMCPEvent.
 const evAntigravityMCP = "mcp:antigravity"
 
-// AntigravityMCPEvent es el payload de mcp:antigravity.
+// AntigravityMCPEvent es el payload de mcp:antigravity. Added: se agregó el servidor
+// a la configuración global. Permissions: cuántas reglas `mcp(scadlab/…)` se
+// agregaron a `permissions.allow` de su settings.json (SettingsPath). Error, con el
+// motivo, si falló cualquiera de las dos cosas.
 type AntigravityMCPEvent struct {
-	Added bool   `json:"added"`
-	Error string `json:"error"`
+	Added        bool   `json:"added"`
+	Permissions  int    `json:"permissions"`
+	SettingsPath string `json:"settingsPath"`
+	Error        string `json:"error"`
 }
 
 // evMCPChanged avisa a la interfaz que cambió el interruptor del servidor MCP o
@@ -159,6 +164,9 @@ func (a *App) SetMCPEnabled(enabled bool) error {
 
 // syncMCP aplica mcpconf.Sync a un workspace con el ejecutable vigente.
 func (a *App) syncMCP(w store.Workspace, enabled bool) (mcpconf.Report, error) {
+	// De paso, se retira el hook de Antigravity que una versión anterior pudo dejar
+	// en el proyecto (ya no se usa: los permisos van en el settings.json global).
+	cleanLegacyAgyHook(absDir(w.Path))
 	bin, err := mcpBinary()
 	if err != nil {
 		if enabled {
@@ -373,17 +381,21 @@ type AntigravityEnsure struct {
 	// State: cómo quedó la entrada (AgyOK, AgyMissing, AgyOther, AgyDisabled,
 	// AgyNotInstalled) o "off" si el servidor MCP está apagado en Configuración.
 	State string `json:"state"`
+	// PermissionsAdded: reglas `mcp(scadlab/…)` que se agregaron AHORA al settings.json.
+	PermissionsAdded int `json:"permissionsAdded"`
+	// PermissionsError: por qué no se pudieron aprobar las herramientas (vacío = bien).
+	PermissionsError string `json:"permissionsError"`
 }
 
 // agyEnsureMu serializa el registro automático: elegir Antigravity dos veces
 // seguidas no debe agregar la entrada (ni avisar) dos veces.
 var agyEnsureMu sync.Mutex
 
-// EnsureAntigravityMCP deja ScadLab registrado en Antigravity cuando se lo elige
-// (en el chat o al abrir su terminal). Antigravity solo lee MCP de su
-// configuración GLOBAL —no hay por proyecto ni por flag—, y sin él no tiene
-// ninguna herramienta de ScadLab: intenta la shell, que está denegada, y el turno
-// no deja nada. Antes era un botón opcional (S6); el chat lo vuelve necesario.
+// EnsureAntigravityMCP deja ScadLab registrado en Antigravity —y sus herramientas
+// aprobadas— cuando se lo elige (en el chat o al abrir su terminal). Antigravity solo
+// lee MCP de su configuración GLOBAL —no hay por proyecto ni por flag—, y sin él no
+// tiene ninguna herramienta de ScadLab: intenta la shell, que está denegada, y el
+// turno no deja nada. Antes era un botón opcional (S6); el chat lo vuelve necesario.
 //
 // Solo AGREGA lo que falta: una entrada que ya existe —aunque apunte a otra
 // ScadLab o esté desactivada— es decisión del usuario y no se toca (el botón de
@@ -392,8 +404,13 @@ var agyEnsureMu sync.Mutex
 // <ScadLab> --mcp`, sin shell y sin `--workspace` (el servidor toma la carpeta
 // actual, que es la del workspace).
 //
-// Emite mcp:antigravity cuando agregó (toast «se agregó a su configuración
-// global») o falló (toast con el motivo). No tener `agy` no es un fallo.
+// Después sincroniza los permisos (app_agyperms.go): en cada llamada agrega las
+// reglas `mcp(scadlab/<herramienta>)` que falten en `permissions.allow` del
+// settings.json de Antigravity y quita las de herramientas que ya no existen. Si el
+// usuario las quitó desde Configuración, no las repone.
+//
+// Emite mcp:antigravity cuando agregó el servidor o reglas (toast «se agregó a su
+// configuración global») o falló (toast con el motivo). No tener `agy` no es un fallo.
 func (a *App) EnsureAntigravityMCP() (AntigravityEnsure, error) {
 	if err := a.ready(); err != nil {
 		return AntigravityEnsure{}, err
@@ -409,25 +426,39 @@ func (a *App) EnsureAntigravityMCP() (AntigravityEnsure, error) {
 	}
 	ctx := a.appCtx()
 	st := a.agyStatus(ctx)
+	res := AntigravityEnsure{State: st.State}
 	switch st.State {
 	case mcpconf.AgyError:
 		err := i18n.Errorf(msgAgyEnsureFailed, st.Detail)
 		a.emit(evAntigravityMCP, AntigravityMCPEvent{Error: err.Error()})
-		return AntigravityEnsure{State: st.State}, err
+		return res, err
+	case mcpconf.AgyNotInstalled:
+		return res, nil
 	case mcpconf.AgyMissing:
-	default:
-		return AntigravityEnsure{State: st.State}, nil
+		// AddAntigravityMCP toma agyMu por su cuenta y vuelve a leer el estado.
+		after, err := a.AddAntigravityMCP()
+		res.State = after.State
+		if err != nil {
+			err = i18n.Errorf(msgAgyEnsureFailed, err.Error())
+			a.emit(evAntigravityMCP, AntigravityMCPEvent{Error: err.Error()})
+			return res, err
+		}
+		res.Added = true
+		log.Printf("scadlab: ScadLab registrado en la configuración global de Antigravity (%s)", after.Command)
 	}
-	// AddAntigravityMCP toma agyMu por su cuenta y vuelve a leer el estado.
-	after, err := a.AddAntigravityMCP()
-	if err != nil {
-		err = i18n.Errorf(msgAgyEnsureFailed, err.Error())
-		a.emit(evAntigravityMCP, AntigravityMCPEvent{Error: err.Error()})
-		return AntigravityEnsure{State: after.State}, err
+
+	// Un fallo de permisos no deshace el registro: se avisa y el turno explica por qué.
+	perm := a.syncAgyPermissions(false)
+	ev := AntigravityMCPEvent{Added: res.Added, Permissions: len(perm.Report.Added), SettingsPath: perm.Report.Path}
+	if perm.Err != nil {
+		res.PermissionsError = i18n.T(msgAgyPermsFailed, agySettingsPath(), perm.Err)
+		ev.Error = res.PermissionsError
 	}
-	log.Printf("scadlab: ScadLab registrado en la configuración global de Antigravity (%s)", after.Command)
-	a.emit(evAntigravityMCP, AntigravityMCPEvent{Added: true})
-	return AntigravityEnsure{Added: true, State: after.State}, nil
+	res.PermissionsAdded = ev.Permissions
+	if ev.Added || ev.Permissions > 0 || ev.Error != "" {
+		a.emit(evAntigravityMCP, ev)
+	}
+	return res, nil
 }
 
 var msgAgyEnsureFailed = i18n.Msg{

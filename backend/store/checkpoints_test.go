@@ -175,3 +175,37 @@ func TestTrashMetaRoundTrip(t *testing.T) {
 		t.Errorf("no debía crear una fila sin datos guardados: %v", err)
 	}
 }
+
+// Eliminar de la papelera para siempre olvida lo que se guardó: uno solo, o todo.
+func TestForgetCheckpointMeta(t *testing.T) {
+	s := openTemp(t)
+	ws := newWS(t, s)
+	if err := s.SyncCheckpoints(ws, found("001-a.scad", "002-b.scad", "003-c.scad")); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.SetCheckpointUI(ws, "002-b.scad", "Tapa", false)
+	_ = s.SetCheckpointUI(ws, "003-c.scad", "Base", false)
+	_ = s.StashCheckpointMeta(ws, "002-b.scad", "20260101-101010-002-b.scad")
+	_ = s.StashCheckpointMeta(ws, "003-c.scad", "20260101-101010-003-c.scad")
+
+	if err := s.ForgetCheckpointMeta(ws, "20260101-101010-002-b.scad"); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.RestoreCheckpointMeta(ws, "20260101-101010-002-b.scad", "012-b.scad")
+	if _, err := s.GetCheckpoint(ws, "012-b.scad"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("lo olvidado no debía volver: %v", err)
+	}
+	_ = s.RestoreCheckpointMeta(ws, "20260101-101010-003-c.scad", "013-c.scad")
+	if c, err := s.GetCheckpoint(ws, "013-c.scad"); err != nil || c.Label != "Base" {
+		t.Errorf("el otro debía seguir guardado: %+v %v", c, err)
+	}
+
+	_ = s.StashCheckpointMeta(ws, "003-c.scad", "20260101-111111-003-c.scad")
+	if err := s.ForgetCheckpointMeta(ws, ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.RestoreCheckpointMeta(ws, "20260101-111111-003-c.scad", "014-c.scad")
+	if _, err := s.GetCheckpoint(ws, "014-c.scad"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("vaciar olvida todo: %v", err)
+	}
+}

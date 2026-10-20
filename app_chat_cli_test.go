@@ -823,8 +823,9 @@ func TestCLIChatPassesTheTerminalsMCPAndAddDirFlags(t *testing.T) {
 	}
 }
 
-// Una referencia 3D adjunta viaja como texto; una imagen, como ruta (y su carpeta
-// como lectura permitida).
+// Una referencia 3D adjunta viaja como texto; una imagen, como ruta de su copia en
+// refs/images/ (S15). La vista previa del modelo sigue en la carpeta del chat, que
+// por eso se sigue pasando como lectura permitida.
 func TestCLIChatAttachmentsAreTextAndPaths(t *testing.T) {
 	a, wsID, _, ev, f := cliApp(t)
 	f.install("claude", "claude-stream.jsonl")
@@ -846,6 +847,9 @@ func TestCLIChatAttachmentsAreTextAndPaths(t *testing.T) {
 	prompt := args[1]
 	if !strings.Contains(prompt, "mira esto") || !strings.Contains(prompt, "Attached images") || !strings.Contains(prompt, a.chatDir(c.ID)) {
 		t.Errorf("las imágenes van como rutas: %q", prompt)
+	}
+	if !strings.Contains(prompt, "refs/images/captura-") {
+		t.Errorf("la foto va por su copia en refs/images: %q", prompt)
 	}
 	if !strings.Contains(prompt, "refs/") {
 		t.Errorf("el resumen de la referencia STL va como texto: %q", prompt)

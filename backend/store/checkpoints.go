@@ -169,3 +169,15 @@ func (s *Store) RestoreCheckpointMeta(workspaceID int64, trashedName, restoredFi
 	}
 	return tx.Commit()
 }
+
+// ForgetCheckpointMeta olvida lo que StashCheckpointMeta guardó bajo trashedName:
+// el elemento se eliminó de la papelera para siempre y ya no hay a quién devolver
+// su rótulo. trashedName vacío = todos los de la papelera del workspace.
+func (s *Store) ForgetCheckpointMeta(workspaceID int64, trashedName string) error {
+	if trashedName == "" {
+		_, err := s.db.Exec(`DELETE FROM checkpoint_trash WHERE workspace_id = ?`, workspaceID)
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM checkpoint_trash WHERE workspace_id = ? AND trashed_name = ?`, workspaceID, trashedName)
+	return err
+}

@@ -75,7 +75,7 @@ func TestSTLEditingSkillIsValidAndSynced(t *testing.T) {
 		t.Fatalf("Discover: %+v", found)
 	}
 	ws := t.TempDir()
-	if err := skills.Sync(ws, list, func(string) bool { return true }); err != nil {
+	if _, err := skills.Sync(ws, list, func(string) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 	for _, dir := range skills.AgentDirs {

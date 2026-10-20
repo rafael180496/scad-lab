@@ -3,7 +3,7 @@ import {createPortal} from 'react-dom'
 import {cn} from '../../lib/cn'
 
 // Desplegable anclado a un botón para los selectores del chat (proveedor, modelo,
-// modo, conversaciones). Va en un portal con posición fija por la misma razón que
+// modo, conversaciones) y el de impresoras (S14). Va en un portal con posición fija por la misma razón que
 // el Menu: los grupos del dock recortan lo que desborda (overflow-clip) y un
 // desplegable absoluto quedaría cortado en un panel angosto o pegado al borde de
 // la ventana.
@@ -146,7 +146,9 @@ export function Popover({
         >
             {children}
         </div>,
-        document.body,
+        // Dentro de un <dialog> modal (showModal) todo lo que cuelga del <body> queda DETRÁS: el
+        // desplegable se cuelga del propio diálogo (posición fija, así que no lo recorta su overflow).
+        anchor.closest('dialog') ?? document.body,
     )
 }
 

@@ -22,6 +22,10 @@ export function AntigravityMCPStatus() {
   return window['go']['main']['App']['AntigravityMCPStatus']();
 }
 
+export function AntigravityPermissionsStatus() {
+  return window['go']['main']['App']['AntigravityPermissionsStatus']();
+}
+
 export function ApplyMeshEdit(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['ApplyMeshEdit'](arg1, arg2, arg3, arg4);
 }
@@ -56,6 +60,10 @@ export function ChatModelCatalog(arg1, arg2) {
 
 export function ChooseChatAttachment(arg1) {
   return window['go']['main']['App']['ChooseChatAttachment'](arg1);
+}
+
+export function ChooseChatImages(arg1) {
+  return window['go']['main']['App']['ChooseChatImages'](arg1);
 }
 
 export function ChooseDirectory(arg1, arg2) {
@@ -102,6 +110,14 @@ export function CreateWorkspaceIn(arg1, arg2, arg3) {
   return window['go']['main']['App']['CreateWorkspaceIn'](arg1, arg2, arg3);
 }
 
+export function CreateWorkspaceWith(arg1) {
+  return window['go']['main']['App']['CreateWorkspaceWith'](arg1);
+}
+
+export function DefaultWorkspaceSkills(arg1) {
+  return window['go']['main']['App']['DefaultWorkspaceSkills'](arg1);
+}
+
 export function DeleteChat(arg1) {
   return window['go']['main']['App']['DeleteChat'](arg1);
 }
@@ -118,6 +134,10 @@ export function DeleteSkillFile(arg1, arg2) {
   return window['go']['main']['App']['DeleteSkillFile'](arg1, arg2);
 }
 
+export function DeleteTrashed(arg1, arg2) {
+  return window['go']['main']['App']['DeleteTrashed'](arg1, arg2);
+}
+
 export function DetectSlicers() {
   return window['go']['main']['App']['DetectSlicers']();
 }
@@ -132,6 +152,10 @@ export function DownloadOpenSCAD() {
 
 export function EffectiveWorkspacesRoot() {
   return window['go']['main']['App']['EffectiveWorkspacesRoot']();
+}
+
+export function EmptyTrash(arg1) {
+  return window['go']['main']['App']['EmptyTrash'](arg1);
 }
 
 export function EnsureAntigravityMCP() {
@@ -202,6 +226,10 @@ export function GetSkillsFolder() {
   return window['go']['main']['App']['GetSkillsFolder']();
 }
 
+export function GetWorkspaceConfig(arg1) {
+  return window['go']['main']['App']['GetWorkspaceConfig'](arg1);
+}
+
 export function ImportMiniToolsServers(arg1) {
   return window['go']['main']['App']['ImportMiniToolsServers'](arg1);
 }
@@ -250,6 +278,10 @@ export function ListOpenProjects() {
   return window['go']['main']['App']['ListOpenProjects']();
 }
 
+export function ListPrinterBrands() {
+  return window['go']['main']['App']['ListPrinterBrands']();
+}
+
 export function ListPrinters() {
   return window['go']['main']['App']['ListPrinters']();
 }
@@ -284,6 +316,10 @@ export function ListTrash(arg1) {
 
 export function ListWorkspaces() {
   return window['go']['main']['App']['ListWorkspaces']();
+}
+
+export function MakeCheckpointRoot(arg1, arg2) {
+  return window['go']['main']['App']['MakeCheckpointRoot'](arg1, arg2);
 }
 
 export function NewChat(arg1, arg2, arg3) {
@@ -354,6 +390,10 @@ export function RemoveAntigravityMCP() {
   return window['go']['main']['App']['RemoveAntigravityMCP']();
 }
 
+export function RemoveAntigravityPermissions() {
+  return window['go']['main']['App']['RemoveAntigravityPermissions']();
+}
+
 export function RemoveChatAttachment(arg1) {
   return window['go']['main']['App']['RemoveChatAttachment'](arg1);
 }
@@ -388,6 +428,10 @@ export function RenderCheckpoint(arg1, arg2) {
 
 export function ReorderProjects(arg1) {
   return window['go']['main']['App']['ReorderProjects'](arg1);
+}
+
+export function RepairAntigravityPermissions() {
+  return window['go']['main']['App']['RepairAntigravityPermissions']();
 }
 
 export function RescanWorkspace(arg1) {
@@ -476,6 +520,10 @@ export function SaveSwatches(arg1) {
 
 export function SaveViewer(arg1) {
   return window['go']['main']['App']['SaveViewer'](arg1);
+}
+
+export function SaveWorkspaceConfig(arg1, arg2) {
+  return window['go']['main']['App']['SaveWorkspaceConfig'](arg1, arg2);
 }
 
 export function SendChatMessage(arg1, arg2, arg3, arg4, arg5) {

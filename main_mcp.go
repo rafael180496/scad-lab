@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"scadlab/backend/i18n"
@@ -37,11 +38,28 @@ func runMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 
+	// La carpeta: --workspace, si no SCADLAB_WORKSPACE (el chat la pone en los turnos
+	// de Antigravity, cuya entrada global no lleva carpeta) y, si no, el directorio
+	// actual. Se deja dicho en stderr cuál valió: es lo primero que se mira cuando una
+	// herramienta trabaja en una carpeta que no era.
+	dir, origin := *workspace, "--workspace"
+	if dir == "" {
+		if env := strings.TrimSpace(os.Getenv(mcp.WorkspaceEnv)); env != "" {
+			dir, origin = env, mcp.WorkspaceEnv
+		} else {
+			dir, origin = "", "cwd"
+			if wd, err := os.Getwd(); err == nil {
+				dir = wd
+			}
+		}
+	}
+	fmt.Fprintf(stderr, "scadlab --mcp: workspace %s (%s)\n", dir, origin)
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	err := mcp.Serve(ctx, stdin, stdout, mcp.Options{
-		WorkspaceDir: *workspace,
+		WorkspaceDir: dir,
 		Version:      appVersion,
 		Log:          stderr,
 	})

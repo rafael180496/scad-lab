@@ -196,20 +196,32 @@ func checkTrashable(wsDir, file string) error {
 // Trash manda un checkpoint a la papelera (.scadlab/trash/<AAAAMMDD-HHMMSS>-<archivo>)
 // y devuelve su nombre allí. Nunca borra: se puede traer de vuelta con Restore.
 //
-// Los hijos NO se mueven: siguen con `parent=` apuntando al archivo, que queda
-// huérfano en el árbol hasta que se restaure (Restore lo devuelve a su nombre
-// si está libre, y el vínculo se recompone solo). Para llevarse la rama entera
-// está TrashBranch.
+// Los hijos directos NO se mueven: pasan a colgar del padre del borrado (el
+// abuelo), o quedan como raíces si el borrado era una raíz. Así el árbol nunca
+// queda con un `parent=` que apunta a un archivo ausente, y quien borra a
+// propósito no ve una advertencia por ello. Es un cambio de metadato: solo se
+// reescribe la línea `@checkpoint` de cada hijo (ver SetParent) y se anota en la
+// papelera a quiénes y de dónde, para que Restore los devuelva. Los nietos no se
+// tocan: siguen colgando de su padre. Para llevarse la rama entera está
+// TrashBranch (ahí no hay nada que re-colgar).
 //
 // Si era el padre activo, el activo pasa a SU padre (si existe): quien estaba
 // trabajando en esa rama sigue en ella, un paso atrás, en vez de caer a «el más
 // nuevo», que puede ser de otra rama. Sin padre, se limpia.
 func Trash(wsDir, file string) (string, error) {
-	names, err := trashFiles(wsDir, file, false)
+	name, _, err := TrashRelinked(wsDir, file)
+	return name, err
+}
+
+// TrashRelinked es Trash y además dice qué hijos pasaron a colgar del abuelo
+// (por número). Con un error, devuelve igual lo que sí se hizo: el archivo ya
+// está en la papelera aunque un hijo no se haya podido re-colgar.
+func TrashRelinked(wsDir, file string) (string, []string, error) {
+	names, relinked, err := trashFiles(wsDir, file, false)
 	if len(names) == 0 {
-		return "", err
+		return "", nil, err
 	}
-	return names[0], err
+	return names[0], relinked, err
 }
 
 // TrashBranch manda a la papelera el checkpoint y todos sus descendientes con la
@@ -222,16 +234,17 @@ func Trash(wsDir, file string) (string, error) {
 // El padre activo se trata como en Trash: si estaba dentro de la rama, pasa al
 // padre de file.
 func TrashBranch(wsDir, file string) ([]string, error) {
-	return trashFiles(wsDir, file, true)
+	names, _, err := trashFiles(wsDir, file, true)
+	return names, err
 }
 
-func trashFiles(wsDir, file string, branch bool) ([]string, error) {
+func trashFiles(wsDir, file string, branch bool) ([]string, []string, error) {
 	if err := checkTrashable(wsDir, file); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	parents, err := lookupParents(wsDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// order: hojas primero. set: file y luego sus descendientes por número, que
 	// es como se devuelven.
@@ -245,7 +258,7 @@ func trashFiles(wsDir, file string, branch bool) ([]string, error) {
 	}
 	dir, err := trashDir(wsDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	activeMu.Lock()
@@ -275,13 +288,20 @@ func trashFiles(wsDir, file string, branch bool) ([]string, error) {
 		_ = setActive(wsDir, next)
 	}
 
+	// Los hijos directos de un checkpoint suelto pasan al abuelo. Solo si de
+	// verdad se movió: si falló, el árbol sigue entero y no hay nada que arreglar.
+	var relinked []string
+	if !branch && firstErr == nil {
+		relinked, firstErr = relinkChildren(wsDir, dir, file, moved[file], parents)
+	}
+
 	out := make([]string, 0, len(moved))
 	for _, f := range set { // file primero, luego por número
 		if name, ok := moved[f]; ok {
 			out = append(out, name)
 		}
 	}
-	return out, firstErr
+	return out, relinked, firstErr
 }
 
 // TrashEmpty dice si la papelera del workspace no guarda nada (o no existe). Ante
@@ -344,11 +364,32 @@ func ListTrash(wsDir string) ([]TrashedItem, error) {
 // Restore saca un archivo de la papelera y lo devuelve al workspace. Vuelve a su
 // nombre original si está libre; si no, toma el siguiente NNN con el mismo slug
 // (003-base.scad ocupado → 007-base.scad). El archivo se mueve entero, sin
-// reescribir: el encabezado `@checkpoint` queda como estaba. Por eso, si cambió
-// de número, los hijos que decían `parent=003-base.scad` no se reenganchan (son
-// inmutables, igual que él): la rama restaurada queda como una raíz más.
-// Nunca pisa un checkpoint existente.
+// reescribir: su propio encabezado `@checkpoint` queda como estaba.
+//
+// Si al borrarlo sus hijos pasaron a colgar del abuelo (ver Trash), los vuelve a
+// colgar de él —con el nombre con que volvió, sea el original o no— siempre que
+// sigan existiendo y todavía cuelguen de donde se los dejó. Un hijo que el
+// usuario movió a otra rama mientras tanto no se toca. Una rama que se trajo de
+// la papelera (TrashBranch) no tiene nada que re-colgar. Nunca pisa un
+// checkpoint existente.
 func Restore(wsDir, trashedName string) (string, error) {
+	name, _, err := RestoreRelinked(wsDir, trashedName)
+	return name, err
+}
+
+// RestoreRelinked es Restore y además dice qué hijos volvieron a colgar del
+// restaurado (por número). Un error al re-colgar no deshace la restauración: el
+// archivo ya volvió y se devuelve junto con el error.
+func RestoreRelinked(wsDir, trashedName string) (string, []string, error) {
+	name, err := restoreFile(wsDir, trashedName)
+	if err != nil {
+		return "", nil, err
+	}
+	relinked, rerr := relinkOnRestore(wsDir, trashedName, name)
+	return name, relinked, rerr
+}
+
+func restoreFile(wsDir, trashedName string) (string, error) {
 	if err := ValidName(trashedName); err != nil {
 		return "", err
 	}

@@ -1,4 +1,4 @@
-import type {InputHTMLAttributes, ReactNode, SelectHTMLAttributes} from 'react'
+import type {InputHTMLAttributes, ReactNode, Ref, SelectHTMLAttributes} from 'react'
 import {cn} from '../../lib/cn'
 
 export function Field({label, hint, children}: {label: string; hint?: ReactNode; children: ReactNode}) {
@@ -14,7 +14,8 @@ export function Field({label, hint, children}: {label: string; hint?: ReactNode;
 const control =
     'h-8 w-full rounded-md border border-line bg-surface-2 px-2.5 text-ui-12-5 text-fg placeholder:text-faint outline-none transition-colors focus:border-accent'
 
-export function Input({className, ...rest}: InputHTMLAttributes<HTMLInputElement>) {
+// En React 19 `ref` llega como una prop más: se pasa tal cual al <input>.
+export function Input({className, ...rest}: InputHTMLAttributes<HTMLInputElement> & {ref?: Ref<HTMLInputElement>}) {
     return <input className={cn(control, 'selectable', className)} spellCheck={false} {...rest} />
 }
 

@@ -40,6 +40,12 @@ type Settings struct {
 	// (S9): en macOS el .app, en Windows el .exe. Vacío = autodetectar en las
 	// rutas de instalación habituales; si la ruta no existe se ignora.
 	BambuStudioPath string `json:"bambuStudioPath"`
+	// SlicerPaths es la ruta de cada slicer que el usuario fijó a mano, por id del
+	// registro (backend/slicers): "orcaslicer" → "/Applications/OrcaSlicer.app".
+	// Vacío = autodetectar. Para "bambu-studio" vale también bambuStudioPath (la
+	// clave anterior a S14): ver SlicerPath. Un campo más de la tabla key/value,
+	// sin migración.
+	SlicerPaths map[string]string `json:"slicerPaths"`
 	// AutoRender renderiza solo cada checkpoint nuevo que aparece en el
 	// workspace (y el que se elige en el árbol si todavía no tiene resultado).
 	AutoRender bool `json:"autoRender"`
@@ -280,6 +286,32 @@ func (s *Settings) normalizeEditor() {
 	s.UIScale, s.EditorFontSize, s.TerminalFontSize, s.ChatFontSize = a.UIScale, a.EditorFontSize, a.TerminalFontSize, a.ChatFontSize
 	s.Layout = s.Layout.Normalize()
 	s.normalizePrint()
+	s.normalizeSlicerPaths()
+}
+
+// normalizeSlicerPaths deja el mapa listo para usar: nunca nil (el frontend
+// espera un objeto) y sin entradas vacías, con las rutas sin espacios sobrantes.
+func (s *Settings) normalizeSlicerPaths() {
+	out := make(map[string]string, len(s.SlicerPaths))
+	for id, p := range s.SlicerPaths {
+		if id, p = strings.TrimSpace(id), strings.TrimSpace(p); id != "" && p != "" {
+			out[id] = p
+		}
+	}
+	s.SlicerPaths = out
+}
+
+// SlicerPath es la ruta que el usuario fijó para un slicer ("" = autodetectar).
+// Bambu Studio conserva su clave anterior: slicerPaths["bambu-studio"] gana y, si
+// no está, vale bambuStudioPath.
+func (s Settings) SlicerPath(id string) string {
+	if p := strings.TrimSpace(s.SlicerPaths[id]); p != "" {
+		return p
+	}
+	if id == "bambu-studio" {
+		return strings.TrimSpace(s.BambuStudioPath)
+	}
+	return ""
 }
 
 // Límites y valores de fábrica de la estimación de impresión.
@@ -354,6 +386,7 @@ func DefaultSettings() Settings {
 		LineWidthMm:        DefaultLineWidthMm,
 		FilamentDiameterMm: DefaultFilamentDiameter,
 		Currency:           DefaultCurrency,
+		SlicerPaths:        map[string]string{},
 		AutoRender:         true,
 		RenderTimeoutSec:   300,
 		AutoIterate:        true,

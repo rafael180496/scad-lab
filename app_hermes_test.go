@@ -830,7 +830,10 @@ func TestAttachmentValidation(t *testing.T) {
 		{"vacio.stl", "", "empty"},
 		{"roto.stl", b64([]byte("esto no es un STL")), "could not read"},
 		{"falso.3mf", b64([]byte("no es un zip")), "not a valid 3MF"},
-		{"enorme.png", b64(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, hermes.MaxImageBytes+10)...)), "maximum size"},
+		// Más de 5 MB ya no es «demasiado grande» (se reduce al adjuntar); más de
+		// 20 MB, sí. Y una imagen que no se puede leer no se adjunta.
+		{"enorme.png", b64(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, hermes.MaxImageInputBytes+10)...)), "maximum size"},
+		{"rota.png", b64(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, hermes.MaxImageBytes+10)...)), "could not prepare the image"},
 		{"mal.png", "@@@no es base64", "could not be decoded"},
 	}
 	for _, c := range cases {

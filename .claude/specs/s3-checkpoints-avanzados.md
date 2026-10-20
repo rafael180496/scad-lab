@@ -8,7 +8,7 @@ y (agregado por el architect) comparar con el padre.
 
 - **Nunca se borra un checkpoint** (regla 3 de `technical.md`). «Borrar» mueve a
   `<ws>/.scadlab/trash/<AAAAMMDD-HHMMSS>-<archivo>`; se puede **restaurar**. No
-  hay «vaciar papelera» en la app (el usuario puede borrar la carpeta a mano).
+  hay «vaciar papelera» en la app (el usuario puede borrar la carpeta a mano). [Superado: ver claude/15, «Eliminación permanente».]
 - **Renombrar = rótulo** (columna `label` que ya existe): el archivo no cambia
   de nombre (los hijos lo referencian en `parent=`).
 - **Padre activo** = `<ws>/.scadlab/active-parent` (una línea: el nombre del

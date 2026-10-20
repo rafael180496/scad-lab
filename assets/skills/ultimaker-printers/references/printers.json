@@ -1,0 +1,129 @@
+{
+  "schema_version": 2,
+  "units": "mm",
+  "brand": {"id": "ultimaker", "name": "UltiMaker", "skill": "ultimaker-printers"},
+  "notes": "Volumen de impresión nominal de la ficha oficial de UltiMaker. Todas usan filamento de 2,85 mm (no 1,75) y doble extrusión con print cores AA/BB; el slicer es UltiMaker Cura. 'default_colors' es 2 porque es la configuración de doble extrusión. 'verify' lista lo que no se pudo confirmar.",
+  "printers": [
+    {
+      "id": "ultimaker-s3",
+      "name": "UltiMaker S3",
+      "model": "S3",
+      "build_volume": {"x": 230, "y": 190, "z": 200},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 2.85,
+      "multicolor_kind": "dual",
+      "multicolor_system": "Doble extrusión (print cores AA/BB intercambiables)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Cristal calefactado",
+      "max_nozzle_temp_c": 280,
+      "max_bed_temp_c": 0,
+      "slicers": ["ultimaker-cura"],
+      "notes": "Parcialmente cerrada, cámara pasiva. Print cores 0.25/0.4/0.6/0.8. La página oficial da 'bed 20-140 °C', que choca con la ficha histórica de la S3 (100 °C): no se usó.",
+      "sources": [
+        "https://ultimaker.com/3d-printers/s-series/ultimaker-s3/"
+      ],
+      "verify": ["max_bed_temp_c", "enclosed"]
+    },
+    {
+      "id": "ultimaker-s5",
+      "name": "UltiMaker S5",
+      "model": "S5",
+      "build_volume": {"x": 330, "y": 240, "z": 300},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 2.85,
+      "multicolor_kind": "dual",
+      "multicolor_system": "Doble extrusión (print cores AA/BB intercambiables)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Cristal",
+      "max_nozzle_temp_c": 280,
+      "max_bed_temp_c": 0,
+      "slicers": ["ultimaker-cura"],
+      "notes": "Parcialmente cerrada (puerta/tapa opcionales), cámara pasiva.",
+      "sources": [
+        "https://ultimaker.com/3d-printers/s-series/ultimaker-s5/"
+      ],
+      "verify": ["max_bed_temp_c", "enclosed"]
+    },
+    {
+      "id": "ultimaker-s7",
+      "name": "UltiMaker S7",
+      "model": "S7",
+      "build_volume": {"x": 330, "y": 240, "z": 300},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 2.85,
+      "multicolor_kind": "dual",
+      "multicolor_system": "Doble extrusión (print cores AA/BB intercambiables)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Acero flexible",
+      "max_nozzle_temp_c": 280,
+      "max_bed_temp_c": 0,
+      "slicers": ["ultimaker-cura"],
+      "notes": "Totalmente cerrada con puerta de vidrio, pasivamente calefactada, filtro EPA.",
+      "sources": [
+        "https://ultimaker.com/3d-printers/s-series/ultimaker-s7/"
+      ],
+      "verify": ["max_bed_temp_c"]
+    },
+    {
+      "id": "ultimaker-s8",
+      "name": "UltiMaker S8",
+      "model": "S8",
+      "build_volume": {"x": 330, "y": 240, "z": 300},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 2.85,
+      "multicolor_kind": "dual",
+      "multicolor_system": "Doble extrusión (print cores AA/BB intercambiables)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": false,
+      "bed_surface": "Acero flexible",
+      "max_nozzle_temp_c": 0,
+      "max_bed_temp_c": 0,
+      "slicers": ["ultimaker-cura"],
+      "notes": "NUEVA en el catálogo (sucesora de la S7). La página pública no lista nozzle/bed. Volumen 330x240x300 mm y 2.85 mm según su página.",
+      "sources": [
+        "https://ultimaker.com/3d-printers/s-series/ultimaker-s8/"
+      ],
+      "verify": ["max_nozzle_temp_c", "max_bed_temp_c", "bed_surface", "enclosed"]
+    },
+    {
+      "id": "ultimaker-factor-4",
+      "name": "UltiMaker Factor 4 (Factor 4 Plus)",
+      "model": "Factor 4",
+      "build_volume": {"x": 330, "y": 240, "z": 300},
+      "nozzle_mm": 0.4,
+      "nozzle_count": 2,
+      "filament_diameter_mm": 2.85,
+      "multicolor_kind": "dual",
+      "multicolor_system": "Doble extrusión (print cores AA/BB intercambiables)",
+      "multicolor_slots": 2,
+      "default_colors": 2,
+      "enclosed": true,
+      "heated_chamber": true,
+      "bed_surface": "",
+      "max_nozzle_temp_c": 340,
+      "max_bed_temp_c": 0,
+      "slicers": ["ultimaker-cura"],
+      "notes": "Cámara aislada con control térmico. Hasta 340 °C con el print core CC+. El sitio oficial hoy lo llama Factor 4 Plus.",
+      "sources": [
+        "https://ultimaker.com/3d-printers/factor-series/ultimaker-factor-4-plus/",
+        "https://ultimaker.com/3d-printers/ultimaker-factor-4/"
+      ],
+      "verify": ["max_bed_temp_c", "bed_surface", "heated_chamber"]
+    }
+  ]
+}

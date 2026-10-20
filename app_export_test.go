@@ -205,30 +205,6 @@ func TestOpenInSlicerArguments(t *testing.T) {
 	}
 }
 
-// El comando de cada sistema se verifica sin importar en cuál corre el test.
-func TestSlicerLaunchPerOS(t *testing.T) {
-	name, args, err := slicerLaunch("darwin", "/Applications/BambuStudio.app", "/tmp/a.3mf")
-	if err != nil || name != "open" || !reflect.DeepEqual(args, []string{"-a", "/Applications/BambuStudio.app", "/tmp/a.3mf"}) {
-		t.Errorf("darwin: %q %v %v", name, args, err)
-	}
-	name, args, err = slicerLaunch("windows", `C:\Program Files\Bambu Studio\bambu-studio.exe`, `C:\x\a.3mf`)
-	if err != nil || name != `C:\Program Files\Bambu Studio\bambu-studio.exe` || !reflect.DeepEqual(args, []string{`C:\x\a.3mf`}) {
-		t.Errorf("windows: %q %v %v", name, args, err)
-	}
-	if _, _, err := slicerLaunch("linux", "x", "y"); err == nil {
-		t.Error("linux no está soportado")
-	}
-	// Nunca flags de la CLI de Bambu.
-	for _, goos := range []string{"darwin", "windows"} {
-		_, args, _ := slicerLaunch(goos, "app", "file")
-		for _, a := range args {
-			if strings.HasPrefix(a, "--") {
-				t.Errorf("%s: flag de CLI %q", goos, a)
-			}
-		}
-	}
-}
-
 func TestOpenInSlicerRejects(t *testing.T) {
 	a, _ := slicerRig(t)
 	calls := recordLaunch(t)
@@ -263,60 +239,22 @@ func TestOpenInSlicerRejects(t *testing.T) {
 
 func TestOpenInSlicerNotInstalled(t *testing.T) {
 	a := newTestApp(t)
-	// Sin ruta configurada y sin instalación en las rutas habituales no hay nada
-	// que abrir; si esta máquina sí tiene Bambu Studio, se prueba con una ruta
-	// configurada que no existe y se ignora.
+	// Sin ruta configurada y con un entorno vacío (isolateSlicers) no hay nada que
+	// abrir; el error nombra al slicer pedido.
 	s, _ := a.store.GetSettings()
 	s.BambuStudioPath = filepath.Join(t.TempDir(), "no-existe", "BambuStudio.app")
 	a.store.SaveSettings(s)
 	calls := recordLaunch(t)
 	file := filepath.Join(t.TempDir(), "a.3mf")
 	os.WriteFile(file, []byte("x"), 0o644)
-	if sl := a.DetectSlicers(); len(sl) != 1 || sl[0].ID != "bambu-studio" || sl[0].Name != "Bambu Studio" {
-		t.Fatalf("slicers: %+v", sl)
-	} else if !sl[0].Found {
-		if err := a.OpenInSlicer("bambu-studio", file); err == nil {
-			t.Error("Bambu Studio no está: debía fallar")
-		}
-		if len(*calls) != 0 {
-			t.Errorf("no debía lanzar nada: %+v", *calls)
+	for id, name := range map[string]string{"bambu-studio": "Bambu Studio", "prusaslicer": "PrusaSlicer", "ultimaker-cura": "UltiMaker Cura"} {
+		err := a.OpenInSlicer(id, file)
+		if err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s no está instalado: el error tenía que nombrarlo: %v", id, err)
 		}
 	}
-}
-
-func TestDetectBambuStudio(t *testing.T) {
-	dir := t.TempDir()
-	mk := func(name string) string {
-		p := filepath.Join(dir, name)
-		os.MkdirAll(p, 0o755)
-		return p
-	}
-	a, b := mk("a.app"), mk("b.app")
-	missing := filepath.Join(dir, "falta.app")
-	if got := detectBambuStudio("darwin", "", []string{missing, b, a}); got != b {
-		t.Errorf("primera existente: %q", got)
-	}
-	if got := detectBambuStudio("darwin", a, []string{b}); got != a {
-		t.Errorf("la configurada gana: %q", got)
-	}
-	if got := detectBambuStudio("darwin", missing, []string{b}); got != b {
-		t.Errorf("configurada inexistente se ignora: %q", got)
-	}
-	if got := detectBambuStudio("darwin", "", []string{missing}); got != "" {
-		t.Errorf("ninguna: %q", got)
-	}
-	// El ejecutable de dentro del .app se lleva al propio .app.
-	inner := filepath.Join(a, "Contents", "MacOS", "BambuStudio")
-	os.MkdirAll(filepath.Dir(inner), 0o755)
-	os.WriteFile(inner, []byte("x"), 0o755)
-	if got := detectBambuStudio("darwin", inner, nil); got != a {
-		t.Errorf("bundle: %q", got)
-	}
-	if c := bambuStudioCandidates("darwin", "/Users/x", ""); len(c) != 2 || c[0] != "/Applications/BambuStudio.app" || c[1] != "/Users/x/Applications/BambuStudio.app" {
-		t.Errorf("candidatos macOS: %v", c)
-	}
-	if c := bambuStudioCandidates("windows", "", "D:/PF"); len(c) != 1 || !strings.HasSuffix(filepath.ToSlash(c[0]), "Bambu Studio/bambu-studio.exe") {
-		t.Errorf("candidatos Windows: %v", c)
+	if len(*calls) != 0 {
+		t.Errorf("no debía lanzar nada: %+v", *calls)
 	}
 }
 

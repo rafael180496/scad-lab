@@ -148,7 +148,7 @@ línea de acento arriba en la pestaña activa del grupo con el foco.
 
 Spec: [.claude/specs/s8-pestanas-proyecto.md](../.claude/specs/s8-pestanas-proyecto.md). Una ventana, hasta 4
 workspaces abiertos (`MAX_PROJECTS` = `store.MaxOpenProjects`). El **dock es uno solo** y su contenido sigue al
-proyecto activo; no hay un diseño por proyecto. Backend: [06-go-react-contract.md](06-go-react-contract.md).
+proyecto activo; no hay un diseño por proyecto. Backend: [29-contrato-workspaces.md](29-contrato-workspaces.md#proyectos-abiertos--app_projectsgo-s8).
 
 | Archivo | Qué hace |
 |---|---|

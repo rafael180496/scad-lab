@@ -8,23 +8,72 @@ Formato del archivo y creación: [claude/10-editor.md](10-editor.md).
 ## Nunca se borra
 
 Regla 3 de [technical.md](../.claude/rules/technical.md): ningún código de
-ScadLab borra un `.scad`. «Borrar» = **mover** a
-`<ws>/.scadlab/trash/<AAAAMMDD-HHMMSS>-<archivo>` (hora local). No hay «vaciar
-papelera» en la app; el usuario puede borrar la carpeta a mano.
+ScadLab borra un `.scad` por su cuenta. «Borrar» = **mover** a
+`<ws>/.scadlab/trash/<AAAAMMDD-HHMMSS>-<archivo>` (hora local). Eliminar de verdad
+existe, pero **solo como acción explícita del usuario** en la papelera de la app (ver
+«Eliminación permanente»); ningún agente puede.
 
 | Función | Qué hace |
 |---|---|
-| `Trash(ws, file)` | manda un checkpoint; devuelve su nombre en la papelera. Los hijos **no** se mueven: quedan huérfanos (su `parent=` sigue apuntando al archivo) hasta que se restaure |
+| `Trash(ws, file)` / `TrashRelinked` | manda un checkpoint; devuelve su nombre en la papelera (y, `TrashRelinked`, los hijos que re-colgó). Los hijos directos **no** se mueven: pasan a colgar de su padre (o quedan raíz); ver «Re-colgado» |
 | `TrashBranch(ws, file)` | el archivo y todos sus descendientes con la misma marca de fecha; devuelve los nombres (el de `file` primero, luego por número). Mueve las hojas primero y `file` al final: si falla a medias queda un árbol conectado, y se devuelve lo movido más el error |
 | `Descendants(ws, file)` | hijos, nietos… (sin `file`), por número; `file` no tiene que existir; tolera ciclos |
 | `ListTrash(ws)` | `[]TrashedItem{Name, Original, Parent, Description, TrashedAt}`, lo más reciente primero. Ignora lo que no tiene el formato de papelera |
-| `Restore(ws, trashedName)` | vuelve a su nombre original si está libre; si no, al siguiente `NNN` libre con el mismo slug |
+| `Restore(ws, trashedName)` / `RestoreRelinked` | vuelve a su nombre original si está libre; si no, al siguiente `NNN` libre con el mismo slug. Deshace el re-colgado |
+| `SetParent(ws, file, parent)` | reescribe solo el `parent=` de la cabecera (`""` = raíz); ver «Re-colgado» |
+| `PurgeTrashed` / `EmptyTrash` / `StarterDeclined` | eliminación permanente; ver «Eliminación permanente» |
 
-`Restore` **mueve sin reescribir**: el encabezado `@checkpoint` queda intacto.
-Consecuencia: si cambió de número, los hijos que decían `parent=003-x.scad` no se
-reenganchan (también son inmutables) y la rama restaurada aparece como raíz. Con
-el nombre original libre —el caso normal— el vínculo se recompone solo, y
-restaurar una rama completa devuelve el árbol tal cual.
+`Restore` **mueve sin reescribir** el archivo restaurado: su propia cabecera queda intacta. Con el nombre original libre
+—el caso normal— vuelve con el mismo nombre; si cambió de número, los hijos que había re-colgado (ver abajo) se
+re-cuelgan del nombre nuevo.
+
+## Re-colgado de los hijos (`reparent.go`, `relink.go`)
+
+`Trash` (suelto, no `TrashBranch`) deja a cada **hijo directo** del borrado colgando de **su padre** (el abuelo), o como
+**raíz** (`parent=` vacío) si era raíz o si el abuelo ya no está: el árbol nunca queda con un `parent=` a un archivo ausente
+y el usuario no ve el ⚠ ni el SL002 por algo que hizo a propósito. Los nietos no se tocan. Con `TrashBranch` se va todo el
+subárbol y no hay nada que re-colgar.
+
+- **`SetParent(ws, file, parent)` es la única excepción a la inmutabilidad** (regla 3): es metadato del árbol, no el
+  modelo. Cambia **solo los bytes del valor de `parent=`** en la primera línea (misma regex que `workspace.Scan`, así lo
+  escrito y lo leído coinciden): descripción, espacios, BOM, `\r\n` y el resto del archivo quedan byte a byte. Escritura
+  atómica (temporal en la carpeta + rename) **conservando permisos y fecha de modificación** —cambiar de rama no es
+  «haberlo editado»: el árbol muestra la fecha de creación—. No reescribe enlaces simbólicos (el rename los reemplazaría) ni
+  archivos sin cabecera; si ya tenía ese padre no escribe. El padre nuevo no tiene que existir, sí ser un nombre válido sin
+  espacios (`parent=` termina en el primero).
+- **Registro para deshacer**: `<papelera>/<AAAAMMDD-HHMMSS>-<archivo>.scad.relink.json` = `{"parent": <de quién cuelgan>,
+  "children": [...]}`. Termina en `.json`, así que `ListTrash`/`Scan` no lo ven. `Restore` lo consume: cada hijo que
+  **siga existiendo y siga colgando de `parent`** vuelve a colgar del restaurado **con el nombre con que volvió**; uno que el
+  usuario movió a otra rama no se toca, y no se re-cuelga si cerraría un ciclo. Un fallo al re-colgar no revierte el borrado
+  ni la restauración: se devuelve el error junto con lo hecho (`TrashRelinked`/`RestoreRelinked` devuelven también la lista).
+- **El render no se invalida**: `render.contentHash` ignora la línea `// @checkpoint …` (es un comentario; re-colgar la
+  reescribe, y con ella en la clave cada borrado costaría re-renderizar —minutos en un modelo pesado— a todos los hijos).
+  Efecto secundario: dos checkpoints con el mismo código comparten entrada de caché, y **la primera vez tras actualizar** se
+  recalculan los renders ya guardados (la clave cambió una vez).
+- **Workspaces con el problema ya hecho** (hijos con padre en la papelera, de antes): SL002 dice «parent=X está en la
+  papelera: restáuralo o haz principal» (`scad.analysis.inTrash`), y **«Hacer principal»** (`MakeCheckpointRoot` →
+  `SetParent(…, "")`) está en el aviso del panel Problemas y en el menú del nodo con ⚠. Al cambiar el `parent=` del
+  checkpoint elegido, `App.tsx` relee su código (si no hay cambios sin guardar) para que el linter lo vea.
+
+## Eliminación permanente (`purge.go`)
+
+Pedida por el usuario: poder liberar la papelera. **Solo la dispara la interfaz** (`DeleteTrashed(id, name)`,
+`EmptyTrash(id)`): **no hay herramienta MCP** equivalente y un test (`TestNoToolDeletesForGood`) falla si aparece una
+herramienta o un parámetro que sugiera borrar. Mismo criterio que «Abrir en Bambu Studio»: lo irreversible es del usuario.
+
+- `PurgeTrashed`: valida el nombre (`ValidName` + formato de papelera), solo toca un archivo suelto **dentro de**
+  `.scadlab/trash`; un enlace se quita a él, no a su destino; una carpeta no se elimina por esta vía. Borra también su
+  registro `.relink.json` y, desde la app, lo guardado en `checkpoint_trash` (`Store.ForgetCheckpointMeta`).
+- `EmptyTrash`: vacía **todo** lo que haya en `.scadlab/trash` (checkpoints, registros y cualquier otra cosa: la confirmación
+  lo dice) sin seguir enlaces; la carpeta queda. Devuelve cuántos checkpoints eran. `metaDir` rechaza una papelera que sea un
+  enlace: nada fuera del workspace se toca. El botón está deshabilitado con la lista vacía.
+- **Starter**: la regla de S12.c escribe el modelo de inicio al abrir un workspace sin `.scad` **y con la papelera vacía**,
+  y vaciarla deja justo ese estado. Para que no reaparezca en un workspace que el usuario dejó vacío adrede, cuando una
+  eliminación deja la papelera vacía se escribe `.scadlab/no-starter` (`StarterDeclined`) y `ensureStarter` lo respeta; el botón
+  «Crear un modelo de inicio» sigue funcionando. Se eligió una marca y no «tratar la papelera vacía como llena» porque dura
+  entre aperturas y no depende de que la papelera siga existiendo.
+- La papelera de **skills** (`<datos>/trash/skills`) es otra y **no tiene** «Vaciar»: no hay un panel que la liste, así que
+  una confirmación no podría nombrar qué se elimina. Pendiente si hace falta.
 
 ### Mover sin pisar
 
@@ -80,7 +129,7 @@ nuevo.
 `trash_checkpoint` (`branch=true` con su rama), `list_trash` y `restore_checkpoint`, con la misma lógica de
 `backend/checkpoint` que los bindings. «Borrar» sigue siendo mandar a `.scadlab/trash/`: ninguna herramienta borra. Como
 esas cuatro no crean un `.scad`, la app reescanea y emite `checkpoints:changed` tras un paso bueno
-([25-herramientas-ia.md](25-herramientas-ia.md#para-la-interfaz)); `restore_checkpoint` además marca el archivo como
+([25-herramientas-ia.md](25-herramientas-ia.md#para-la-interfaz)); `trash_checkpoint` informa `relinked` (los hijos re-colgados) y `restore_checkpoint` también; este además marca el archivo como
 restaurado (`markRestored`) para que el watcher no lo trate como trabajo nuevo. Las reglas del workspace
 (`assets/workspace/RULES.md.tmpl`) se lo explican al agente.
 

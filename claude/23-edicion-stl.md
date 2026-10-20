@@ -132,7 +132,7 @@ descripción del checkpoint usa el nombre original del archivo (`Importa Mi Piez
 
 ## Bindings (`app_meshedit.go`)
 
-Ver la tabla en [06-go-react-contract.md](06-go-react-contract.md). Tipos con etiquetas JSON en camelCase
+Ver la tabla en [31-contrato-render-visor-editor.md](31-contrato-render-visor-editor.md#editar-un-stl--app_mesheditgo-s13). Tipos con etiquetas JSON en camelCase
 (`centerOnBed`, `meshPath`, `fromImport`…); `refmodel.Report` ahora también (`volumeMm3`, `watertight`, `parts`…).
 `ChooseModelFile()` (diálogo nativo con filtro STL/3MF/OBJ) se agregó porque el diálogo solo se abre desde Go.
 `ApplyMeshEdit` usa `checkpoint.Create` como `SaveAsCheckpoint` (padre activo que avanza, `markOwn`: no se vincula a

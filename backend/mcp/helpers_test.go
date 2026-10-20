@@ -15,6 +15,7 @@ import (
 	"scadlab/backend/appdata"
 	"scadlab/backend/detect"
 	"scadlab/backend/i18n"
+	"scadlab/backend/printers"
 	"scadlab/backend/store"
 	"scadlab/backend/workspace"
 )
@@ -58,7 +59,7 @@ func setup(t *testing.T, seed func(t *testing.T, st *store.Store, ws string)) *c
 	t.Cleanup(func() { i18n.SetLang("en") })
 	i18n.SetLang("en")
 
-	ws, err := workspace.Create(t.TempDir(), "Prueba MCP", "bambu-a1-mini")
+	ws, err := workspace.Create(t.TempDir(), "Prueba MCP", miniPrinter())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,3 +264,9 @@ const (
 	srcCube   = "color(\"red\") cube([20, 10, 5]);\n"
 	srcBroken = "// intento roto\ncolor(\"red\") cube([20, 10, 5];\ncube(1);\n"
 )
+
+// miniPrinter es la impresora de las fixtures: la A1 mini del catálogo.
+func miniPrinter() printers.Printer {
+	p, _ := printers.ByID("bambu-a1-mini")
+	return p
+}

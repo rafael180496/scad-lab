@@ -6,12 +6,15 @@
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-apoyar-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/rhidalgo)
 [![Patreon](https://img.shields.io/badge/Patreon-suscribirse-F96854?logo=patreon&logoColor=white)](https://www.patreon.com/16966547/join)
 
-**Diseño 3D con OpenSCAD e IA, listo para imprimir en Bambu Lab.**
+**Diseño 3D con OpenSCAD e IA, listo para imprimir en tu impresora: Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker o UltiMaker.**
 
 ScadLab es una app de escritorio para macOS y Windows donde describes una pieza,
 un agente de IA (Claude Code, opencode, Codex o Antigravity, u Ollama en local)
 la escribe en OpenSCAD dentro de tu proyecto, y tú la ves, la mides, comparas
-versiones y la exportas a STL o 3MF multicolor para tu A1, A1 mini, P1S, X1C o H2D.
+versiones y la exportas a STL o 3MF multicolor para tu impresora. El catálogo trae las siete
+marcas —Bambu Lab (A1, P1S, X1C, H2D…), Prusa (MK4S, CORE One…), Creality (K1, Ender-3 V3…), Elegoo
+(Centauri Carbon…), Anycubic (Kobra…), Snapmaker (U1…) y UltiMaker (S5, S7…)— con su ficha, su skill
+y su slicer; cada workspace elige la suya, con sus colores y sus skills.
 
 📖 **Ayuda:** [English](https://rafael180496.github.io/ScadLab/) ·
 [Español](https://rafael180496.github.io/ScadLab/es/)
@@ -28,6 +31,7 @@ pendiente es la verificación manual en ventanas reales (ver abajo).
 | Árbol de checkpoints inmutables con ramas, padre activo, papelera, renombrar, comparar con el padre y retomar la sesión que los creó | ✅ |
 | Render con OpenSCAD (Manifold/CGAL), caché de mallas, diagnósticos con línea y `RENDER_ERRORS.md` | ✅ |
 | Visor 3D PBR: siete vistas, wireframe, aristas, ortográfica/perspectiva, vista dividida, captura PNG | ✅ |
+| Impresoras de siete marcas: catálogo con ficha y búsqueda, y por workspace la impresora, los colores, las skills y los ajustes de impresión («Configuración del workspace») | ✅ |
 | Medición por partes (color), peso, filamento y costo estimados, aviso si no cabe en la placa | ✅ |
 | Editor Monaco con resaltado OpenSCAD, linter (SL001–SL009), formateo, autocompletado y guardar como checkpoint | ✅ |
 | Paneles acoplables (mover, dividir, flotar, minimizar, ocultar), diseños guardados y modo enfoque | ✅ |
@@ -35,9 +39,9 @@ pendiente es la verificación manual en ventanas reales (ver abajo).
 | Terminal integrada con el agente (PTY), sesiones y auto-iteración de errores | ✅ |
 | Hermes: chat que usa las herramientas de ScadLab (crea, renderiza, mira, mide y corrige checkpoints), con adjuntos (imágenes y modelos STL/3MF/OBJ), conversaciones, tokens y costo | ✅ |
 | Servidor MCP de OpenSCAD (`render`, `measure`, `preview`, `export`…) configurado solo en cada CLI | ✅ |
-| Exportación STL / 3MF multicolor para Bambu (una parte por color con su extrusor) / STL por color / PNG, y abrir en Bambu Studio | ✅ |
+| Exportación STL / 3MF multicolor para Bambu y Orca o para PrusaSlicer (una parte por color con su extrusor) / STL por color / PNG, y abrir en el slicer de la impresora (Bambu Studio, OrcaSlicer, PrusaSlicer, Creality Print, ElegooSlicer, Anycubic Slicer Next, Snapmaker Orca, UltiMaker Cura) | ✅ |
 | Interfaz y ayuda en inglés y español | ✅ |
-| Probar en una Windows real y en las ventanas reales de Wails (WebGL, Monaco, arrastre de pestañas), con CLIs de agente reales y en Bambu Studio | ⬜ pendiente de verificación manual |
+| Probar en una Windows real y en las ventanas reales de Wails (WebGL, Monaco, arrastre de pestañas), con CLIs de agente reales y en cada slicer | ⬜ pendiente de verificación manual |
 
 Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
@@ -50,13 +54,13 @@ Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
 ## Descargas
 
-Versión **0.1.0** (la primera), en los assets del
-[Release v0.1.0](https://github.com/rafael180496/ScadLab/releases/tag/v0.1.0):
+Versión **0.2.0**, en los assets del
+[Release v0.2.0](https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0):
 
 | Sistema | Archivo | Tamaño |
 |---|---|---|
-| macOS (Apple Silicon, 11+) | [`ScadLab-v0.1.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0.dmg) | 17,4 MB |
-| Windows (x64) | [`ScadLab-v0.1.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0-windows-amd64.exe) (portable) | 46,5 MB |
+| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg) | 18,4 MB |
+| Windows (x64) | [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe) (portable) | 49,1 MB |
 
 Los binarios no van firmados: macOS pide «clic derecho → Abrir» la primera vez y
 Windows muestra el aviso de SmartScreen. También puedes compilarla desde el código
@@ -76,19 +80,18 @@ Arquitectura, reglas y agentes de desarrollo: [CLAUDE.md](CLAUDE.md).
 
 ## Distribución / Empaquetado macOS
 
-**v0.1.0** — [`ScadLab-v0.1.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0.dmg), 17,4 MB, SHA-256
-`fa509e2ef6fc20c876ff4484163ff5074e185495152cafecb2bdfd6aa5e91cde`. Solo Apple Silicon
+**v0.2.0** — [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg), 18,4 MB, SHA-256
+`5b943a17a7734716ff029cc5236610dcb7c13443d533c647188001a3a8f43655`. Solo Apple Silicon
 (arm64), macOS 11 o superior (el `Info.plist` que genera Wails declara 10.13, pero el
 binario es arm64 y exige 11+). Sin firma ni notarización: clic derecho → Abrir.
 Detalle en [releases/macos](releases/macos/README.md).
 
 ## Distribución / Empaquetado Windows
 
-**v0.1.0** — [`ScadLab-v0.1.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.1.0/ScadLab-v0.1.0-windows-amd64.exe), 46,5 MB,
-SHA-256 `0216d858ef5aacb20124fe2add54def5cf27f08b4f5a0da18a0ba7f7671fa87a`. Portable (x86-64),
-sin instalador ni firma Authenticode (SmartScreen avisa). **No verificado en una Windows
-real**: se cross-compila desde macOS y todavía nadie lo ha ejecutado allí. Detalle en
-[releases/windows](releases/windows/README.md).
+**v0.2.0** — [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe), 49,1 MB,
+SHA-256 `10ae9563a01e79237258604c187986fb66f8dd935a485198975edd7b4fea320b`. Portable (x86-64),
+sin instalador ni firma Authenticode (SmartScreen avisa). Verificado por el usuario en
+Windows 10 y Windows 11. Detalle en [releases/windows](releases/windows/README.md).
 
 ## Apoya el proyecto
 

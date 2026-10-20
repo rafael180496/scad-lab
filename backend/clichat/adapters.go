@@ -329,7 +329,7 @@ func agyEvents(line []byte, st *agyTurn) []Event {
 			switch s.State {
 			case "ACTIVE":
 				name := firstNonEmpty(s.ToolName, s.StepType)
-				return []Event{{Kind: KindTool, Tool: newToolCall(id, name, rawJSON(s.ToolInput))}}
+				return []Event{{Kind: KindTool, Tool: unwrapAgyMCP(newToolCall(id, name, rawJSON(s.ToolInput)))}}
 			case "DONE":
 				return []Event{{Kind: KindToolResult, Tool: &ToolCall{ID: id, Result: agyDetailOf(line, false)}}}
 			case "ERROR", "FAILED", "CANCELLED":
@@ -361,6 +361,45 @@ func agyEvents(line []byte, st *agyTurn) []Event {
 		return append(out, Event{Kind: KindDone, Usage: u, ConversationID: l.Result.ConversationID})
 	}
 	return nil
+}
+
+// agyMCPCall es el nombre con que Antigravity llama a TODA herramienta de un
+// servidor MCP: el paso es siempre `call_mcp_tool` y la herramienta de verdad
+// viaja en sus argumentos (`ServerName`, `ToolName`, `Arguments`).
+const agyMCPCall = "call_mcp_tool"
+
+// unwrapAgyMCP vuelve la llamada genérica de Antigravity la herramienta que es:
+// `call_mcp_tool{ServerName: scadlab, ToolName: render}` se muestra y se cuenta
+// como `render`, igual que en Hermes y en los otros CLIs. Sin esto cada tarjeta
+// decía `call_mcp_tool` y `mcp.CreatesCheckpoint` nunca reconocía un
+// `create_checkpoint` de Antigravity. Las llamadas a OTROS servidores se dejan
+// como llegan: ScadLab no las conoce.
+func unwrapAgyMCP(tc *ToolCall) *ToolCall {
+	if tc == nil || tc.Name != agyMCPCall || tc.Args == nil {
+		return tc
+	}
+	var server, tool string
+	var inner any
+	for k, v := range tc.Args {
+		switch strings.ToLower(k) {
+		case "servername", "server_name":
+			server, _ = v.(string)
+		case "toolname", "tool_name":
+			tool, _ = v.(string)
+		case "arguments", "args":
+			inner = v
+		}
+	}
+	if server != mcpServerName || tool == "" {
+		return tc
+	}
+	tc.Name = tool
+	tc.Args, tc.Input = nil, ""
+	if m, ok := inner.(map[string]any); ok {
+		tc.Args = m
+		tc.Input = trim(rawJSON(m))
+	}
+	return tc
 }
 
 // agyDetailOf lee el detalle (error o salida) del `step_update` de una línea.

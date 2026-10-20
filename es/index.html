@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ayuda de ScadLab</title>
-<meta name="description" content="Documentación de ScadLab: diseña modelos 3D en OpenSCAD con ayuda de agentes de IA (Claude Code, opencode, Codex, Antigravity, Ollama) y déjalos listos para imprimir en Bambu Lab. App de escritorio para macOS y Windows.">
+<meta name="description" content="Documentación de ScadLab: diseña modelos 3D en OpenSCAD con ayuda de agentes de IA (Claude Code, opencode, Codex, Antigravity, Ollama) y déjalos listos para imprimir en tu impresora 3D (Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker, UltiMaker). App de escritorio para macOS y Windows.">
 <meta name="color-scheme" content="light dark">
 <link rel="alternate" hreflang="en" href="https://rafael180496.github.io/ScadLab/">
 <link rel="alternate" hreflang="es" href="https://rafael180496.github.io/ScadLab/es/">
@@ -12,7 +12,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2314171e%22/%3E%3Cpath d=%22M16 5 26 10.8 16 16.6 6 10.8Z%22 fill=%22%23ff7a1a%22/%3E%3Cpath d=%22M6 10.8 16 16.6V28L6 22.2Z%22 fill=%22%235e6677%22/%3E%3Cpath d=%22M26 10.8 16 16.6V28l10-5.8Z%22 fill=%22%23aeb4c0%22/%3E%3Cpath d=%22M6 10.8 16 16.6 26 10.8%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.6%22 stroke-width=%22.8%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E">
 <meta property="og:title" content="Ayuda de ScadLab">
 <meta property="og:image" content="../docs/screenshots/es/app-main.png">
-<meta property="og:description" content="Diseña en OpenSCAD con agentes de IA y exporta a 3MF multicolor para tu Bambu Lab.">
+<meta property="og:description" content="Diseña en OpenSCAD con agentes de IA y exporta a 3MF multicolor para Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker o UltiMaker.">
 <style>
 /* ==========================================================================
    Página de AYUDA, no una landing. Misma anatomía que la ayuda de mini-tools:
@@ -321,7 +321,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#14171e"/><path d="M16 5 26 10.8 16 16.6 6 10.8Z" fill="#ff7a1a"/><path d="M6 10.8 16 16.6V28L6 22.2Z" fill="#5e6677"/><path d="M26 10.8 16 16.6V28l10-5.8Z" fill="#aeb4c0"/><path d="M6 10.8 16 16.6 26 10.8" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width=".8" stroke-linejoin="round"/></svg>
     ScadLab
   </a>
-  <span class="ver" title="Esta ayuda describe la versión 0.1.0, la primera de ScadLab. Todo lo que describe está implementado; solo faltan pruebas manuales en una Windows real.">v0.1.0</span>
+  <span class="ver" title="Esta ayuda describe la versión 0.2.0 de ScadLab. Todo lo que describe está implementado.">v0.2.0</span>
   <div class="spacer"></div>
   <div class="search">
     <input id="q" type="search" placeholder="Buscar en la ayuda…" autocomplete="off" spellcheck="false" aria-label="Buscar en la ayuda">
@@ -378,6 +378,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li><a href="#ia-mcp">Servidor MCP de ScadLab</a></li>
     <li><a href="#ia-autoiteracion">Auto-iteración de errores</a></li>
     <li><a href="#ia-hermes">Hermes: el chat con herramientas y los proveedores de IA</a></li>
+    <li><a href="#ia-imagen">Crear un modelo desde una imagen</a></li>
     <li><a href="#ia-prompts">Cómo pedirle un modelo a la IA</a></li>
     <li><a href="#ia-skills">Skills incluidas</a></li>
     <li><a href="#ia-skill-propia">Crear tu propia skill</a></li>
@@ -385,7 +386,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
 
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>Imprimir</button>
   <ul>
-    <li><a href="#imprimir-impresoras">Impresoras Bambu Lab</a></li>
+    <li><a href="#imprimir-impresoras">Impresoras y configuración del workspace</a></li>
     <li><a href="#imprimir-reglas">Reglas de diseño FDM</a></li>
     <li><a href="#imprimir-exportar">Exportar STL, 3MF y PNG</a></li>
     <li><a href="#imprimir-multicolor">Multicolor con AMS</a></li>
@@ -420,13 +421,13 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
 <article class="topic" id="introduccion" data-title="Qué es ScadLab">
   <h1>Qué es ScadLab</h1>
   <p class="lead">Una app de escritorio para diseñar modelos 3D en OpenSCAD conversando con agentes de IA,
-  ver cada versión en un visor 3D y dejar el modelo listo para imprimir en tu Bambu Lab — STL, o 3MF
-  multicolor para el AMS.</p>
+  ver cada versión en un visor 3D y dejar el modelo listo para imprimir en tu impresora — STL, o 3MF
+  multicolor para el AMS, el MMU, el CFS y los demás sistemas.</p>
 
   <ul class="chips">
     <li class="chip">OpenSCAD</li><li class="chip">Claude Code</li><li class="chip">opencode</li>
     <li class="chip">Codex</li><li class="chip">Antigravity</li><li class="chip">Ollama</li>
-    <li class="chip">Bambu Lab A1 · A1 mini · P1S · X1C · H2D</li><li class="chip">STL · 3MF</li>
+    <li class="chip">Bambu Lab</li><li class="chip">Prusa</li><li class="chip">Creality</li><li class="chip">Elegoo</li><li class="chip">Anycubic</li><li class="chip">Snapmaker</li><li class="chip">UltiMaker</li><li class="chip">STL · 3MF</li>
     <li class="chip">macOS · Windows</li><li class="chip">Español · English</li>
   </ul>
 
@@ -440,18 +441,18 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <div class="card"><h3>Cada cambio es un checkpoint</h3><p>La IA nunca sobrescribe un archivo: cada versión es un <code>.scad</code> nuevo en un árbol con ramas. Volver atrás es hacer clic.</p></div>
     <div class="card"><h3>Lo ves al instante</h3><p>Visor 3D con materiales realistas, medidas, peso y costo estimado de cada pieza.</p></div>
     <div class="card"><h3>Los errores se corrigen solos</h3><p>Si OpenSCAD falla al renderizar, ScadLab le pasa el error al agente para que lo arregle en un checkpoint nuevo.</p></div>
-    <div class="card"><h3>Pensado para Bambu Lab</h3><p>Perfil de impresora por proyecto, aviso si no cabe en la placa y 3MF con color por pieza para el AMS.</p></div>
+    <div class="card"><h3>Para tu impresora, de la marca que sea</h3><p>Catálogo de siete marcas, impresora, colores y skills por workspace, aviso si no cabe en la placa y 3MF con color por pieza.</p></div>
     <div class="card"><h3>Tus agentes, no uno nuestro</h3><p>Usa el CLI que ya tengas instalado —Claude Code, opencode, Codex, Antigravity— o un modelo local con Ollama.</p></div>
     <div class="card"><h3>Local</h3><p>Tus proyectos son carpetas en tu disco y la configuración vive en una base SQLite local. Sin cuenta.</p></div>
   </div>
 
   <h2 id="introduccion--estado">Estado del proyecto</h2>
-  <p>Esta ayuda describe la versión <strong>0.1.0</strong>, la primera de ScadLab. Los binarios para macOS y Windows
-  están en <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.1.0">Releases</a> (también puedes
+  <p>Esta ayuda describe la versión <strong>0.2.0</strong> de ScadLab. Los binarios para macOS y Windows
+  están en <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0">Releases</a> (también puedes
   <a href="#instalacion--compilar">compilarla desde el código</a>). Todo lo que documenta esta página está
   implementado y verificado con OpenSCAD real; nada está «en desarrollo».</p>
   <div class="tablewrap"><table>
-    <tr><th>Área</th><th>Estado en v0.1.0</th></tr>
+    <tr><th>Área</th><th>Estado en v0.2.0</th></tr>
     <tr><td>Workspaces, configuración, idioma ES/EN</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Detección de OpenSCAD y de CLIs de agentes</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Skills incluidas; skills propias: crear, editar, renombrar, eliminar y elegir su carpeta</td><td><span class="badge ok">Disponible</span></td></tr>
@@ -462,7 +463,8 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <tr><td>Varios proyectos a la vez: pestañas de proyecto con indicadores de fondo, reordenar, atajos y reapertura al arrancar</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Terminal de agentes (Claude Code, opencode, Codex, Antigravity) con sesiones y auto-iteración de errores</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Chat Hermes: proveedores de IA con claves cifradas (Ollama, compatibles con OpenAI, OpenRouter, Gemini, Anthropic), modo Agente con herramientas, adjuntos (imágenes y modelos STL/3MF/OBJ), conversaciones, tokens y costo</td><td><span class="badge ok">Disponible</span></td></tr>
-    <tr><td>Exportar: STL, 3MF multicolor para Bambu (una parte por color con su extrusor), STL por color y abrir en Bambu Studio</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Impresoras de siete marcas: catálogo con ficha y búsqueda, y por workspace la impresora, los colores, las skills y los ajustes de impresión</td><td><span class="badge ok">Disponible</span></td></tr>
+    <tr><td>Exportar: STL, 3MF multicolor para Bambu y Orca o para PrusaSlicer (una parte por color con su extrusor), STL por color y abrir en el slicer de la impresora</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Servidor MCP de ScadLab: los agentes renderizan, validan, miden y ven sus modelos, configurado solo en cada CLI</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Medición por partes: selección en el visor, peso, filamento y costo estimados, aviso de placa y panel Impresión</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Motor integrado (OpenSCAD en WebAssembly): visor, exportación a STL/3MF y estimación sin tener OpenSCAD instalado, y el botón <strong>Descargar OpenSCAD</strong></td><td><span class="badge ok">Disponible</span></td></tr>
@@ -476,7 +478,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li>El visor 3D, el editor y el arrastre de pestañas dentro de la ventana real (WebGL de WKWebView / WebView2, los workers de Monaco, <kbd>Ctrl+Tab</kbd>).</li>
     <li>La terminal con un CLI de agente real, el chat contra un servidor real y una sesión de cada agente usando las herramientas MCP.</li>
     <li>El botón <strong>Descargar OpenSCAD</strong> en una Windows real (la descarga de macOS está probada de punta a punta) y el motor integrado en los dos sistemas.</li>
-    <li>Abrir en Bambu Studio un 3MF exportado, asignar el AMS y laminar.</li>
+    <li>Abrir un 3MF o un STL exportado en cada slicer (Bambu Studio, OrcaSlicer, PrusaSlicer, Creality Print…), asignar los filamentos y laminar.</li>
   </ul>
 
   <h2 id="introduccion--seguir">Por dónde seguir</h2>
@@ -510,9 +512,9 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   <p class="lead">Un ejecutable para macOS (Apple Silicon) y otro para Windows (x64). Los binarios no están
   firmados todavía, así que el sistema avisa la primera vez que los abres.</p>
 
-  <div class="note tip"><span class="lbl">Versión 0.1.0</span><p>Los archivos están en
-  <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.1.0">Releases</a>:
-  <code>ScadLab-v0.1.0.dmg</code> para macOS y <code>ScadLab-v0.1.0-windows-amd64.exe</code> para Windows. También
+  <div class="note tip"><span class="lbl">Versión 0.2.0</span><p>Los archivos están en
+  <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0">Releases</a>:
+  <code>ScadLab-v0.2.0.dmg</code> para macOS y <code>ScadLab-v0.2.0-windows-amd64.exe</code> para Windows. También
   puedes <a href="#instalacion--compilar">compilarla desde el código</a>.</p></div>
 
   <h2 id="instalacion--macos">macOS (Apple Silicon)</h2>
@@ -629,22 +631,23 @@ wails build            <span class="c"># binario en build/bin/</span></code></pr
   <p class="lead">De una carpeta vacía a una pieza que puedes imprimir: crea un workspace, pídele algo al
   agente y mira el resultado.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/new-workspace.png" alt="Diálogo Nuevo workspace con el nombre, el selector de impresora, la ubicación con el botón Elegir, la ruta final exacta que se creará y la casilla para usar esa carpeta como predeterminada" loading="lazy"><figcaption>Nuevo workspace: nombre, impresora y ubicación. «Se creará en» muestra la ruta exacta; la casilla de abajo la deja como carpeta predeterminada.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/new-workspace.png" alt="Diálogo Nuevo workspace con el nombre, el selector de impresora con su volumen y colores, la lista de skills, la ubicación con el botón Elegir, la ruta final exacta que se creará y la casilla para usar esa carpeta como predeterminada" loading="lazy"><figcaption>Nuevo workspace: nombre, impresora y colores, skills y ubicación. «Se creará en» muestra la ruta exacta; la casilla de abajo la deja como carpeta predeterminada.</figcaption></figure>
 
   <h2 id="primer-proyecto--crear">1. Crea el workspace <span class="badge ok">Disponible</span></h2>
   <ol class="steps">
     <li>Pulsa <strong>Nuevo workspace</strong>.</li>
-    <li>Ponle nombre (por ejemplo <em>Caja sensores</em>) y elige la impresora.</li>
+    <li>Ponle nombre (por ejemplo <em>Caja sensores</em>) y elige la <a href="#imprimir-impresoras--elegir">impresora</a>; si es multicolor, indica cuántos colores usa. Las <a href="#imprimir-impresoras--skills">skills</a> vienen marcadas según tu impresora y las puedes ajustar.</li>
     <li>En <strong>Ubicación</strong> elige la carpeta donde se crea (<strong>Elegir…</strong>): de forma predeterminada es la de
     Configuración → General, y se crea si no existe. Debajo, <strong>Se creará en</strong> te muestra la ruta final exacta
     (<code>&lt;ubicación&gt;/caja-sensores</code>) mientras escribes el nombre; si esa carpeta ya existe y no está vacía,
     ScadLab no la toca y te dice cuál es.</li>
-    <li>ScadLab crea la estructura y copia las <a href="#ia-skills">skills</a> para todos los CLIs.</li>
+    <li>ScadLab crea la estructura y copia solo las <a href="#ia-skills">skills</a> elegidas para todos los CLIs.</li>
   </ol>
   <figure class="shot"><img src="../docs/screenshots/es/workspace-starter.png" alt="Un workspace recién abierto, «Mi primer proyecto»: el árbol con un único checkpoint 001-mi-primer-proyecto, el visor con una base azul y un pomo ámbar ya renderizados y, a la derecha, su código con los parámetros del Customizer" loading="lazy"><figcaption>Un workspace nuevo ya trae un modelo de inicio: hay algo que ver y de lo que partir.</figcaption></figure>
   <p>El workspace <strong>nunca se abre vacío</strong>: trae <code>001-&lt;nombre&gt;.scad</code>, una base con un pomo, con parámetros del Customizer y dos colores. También lo recibe un workspace que abres y no tiene ningún
-  <code>.scad</code> (uno anterior a esta versión, por ejemplo). Si <em>tú</em> lo vaciaste —mandaste sus checkpoints a la <a href="#checkpoints-arbol">papelera</a>— no vuelve solo: el visor y el panel Código muestran
-  <strong>Crear un modelo de inicio</strong> cuando el proyecto no tiene ningún checkpoint, y lo escriben cuando lo pides. Nunca pisa nada.</p>
+  <code>.scad</code> (uno anterior a esta versión, por ejemplo). Si <em>tú</em> lo vaciaste —mandaste sus checkpoints a la <a href="#checkpoints-arbol">papelera</a>, o la vaciaste después— no vuelve solo: el visor y el panel Código muestran
+  <strong>Crear un modelo de inicio</strong> cuando el proyecto no tiene ningún checkpoint, y lo escriben cuando lo pides. Nunca pisa nada. Junto a él,
+  <strong>Crear desde una imagen</strong> arranca el proyecto <a href="#ia-imagen">con tus fotos</a>.</p>
 
   <h2 id="primer-proyecto--pedir">2. Pídele el modelo al agente <span class="badge ok">Disponible</span></h2>
   <p>Abre el panel <a href="#ia-agentes">Agente</a>, elige tu agente, pulsa <strong>Nueva</strong> y describe la pieza con medidas:</p>
@@ -700,7 +703,7 @@ color("SteelBlue") difference() {
 
   <h2 id="workspaces--abrir">Crear, abrir y recientes <span class="badge ok">Disponible</span></h2>
   <ul>
-    <li><strong>Nuevo workspace</strong>: nombre, impresora y <strong>ubicación</strong> (la carpeta que lo contendrá; el workspace queda en
+    <li><strong>Nuevo workspace</strong>: nombre, impresora y colores, skills y <strong>ubicación</strong> (la carpeta que lo contendrá; el workspace queda en
     <code>&lt;ubicación&gt;/&lt;nombre-en-minúsculas-y-guiones&gt;</code>). Con <strong>Usar esta carpeta como predeterminada</strong>
     los próximos se crean ahí. Una carpeta de destino que ya existe y tiene archivos se rechaza sin tocarla.</li>
     <li><strong>Abrir</strong>: elige una carpeta existente; ScadLab completa lo que falte (skills, reglas) sin tocar tus archivos <code>.scad</code>.</li>
@@ -845,7 +848,8 @@ color("SteelBlue") difference() {
     <tr><td>Plegar / desplegar rama</td><td>Oculta o muestra los checkpoints que cuelgan de este</td></tr>
     <tr><td>Copiar nombre</td><td>Copia el nombre del archivo al portapapeles</td></tr>
     <tr><td>Mostrar en el Finder / Explorador</td><td>Abre la carpeta del workspace con el archivo seleccionado</td></tr>
-    <tr><td>Mover a la papelera <kbd>⌫</kbd></td><td>Saca <em>solo ese</em> checkpoint del árbol. Sus hijos se quedan, con el padre perdido (marcados con ⚠)</td></tr>
+    <tr><td>Mover a la papelera <kbd>⌫</kbd></td><td>Saca <em>solo ese</em> checkpoint del árbol. Sus hijos pasan a colgar de su padre (o quedan como principales si era una raíz); la confirmación lo dice</td></tr>
+    <tr><td>Hacer principal</td><td>Solo en un checkpoint marcado con ⚠ (su padre no está): lo deja como <a href="#checkpoints-arbol--papelera">principal</a>, sin padre</td></tr>
     <tr><td>Mover con su rama a la papelera</td><td>Se lleva el checkpoint y todos sus descendientes. La confirmación dice cuántos son</td></tr>
   </table></div>
 
@@ -855,15 +859,41 @@ color("SteelBlue") difference() {
   cancela, y dejarlo vacío vuelve a mostrar el nombre del archivo.</p>
 
   <h2 id="checkpoints-arbol--papelera">La papelera</h2>
-  <p>ScadLab <strong>nunca borra</strong> un checkpoint: «borrar» lo mueve a <code>.scadlab/trash/</code> del workspace,
+  <p>Mandar un checkpoint a la papelera <strong>no lo borra</strong>: lo mueve a <code>.scadlab/trash/</code> del workspace,
   con la fecha delante del nombre. El ícono de papelera de la cabecera del árbol muestra cuántos hay y abre la lista,
-  con su descripción, cuándo se descartó y el botón <strong>Restaurar</strong>.</p>
+  con su descripción, cuándo se descartó y el botón <strong>Restaurar</strong>. Eliminar de verdad es una decisión aparte
+  y solo tuya: <a href="#checkpoints-arbol--eliminar">más abajo</a>.</p>
   <figure class="shot"><img src="../docs/screenshots/es/trash.png" alt="Diálogo Papelera de checkpoints con tres checkpoints descartados, cada uno con su descripción, la fecha y un botón Restaurar" loading="lazy"><figcaption>La papelera: restaurar devuelve el archivo (y su rótulo y su vínculo con la sesión) al árbol.</figcaption></figure>
   <ul>
     <li>Restaurar devuelve el checkpoint a su nombre; si ese número ya lo ocupa otro, toma el siguiente libre con el mismo
-      slug. El archivo no se reescribe, así que sus hijos —que lo nombran— solo se reenganchan si volvió con su nombre.</li>
-    <li>No hay «vaciar papelera» en la app. Si quieres liberar el espacio, borra la carpeta <code>.scadlab/trash/</code> a mano.</li>
+      slug. El archivo en sí no se reescribe.</li>
+    <li><strong>Sus hijos no se quedan huérfanos.</strong> Al mandarlo a la papelera, los hijos directos pasan a colgar de su
+      padre —el «abuelo»— o, si era una raíz, quedan como principales. Solo cambia la línea <code>// @checkpoint parent=…</code> de
+      cada hijo: el código, la descripción y la fecha del archivo no se tocan, y los nietos siguen colgando de su padre.
+      <strong>Restaurar lo deshace</strong>: los hijos que sigan donde se los dejó vuelven a colgar del restaurado (con el nombre
+      con que volvió); uno que ya moviste a otra rama no se toca. Si mandas a la papelera <em>toda la rama</em>, no hay nada
+      que re-colgar.</li>
+    <li>Si era el <a href="#checkpoints-arbol--activo">padre activo</a>, el activo pasa a su padre.</li>
   </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/tree-trash-confirm.png" alt="Confirmación: ¿Mover «Tapa deslizante» a la papelera? Sus 2 checkpoints hijos pasarán a colgar de «001-base-box». No se borra nada: si lo restauras, vuelven a colgar de él." loading="lazy"><figcaption>La confirmación dice qué pasa con los hijos antes de mover nada.</figcaption></figure>
+
+  <h3 id="checkpoints-arbol--principal">Un hijo cuyo padre no está: «Hacer principal»</h3>
+  <p>Un workspace que ya tenía hijos con el padre en la papelera (de una versión anterior de ScadLab) o un padre borrado a mano
+  los muestra con ⚠ en el árbol, y el panel <strong>Problemas</strong> avisa <code>SL002</code>. Si el padre está en la papelera, el
+  aviso lo dice: puedes <strong>restaurarlo</strong> desde la papelera o pulsar <strong>Hacer principal</strong> —en el aviso, o con
+  clic derecho sobre el checkpoint—, que lo deja sin padre reescribiendo solo su línea de cabecera.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/problems-orphan.png" alt="El panel Problemas con el aviso SL002 «Parent=008-draft-lid.scad está en la papelera: restáuralo o haz principal a este checkpoint» y el botón Hacer principal; el árbol marca 007-snap-case-v2 con ⚠" loading="lazy"><figcaption>El aviso de un padre en la papelera, con su arreglo de un clic.</figcaption></figure>
+
+  <h3 id="checkpoints-arbol--eliminar">Eliminar para siempre y vaciar la papelera</h3>
+  <p>La papelera de la ventana tiene dos botones que <strong>sí borran</strong>, y piden confirmación nombrando lo que se va y
+  diciendo que no se puede deshacer:</p>
+  <ul>
+    <li><strong>✕ en cada fila</strong>: elimina ese checkpoint para siempre.</li>
+    <li><strong>Vaciar papelera</strong>: elimina todo lo que haya en <code>.scadlab/trash/</code> de ese workspace —los checkpoints y cualquier otro archivo que alguien haya dejado ahí—. Vaciarla <em>no</em> hace reaparecer el <a href="#primer-proyecto">modelo de inicio</a> al reabrir un workspace que se quedó sin modelos: lo dejaste vacío a propósito, y el botón «Crear un modelo de inicio» sigue ahí.</li>
+  </ul>
+  <figure class="shot"><img src="../docs/screenshots/es/trash-empty-confirm.png" alt="Confirmación sobre la papelera: ¿Vaciar la papelera? Se eliminarán para siempre sus 3 checkpoints y cualquier otro archivo que haya en .scadlab/trash de este workspace. No se puede deshacer." loading="lazy"><figcaption>Vaciar la papelera: confirmación con la cantidad y el aviso de que no se deshace.</figcaption></figure>
+  <p>Esto es <strong>solo de la interfaz</strong>: la IA puede mandar a la papelera y restaurar, pero ninguna de sus herramientas
+  elimina para siempre ni vacía la papelera. (La papelera de las <a href="#ia-skill-propia">skills</a> es otra y no tiene este botón.)</p>
 
   <h2 id="checkpoints-arbol--comparar">Comparar con el padre</h2>
   <p>El panel Código se convierte en un visor de diferencias de solo lectura: a la izquierda el padre, a la derecha el
@@ -1239,7 +1269,7 @@ color("SteelBlue") difference() {
     <tr><th>Código</th><th>Tipo</th><th>Qué avisa</th><th>Por qué importa</th></tr>
     <tr><td><code>syntax</code></td><td>Error</td><td>Lo que dice OpenSCAD al leer el archivo</td><td>Con un error de sintaxis no hay pieza.</td></tr>
     <tr><td><code>SL001</code></td><td>Advertencia</td><td>Falta el encabezado <code>// @checkpoint parent=… desc="…"</code> en la línea 1, o está mal escrito</td><td>Sin él, el checkpoint no se cuelga del árbol.</td></tr>
-    <tr><td><code>SL002</code></td><td>Advertencia</td><td><code>parent=</code> apunta a un archivo que no existe</td><td>El checkpoint aparece huérfano en el árbol.</td></tr>
+    <tr><td><code>SL002</code></td><td>Advertencia</td><td><code>parent=</code> apunta a un archivo que no existe (o que está en la papelera)</td><td>El checkpoint aparece huérfano en el árbol. El aviso trae <a href="#checkpoints-arbol--principal">«Hacer principal»</a>.</td></tr>
     <tr><td><code>SL003</code></td><td>Advertencia</td><td>Una pieza del nivel superior sin <code>color()</code></td><td>En el 3MF multicolor quedaría sin filamento asignado.</td></tr>
     <tr><td><code>SL004</code></td><td>Error</td><td>Un <code>include &lt;…&gt;</code> / <code>use &lt;…&gt;</code> que no se encuentra</td><td>El render falla o pierde piezas.</td></tr>
     <tr><td><code>SL005</code></td><td>Advertencia</td><td>Un checkpoint incluye a otro checkpoint</td><td>Cada checkpoint tiene que ser autocontenido: si el otro cambia de lugar, este se rompe.</td></tr>
@@ -1583,8 +1613,8 @@ color("SteelBlue") difference() {
     <tr><td><code>create_checkpoint</code></td><td>Crea un checkpoint nuevo (<code>NNN-slug.scad</code>, con su encabezado) a partir de un padre. <strong>Nunca sobrescribe</strong> uno existente.</td><td>Agente</td></tr>
     <tr><td><code>set_active_parent</code></td><td>Elige desde qué checkpoint ramifica el siguiente (tu «Ramificar desde aquí») o lo borra.</td><td>Agente</td></tr>
     <tr><td><code>rename_checkpoint</code></td><td>Cambia el rótulo que el árbol muestra para un checkpoint. El archivo y su encabezado no cambian.</td><td>Agente</td></tr>
-    <tr><td><code>trash_checkpoint</code></td><td>Manda un checkpoint (o toda su rama) a la papelera. <strong>Nunca borra nada.</strong></td><td>Agente</td></tr>
-    <tr><td><code>list_trash</code> / <code>restore_checkpoint</code></td><td>Lista la papelera / trae un checkpoint de vuelta, con su rótulo. Nunca pisa uno existente.</td><td>Consulta / Agente</td></tr>
+    <tr><td><code>trash_checkpoint</code></td><td>Manda un checkpoint (o toda su rama) a la papelera; si es suelto, sus hijos pasan a colgar de su padre. <strong>Nunca borra nada</strong>: eliminar para siempre o vaciar la papelera solo lo puedes hacer tú, desde la interfaz.</td><td>Agente</td></tr>
+    <tr><td><code>list_trash</code> / <code>restore_checkpoint</code></td><td>Lista la papelera / trae un checkpoint de vuelta, con su rótulo (y sus hijos vuelven a colgar de él). Nunca pisa uno existente.</td><td>Consulta / Agente</td></tr>
     <tr><td><code>list_refs</code></td><td>Los STL, 3MF y OBJ de <code>refs/</code>: nombre, formato, tamaño y fecha.</td><td>Consulta</td></tr>
     <tr><td><code>render</code></td><td>Renderiza un checkpoint (por defecto, el más nuevo) y devuelve el estado, los diagnósticos con su línea, la duración, el tamaño, el volumen, los triángulos, si es estanco y si cabe en la placa. Escribe o borra <code>RENDER_ERRORS.md</code> con la misma regla que la app.</td><td>Consulta</td></tr>
     <tr><td><code>lint</code></td><td>Los diagnósticos del linter (OpenSCAD y las reglas SL001–SL009) de un archivo o de un código suelto.</td><td>Consulta</td></tr>
@@ -1597,6 +1627,10 @@ color("SteelBlue") difference() {
     <tr><td><code>list_libraries</code> / <code>install_library</code></td><td>Dice qué librerías tienes (BOSL2, MCAD, NopSCADlib) y la línea <code>include</code> exacta / descarga una a <code>lib/</code> de una versión fija y comprobada. Nunca reemplaza una instalada.</td><td>Consulta / Agente</td></tr>
     <tr><td><code>list_skills</code> / <code>read_skill</code></td><td>Lista las skills del workspace y lee su <code>SKILL.md</code>.</td><td>Consulta</td></tr>
     <tr><td><code>inspect_reference</code></td><td>Mide un modelo de <code>refs/</code> (tamaño, volumen, partes por color) y devuelve una imagen.</td><td>Consulta</td></tr>
+    <tr><td><code>image_info</code></td><td>Lee una foto de <code>refs/images/</code>: tamaño, proporción, colores dominantes y la caja del objeto; con una región, un recorte ampliado y realzado.</td><td>Consulta</td></tr>
+    <tr><td><code>compare_with_image</code></td><td>Compara el modelo de un checkpoint con una foto: una imagen con los dos lado a lado (o la silueta sobre la foto), la vista usada, las proporciones y el solapamiento de siluetas (IoU).</td><td>Consulta</td></tr>
+    <tr><td><code>trace_image_outline</code></td><td>Traza la silueta de una foto a un <strong>SVG en milímetros</strong> en <code>refs/</code> (uno por color con capas) y devuelve sus medidas y el fragmento con <code>import()</code>.</td><td>Agente</td></tr>
+    <tr><td><code>image_to_heightmap</code></td><td>Convierte una foto en un mapa de alturas para <code>surface()</code> (relieve o litofanía), guardado en <code>refs/</code>.</td><td>Agente</td></tr>
     <tr><td><code>import_mesh</code></td><td>Deja editable un STL, 3MF u OBJ de <code>refs/</code>: crea un checkpoint raíz que lo importa.</td><td>Agente</td></tr>
     <tr><td><code>edit_mesh</code></td><td>Edita un modelo 3D como el modo Editar del visor (mover, rotar, escalar, espejar, centrar, apoyar, recolorear, agregar piezas, perforar y cortar) y deja un checkpoint hijo.</td><td>Agente</td></tr>
     <tr><td><code>printer_info</code></td><td>La impresora del workspace: volumen, boquilla, ranuras del AMS y reglas clave.</td><td>Consulta</td></tr>
@@ -1671,8 +1705,33 @@ color("SteelBlue") difference() {
   <code>--workspace</code></strong>: el servidor usa la carpeta desde la que se lanza, y Antigravity lo lanza en la
   carpeta del proyecto, así que <strong>una sola entrada sirve a todos tus workspaces</strong>. Ese es el punto
   delicado: si en tu versión de Antigravity el servidor no se lanzara dentro de la carpeta del proyecto, la herramienta
-  te lo dirá al usarla (esa carpeta no sería un workspace). En ese caso, quítalo desde aquí y agrégalo a mano con
-  <code>--workspace</code>.</p>
+  te lo dirá al usarla (esa carpeta no sería un workspace). Como salvaguarda, en cada turno del chat ScadLab pone la carpeta del proyecto en
+  la variable <code>SCADLAB_WORKSPACE</code>, que el servidor usa si no trae <code>--workspace</code> (y su primera línea del log dice cuál usó). Si aun así
+  trabaja en otra carpeta, quita la entrada desde aquí y agrégala a mano con <code>--workspace</code>.</p>
+
+  <h3 id="ia-mcp--antigravity-permisos">Antigravity en el chat: aprobar las herramientas de ScadLab</h3>
+  <p>Registrar el servidor no basta. Cuando ScadLab ejecuta Antigravity desde el chat (<code>agy --print</code>) <strong>nadie puede contestar un permiso</strong>,
+  así que Antigravity rechaza la primera herramienta que no estaba aprobada —«<em>permission check failed for mcp
+  scadlab/…</em>»— y <strong>termina el turno ahí mismo</strong>: el chat decía que «terminó el turno sin responder nada».
+  Para evitarlo, ScadLab agrega al archivo de configuración propio de Antigravity, <code>~/.gemini/antigravity-cli/settings.json</code>, <strong>una regla por herramienta de ScadLab</strong>
+  en <code>permissions.allow</code>, con el formato exacto que Antigravity pide: <code>mcp(scadlab/list_checkpoints)</code>, <code>mcp(scadlab/create_checkpoint)</code>…
+  Es una lista explícita de <strong>las herramientas de ScadLab</strong> —las de lectura y las que crean o cambian el proyecto—: nunca un comodín, nunca <code>command(…)</code>.
+  Lo hace <strong>la primera vez que usas Antigravity en el chat</strong>, junto con el registro del servidor, y un aviso te dice qué agregó y dónde; después mantiene la lista
+  al día en cada turno (agrega las herramientas nuevas y quita las que ya no existen). Todo lo demás del archivo —<code>trustedWorkspaces</code>, tus propias reglas,
+  el orden de las claves— queda como estaba; antes se guarda una copia del archivo en la carpeta de datos de ScadLab, y si el archivo no es un JSON válido no se toca (el chat te avisa).</p>
+  <p><strong>«Solo consulta» sigue funcionando.</strong> Las reglas son globales —iguales en Agente y en Solo consulta—, así que el modo lo hace cumplir el servidor de ScadLab: durante un turno de Solo consulta
+  el chat deja una marca en el proyecto (<code>.scadlab/turn-mode</code>, se retira al terminar el turno y trae un vencimiento para que nunca quede huérfana) y el servidor rechaza las herramientas que modifican el proyecto
+  con el motivo, para que Antigravity te entregue el diseño en un bloque. En modo Agente todo pasa. La shell sigue denegada y <code>--dangerously-skip-permissions</code> no se usa nunca.</p>
+  <div class="note"><span class="lbl">Son globales</span><p>Las reglas valen para <strong>todo</strong> uso de Antigravity, también cuando lo abres tú (en la terminal de ScadLab o en cualquier otro lado): sus avisos de permiso
+  no te pedirán las herramientas de ScadLab, tampoco las que escriben. Si prefieres aprobarlas una por una, quítalas como se explica a continuación.</p></div>
+
+  <h3 id="ia-mcp--antigravity-reparar">Ver, quitar o reparar los permisos</h3>
+  <p>En <strong>Configuración → Proveedores de IA → CLIs detectados</strong>, Antigravity muestra <strong>«Permisos de ScadLab: N herramientas aprobadas»</strong> con dos botones. <strong>Quitar</strong>
+  borra <em>solo</em> las reglas <code>mcp(scadlab/…)</code> (pide confirmación y antes guarda una copia del archivo); es una decisión que ScadLab respeta: no las vuelve a agregar solo.
+  <strong>Volver a agregar</strong> las pone otra vez y restablece la sincronización automática. Si Antigravity bloquea una herramienta de ScadLab de todos modos —quitaste los permisos, el archivo no era un JSON válido,
+  una regla tuya pide confirmación—, el mensaje del chat nombra la herramienta, el archivo y el paso a seguir, y un aviso ofrece <strong>Reparar permisos de Antigravity</strong>, que vuelve a sincronizar la lista.</p>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-providers.png" alt="Configuración, pestaña Proveedores de IA: la lista de CLIs detectados; bajo Antigravity CLI la línea «Permisos de ScadLab: 37 herramientas aprobadas» con los botones Quitar y Volver a agregar" loading="lazy"><figcaption>Bajo Antigravity, los permisos que ScadLab mantiene en su archivo de configuración, con Quitar y Volver a agregar.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-agy-denied.png" alt="Panel del chat con Antigravity CLI en modo Agente: un paso printer_info en rojo con el detalle «permission check failed», la nota en cursiva de que terminó el turno sin responder nada y la explicación que nombra la herramienta y el archivo de configuración; abajo a la derecha, un aviso con el botón Reparar permisos de Antigravity" loading="lazy"><figcaption>Si Antigravity igual bloquea una herramienta: el mensaje dice cuál y dónde las aprueba ScadLab, y el aviso ofrece reparar los permisos.</figcaption></figure>
 
   <h3 id="ia-mcp--claude-flags">Claude Code: sin aprobación cuando lo abres desde ScadLab</h3>
   <p>Un servidor que viene en el <code>.mcp.json</code> del proyecto queda <em>pendiente de aprobación</em> hasta que
@@ -1736,6 +1795,9 @@ color("SteelBlue") difference() {
     <li><strong>Antigravity no lo ve.</strong> ScadLab lo agrega solo al elegirlo en el chat; si no pudo, o lo quitaste, pulsa <strong>Agregar a Antigravity</strong> en Configuración → IA: con el
       archivo del workspace no basta. Si dice <em>agy no instalado</em>, instala Antigravity o revisa que el comando
       <code>agy</code> exista en tu equipo.</li>
+    <li><strong>Antigravity «bloqueó la herramienta de ScadLab» en el chat.</strong> Faltan en su archivo de configuración las reglas de permiso de las herramientas de ScadLab (las quitaste, el archivo no era un JSON válido, o una regla tuya pide confirmación): pulsa
+      <strong>Reparar permisos de Antigravity</strong> en el aviso, o <strong>Volver a agregar</strong> en Configuración → Proveedores de IA (ver <a href="#ia-mcp--antigravity-permisos">aprobar las herramientas de ScadLab</a>). Si el mensaje dice además que Antigravity no confía en la carpeta,
+      ábrela una vez con Antigravity y acepta «Yes, I trust this folder».</li>
     <li><strong>Las herramientas fallan al renderizar.</strong> Revisa que ScadLab encuentre OpenSCAD (pestaña
       OpenSCAD de la configuración).</li>
   </ul>
@@ -1805,11 +1867,11 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
     <li><strong>Punto de estado</strong> sobre cada ícono: verde responde (un CLI, que está instalado; un servidor, que contesta), rojo no responde. Al lado del selector, una
       <strong>píldora de latencia</strong> (<code>18 ms</code>) para los servidores, que se refresca sola cada minuto, al cambiar de proveedor y con un clic; si el servidor se cae, un aviso sobre la caja lo dice y deja reintentar.</li>
     <li>Se maneja con el teclado: <kbd>↑</kbd> <kbd>↓</kbd> recorren, <kbd>Enter</kbd> elige y <kbd>Esc</kbd> cierra.</li>
-    <li><strong>Agregar proveedor de IA…</strong> abre Configuración → Proveedores de IA, donde también ves, de solo lectura, los <strong>CLIs detectados</strong> con su versión.</li>
+    <li><strong>Agregar proveedor de IA…</strong> abre Configuración → Proveedores de IA, donde también ves los <strong>CLIs detectados</strong> con su versión.</li>
   </ul>
 
   <h2 id="ia-hermes--proveedores">Proveedores de IA: servidores y claves</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/settings-providers.png" alt="Configuración, pestaña Proveedores de IA: el bloque de solo lectura CLIs detectados con Claude Code, Codex CLI, Antigravity CLI y OpenCode y su versión, el panel Llavero de claves y cinco servidores (MacOS · Ollama, OpenRouter, Google Gemini, Anthropic y un LM Studio en la red), cada uno con su interruptor y su botón Probar; abajo, Agregar servidor e Importar servidores de mini-tools" loading="lazy"><figcaption>Configuración → Proveedores de IA: los <strong>CLIs detectados</strong> (solo lectura), el <a href="#ia-hermes--llavero">llavero de claves</a> y tantos servidores como quieras, cada uno con su prueba.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-providers.png" alt="Configuración, pestaña Proveedores de IA: el bloque CLIs detectados con Claude Code, Codex CLI, Antigravity CLI (con su línea «Permisos de ScadLab») y OpenCode y su versión, el panel Llavero de claves y cinco servidores (MacOS · Ollama, OpenRouter, Google Gemini, Anthropic y un LM Studio en la red), cada uno con su interruptor y su botón Probar; abajo, Agregar servidor e Importar servidores de mini-tools" loading="lazy"><figcaption>Configuración → Proveedores de IA: los <strong>CLIs detectados</strong> (no se configuran aquí, salvo los permisos de las herramientas de ScadLab en Antigravity), el <a href="#ia-hermes--llavero">llavero de claves</a> y tantos servidores como quieras, cada uno con su prueba.</figcaption></figure>
   <p>En <strong>Configuración → Proveedores de IA</strong> agregas los servidores con los que puede hablar el chat, varios de cada tipo. <strong>Agregar servidor</strong>
   ofrece atajos que ya traen la dirección: Ollama (local y remoto), LM Studio, llama.cpp, vLLM, OpenAI, <strong>OpenRouter</strong>,
   <strong>Google Gemini</strong>, Anthropic, Groq, DeepSeek, Mistral, Together, xAI o cualquier servidor <em>compatible con OpenAI</em>.</p>
@@ -1861,10 +1923,10 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   <figure class="shot"><img src="../docs/screenshots/es/chat-empty.png" alt="Chat nuevo con Claude Code en modo Agente: el título «Piensa tu diseño con un modelo», los chips del proveedor, del modelo (Por defecto) y del modo, la explicación del modo y cuatro sugerencias de OpenSCAD en dos columnas" loading="lazy"><figcaption>Un chat nuevo dice con qué vas a hablar y propone cuatro pedidos; un clic rellena la caja de mensaje.</figcaption></figure>
   <ol class="steps">
     <li>Abre la pestaña <strong>Chat</strong> y pulsa <strong>Chat nuevo</strong>. Verás el proveedor, el modelo y el modo con los que vas a hablar, y cuatro sugerencias
-      (<em>una caja con tapa a presión para un Raspberry Pi 5</em>, <em>copia la pieza de esta foto</em>…): un clic rellena la caja de mensaje, y la editas antes de enviar.</li>
+      (<em>una caja con tapa a presión para un Raspberry Pi 5</em>, <em>copia la pieza de esta foto</em>…): un clic rellena la caja de mensaje, y la editas antes de enviar. Sobre ellas, <strong>Crear desde una imagen</strong> abre el <a href="#ia-imagen">diálogo para modelar desde fotos</a>.</li>
     <li>Elige el <strong>proveedor</strong> y luego el <strong>modelo</strong>: la lista sale del proveedor, con un buscador. En un servidor, cada modelo muestra si
       <strong>ve imágenes</strong> y si <strong>usa herramientas</strong> —cuando el servidor lo informa—, su ventana de contexto y, con los
-      proveedores que publican precios (OpenRouter), cuánto cuesta por millón de tokens. Si el proveedor no lo lista, escribe el nombre a mano.</li>
+      proveedores que publican precios (OpenRouter), cuánto cuesta por millón de tokens. El botón <strong>Solo con visión</strong> deja solo los modelos que ven imágenes. Si el proveedor no lo lista, escribe el nombre a mano.</li>
     <li>Escribe lo que quieres y envía con <kbd>Enter</kbd> (<kbd>Mayús+Enter</kbd> agrega una línea; <kbd>⌘/Ctrl+Enter</kbd> también envía).</li>
   </ol>
   <figure class="shot"><img src="../docs/screenshots/es/chat-cli-models.png" alt="Selector de modelo abierto con Antigravity CLI: la opción Por defecto, marcada, con la explicación «El que tenga configurado el CLI», y cinco modelos con su nombre —Gemini 4 Argon (High), Gemini 4 Argon (Low), Gemini 4 Flash, Claude Sonnet 5.5 (Thinking) y GPT-OSS 240B (Medium)— y su descripción" loading="lazy"><figcaption>Los modelos de un CLI los informa el propio CLI. <strong>Por defecto</strong> deja que use el que tenga configurado.</figcaption></figure>
@@ -1949,7 +2011,7 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   <p>Con el <strong>clip</strong>, <strong>pegando</strong> (⌘V / Ctrl+V) o <strong>arrastrando</strong> sobre el panel puedes adjuntar, hasta 10 por mensaje:</p>
   <div class="tablewrap"><table>
     <tr><th>Tipo</th><th>Límite</th><th>Qué pasa</th></tr>
-    <tr><td>Imagen: PNG, JPG, GIF, WebP</td><td>5 MB</td><td>Viaja como imagen: la foto de lo que quieres copiar, un croquis, una captura.</td></tr>
+    <tr><td>Imagen: PNG, JPG, GIF, WebP</td><td>20 MB</td><td>Viaja como imagen: la foto de lo que quieres copiar, un croquis, una captura. También se copia a <code>refs/images/</code> (sin pisar nada; la misma foto es un solo archivo) para que las <a href="#ia-imagen">herramientas de imagen</a> la lean.</td></tr>
     <tr><td>Modelo 3D: STL, 3MF, OBJ</td><td>64 MB</td><td>Se copia a la carpeta <code>refs/</code> del proyecto, ScadLab lo mide (tamaño, volumen, triángulos, si la malla es cerrada, las partes por color de un 3MF) y le da al modelo ese informe más una vista previa dibujada, para que pueda copiarlo o encajar una pieza con él.</td></tr>
   </table></div>
   <ul>
@@ -1958,8 +2020,9 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
       Un modelo 3D siempre se envía: sin visión, solo sus medidas. Un proveedor que no informa si su modelo ve imágenes nunca te lo impide.</li>
     <li><code>import("refs/pieza.stl")</code> sirve para un STL u OBJ de una sola pieza; un 3MF se reconstruye con primitivas a partir de sus medidas, porque no todas las
       versiones de OpenSCAD lo importan.</li>
-    <li>El historial guarda el nombre, la miniatura y el informe de cada adjunto, <strong>no el archivo</strong>. Quitar un chip antes de enviar borra la copia que hizo en <code>refs/</code>.</li>
+    <li>El historial guarda el nombre, la miniatura y el informe de cada adjunto, <strong>no el archivo</strong>. Quitar un chip antes de enviar borra la copia que hizo en <code>refs/</code>. Las fotos que <strong>sí enviaste</strong> se quedan en <code>refs/images/</code>.</li>
   </ul>
+  <p>Para modelar a partir de fotos hay un flujo propio: <a href="#ia-imagen">Crear un modelo desde una imagen</a>.</p>
 
   <h2 id="ia-hermes--conversaciones">Conversaciones, tokens y costo</h2>
   <figure class="shot"><img src="../docs/screenshots/es/chat-conversations.png" alt="La lista de conversaciones abierta con «tapa» en el buscador: la primera conversación con sus botones de renombrar y borrar y la palabra resaltada en su título; la segunda en renombrado en línea, con el campo seleccionado; y una tercera que aparece porque lo que se dijo en ella menciona «tapa», con el fragmento resaltado" loading="lazy"><figcaption>La lista de conversaciones con búsqueda por título <em>y contenido</em>; renombrar en línea (<kbd>Enter</kbd> guarda, <kbd>Esc</kbd> cancela) y borrar.</figcaption></figure>
@@ -1986,6 +2049,75 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   <figure class="shot"><img src="../docs/screenshots/es/chat-no-providers.png" alt="Panel Chat sin proveedores: el aviso «No hay ningún proveedor de IA disponible», que explica que los CLIs instalados se detectan solos y que un servidor se agrega en Configuración, con los botones Abrir Proveedores de IA y Ya instalé uno" loading="lazy"><figcaption>Sin ningún CLI instalado ni servidor habilitado, el chat lo avisa y te lleva a Configuración → Proveedores de IA.</figcaption></figure>
   <p>El chat lo avisa con un botón que abre Configuración → Proveedores de IA. Instala un CLI o agrega y enciende un servidor, vuelve al panel y pulsa
   <strong>Ya instalé uno</strong> para que lo vuelva a buscar.</p>
+</article>
+
+<article class="topic" id="ia-imagen" data-title="Crear un modelo desde una imagen">
+  <h1>Crear un modelo desde una imagen</h1>
+  <p class="lead">Dale a ScadLab <strong>una o varias fotos</strong> de un objeto —o un boceto con medidas— y la IA lo modela en OpenSCAD: averigua qué es el objeto y su escala,
+  lo arma con formas simples, lo renderiza y <strong>compara el resultado con tu foto</strong> hasta que coincide. Sigue la <a href="#ia-skills">skill</a> incluida
+  <code>openscad-from-image</code> y funciona con el <a href="#ia-hermes">chat</a> de cualquier proveedor.</p>
+
+  <h2 id="ia-imagen--dialogo">El diálogo «Crear desde una imagen»</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-from-image.png" alt="El diálogo Crear un modelo desde una imagen sobre el chat: dos miniaturas de fotos de una escuadra en L de metal sobre una mesa con una moneda, el botón Elegir fotos, el campo Medida de referencia con «El ancho total es 60 mm; la moneda de 25 centavos mide 24 mm» y el campo ¿Qué es? con «Una escuadra en L de metal para sostener un estante», y los botones Cancelar y Crear modelo" loading="lazy"><figcaption>El diálogo: las fotos, una medida de referencia y qué es el objeto.</figcaption></figure>
+  <p>El botón <strong>Crear desde una imagen</strong> está en el <strong>chat vacío</strong> y, en un proyecto que todavía no tiene ningún modelo, junto a
+  <strong>Crear un modelo de inicio</strong> en el visor y en Código. Pide tres cosas:</p>
+  <ul>
+    <li><strong>Fotos</strong>: una o varias (hasta 10), <strong>eligiéndolas</strong>, <strong>pegándolas</strong> (⌘V / Ctrl+V) o <strong>arrastrándolas</strong> al recuadro.
+      Una vista de frente, otra de lado y otra de arriba del mismo objeto ayudan mucho.</li>
+    <li><strong>Medida de referencia</strong> (opcional): «el ancho total es 80 mm», «hay una moneda junto a la pieza», «el agujero mide 6 mm».</li>
+    <li><strong>¿Qué es?</strong> (opcional): «un soporte de pared para auriculares». Ayuda a decidir cómo modelarlo.</li>
+  </ul>
+  <p><strong>Crear modelo</strong> abre una <strong>conversación nueva en modo Agente</strong>, adjunta las fotos, escribe un mensaje estructurado —el objeto, la referencia y la
+  indicación de seguir la skill— y lo envía. Cerrar el diálogo con Cancelar descarta las fotos que habías elegido.</p>
+  <p>Cada foto que envías además se <strong>copia al proyecto</strong>, en <code>refs/images/</code> (con el nombre de la foto más un código corto de su contenido, así la misma foto
+  enviada dos veces es un solo archivo y nada se sobrescribe): de ahí la leen las herramientas de imagen, y no se pierde entre mensajes ni entre proveedores.</p>
+
+  <h2 id="ia-imagen--escala">La escala: la medida que más importa</h2>
+  <p>Una foto no dice de qué tamaño son las cosas. Da <strong>una medida real</strong>, o deja un <strong>objeto conocido</strong> junto a la pieza: una moneda, una tarjeta de crédito
+  (85,60 × 53,98 mm), una hoja A4. El asistente la busca en la tabla de la skill, escala todo a partir de ella y te dice qué medida usó. Si no tiene ninguna, estima la escala y
+  <strong>dice qué supuso</strong>, para que lo corrijas.</p>
+
+  <h2 id="ia-imagen--fotos">Qué fotos funcionan mejor</h2>
+  <ul>
+    <li>De frente (no en ángulo), con el objeto llenando el encuadre y un <strong>fondo liso</strong> que contraste con él.</li>
+    <li>Luz pareja, sin sombras fuertes.</li>
+    <li>Una segunda foto de lado (y otra desde arriba) le da la profundidad que una sola foto no tiene.</li>
+    <li>Un <strong>boceto a mano con sus cotas</strong> también sirve: el asistente lee los números.</li>
+  </ul>
+
+  <h2 id="ia-imagen--comparar">Comprueba su trabajo contra tu foto</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-compare.png" alt="Chat en modo Agente: los pasos leer skill, mirar la foto, crear checkpoint, renderizar y comparar con la foto; el último muestra la foto a la izquierda y el modelo a la derecha con la silueta de la foto en naranja, y las pastillas vista Isométrica, ancho/alto modelo 1,19 y foto 1,21 e IoU 93 %" loading="lazy"><figcaption>El paso <strong>Comparar con la foto</strong>: la foto y el modelo lado a lado, desde la misma vista, con las proporciones y el solapamiento de siluetas.</figcaption></figure>
+  <p>Después de renderizar, el asistente llama a <code>compare_with_image</code>: elige la vista del modelo que más se parece a tu foto y pone las dos lado a lado
+  (o dibuja la silueta del modelo sobre la foto). La tarjeta del paso muestra esa imagen en grande y tres datos:</p>
+  <ul>
+    <li>la <strong>vista</strong> desde la que comparó;</li>
+    <li>la <strong>proporción ancho/alto</strong> del modelo y la del objeto de la foto: si se parecen, las proporciones coinciden;</li>
+    <li>el <strong>IoU</strong>: cuánto se superponen las dos siluetas, con 100 % = idénticas. Verde desde 85 %, ámbar por debajo de 60 %.</li>
+  </ul>
+  <p>Con eso corrige lo que difiere en un checkpoint <em>nuevo</em> (los checkpoints nunca se editan) y vuelve a comparar.</p>
+
+  <h2 id="ia-imagen--contorno">Contornos planos, logos y relieves</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-trace.png" alt="Chat en modo Agente: el paso Trazar el contorno muestra la silueta trazada del logo de un club —un anillo con una estrella calada— sobre una retícula en milímetros, las pastillas 80 × 80 mm, 2315,6 mm² y 3 contornos y el archivo refs/logo-club.svg; debajo, el checkpoint creado a partir de él y su render" loading="lazy"><figcaption>El paso <strong>Trazar el contorno</strong>: la silueta, sus medidas en milímetros y el SVG que quedó en <code>refs/</code>.</figcaption></figure>
+  <p>Una placa con un logo, un sello o una silueta no se «modela»: se <strong>traza</strong>. <code>trace_image_outline</code> encuentra el contorno, quita las motas, lo simplifica y
+  escribe un <strong>SVG en milímetros</strong> en <code>refs/</code> (uno por color si pides capas); después el modelo hace <code>linear_extrude(h) import("refs/logo.svg")</code>. La tarjeta muestra
+  la silueta trazada y los archivos que creó. <code>image_to_heightmap</code> convierte una foto en un <strong>relieve o litofanía</strong> (<code>surface()</code>), e
+  <code>image_info</code> amplía una región de la foto y la realza para leer una cota.</p>
+
+  <h2 id="ia-imagen--sin-vision">Si el modelo no ve imágenes</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/chat-no-vision.png" alt="Chat con una foto adjunta y un modelo que no ve imágenes: un aviso ámbar lo dice y ofrece dos botones, Cambiar a un modelo con visión y Usar trazado de contorno; la ficha de la foto dice El modelo no ve" loading="lazy"><figcaption>Una foto con un modelo que no ve: cambiar de modelo o trazar el contorno.</figcaption></figure>
+  <p>Si el modelo que elegiste informó que no ve imágenes, sobre la caja aparece un aviso con dos salidas:</p>
+  <ul>
+    <li><strong>Cambiar a un modelo con visión</strong> abre la lista de modelos filtrada a los que ven imágenes (el botón <em>Solo con visión</em> quita el filtro).</li>
+    <li><strong>Usar trazado de contorno</strong> envía igual: la foto <strong>no se le muestra al modelo</strong>, queda en <code>refs/images/</code> y se le pide usar
+      <code>trace_image_outline</code>, que no necesita visión. Alcanza para siluetas y logos; para una pieza con relieve, elige un modelo con visión.</li>
+  </ul>
+
+  <h2 id="ia-imagen--limites">Qué esperar</h2>
+  <ul>
+    <li>Las piezas mecánicas, las carcasas, los soportes y las placas salen bien; las <strong>formas orgánicas</strong> (figuras, caras) se aproximan con formas simples y el asistente lo dice.</li>
+    <li>Una foto no es un escaneo: no tiene profundidad. Cuantas más vistas y medidas des, más se acerca.</li>
+    <li>En el chat una imagen puede pesar hasta <strong>20 MB</strong>: si pasa de 2048 px o de 5 MB, al modelo le llega una copia reducida y <code>refs/images/</code> guarda el original para las herramientas. El procesamiento (contorno, comparación, relieve) lo hace ScadLab en tu equipo; las fotos llegan al modelo solo si este ve imágenes.</li>
+  </ul>
 </article>
 
 <article class="topic" id="ia-prompts" data-title="Cómo pedirle un modelo a la IA">
@@ -2017,9 +2149,9 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
 <article class="topic" id="ia-skills" data-title="Skills incluidas">
   <h1>Skills incluidas <span class="badge ok">Disponible</span></h1>
   <p class="lead">Instrucciones empaquetadas que le enseñan al agente a escribir OpenSCAD correcto e imprimible
-  en Bambu Lab. Se copian a cada workspace para todos los CLIs.</p>
+  en tu impresora. Cada workspace instala las que eligió, para todos los CLIs.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Configuración, pestaña Skills: las cinco skills incluidas con su interruptor y dos skills propias, gear-helper y hinge-kit" loading="lazy"><figcaption>Configuración → Skills: incluidas y propias, cada una con su interruptor.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-skills.png" alt="Configuración, pestaña Skills: las skills incluidas —las generales y una por marca de impresora— con su interruptor y dos skills propias, gear-helper y hinge-kit" loading="lazy"><figcaption>Configuración → Skills: incluidas y propias, cada una con su interruptor. Las encendidas son las que traen por defecto los workspaces nuevos.</figcaption></figure>
 
   <h2 id="ia-skills--donde">Dónde se copian</h2>
   <div class="tablewrap"><table>
@@ -2032,12 +2164,13 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   <p>Cada skill es una carpeta con un <code>SKILL.md</code> (cuándo usarla y sus reglas) más
   <code>references/</code> y <code>templates/</code> que el agente carga solo cuando hacen falta.</p>
 
-  <h2 id="ia-skills--lista">Las cinco skills</h2>
+  <h2 id="ia-skills--lista">Las skills incluidas</h2>
   <div class="grid">
     <div class="card"><h3>openscad-core</h3><p>La base: checkpoints inmutables, color obligatorio, parámetros de Customizer, CSG limpio, rendimiento y cómo leer errores. Si otra skill la contradice, gana esta.</p></div>
-    <div class="card"><h3>bambu-lab-printers</h3><p>Perfiles de A1 mini, A1, P1P, P1S, P2S, X1C, X1E, H2D y H2S (volumen, boquilla, AMS) y reglas FDM: voladizos, holguras, insertos, texto mínimo.</p></div>
-    <div class="card"><h3>openscad-3mf-multicolor</h3><p>Modelos para AMS: una pieza por <code>color()</code>, cómo exportar a 3MF y cómo lo interpreta Bambu Studio.</p></div>
+    <div class="card"><h3>Una skill por marca</h3><p><code>bambu-lab-printers</code>, <code>prusa-printers</code>, <code>creality-printers</code>, <code>elegoo-printers</code>, <code>anycubic-printers</code>, <code>snapmaker-printers</code> y <code>ultimaker-printers</code>: los perfiles de la marca (volumen, boquilla, multicolor) y las reglas FDM. Un workspace instala la de la marca de su impresora.</p></div>
+    <div class="card"><h3>openscad-3mf-multicolor</h3><p>Modelos multicolor: una pieza por <code>color()</code>, cómo exportar a 3MF y cómo lo interpreta cada slicer.</p></div>
     <div class="card"><h3>openscad-templates</h3><p>Plantillas paramétricas para arrancar un proyecto sin partir de cero.</p></div>
+    <div class="card"><h3>openscad-from-image</h3><p>Cómo modelar desde fotos: averiguar el objeto y su escala (una medida tuya o un objeto conocido), armarlo con formas simples, compararlo con la foto y corregirlo. Ver <a href="#ia-imagen">Crear un modelo desde una imagen</a>.</p></div>
     <div class="card"><h3>openscad-libraries</h3><p>Cuándo y cómo usar BOSL2, MCAD y NopSCADlib desde la carpeta <code>lib/</code> del workspace.</p></div>
   </div>
 
@@ -2133,39 +2266,92 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
 </article>
 
 <!-- ============================================================ IMPRIMIR -->
-<article class="topic" id="imprimir-impresoras" data-title="Impresoras Bambu Lab">
-  <h1>Impresoras Bambu Lab</h1>
-  <p class="lead">Cada workspace tiene su impresora, y con ella el volumen de impresión que el modelo tiene que
-  respetar.</p>
+<article class="topic" id="imprimir-impresoras" data-title="Impresoras y configuración del workspace">
+  <h1>Impresoras y configuración del workspace <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Cada workspace tiene su impresora, sus colores, sus skills y sus ajustes de impresión. ScadLab trae un
+  catálogo de siete marcas: eliges al crear el workspace y lo cambias cuando quieras.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/settings-printing.png" alt="Configuración, pestaña Impresión: impresora por defecto A1 mini con su volumen, material, relleno y la tabla de materiales" loading="lazy"><figcaption>Configuración → Impresión: impresora por defecto con su volumen, material y relleno.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/workspace-new-printer.png" alt="Diálogo Nuevo workspace con una Prusa MK4S elegida, cuatro colores con su MMU3 y la lista de skills: la de Prusa marcada como «Tu impresora» y las generales encendidas" loading="lazy"><figcaption>Nuevo workspace con una Prusa MK4S: la impresora, cuántos colores usa a la vez (hasta 5 con el MMU3) y las skills que se instalan.</figcaption></figure>
 
-  <h2 id="imprimir-impresoras--perfiles">Perfiles incluidos</h2>
+  <h2 id="imprimir-impresoras--marcas">Marcas e impresoras</h2>
   <div class="tablewrap"><table>
-    <tr><th>Impresora</th><th>Volumen (mm)</th><th>Multicolor</th></tr>
-    <tr><td>A1 mini</td><td>180 × 180 × 180</td><td>AMS lite (4)</td></tr>
-    <tr><td>A1</td><td>256 × 256 × 256</td><td>AMS lite (4)</td></tr>
-    <tr><td>P1P / P1S</td><td>256 × 256 × 256</td><td>AMS, hasta 4 unidades</td></tr>
-    <tr><td>P2S</td><td>256 × 256 × 256*</td><td>AMS / AMS 2 Pro</td></tr>
-    <tr><td>X1 Carbon / X1E</td><td>256 × 256 × 256</td><td>AMS, hasta 4 unidades</td></tr>
-    <tr><td>H2D</td><td>325 × 320 × 325*</td><td>AMS 2 Pro / AMS HT</td></tr>
-    <tr><td>H2S</td><td>340 × 320 × 340*</td><td>AMS 2 Pro / AMS HT</td></tr>
+    <tr><th>Marca</th><th>Modelos</th><th>Multicolor</th><th>Slicer recomendado</th></tr>
+    <tr><td>Bambu Lab</td><td>A1 mini, A1, A2L, P1P, P1S, P2S, X1 Carbon, X1E, X2D, H2D, H2S, H2C</td><td>AMS, AMS lite, AMS 2 Pro, AMS HT</td><td>Bambu Studio</td></tr>
+    <tr><td>Prusa Research</td><td>MK4S, CORE One / One+, CORE One L+, MINI+, XL / XL+</td><td>MMU3, INDX, XL de 1 a 5 cabezales</td><td>PrusaSlicer</td></tr>
+    <tr><td>Creality</td><td>Ender-3 V3, V3 SE, V3 KE, K1, K1C, K1 Max, K2, K2 Pro, K2 Plus, Hi</td><td>CFS, CFS-C</td><td>Creality Print</td></tr>
+    <tr><td>Elegoo</td><td>Neptune 4, 4 Pro, 4 Max, Centauri Carbon, Centauri Carbon 2</td><td>CANVAS</td><td>ElegooSlicer</td></tr>
+    <tr><td>Anycubic</td><td>Kobra 3, Kobra S1, Kobra S1 Max, Kobra X, Kobra 2 Max, 2 Plus, 2 Pro</td><td>ACE Pro, ACE 2 Pro</td><td>Anycubic Slicer Next</td></tr>
+    <tr><td>Snapmaker</td><td>U1, J1s / J1, Artisan</td><td>Cabezales independientes (U1), IDEX (J1s), doble extrusión (Artisan)</td><td>Snapmaker Orca</td></tr>
+    <tr><td>UltiMaker</td><td>S3, S5, S7, S8, Factor 4</td><td>Doble extrusión</td><td>UltiMaker Cura</td></tr>
   </table></div>
-  <p>* Valores nominales pendientes de confirmar con la ficha oficial. Deja siempre 2–5 mm de margen.</p>
+  <p>Cada ficha sale de la página oficial del fabricante: volumen de impresión, boquilla, filamento, temperaturas
+  máximas, cámara, superficie de la cama y sistema multicolor. Un dato que no se pudo confirmar no se adivina: la
+  impresora lleva la marca <strong>por confirmar</strong> (⚠) y la ficha dice cuál. Deja siempre 2–5 mm de margen
+  respecto al volumen.</p>
+  <p>Hay <strong>una entrada por modelo comercial</strong>. Lo que cambia entre una configuración y otra de la misma
+  máquina —una XL con uno o con cinco cabezales, un AMS opcional— es la cantidad de <strong>colores</strong> del
+  workspace, que eliges tú.</p>
+
+  <h2 id="imprimir-impresoras--elegir">Elegir la impresora</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/printer-picker.png" alt="Selector de impresora abierto: un buscador y las impresoras agrupadas por marca, cada una con su volumen, sus colores máximos y su sistema multicolor, y una advertencia en las que tienen datos por confirmar" loading="lazy"><figcaption>El selector: busca por marca, modelo o sistema multicolor; cada fila muestra el volumen y los colores máximos.</figcaption></figure>
+  <p>El mismo selector está en <strong>Nuevo workspace</strong>, en <strong>Configuración del workspace</strong> y en
+  <a href="#config-materiales--impresora">Configuración → Impresión</a> (la impresora por defecto de los workspaces nuevos).
+  Se maneja con el teclado: <kbd>↑</kbd> <kbd>↓</kbd> recorren la lista, <kbd>Enter</kbd> elige y <kbd>Esc</kbd> cierra la lista
+  sin cerrar el diálogo.</p>
+
+  <h2 id="imprimir-impresoras--colores">Colores o extrusores</h2>
+  <p>De 1 al máximo de la máquina; nace con el valor de fábrica de la impresora (4 en una Bambu con AMS, 1 en una Prusa MK4S
+  sin MMU3…). Es lo que usan el aviso de «más colores de los que admite tu impresora», las reglas para la IA y la exportación,
+  así que ponlo en lo que de verdad tienes instalado. Si la impresora no tiene multicolor, el campo no aparece.</p>
+
+  <h2 id="imprimir-impresoras--skills">Skills del workspace</h2>
+  <p>Cada workspace guarda <strong>su propia lista de skills</strong>. Al crearlo vienen marcadas las encendidas en
+  <a href="#config-general--skills">Configuración → Skills</a> que no son de marca, más <strong>la skill de la marca de tu
+  impresora</strong> (señalada como «Tu impresora»): un workspace Prusa no lleva la guía de Bambu aunque esté encendida. Si cambias de
+  impresora, la skill de marca cambia con ella y el resto de tu elección se conserva. Cambiar Configuración → Skills después no toca
+  los workspaces que ya existen.</p>
+  <p>Quitar una skill del workspace retira su copia de las cuatro carpetas de agente <strong>solo si nadie la editó</strong>; una copia
+  editada a mano se queda y el aviso de guardado te dice cuál.</p>
+
+  <h2 id="imprimir-impresoras--configuracion">Configuración del workspace</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/workspace-config.png" alt="Diálogo Configuración del workspace, sección Impresora: una Creality K1 Max con cuatro colores y su ficha con volumen, boquilla, filamento, sistema multicolor, superficie, temperaturas máximas, cámara y slicer recomendado instalado" loading="lazy"><figcaption>Configuración del workspace: la impresora, sus colores y su ficha, con el slicer recomendado y si está instalado.</figcaption></figure>
+  <p>Se abre con el <strong>engranaje</strong> junto al workspace en la barra lateral, o con un clic en la impresora de la barra de
+  estado, que dice <em>«Impresora · N colores»</em>. Tiene tres secciones:</p>
+  <ul>
+    <li><strong>Impresora</strong>: el selector, los colores y la ficha (volumen, boquilla, filamento, sistema multicolor, superficie,
+    temperaturas máximas, cámara, slicer recomendado y si está instalado).</li>
+    <li><strong>Skills</strong>: una casilla por skill, con su descripción, si es incluida o propia y cuál es la de marca. <strong>Restablecer por
+    defecto</strong> vuelve a las de siempre.</li>
+    <li><strong>Impresión</strong>: material, relleno, perímetros, ancho de línea y diámetro del filamento. Cada campo muestra el valor
+    heredado de <a href="#config-materiales--estimacion">Configuración → Impresión</a> y, si fijas uno propio,
+    <strong>Usar el de Configuración</strong> vuelve a él. El diámetro del filamento es una propiedad de la máquina: gana el de la
+    impresora (una UltiMaker usa 2,85 mm) sobre el global, y el que fijes aquí sobre los dos.</li>
+  </ul>
+  <p>Un valor fuera de rango no se guarda: Guardar se apaga y el campo dice el rango. Al guardar, ScadLab reescribe
+  <code>CLAUDE.md</code>, <code>AGENTS.md</code> y <code>printer.json</code> con la impresora y los colores nuevos y sincroniza las skills de
+  ese workspace. El panel <a href="#imprimir-costo">Impresión</a> parte de los ajustes de <strong>este</strong> workspace, no de los
+  globales. La IA también puede cambiar la impresora desde el chat (<code>set_workspace_printer</code>): la pantalla se entera sola.</p>
 
   <h2 id="imprimir-impresoras--printerjson">printer.json</h2>
-  <p>La impresora del workspace se guarda en <code>printer.json</code>, que también leen los agentes:</p>
+  <p>La impresora del workspace, con sus colores, se guarda en <code>printer.json</code>, que también leen los agentes:</p>
   <div class="codewrap"><pre><code>{
-  "id": "bambu-a1-mini",
-  "name": "Bambu Lab A1 mini",
-  "build_volume": { "x": 180, "y": 180, "z": 180 },
+  "brand": "Prusa Research",
+  "build_volume": { "x": 250, "y": 210, "z": 220 },
+  "colors": 4,
+  "filament_diameter_mm": 1.75,
+  "max_colors": 5,
+  "model": "MK4S",
+  "multicolor_slots": 4,
+  "multicolor_system": "Prusa MMU3",
+  "name": "Prusa MK4S",
   "nozzle_mm": 0.4,
-  "multicolor_system": "AMS lite"
+  "printer": "prusa-mk4s",
+  "slicer": "PrusaSlicer"
 }</code></pre></div>
 
   <h2 id="imprimir-impresoras--aviso">Aviso si no cabe</h2>
   <p>Si la caja envolvente del checkpoint supera el volumen de la impresora, el visor dibuja la placa y avisa
-  qué eje se pasa. La IA recibe la misma regla: pídele <em>«que quepa en la A1 mini»</em> y lo tendrá en cuenta.</p>
+  qué eje se pasa. La IA recibe la misma regla: pídele <em>«que quepa en la MK4S»</em> y lo tendrá en cuenta.</p>
   <p>Si el modelo no entra en la placa de la impresora del workspace, el visor marca la cama en rojo y dice cuántos
   milímetros sobran en cada eje, con sugerencias (rotarlo, partirlo o elegir otra impresora). El mismo aviso aparece en
   la barra de estado. Ver <a href="#imprimir-costo">Estimación de costo</a>.</p>
@@ -2206,7 +2392,7 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
   <p class="lead">Tres botones en la cabecera exportan el checkpoint seleccionado. Están activos cuando ese checkpoint
   tiene un render correcto; si no, siguen apagados y su descripción (pasa el ratón) dice por qué.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/export-3mf.png" alt="Diálogo Exportar a 3MF: formato 3MF para Bambu Studio elegido, dos partes (Color 1 grafito en el extrusor E1 y Color 2 naranja en el E2) con sus triángulos, sin avisos, y los botones Cancelar, Exportar y Exportar y abrir en Bambu Studio" loading="lazy"><figcaption>El diálogo de 3MF: una fila por parte, con su color, sus triángulos y el extrusor que le toca.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/export-3mf.png" alt="Diálogo Exportar a 3MF: los tres formatos (3MF para Bambu y Orca elegido, 3MF para PrusaSlicer y un STL por color), dos partes (Color 1 grafito en el extrusor E1 y Color 2 naranja en el E2) con sus triángulos, sin avisos, y los botones Cancelar, Exportar y Exportar y abrir en Bambu Studio" loading="lazy"><figcaption>El diálogo de 3MF: una fila por parte, con su color, sus triángulos y el extrusor que le toca.</figcaption></figure>
 
   <div class="tablewrap"><table>
     <tr><th>Botón</th><th>Atajo</th><th>Qué genera</th><th>Cuándo usarlo</th></tr>
@@ -2222,7 +2408,7 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
     <li><strong>Una parte por cada <code>color()</code></strong> del modelo, con su muestra de color, su nombre y su
     cantidad de triángulos. La geometría sin <code>color()</code> sale como una parte más, <em>Default</em>
     (amarillo), y el diálogo la marca como «sin color()».</li>
-    <li><strong>El extrusor</strong> (E1, E2…) que Bambu Studio le asigna a cada parte, en el orden en que aparecen
+    <li><strong>El extrusor</strong> (E1, E2…) que el slicer le asigna a cada parte, en el orden en que aparecen
     los colores en el modelo.</li>
     <li><strong>Avisos</strong>, que no impiden exportar: más colores de los que admite la impresora del workspace
     (por ejemplo, cinco colores en una A1 mini, que admite cuatro a la vez), geometría sin <code>color()</code>, o dos
@@ -2231,32 +2417,38 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
 
   <figure class="shot"><img src="../docs/screenshots/es/export-3mf-warning.png" alt="Diálogo Exportar a 3MF con cinco partes, de E1 a E5, y un aviso en ámbar: el modelo usa 5 colores y la Bambu Lab A1 mini admite 4 a la vez" loading="lazy"><figcaption>Cinco colores en una A1 mini: el aviso lo dice antes de exportar, y la exportación sigue disponible.</figcaption></figure>
 
-  <h2 id="imprimir-exportar--formatos">Los tres formatos</h2>
+  <h2 id="imprimir-exportar--formatos">Los formatos</h2>
   <div class="tablewrap"><table>
     <tr><th>Formato</th><th>Cómo sale</th><th>Para qué</th></tr>
     <tr><td><strong>STL</strong></td><td>Un solo archivo <code>.stl</code>, sin color</td><td>Una pieza de un solo color; cualquier laminador</td></tr>
-    <tr><td><strong>3MF para Bambu Studio</strong></td><td>Un objeto con una parte por color y su extrusor, en un <code>.3mf</code></td><td>Multicolor con AMS: Bambu Studio lo abre listo para asignar filamentos</td></tr>
-    <tr><td><strong>Un STL por color</strong></td><td>Un <code>.zip</code> con un <code>.stl</code> por parte</td><td>OrcaSlicer, PrusaSlicer, Cura u otro que no lee las partes del 3MF</td></tr>
+    <tr><td><strong>3MF para Bambu y Orca</strong></td><td>Un objeto con una parte por color y su extrusor, en un <code>.3mf</code></td><td>Bambu Studio, OrcaSlicer y sus derivados (Creality Print, ElegooSlicer, Snapmaker Orca…): lo abren listo para asignar filamentos</td></tr>
+    <tr><td><strong>3MF para PrusaSlicer</strong></td><td>Lo mismo, con los extrusores donde PrusaSlicer los lee</td><td>Una Prusa con MMU3 o INDX: PrusaSlicer no lee los extrusores del 3MF anterior</td></tr>
+    <tr><td><strong>Un STL por color</strong></td><td>Un <code>.zip</code> con un <code>.stl</code> por parte</td><td>UltiMaker Cura u otro que no lee las partes del 3MF</td></tr>
   </table></div>
+  <p>El diálogo arranca con el formato de tu impresora: <strong>3MF para PrusaSlicer</strong> si su slicer recomendado es PrusaSlicer,
+  <strong>un STL por color</strong> con UltiMaker Cura (Cura no asigna extrusores desde un 3MF de partes) y el 3MF de Bambu y Orca en los
+  demás casos. Siempre puedes elegir otro.</p>
   <p>El nombre que propone el diálogo de guardar es <code>&lt;workspace&gt;-&lt;checkpoint&gt;</code> con la extensión del
   formato, y abre en la carpeta <code>exports/</code> del workspace si existe.</p>
 
   <h2 id="imprimir-exportar--despues">Tras exportar</h2>
   <p>Un aviso te dice dónde quedó el archivo y te ofrece dos botones: <strong>Mostrar en el Finder</strong>
-  (<strong>Explorador</strong> en Windows) y, si ScadLab encontró Bambu Studio, <strong>Abrir en Bambu Studio</strong>.
-  En el diálogo de 3MF, <strong>Exportar y abrir en Bambu Studio</strong> hace las dos cosas de una vez. Bambu Studio
-  <strong>solo se abre cuando tú lo pides</strong> con uno de esos botones, nunca solo.</p>
+  (<strong>Explorador</strong> en Windows) y, si ScadLab encontró un slicer de la impresora del workspace, <strong>Abrir en &lt;slicer&gt;</strong>
+  (Bambu Studio, PrusaSlicer…). En el diálogo de 3MF, <strong>Exportar y abrir en &lt;slicer&gt;</strong> hace las dos cosas de una vez.
+  El slicer <strong>solo se abre cuando tú lo pides</strong> con uno de esos botones, nunca solo.</p>
 
-  <h2 id="imprimir-exportar--bambu">Abrir en Bambu Studio</h2>
-  <p>ScadLab busca la app en su ruta de instalación (macOS: <code>/Applications/BambuStudio.app</code> o la misma
-  carpeta dentro de tu <code>~/Applications</code>; Windows: <code>Program Files\Bambu Studio</code>). Si la tienes en
-  otro lado, indícala en <a href="#config-materiales--bambu">Configuración → Impresión → Ruta de Bambu Studio</a>. Si no
-  está, el botón no aparece y el diálogo te lleva a esa configuración.</p>
+  <h2 id="imprimir-exportar--slicer">Abrir en tu slicer</h2>
+  <p>Cada impresora del catálogo trae su lista de slicers, con el recomendado primero. ScadLab usa <strong>el primero que tengas
+  instalado</strong>. Lo busca donde lo deja su instalador (macOS: <code>/Applications</code> o tu <code>~/Applications</code>;
+  Windows: <code>Program Files</code>, <code>Program Files (x86)</code> o <code>%LocalAppData%\Programs</code>). Si lo tienes en otro
+  lado, indica su ruta en <a href="#config-materiales--slicers">Configuración → Impresión → Slicers</a>. Si ninguno está instalado, el
+  botón sigue a la vista pero apagado, y su descripción nombra el slicer recomendado y dice dónde indicar la ruta. ScadLab abre la
+  aplicación con el archivo; nunca lanza el slicer por su línea de comandos.</p>
 
   <h2 id="imprimir-exportar--comprobar">Comprueba el 3MF en Bambu Studio</h2>
   <p>La primera vez que exportes un modelo multicolor, vale la pena hacer esta comprobación a mano:</p>
   <ol class="steps">
-    <li>Abre el archivo en Bambu Studio (con <strong>Abrir en Bambu Studio</strong>, o con <strong>Archivo → Importar</strong>
+    <li>Abre el archivo en Bambu Studio (con <strong>Abrir en Bambu Studio</strong> o con <strong>Archivo → Importar</strong>
     o arrastrándolo a la ventana).</li>
     <li>Si pregunta si cargarlo como un objeto con varias partes, responde que sí.</li>
     <li>Revisa la lista de objetos: tiene que verse <strong>un objeto con una parte por color</strong>, cada parte con su
@@ -2273,6 +2465,10 @@ description: Medidas de agujeros para insertos térmicos y tornillos M3 de mi ta
   <h1>Multicolor con AMS</h1>
   <p class="lead">Una pieza por color en OpenSCAD, un 3MF con esas partes, y en Bambu Studio cada parte va a un
   filamento del AMS o AMS lite.</p>
+  <div class="note"><span class="lbl">Con otras marcas</span><p>Este tema usa el AMS de Bambu como ejemplo. En una Prusa con MMU3, una
+  Creality con CFS, una Anycubic con ACE o una Snapmaker U1 el flujo es el mismo —una pieza por color, un 3MF con partes—; cambia el
+  slicer y el formato: <strong>3MF para PrusaSlicer</strong> en una Prusa, <strong>un STL por color</strong> en una UltiMaker. Ver
+  <a href="#imprimir-exportar--formatos">Los formatos</a>.</p></div>
 
   <figure class="shot"><img src="../docs/screenshots/es/export-3mf-warning.png" alt="Diálogo de exportación con cinco partes, cada una con su extrusor, y el aviso de que la A1 mini admite cuatro colores a la vez" loading="lazy"><figcaption>Al exportar, el diálogo lista cada color como una parte con su extrusor y avisa si hay más colores de los que admite tu impresora.</figcaption></figure>
 
@@ -2415,25 +2611,28 @@ color("Black") label();                                    // texto que llena el
 
   <h2 id="config-general--skills">Skills</h2>
   <p>Lista las incluidas y las tuyas, y permite crear una nueva desde la plantilla: ver
-  <a href="#ia-skill-propia">Crear tu propia skill</a>.</p>
+  <a href="#ia-skill-propia">Crear tu propia skill</a>. Las encendidas aquí son las que traen <strong>por defecto los workspaces
+  nuevos</strong> (las de marca se eligen por la impresora); después cada workspace elige las suyas en su
+  <a href="#imprimir-impresoras--configuracion">configuración</a>, y cambiar esto no toca los que ya existen.</p>
 </article>
 
 <article class="topic" id="config-materiales" data-title="Modelos de IA, materiales e impresora">
   <h1>Modelos de IA, materiales e impresora <span class="badge ok">Disponible</span></h1>
-  <p class="lead">Los servidores de modelos del chat, y los ajustes que alimentan la estimación de costo y el perfil de
-  impresora de los proyectos nuevos.</p>
+  <p class="lead">Los servidores de modelos del chat, y los ajustes que alimentan la estimación de costo y los valores por
+  defecto de los workspaces nuevos: impresora, material y datos de la estimación.</p>
 
-  <figure class="shot"><img src="../docs/screenshots/es/settings-printing.png" alt="Configuración, pestaña Impresión: impresora, material y relleno por defecto, los datos de la estimación (perímetros, ancho de línea, diámetro del filamento y moneda), ruta de Bambu Studio con su estado de detección y tabla de materiales con densidad y costo por kilo" loading="lazy"><figcaption>Impresión: los datos de la estimación, la ruta de Bambu Studio (con su estado de detección) y los materiales con densidad y costo por kilo, editables.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/settings-printing.png" alt="Configuración, pestaña Impresión: el texto que explica que son los valores por defecto de los workspaces nuevos, el selector de la impresora por defecto, material y relleno, los datos de la estimación (perímetros, ancho de línea, diámetro del filamento y moneda), la lista de los ocho slicers con su estado de detección y la tabla de materiales" loading="lazy"><figcaption>Impresión: los valores por defecto de los workspaces nuevos, los ocho slicers (con lo detectado o la ruta que fijaste) y los materiales con densidad y costo por kilo, editables.</figcaption></figure>
 
-  <h2 id="config-materiales--bambu">Ruta de Bambu Studio</h2>
-  <p>En la pestaña <strong>Impresión</strong>. La usa <a href="#imprimir-exportar--bambu">Abrir en Bambu Studio</a> tras
-  exportar. <strong>Vacío = autodetectar</strong>: ScadLab busca la app en su ruta de instalación y, debajo del campo,
-  te dice si la encontró y dónde. Si la tienes en otra carpeta, escribe la ruta o pulsa <strong>Elegir…</strong>
-  (en macOS, la carpeta <code>BambuStudio.app</code>; en Windows, <code>bambu-studio.exe</code>). Se aplica al
-  guardar.</p>
+  <h2 id="config-materiales--slicers">Slicers</h2>
+  <p>En la pestaña <strong>Impresión</strong> están los ocho slicers que ScadLab sabe abrir (Bambu Studio, OrcaSlicer, PrusaSlicer, Creality
+  Print, ElegooSlicer, Anycubic Slicer Next, Snapmaker Orca y UltiMaker Cura), cada uno con lo que se detectó o la ruta que fijaste.
+  <a href="#imprimir-exportar--slicer">Abrir en &lt;slicer&gt;</a> usa el de la impresora del workspace. Si lo tienes en otra carpeta,
+  pulsa <strong>Elegir…</strong> (en macOS, la aplicación <code>.app</code>; en Windows, el <code>.exe</code>); <strong>Usar la detección</strong>
+  borra la ruta fijada y vuelve a buscarlo en los lugares de siempre. Se aplica al guardar. La ruta de Bambu Studio que tenías guardada
+  antes pasa sola a su fila.</p>
 
   <h2 id="config-materiales--proveedores">Pestaña Proveedores de IA</h2>
-  <p>Arriba, un bloque de solo lectura, <strong>CLIs detectados</strong>, lista los <a href="#ia-hermes--cli">CLIs que ScadLab encontró</a> (Claude Code, Codex, Antigravity, OpenCode) con su versión: se detectan solos y no hace falta configurarlos. Debajo se agregan, prueban y encienden o apagan los <a href="#ia-hermes--proveedores">servidores de modelos del chat</a>: Ollama (local o en otra máquina),
+  <p>Arriba, un bloque, <strong>CLIs detectados</strong>, lista los <a href="#ia-hermes--cli">CLIs que ScadLab encontró</a> (Claude Code, Codex, Antigravity, OpenCode) con su versión: se detectan solos y no hace falta configurarlos (Antigravity muestra además <a href="#ia-mcp--antigravity-reparar">los permisos de las herramientas de ScadLab</a>). Debajo se agregan, prueban y encienden o apagan los <a href="#ia-hermes--proveedores">servidores de modelos del chat</a>: Ollama (local o en otra máquina),
   cualquier servidor compatible con OpenAI (LM Studio, vLLM, OpenRouter, Google Gemini…) y Anthropic, con atajos que ya traen la dirección.
   <strong>Probar conexión</strong> comprueba el servidor antes de guardar. La clave de API se guarda <strong>cifrada</strong>, con tu <a href="#ia-hermes--llavero">contraseña maestra</a> (el panel de arriba muestra su estado y
   deja cambiarla, olvidar este equipo o restablecerla), o indicas el nombre de la variable de entorno que la tiene. <strong>Importar servidores de mini-tools</strong> <a href="#ia-hermes--importar">copia los que ya tienes allí</a>, sin sus claves.</p>
@@ -2459,8 +2658,9 @@ color("Black") label();                                    // texto que llena el
   campo.</p>
 
   <h2 id="config-materiales--impresora">Impresora por defecto</h2>
-  <p>El perfil que se pone en <code>printer.json</code> al crear un workspace. Cada proyecto puede cambiarlo
-  después.</p>
+  <p>La impresora con que nacen los workspaces nuevos, elegida con el <a href="#imprimir-impresoras--elegir">mismo selector</a> del
+  catálogo. Todo lo de esta pestaña (impresora, material, relleno, perímetros, ancho de línea y filamento) son <strong>valores por defecto</strong>:
+  cada workspace puede fijar los suyos en su <a href="#imprimir-impresoras--configuracion">configuración</a>, y lo que no fija lo hereda de aquí.</p>
 </article>
 
 <article class="topic" id="config-datos" data-title="Dónde se guardan tus datos">
@@ -2635,17 +2835,20 @@ color("Black") label();                                    // texto que llena el
   <details><summary>¿Por qué la IA no puede editar un checkpoint?</summary><p>Porque el historial se reconstruye de los
   archivos: si uno cambiara, el árbol dejaría de decir la verdad. Ver <a href="#checkpoints--inmutables">por qué son
   inmutables</a>.</p></details>
-  <details><summary>¿Funciona con impresoras que no son Bambu Lab?</summary><p>El STL sirve para cualquier slicer y las
-  reglas FDM son las mismas. Lo específico de Bambu son los perfiles incluidos y el flujo de 3MF multicolor con AMS.</p></details>
-  <details><summary>Exporté a 3MF y Bambu Studio no muestra los colores</summary><p>Comprueba que cada pieza de primer
+  <details><summary>¿Con qué impresoras funciona?</summary><p>El catálogo trae siete marcas (Bambu Lab, Prusa, Creality, Elegoo, Anycubic,
+  Snapmaker y UltiMaker) con su ficha, su skill y su slicer; ver <a href="#imprimir-impresoras">Impresoras y configuración del workspace</a>.
+  Si la tuya no está, elige la más parecida: el STL sirve para cualquier slicer y las reglas FDM son las mismas.</p></details>
+  <details><summary>Mi impresora es una Prusa con MMU3: ¿qué formato exporto?</summary><p>Elige <strong>3MF para PrusaSlicer</strong> en el diálogo
+  de exportación (viene preseleccionado cuando el slicer de la impresora es PrusaSlicer). Con UltiMaker Cura usa <strong>un STL por color</strong>.</p></details>
+  <details><summary>Exporté a 3MF y el slicer no muestra los colores</summary><p>Comprueba que cada pieza de primer
   nivel tiene su <code>color()</code>, que no se solapan, y que tu OpenSCAD es una versión reciente que exporta color en
   3MF (<a href="#requisitos--openscad">Requisitos</a>). Al importar, acepta cargarlo como un objeto con varias partes.</p></details>
   <details><summary>¿Hay versión para Linux o Mac con Intel?</summary><p>No se publican binarios para esas plataformas.
   Puedes intentar <a href="#instalacion--compilar">compilar desde el código</a>, sin soporte.</p></details>
   <details><summary>¿Dónde están mis modelos si desinstalo la app?</summary><p>En las carpetas de tus workspaces, intactos.
   Solo se pierde la configuración de <code>scadlab.db</code>; ver <a href="#config-datos">Dónde se guardan tus datos</a>.</p></details>
-  <details><summary>¿Ya puedo descargarlo?</summary><p>Sí: la primera versión (0.1.0) está en
-  <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.1.0">Releases</a>; ver <a href="#instalacion">Instalación</a>.
+  <details><summary>¿Ya puedo descargarlo?</summary><p>Sí: la última versión (0.2.0) está en
+  <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0">Releases</a>; ver <a href="#instalacion">Instalación</a>.
   También puedes <a href="#instalacion--compilar">compilarla desde el código</a>.</p></details>
 
   <h2 id="faq--licencia">Licencia</h2>
@@ -2665,7 +2868,7 @@ color("Black") label();                                    // texto que llena el
 <div id="foot">
   <div class="pagenav" id="pagenav"></div>
   <p class="pagefoot"><strong>ScadLab</strong> — Go + Wails&nbsp;v2 + React. Documentación de la
-  <span class="ver">v0.1.0</span> (primera versión); esta página no hace ninguna petición externa.
+  <span class="ver">v0.2.0</span>; esta página no hace ninguna petición externa.
   <a href="https://github.com/rafael180496/ScadLab">Código</a> ·
   <a href="https://github.com/rafael180496/ScadLab/releases">Descargas</a></p>
 </div>

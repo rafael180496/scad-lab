@@ -22,10 +22,24 @@ import (
 // Qué herramientas son de este tipo lo dice mcp.ChangesTree, la misma definición
 // que usan la red de seguridad y el espejo del frontend.
 
-// refreshTreeAfterStep refresca la interfaz tras un paso que cambió el árbol. No
-// hace nada con un paso en curso, uno fallido (no cambió nada) ni otra herramienta.
+// refreshTreeAfterStep refresca la interfaz tras un paso que cambió el árbol o la
+// configuración del workspace. No hace nada con un paso en curso, uno fallido (no
+// cambió nada) ni otra herramienta.
+//
+// Una herramienta de configuración (mcp.EffectConfig, S14: set_workspace_printer)
+// no toca el árbol: cambia la impresora, los colores o las skills del workspace en
+// la base. El paso llega aquí ya terminado y se hace lo mismo que al guardar desde
+// la interfaz: releer el workspace y emitir workspace:config, para que la barra
+// de estado y el panel «Configuración del workspace» muestren la impresora nueva.
 func (a *App) refreshTreeAfterStep(workspaceID int64, st hermes.Step) {
-	if st.Status != hermes.StepOK || !mcp.ChangesTree(st.Tool) {
+	if st.Status != hermes.StepOK {
+		return
+	}
+	if mcp.ChangesConfig(st.Tool) {
+		a.emitWorkspaceConfig(workspaceID)
+		return
+	}
+	if !mcp.ChangesTree(st.Tool) {
 		return
 	}
 	w, err := a.store.GetWorkspace(workspaceID)

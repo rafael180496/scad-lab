@@ -108,23 +108,56 @@ Spec: [.claude/specs/s2-visor-3d.md](../.claude/specs/s2-visor-3d.md).
 Lo escriben los agentes (reglas en `assets/workspace/RULES.md.tmpl`), lo lee
 `workspace.Scan`. Cambiar el formato es cambiar las dos puntas y las skills.
 
-## Impresoras
+## Impresoras (S14: siete marcas)
 
-`assets/skills/bambu-lab-printers/references/printers.json` es la única fuente:
-la lee la app (`backend/printers`) y la IA (skill). Las cifras sin confirmar van
-en `verify` de cada impresora. La impresora del workspace se escribe en
-`printer.json` y en las reglas (volumen de impresión, colores del AMS).
+El catálogo está **partido por marca**: cada skill de marca trae su
+`assets/skills/<marca>-printers/references/printers.json` (esquema v2) y
+`backend/printers` junta todos los que encuentra en el binario
+(`skills/*/references/printers.json`). Es la única fuente: la lee la app (`printers.All`,
+`Brands`, `ByID`) y la IA dentro de su skill. Las skills del usuario no cambian el catálogo.
+
+| Marca | Skill | Impresoras | Multicolor |
+|---|---|---|---|
+| Bambu Lab | `bambu-lab-printers` | A1 mini, A1, A2L, P1P, P1S, P2S, X1C, X1E, X2D, H2D, H2S, H2C (12) | AMS |
+| Prusa | `prusa-printers` | MK4S, CORE One+, CORE One L+, MINI+, XL (5) | MMU3, toolchanger XL / INDX |
+| Creality | `creality-printers` | Ender-3 V3 / SE / KE, K1 / K1C / K1 Max, K2 / K2 Pro / K2 Plus, Hi (10) | CFS-C, CFS |
+| Elegoo | `elegoo-printers` | Neptune 4 / Pro / Max, Centauri Carbon 1 y 2 (5) | CANVAS |
+| Anycubic | `anycubic-printers` | Kobra 2 Pro / Plus / Max, Kobra 3, S1, S1 Max, X (7) | ACE Pro / ACE 2 Pro |
+| Snapmaker | `snapmaker-printers` | U1, J1s, Artisan (3) | toolchanger, IDEX, doble extrusión |
+| UltiMaker | `ultimaker-printers` | S3, S5, S7, S8, Factor 4 (5) | doble extrusión (2,85 mm) |
+
+- **Una entrada por modelo comercial.** Lo que varía con los accesorios (AMS, CFS, ACE, los cabezales del XL) es la cantidad
+  de **colores**: `multicolor_slots` es el máximo de la máquina y `default_colors` la configuración con que nace un workspace.
+  La impresora **efectiva** de un workspace (`wsconfig.EffectivePrinter`) trae sus colores en `MulticolorSlots` y el tope en
+  `MaxColors`. Detalle del contrato y de la configuración por workspace: [29-contrato-workspaces.md](29-contrato-workspaces.md).
+- **Cada cifra tiene su ficha oficial** en `sources`; lo que no se pudo confirmar va en `verify` (nombre del campo, validado por
+  `TestVerifyNamesAreSchemaFields`) y un número desconocido es `0`. Campos extra (`build_volume_dual_nozzle`,
+  `build_volume_with_indx`, `build_volume_copy_mode`…) los ignora Go y los lee la IA. Dos casos a no olvidar: la **Kobra 2** da
+  su volumen como alto × ancho × fondo (aquí va como X×Y×Z: la Max es 420×420×500) y las **UltiMaker** usan filamento de 2,85 mm.
+- **La skill de la marca** (`SKILL.md`) trae la tabla de perfiles (espejo del JSON), las reglas FDM de esa marca (superficie de la
+  cama, primera capa, voladizos, holguras, materiales), su multicolor (cómo modelar por color y cómo llega al slicer), qué formato
+  exportar y `references/plate_check.scad` con su `assert_fits_plate()`. Los tests exigen que la tabla de cada skill y su
+  `plate_check.scad` coincidan con el JSON (`TestBrandSkillsDocumentTheirPrinters`, `TestPlateCheckMirrorsTheCatalog`).
+  Las reglas FDM genéricas y sus snippets están en `openscad-core/references/fdm-design-rules.md`.
+- La impresora del workspace se escribe en `printer.json` y en las reglas (`RULES.md.tmpl`: marca, modelo, volumen, sistema
+  multicolor, colores del workspace y máximo, boquilla, filamento, slicer y skill de la marca).
+- **Agregar una marca**: carpeta `assets/skills/<marca>-printers/` con `SKILL.md` (frontmatter `name` = carpeta), `references/printers.json`
+  (bloque `brand` {id, name, skill} y las impresoras; ids con el prefijo de la marca) y `references/plate_check.scad`; sumar la
+  marca a `brandOrder` de `backend/printers` y, si tiene slicer propio, a `backend/slicers`. No hace falta tocar nada más de Go:
+  el selector, las reglas y las herramientas MCP la ven sola. **Agregar un modelo**: una entrada más en el JSON de su marca, una
+  fila en la tabla de su `SKILL.md` y en `plate_check.scad`.
 
 ## Skills de modelado (`assets/skills/`)
 
 | Skill | Para qué |
 |---|---|
-| `openscad-core` | reglas de modelado paramétrico y del workspace |
-| `bambu-lab-printers` | perfiles, reglas FDM, chequeo de placa |
-| `openscad-3mf-multicolor` | multicolor AMS, formato 3MF |
+| `openscad-core` | reglas de modelado paramétrico y del workspace, reglas FDM genéricas (`references/fdm-design-rules.md`) |
+| `<marca>-printers` (7) | perfiles de la marca, reglas FDM propias, multicolor, formato a exportar, chequeo de placa (arriba) |
+| `openscad-3mf-multicolor` | multicolor de cualquier sistema (AMS, MMU3, CFS, ACE, toolchanger, IDEX, doble extrusión) y qué 3MF lee cada slicer ([11-exportacion.md](11-exportacion.md)) |
 | `openscad-templates` | plantillas paramétricas listas |
 | `openscad-libraries` | BOSL2, MCAD, NopSCADlib |
 | `openscad-stl-editing` | editar un STL existente sin tocarlo (S13): `import()` en un checkpoint nuevo, recetas de agujeros, cortes, texto, escala, partir y espejar; límites de las mallas ([23-edicion-stl.md](23-edicion-stl.md)) |
+| `openscad-from-image` | modelar a partir de imágenes (S15): foto de una pieza, logo o placa plana, relieve o litofanía, boceto acotado, varias vistas; la escala (una medida del usuario o un objeto conocido: `references/standard-sizes.md`, cada cifra con su fuente o «por confirmar»), el flujo crear → render → `compare_with_image` → corregir, qué se puede y qué no se puede prometer; 3 plantillas renderizadas con OpenSCAD real (`bracket-from-photo`, `plate-from-svg`, `lithophane-surface`). Usa las herramientas `image_info`, `compare_with_image`, `trace_image_outline` e `image_to_heightmap` ([25](25-herramientas-ia.md#imágenes-s15)) |
 | `_skill-template` | base para crear skills propias (no se instala) |
 
 Agregar una skill incluida: carpeta nueva en `assets/skills/<nombre>/` con
@@ -150,8 +183,8 @@ Se embebe sola en el binario. Una skill del usuario se crea desde Configuración
 - **3MF con color**: `-o x.3mf` exporta por defecto con colores
   (`-O export-3mf/color-mode=model`; también `none` y `selected-only`). Sale **un
   solo objeto** con `<basematerials>` (un `<base displaycolor>` por cada `color()`
-  más `Default`) y color por triángulo. Para el AMS de Bambu (S9) falta decidir si
-  basta eso o se arma un objeto por color.
+  más `Default`) y color por triángulo. ScadLab lo reparte en una parte por color y escribe el 3MF
+  que lee cada slicer (S9, S14: [11-exportacion.md](11-exportacion.md)).
 - Las 10 plantillas de `openscad-templates` renderizan con Manifold sin errores
   ni warnings (vistas previas revisadas a ojo).
 - Test: `TestRenderWithRealOpenSCAD` (`backend/render/real_test.go`) corre el

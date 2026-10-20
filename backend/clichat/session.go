@@ -338,7 +338,8 @@ func (t Turn) environ() []string {
 // turnEnv son las variables que el turno agrega según el CLI, encima del entorno
 // que armó quien llama.
 func turnEnv(t Turn) []string {
-	if t.CLI == "opencode" {
+	switch t.CLI {
+	case "opencode":
 		return opencodeEnv(t)
 	}
 	return nil

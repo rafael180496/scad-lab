@@ -248,12 +248,167 @@ func TestReadCheckpointPair(t *testing.T) {
 	if _, err := f.a.ReadCheckpointPair(f.w.ID, "001-base.scad"); err == nil {
 		t.Error("una raíz no tiene padre")
 	}
-	// El padre en la papelera: motivo claro, no un error de archivo.
+	// Mandar el padre a la papelera re-cuelga al hijo del abuelo: se compara con él.
 	if _, err := f.a.TrashCheckpoint(f.w.ID, "002-lid.scad", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.a.ReadCheckpointPair(f.w.ID, "003-vents.scad"); err == nil || !strings.Contains(err.Error(), "002-lid.scad") {
-		t.Errorf("padre en la papelera: %v", err)
+	if p, err := f.a.ReadCheckpointPair(f.w.ID, "003-vents.scad"); err != nil || p.Parent != "001-base.scad" {
+		t.Errorf("tras mandar el padre a la papelera: %+v %v", p, err)
+	}
+	// Un padre ausente de un workspace anterior a esto: motivo claro, no un error de archivo.
+	f.write("004-huerfano.scad", "huérfano", "002-lid.scad")
+	if _, err := f.a.ReadCheckpointPair(f.w.ID, "004-huerfano.scad"); err == nil || !strings.Contains(err.Error(), "002-lid.scad") {
+		t.Errorf("padre ausente: %v", err)
+	}
+}
+
+// Borrar uno de rama no deja advertencias: los hijos pasan al abuelo (o a raíz),
+// el árbol avisado ya los trae así, y restaurar los devuelve.
+func TestTrashRelinksChildrenAndRestoreBringsThemBack(t *testing.T) {
+	f := newCkptFixture(t)
+	names, err := f.a.TrashCheckpoint(f.w.ID, "002-lid.scad", false)
+	if err != nil || len(names) != 1 {
+		t.Fatalf("papelera: %v %v", names, err)
+	}
+	v := f.lastView()
+	var vents store.Checkpoint
+	for _, c := range v.Checkpoints {
+		if c.FileName == "003-vents.scad" {
+			vents = c
+		}
+	}
+	if vents.ParentFile != "001-base.scad" {
+		t.Errorf("el árbol avisado debía traer a 003 colgando de 001: %+v", vents)
+	}
+	if got := f.row(t, "003-vents.scad").ParentFile; got != "001-base.scad" {
+		t.Errorf("índice: %q", got)
+	}
+	// Un diagnóstico de padre inexistente ya no aparece.
+	src, _ := os.ReadFile(filepath.Join(f.w.Path, "003-vents.scad"))
+	diags, err := f.a.LintCheckpointSource(f.w.ID, "003-vents.scad", string(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range diags {
+		if d.Code == "SL002" {
+			t.Errorf("no debía haber SL002: %+v", d)
+		}
+	}
+
+	if _, err := f.a.RestoreCheckpoint(f.w.ID, names[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.row(t, "003-vents.scad").ParentFile; got != "002-lid.scad" {
+		t.Errorf("tras restaurar, 003 debía volver a 002: %q", got)
+	}
+
+	// Una raíz: los hijos quedan como raíz.
+	if _, err := f.a.TrashCheckpoint(f.w.ID, "001-base.scad", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.row(t, "002-lid.scad").ParentFile; got != "" {
+		t.Errorf("002 debía quedar como raíz: %q", got)
+	}
+}
+
+func TestMakeCheckpointRoot(t *testing.T) {
+	f := newCkptFixture(t)
+	f.write("004-huerfano.scad", "huérfano", "009-borrado.scad")
+	if _, err := f.a.RescanWorkspace(f.w.ID); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(f.w.Path, "004-huerfano.scad"))
+	if err := f.a.MakeCheckpointRoot(f.w.ID, "004-huerfano.scad"); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.row(t, "004-huerfano.scad").ParentFile; got != "" {
+		t.Errorf("debía quedar como raíz: %q", got)
+	}
+	after, _ := os.ReadFile(filepath.Join(f.w.Path, "004-huerfano.scad"))
+	if string(after) != strings.Replace(string(before), "parent=009-borrado.scad", "parent=", 1) {
+		t.Errorf("solo debía cambiar el parent=:\n%q\n%q", before, after)
+	}
+	for _, bad := range []string{"", "../x.scad", "nada.scad"} {
+		if err := f.a.MakeCheckpointRoot(f.w.ID, bad); err == nil {
+			t.Errorf("MakeCheckpointRoot(%q): quiero error", bad)
+		}
+	}
+}
+
+func TestDeleteTrashedAndEmptyTrash(t *testing.T) {
+	f := newCkptFixture(t)
+	if err := f.a.RenameCheckpoint(f.w.ID, "003-vents.scad", "Rejillas"); err != nil {
+		t.Fatal(err)
+	}
+	n3, err := f.a.TrashCheckpoint(f.w.ID, "003-vents.scad", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n2, err := f.a.TrashCheckpoint(f.w.ID, "002-lid.scad", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.a.DeleteTrashed(f.w.ID, n3[0]); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := f.a.ListTrash(f.w.ID)
+	if len(items) != 1 || items[0].Name != n2[0] {
+		t.Fatalf("debía quedar solo 002: %+v", items)
+	}
+	// Lo eliminado ya no vuelve, ni con su rótulo.
+	if _, err := f.a.RestoreCheckpoint(f.w.ID, n3[0]); err == nil {
+		t.Error("restaurar lo eliminado debe fallar")
+	}
+	if err := f.a.DeleteTrashed(f.w.ID, "../001-base.scad"); err == nil {
+		t.Error("nombre hostil")
+	}
+	if !f.exists("001-base.scad") {
+		t.Fatal("el workspace no se toca")
+	}
+
+	n, err := f.a.EmptyTrash(f.w.ID)
+	if err != nil || n != 1 {
+		t.Fatalf("EmptyTrash: %d %v", n, err)
+	}
+	if items, _ := f.a.ListTrash(f.w.ID); len(items) != 0 {
+		t.Errorf("papelera: %+v", items)
+	}
+	if !f.exists("001-base.scad") {
+		t.Error("EmptyTrash tocó el workspace")
+	}
+}
+
+// Vaciar la papelera de un workspace que se quedó sin modelos no hace reaparecer
+// el modelo de inicio al reabrirlo: fue a propósito.
+func TestEmptyTrashDoesNotResurrectTheStarter(t *testing.T) {
+	a := newTestApp(t)
+	w, err := a.CreateWorkspace("Taller", "bambu-a1-mini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := "// @checkpoint parent= desc=\"mía\"\ncube(5);\n"
+	if err := os.WriteFile(filepath.Join(w.Path, "001-mia.scad"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.TrashCheckpoint(w.ID, "001-mia.scad", false); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := a.EmptyTrash(w.ID); err != nil || n != 1 {
+		t.Fatalf("EmptyTrash: %d %v", n, err)
+	}
+	withStarter(t)
+	v, err := a.OpenProject(w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.stopWatcher)
+	if got, _ := filepath.Glob(filepath.Join(w.Path, "*.scad")); len(got) != 0 || len(v.Checkpoints) != 0 {
+		t.Fatalf("no se resucita el starter tras vaciar: %v %+v", got, v.Checkpoints)
+	}
+	// El botón explícito sigue funcionando.
+	if name, err := a.CreateStarterCheckpoint(w.ID); err != nil || name == "" {
+		t.Errorf("CreateStarterCheckpoint: %q %v", name, err)
 	}
 }
 
