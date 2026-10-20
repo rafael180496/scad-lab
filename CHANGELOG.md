@@ -7,6 +7,14 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+### Corregido
+
+- **Los enlaces a la ayuda y a las descargas daban 404.** Apuntaban a
+  `rafael180496/ScadLab`, pero el repositorio se llama `scad-lab`: la ayuda está en
+  https://rafael180496.github.io/scad-lab/ y las descargas en sus Releases. Corregidos
+  en el README, la ayuda (en y es), los README de `releases/` y las notas que genera
+  el workflow de release.
+
 ## [0.2.0] - 2026-10-19
 
 ### Agregado

@@ -14,7 +14,7 @@ comprueba que su SHA-256 aparezca en este README.
 | Tamaño | 19 313 894 bytes (18,4 MB) |
 | SHA-256 | `5b943a17a7734716ff029cc5236610dcb7c13443d533c647188001a3a8f43655` |
 | Arquitectura | arm64 (Apple Silicon) |
-| Descarga | https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg |
+| Descarga | https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg |
 
 ### Compatibilidad verificada
 

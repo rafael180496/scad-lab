@@ -141,7 +141,7 @@ jobs:
             echo
             echo 'Detalle por sistema en [releases/macos](releases/macos/README.md) y [releases/windows](releases/windows/README.md).'
             echo
-            echo '📖 [Documentación](https://rafael180496.github.io/ScadLab/)'
+            echo '📖 [Documentación](https://rafael180496.github.io/scad-lab/)'
           } > /tmp/release-notes.md
           echo "Notas: $(wc -l < /tmp/release-notes.md) líneas"
 

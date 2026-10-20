@@ -126,7 +126,7 @@ ninguna frase exacta, cualquier mención de esas palabras clave alcanza:
    Windows`) con la versión/checksum/compatibilidad actuales de cada una
    (resumen, no duplicar todo el detalle) y un link directo al **asset del
    GitHub Release** de esa versión:
-   `https://github.com/rafael180496/ScadLab/releases/download/vX.Y.Z/<archivo>`.
+   `https://github.com/rafael180496/scad-lab/releases/download/vX.Y.Z/<archivo>`.
    Si el README tiene una sección "Descargas" cerca del inicio, actualizar
    también esos links ahí. **Nunca linkear a `releases/<os>/<archivo>`**:
    ese archivo no está en el repositorio y el link daría 404.

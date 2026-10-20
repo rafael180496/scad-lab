@@ -16,8 +16,8 @@ marcas —Bambu Lab (A1, P1S, X1C, H2D…), Prusa (MK4S, CORE One…), Creality 
 (Centauri Carbon…), Anycubic (Kobra…), Snapmaker (U1…) y UltiMaker (S5, S7…)— con su ficha, su skill
 y su slicer; cada workspace elige la suya, con sus colores y sus skills.
 
-📖 **Ayuda:** [English](https://rafael180496.github.io/ScadLab/) ·
-[Español](https://rafael180496.github.io/ScadLab/es/)
+📖 **Ayuda:** [English](https://rafael180496.github.io/scad-lab/) ·
+[Español](https://rafael180496.github.io/scad-lab/es/)
 
 ## Qué hace
 
@@ -55,17 +55,17 @@ Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 ## Descargas
 
 Versión **0.2.0**, en los assets del
-[Release v0.2.0](https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0):
+[Release v0.2.0](https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0):
 
 | Sistema | Archivo | Tamaño |
 |---|---|---|
-| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg) | 18,4 MB |
-| Windows (x64) | [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe) (portable) | 49,1 MB |
+| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg) | 18,4 MB |
+| Windows (x64) | [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe) (portable) | 49,1 MB |
 
 Los binarios no van firmados: macOS pide «clic derecho → Abrir» la primera vez y
 Windows muestra el aviso de SmartScreen. También puedes compilarla desde el código
 (`wails build`, ver «Desarrollo»). Más en la ayuda:
-[Instalación](https://rafael180496.github.io/ScadLab/es/#instalacion).
+[Instalación](https://rafael180496.github.io/scad-lab/es/#instalacion).
 
 ## Desarrollo
 
@@ -80,7 +80,7 @@ Arquitectura, reglas y agentes de desarrollo: [CLAUDE.md](CLAUDE.md).
 
 ## Distribución / Empaquetado macOS
 
-**v0.2.0** — [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg), 18,4 MB, SHA-256
+**v0.2.0** — [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg), 18,4 MB, SHA-256
 `5b943a17a7734716ff029cc5236610dcb7c13443d533c647188001a3a8f43655`. Solo Apple Silicon
 (arm64), macOS 11 o superior (el `Info.plist` que genera Wails declara 10.13, pero el
 binario es arm64 y exige 11+). Sin firma ni notarización: clic derecho → Abrir.
@@ -88,7 +88,7 @@ Detalle en [releases/macos](releases/macos/README.md).
 
 ## Distribución / Empaquetado Windows
 
-**v0.2.0** — [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe), 49,1 MB,
+**v0.2.0** — [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe), 49,1 MB,
 SHA-256 `10ae9563a01e79237258604c187986fb66f8dd935a485198975edd7b4fea320b`. Portable (x86-64),
 sin instalador ni firma Authenticode (SmartScreen avisa). Verificado por el usuario en
 Windows 10 y Windows 11. Detalle en [releases/windows](releases/windows/README.md).

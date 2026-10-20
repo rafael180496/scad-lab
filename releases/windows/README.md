@@ -14,7 +14,7 @@ comprueba que su SHA-256 aparezca en este README.
 | Tamaño | 51 521 536 bytes (49,1 MB) |
 | SHA-256 | `10ae9563a01e79237258604c187986fb66f8dd935a485198975edd7b4fea320b` |
 | Arquitectura | x86-64 (amd64) |
-| Descarga | https://github.com/rafael180496/ScadLab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe |
+| Descarga | https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe |
 
 ### Compatibilidad verificada
 

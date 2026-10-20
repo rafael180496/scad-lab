@@ -6,9 +6,9 @@
 <title>ScadLab Help</title>
 <meta name="description" content="ScadLab documentation: design 3D models in OpenSCAD with the help of AI agents (Claude Code, opencode, Codex, Antigravity, Ollama) and get them ready to print on your 3D printer (Bambu Lab, Prusa, Creality, Elegoo, Anycubic, Snapmaker, UltiMaker). A desktop app for macOS and Windows.">
 <meta name="color-scheme" content="light dark">
-<link rel="alternate" hreflang="en" href="https://rafael180496.github.io/ScadLab/">
-<link rel="alternate" hreflang="es" href="https://rafael180496.github.io/ScadLab/es/">
-<link rel="alternate" hreflang="x-default" href="https://rafael180496.github.io/ScadLab/">
+<link rel="alternate" hreflang="en" href="https://rafael180496.github.io/scad-lab/">
+<link rel="alternate" hreflang="es" href="https://rafael180496.github.io/scad-lab/es/">
+<link rel="alternate" hreflang="x-default" href="https://rafael180496.github.io/scad-lab/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2314171e%22/%3E%3Cpath d=%22M16 5 26 10.8 16 16.6 6 10.8Z%22 fill=%22%23ff7a1a%22/%3E%3Cpath d=%22M6 10.8 16 16.6V28L6 22.2Z%22 fill=%22%235e6677%22/%3E%3Cpath d=%22M26 10.8 16 16.6V28l10-5.8Z%22 fill=%22%23aeb4c0%22/%3E%3Cpath d=%22M6 10.8 16 16.6 26 10.8%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.6%22 stroke-width=%22.8%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E">
 <meta property="og:title" content="ScadLab Help">
 <meta property="og:image" content="docs/screenshots/app-main.png">
@@ -328,8 +328,8 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <span class="mag">⌕</span><span class="hint">/</span>
     <div id="results" role="listbox"></div>
   </div>
-  <a class="tlink" href="https://github.com/rafael180496/ScadLab/releases">Downloads</a>
-  <a class="tlink" href="https://github.com/rafael180496/ScadLab">Source</a>
+  <a class="tlink" href="https://github.com/rafael180496/scad-lab/releases">Downloads</a>
+  <a class="tlink" href="https://github.com/rafael180496/scad-lab">Source</a>
   <a class="tlink" href="https://www.patreon.com/16966547/join" title="Support ScadLab with a monthly subscription on Patreon, or with a one-off coffee on Buy Me a Coffee">Support</a>
   <a class="iconbtn" id="langsw" href="es/index.html" data-base="es/index.html" hreflang="es" lang="es" title="Leer esta ayuda en español">Español</a>
   <button class="iconbtn" id="tgl" title="Switch between light and dark theme">Theme</button>
@@ -447,7 +447,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
 
   <h2 id="introduccion--estado">Project status</h2>
   <p>This help describes version <strong>0.2.0</strong> of ScadLab. Binaries for macOS and Windows
-  are on <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0">Releases</a> (you can also
+  are on <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0">Releases</a> (you can also
   <a href="#instalacion--compilar">build it from source</a>). Everything this page documents is implemented and
   verified against a real OpenSCAD; nothing is “in development”.</p>
   <div class="tablewrap"><table>
@@ -489,9 +489,9 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   </div>
 
   <div class="cta">
-    <a class="btn" href="https://github.com/rafael180496/ScadLab/releases">Download</a>
-    <a class="btn ghost" href="https://github.com/rafael180496/ScadLab">View the source</a>
-    <a class="btn ghost" href="https://github.com/rafael180496/ScadLab/blob/main/CHANGELOG.md">Changelog</a>
+    <a class="btn" href="https://github.com/rafael180496/scad-lab/releases">Download</a>
+    <a class="btn ghost" href="https://github.com/rafael180496/scad-lab">View the source</a>
+    <a class="btn ghost" href="https://github.com/rafael180496/scad-lab/blob/main/CHANGELOG.md">Changelog</a>
   </div>
 
   <h2 id="introduccion--apoyar">Support the project</h2>
@@ -512,13 +512,13 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   signed yet, so the system warns you the first time you open them.</p>
 
   <div class="note tip"><span class="lbl">Version 0.2.0</span><p>The files are on
-  <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0">Releases</a>:
+  <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0">Releases</a>:
   <code>ScadLab-v0.2.0.dmg</code> for macOS and <code>ScadLab-v0.2.0-windows-amd64.exe</code> for Windows. You can also
   <a href="#instalacion--compilar">build it from source</a>.</p></div>
 
   <h2 id="instalacion--macos">macOS (Apple Silicon)</h2>
   <ol class="steps">
-    <li>Download the <code>.dmg</code> for macOS from <a href="https://github.com/rafael180496/ScadLab/releases">Releases</a>.</li>
+    <li>Download the <code>.dmg</code> for macOS from <a href="https://github.com/rafael180496/scad-lab/releases">Releases</a>.</li>
     <li>Open it and drag <code>ScadLab.app</code> to <strong>Applications</strong>.</li>
     <li>The first time, <strong>right-click → Open</strong> (not a double-click) and confirm in the dialog.</li>
   </ol>
@@ -531,7 +531,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
 
   <h2 id="instalacion--windows">Windows (x64)</h2>
   <ol class="steps">
-    <li>Download the file for Windows from <a href="https://github.com/rafael180496/ScadLab/releases">Releases</a>.</li>
+    <li>Download the file for Windows from <a href="https://github.com/rafael180496/scad-lab/releases">Releases</a>.</li>
     <li>Run the <code>.exe</code>: it is portable, no installer needed.</li>
     <li>If <strong>“Windows protected your PC”</strong> appears, click <strong>More info → Run anyway</strong>.</li>
   </ol>
@@ -544,7 +544,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   <h2 id="instalacion--compilar">Build from source</h2>
   <p>You need Go, Node.js and the Wails v2 CLI:</p>
   <div class="codewrap"><pre><code>go install github.com/wailsapp/wails/v2/cmd/wails@latest
-git clone https://github.com/rafael180496/ScadLab.git
+git clone https://github.com/rafael180496/scad-lab.git
 cd ScadLab
 wails build            <span class="c"># binary in build/bin/</span></code></pre></div>
 
@@ -2843,14 +2843,14 @@ color("Black") label();                                    // text that fills th
   <details><summary>Where are my models if I uninstall the app?</summary><p>In your workspace folders, intact.
   Only the <code>scadlab.db</code> settings are lost; see <a href="#config-datos">Where your data lives</a>.</p></details>
   <details><summary>Can I download it yet?</summary><p>Yes: the latest version (0.2.0) is on
-  <a href="https://github.com/rafael180496/ScadLab/releases/tag/v0.2.0">Releases</a>; see <a href="#instalacion">Install</a>.
+  <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0">Releases</a>; see <a href="#instalacion">Install</a>.
   You can also <a href="#instalacion--compilar">build it from source</a>.</p></details>
 
   <h2 id="faq--licencia">License</h2>
   <p>ScadLab is free software under the <strong>MIT license</strong> (copyright 2026 rafael). You can use it, copy it,
   modify it, distribute it and use it at work or for commercial purposes, as long as you keep the copyright notice and
   the license text in the copies you distribute. The full text is the repository's
-  <a href="https://github.com/rafael180496/ScadLab/blob/main/LICENSE">LICENSE</a> file, and it is the one that prevails
+  <a href="https://github.com/rafael180496/scad-lab/blob/main/LICENSE">LICENSE</a> file, and it is the one that prevails
   over this summary.</p>
   <p>OpenSCAD is distributed under the GPL. ScadLab always uses it as a <strong>separate program</strong>: the one you install or
   download from the app, or the <strong>built-in engine</strong> (the official OpenSCAD compiled to WebAssembly, unmodified; see
@@ -2864,8 +2864,8 @@ color("Black") label();                                    // text that fills th
   <div class="pagenav" id="pagenav"></div>
   <p class="pagefoot"><strong>ScadLab</strong> — Go + Wails&nbsp;v2 + React. Documentation for
   <span class="ver">v0.2.0</span>; this page makes no external requests.
-  <a href="https://github.com/rafael180496/ScadLab">Source</a> ·
-  <a href="https://github.com/rafael180496/ScadLab/releases">Downloads</a></p>
+  <a href="https://github.com/rafael180496/scad-lab">Source</a> ·
+  <a href="https://github.com/rafael180496/scad-lab/releases">Downloads</a></p>
 </div>
 
 </main>
