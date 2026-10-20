@@ -31,7 +31,7 @@ El archivo es **global** (todos los proyectos). El usuario autorizó que ScadLab
 **1. Las reglas** (`backend/clichat/agyperms.go`, `agyperms` sobre `settings.json`; `jsonobj.go`):
 
 - Una regla `mcp(scadlab/<herramienta>)` por **cada** herramienta del catálogo —las de `readTools` y las de `writeTools` de `modes.go`, una sola
-  definición, así que una herramienta nueva queda aprobada sin más—. Lista **explícita**: nunca `mcp(*)`, `mcp(scadlab/*)` ni `command(...)`.
+  definición, así que una herramienta nueva queda aprobada sin más; así `update_checkpoint` (S16, [34](34-historial-checkpoints.md)) entra en las reglas con la próxima sincronización—. Lista **explícita**: nunca `mcp(*)`, `mcp(scadlab/*)` ni `command(...)`.
   `IsAgyRule` reconoce solo `mcp(scadlab/[A-Za-z0-9_]+)`: cualquier otra regla —un comodín del usuario, otro servidor— no es nuestra y no se toca.
 - **Combina sin tocar el resto**: el archivo se lee como objeto con el orden de sus claves y el texto de cada valor intactos (`jsonobj.go`),
   y solo cambia `permissions.allow`: conserva las reglas del usuario donde estaban, deja las nuestras que ya estaban, quita las

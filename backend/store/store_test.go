@@ -69,6 +69,39 @@ func TestRenderSettingsDefaultsAndFalse(t *testing.T) {
 	}
 }
 
+// El tope del historial de un checkpoint (S16): 20 de fábrica, 1–200, y una base
+// anterior que no tiene la clave (o con un valor roto) cae en 20.
+func TestHistoryMaxVersions(t *testing.T) {
+	s := openTemp(t)
+	got, _ := s.GetSettings()
+	if got.HistoryMaxVersions != DefaultHistoryVersions || DefaultHistoryVersions != 20 {
+		t.Fatalf("de fábrica: %d", got.HistoryMaxVersions)
+	}
+	for in, want := range map[int]int{1: 1, 7: 7, 200: 200, 201: 200, 99999: 200, 0: 20, -3: 20} {
+		got.HistoryMaxVersions = in
+		if err := s.SaveSettings(got); err != nil {
+			t.Fatal(err)
+		}
+		again, _ := s.GetSettings()
+		if again.HistoryMaxVersions != want {
+			t.Errorf("tope %d -> %d, quería %d", in, again.HistoryMaxVersions, want)
+		}
+	}
+	// Un valor roto escrito a mano en la base se normaliza al leer.
+	if err := s.SetSetting("historyMaxVersions", 5000); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := s.GetSettings(); again.HistoryMaxVersions != 200 {
+		t.Errorf("valor roto: %d", again.HistoryMaxVersions)
+	}
+	if err := s.SetSetting("historyMaxVersions", 0); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := s.GetSettings(); again.HistoryMaxVersions != 20 {
+		t.Errorf("cero: %d", again.HistoryMaxVersions)
+	}
+}
+
 func TestSeededCatalogs(t *testing.T) {
 	s := openTemp(t)
 	provs, err := s.ListProviders()

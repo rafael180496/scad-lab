@@ -20,8 +20,8 @@ import (
 // Solo escribe si la raíz de dir no tiene ningún .scad: si ya hay alguno
 // devuelve "" sin error y no toca nada. Nunca pisa un archivo: se crea con
 // O_EXCL, así que una carrera con otro proceso que cree el 001 da error y no
-// una sobreescritura (los checkpoints son inmutables, regla 3 de
-// .claude/rules/technical.md). lang es "es"; cualquier otro valor, inglés.
+// una sobreescritura (un checkpoint solo se reescribe con respaldo previo, regla 3
+// de .claude/rules/technical.md). lang es "es"; cualquier otro valor, inglés.
 func WriteStarter(dir, workspaceName, lang string) (fileName string, err error) {
 	files, err := Scan(dir)
 	if err != nil {

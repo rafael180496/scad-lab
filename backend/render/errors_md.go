@@ -16,8 +16,8 @@ import (
 // workspace (Claude Code, opencode…) se entera de que su último checkpoint no
 // renderiza. Las reglas del workspace (assets/workspace/RULES.md.tmpl, regla 6)
 // le dicen que lo lea. Por eso no es un volcado del log: lleva la línea, el
-// código alrededor y la instrucción de cómo corregir sin romper la
-// inmutabilidad de los checkpoints.
+// código alrededor y la instrucción de cómo corregir: editar ese mismo archivo
+// con update_checkpoint, que guarda antes la versión rota en el historial.
 
 const renderErrorsFile = "RENDER_ERRORS.md"
 
@@ -98,9 +98,9 @@ func writeRenderErrors(dir string, r Result) error {
 
 	fmt.Fprintf(&b, "## %s\n\n", t(i18n.Msg{ES: "Cómo corregir", EN: "How to fix"}))
 	b.WriteString(t(i18n.Msg{
-		ES: "Corregir en un checkpoint NUEVO cuyo parent sea `%s`: crea el siguiente `NNN-slug.scad` con la primera línea `// @checkpoint parent=%s desc=\"<qué corregiste>\"`. No edites `%s` ni ningún otro checkpoint: son inmutables. Si el error está en un include de `lib/`, corrígelo ahí y crea igual el checkpoint nuevo. ScadLab borra este archivo cuando un render sale bien.",
-		EN: "Fix it in a NEW checkpoint whose parent is `%s`: create the next `NNN-slug.scad` with the first line `// @checkpoint parent=%s desc=\"<what you fixed>\"`. Do not edit `%s` or any other checkpoint: they are immutable. If the error is in an include under `lib/`, fix it there and still create the new checkpoint. ScadLab deletes this file when a render succeeds.",
-	}, r.FileName, r.FileName, r.FileName))
+		ES: "Corregir `%s` en el lugar con la herramienta `update_checkpoint` (file=`%s`, `source` con el archivo completo): conserva la cabecera `// @checkpoint` y guarda antes la versión rota en el historial. Léelo con `read_checkpoint` (nunca con las herramientas de archivo del CLI) y no lo escribas con la shell. Si el error está en un include de `lib/`, corrígelo ahí y vuelve a renderizar. ScadLab borra este archivo cuando un render sale bien.",
+		EN: "Fix `%s` in place with the `update_checkpoint` tool (file=`%s`, `source` with the complete file): it keeps the `// @checkpoint` header and saves the broken version in the history first. Read it with `read_checkpoint` (never with the CLI's file tools) and do not write it through the shell. If the error is in an include under `lib/`, fix it there and render again. ScadLab deletes this file when a render succeeds.",
+	}, r.FileName, r.FileName))
 	b.WriteString("\n")
 
 	// Escritura atómica: el agente puede estar leyendo el archivo justo ahora.

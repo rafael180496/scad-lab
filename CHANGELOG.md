@@ -7,7 +7,50 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-20
+
+### Agregado
+
+- **La IA edita el archivo que le nombras, con historial y deshacer.** Hasta ahora, si le
+  decías a la IA «es en el archivo `002-rpi5-snap-case.scad` que quería los cambios», no lo
+  tocaba: contestaba que los checkpoints son inmutables y creaba uno hijo
+  (`004-rpi5-snap-case-vents.scad`), con lo que el árbol se llenaba de copias de algo que
+  querías cambiar en el sitio. Ahora, cuando **nombras un archivo que existe** o te refieres al
+  que tienes **seleccionado** («este», «el actual») y pides cambios, la IA **edita ese archivo**
+  con una herramienta nueva, `update_checkpoint`; solo crea un checkpoint nuevo si pides algo
+  nuevo, una variante u «otra versión». Vale para todos los proveedores: Claude Code, Codex,
+  Antigravity, opencode y el chat con Ollama o una API (Hermes), y solo en modo Agente.
+  - **Antes de escribir se guarda la versión anterior.** Cada archivo editado tiene su historial
+    en `.scadlab/history/<archivo>/`, con la fecha, el motivo (IA o restaurado) y la nota que la
+    IA dejó sobre el cambio. Se conservan hasta **20 versiones por archivo** (se ajusta de 1 a 200
+    en Configuración → General → «Versiones guardadas por archivo»); al pasar el tope se descartan
+    las más viejas de ese archivo, nunca un checkpoint. La cabecera `// @checkpoint` del archivo
+    se conserva, y la papelera se lleva el historial con el archivo y lo devuelve al restaurarlo.
+  - **«Editado por la IA».** Un archivo cuyo último cambio fue de la IA lleva un ícono en el árbol
+    y una pastilla en las cabeceras del visor y del código, con tres acciones (también en el menú
+    del nodo): **Deshacer cambio de la IA** (vuelve a la versión anterior, con confirmación; lo que
+    había se guarda, así que deshacer también se puede deshacer), **Ver diferencias** (la versión
+    anterior y la actual lado a lado, con su fecha y la nota) e **Historial** (todas las versiones,
+    con «Ver diferencias» y «Restaurar esta versión» en cada una).
+  - **El visor y el código se enteran solos.** Cuando la IA —o el agente de la terminal, o una
+    restauración— cambia el archivo que tienes abierto, el código se recarga y se renderiza de
+    nuevo sin que toques nada. Si tienes cambios sin guardar en el editor no se pisan: aparece un
+    aviso con un botón «Recargar» que pregunta antes de descartarlos.
+  - **Lo que no cubre.** Si un agente escribe un `.scad` con sus propias herramientas de archivo o
+    con la shell (`Edit`, `Write`, `apply_patch`…), no queda respaldo: las reglas del workspace lo
+    prohíben, pero ScadLab no puede impedirlo. El editor de código sigue en solo lectura;
+    guardar desde él sigue creando un checkpoint nuevo.
+
 ### Corregido
+
+- **Los CLIs ya no inventan la ruta del archivo.** El turno de un CLI se ejecuta en la carpeta del
+  proyecto, pero el prompt solo decía «esta carpeta»: las herramientas de archivo de Antigravity
+  piden una ruta **absoluta** y el modelo no tenía cómo saberla, así que la inventaba y la lectura
+  fallaba con «no existe» (de ahí, con toda probabilidad, la respuesta sobre los checkpoints
+  inmutables). Ahora cada turno dice la ruta completa del proyecto,
+  cuál es el checkpoint seleccionado en la app («es “este archivo”») y que un `.scad` se lee con
+  `read_checkpoint` y se cambia con `update_checkpoint`, nunca con las herramientas de archivo ni la
+  shell del CLI.
 
 - **Los enlaces a la ayuda y a las descargas daban 404.** Apuntaban a
   `rafael180496/ScadLab`, pero el repositorio se llama `scad-lab`: la ayuda está en

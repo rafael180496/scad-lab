@@ -35,11 +35,11 @@ description: Plantilla para crear skills nuevas de ScadLab; no es una skill oper
 
 <!-- Reglas obligatorias, en forma de lista o tabla. Recordar siempre las del
      contrato de la app:
-- Cada versión es un checkpoint nuevo `NNN-slug.scad`; nunca sobrescribir.
+- Cambios a un archivo que el usuario nombró: `update_checkpoint` (con respaldo); un checkpoint nuevo `NNN-slug.scad` solo para algo nuevo o una variante.
 - Línea 1: `// @checkpoint parent=<padre.scad> desc="<qué cambia>"`.
 - Toda pieza de primer nivel dentro de `color()`.
 - Parámetros arriba con comentarios de Customizer; milímetros.
-- Validar el render y corregir en un checkpoint nuevo.
+- Validar el render y corregir con `update_checkpoint` sobre el mismo archivo.
 -->
 
 ## Flujo

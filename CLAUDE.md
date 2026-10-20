@@ -75,6 +75,7 @@ TypeScript + Tailwind v4 + SQLite. macOS y Windows. Interfaz en inglés y españ
 | [claude/31-contrato-render-visor-editor.md](claude/31-contrato-render-visor-editor.md) | Contrato Go ↔ React: render, visor 3D, editor, paneles acoplables, apariencia y edición de STL |
 | [claude/32-contrato-exportacion-skills.md](claude/32-contrato-exportacion-skills.md) | Contrato Go ↔ React: exportación y slicers, descarga de OpenSCAD, skills |
 | [claude/33-contrato-servidores-chat.md](claude/33-contrato-servidores-chat.md) | Contrato Go ↔ React: servidores de modelos, llavero, chat con Hermes y CLIs como proveedores |
+| [claude/34-historial-checkpoints.md](claude/34-historial-checkpoints.md) | Historial de checkpoints (S16): la IA edita el archivo que nombras con `update_checkpoint` (respaldo previo en `.scadlab/history/`, tope, papelera), el bug de la ruta inventada y el prompt CLI con ruta absoluta, `checkpoint:updated` (chat y watcher), «Editado por la IA», deshacer, diferencias e historial, pendientes |
 | [.claude/rules/technical.md](.claude/rules/technical.md) | Restricciones técnicas duras |
 | [.claude/rules/conventions.md](.claude/rules/conventions.md) | Commits, changelog, `index.html`, estilo |
 | [.claude/specs/releases.md](.claude/specs/releases.md) | Proceso de versión (trigger «preparar la versión») |

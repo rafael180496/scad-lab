@@ -28,7 +28,7 @@ pendiente es la verificación manual en ventanas reales (ver abajo).
 |---|---|
 | Workspaces con reglas para la IA y skills de modelado para todos los agentes; detección de OpenSCAD y de los CLIs; primer `.scad` de entrada en cada workspace nuevo | ✅ |
 | Proveedores de IA (Ollama local o remoto, OpenAI-compatible, OpenRouter, Gemini, Anthropic…) con claves cifradas con tu contraseña maestra (que puedes recordar en el llavero del sistema) y «Probar conexión» | ✅ |
-| Árbol de checkpoints inmutables con ramas, padre activo, papelera, renombrar, comparar con el padre y retomar la sesión que los creó | ✅ |
+| Árbol de checkpoints con ramas, padre activo, papelera, historial por archivo con «Deshacer cambio de la IA» y diferencias, renombrar, comparar con el padre y retomar la sesión que los creó | ✅ |
 | Render con OpenSCAD (Manifold/CGAL), caché de mallas, diagnósticos con línea y `RENDER_ERRORS.md` | ✅ |
 | Visor 3D PBR: siete vistas, wireframe, aristas, ortográfica/perspectiva, vista dividida, captura PNG | ✅ |
 | Impresoras de siete marcas: catálogo con ficha y búsqueda, y por workspace la impresora, los colores, las skills y los ajustes de impresión («Configuración del workspace») | ✅ |
@@ -54,13 +54,13 @@ Plan completo por fases: [claude/01-roadmap.md](claude/01-roadmap.md).
 
 ## Descargas
 
-Versión **0.2.0**, en los assets del
-[Release v0.2.0](https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0):
+Versión **0.2.1**, en los assets del
+[Release v0.2.1](https://github.com/rafael180496/scad-lab/releases/tag/v0.2.1):
 
 | Sistema | Archivo | Tamaño |
 |---|---|---|
-| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg) | 18,4 MB |
-| Windows (x64) | [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe) (portable) | 49,1 MB |
+| macOS (Apple Silicon, 11+) | [`ScadLab-v0.2.1.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1.dmg) | 18,5 MB |
+| Windows (x64) | [`ScadLab-v0.2.1-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1-windows-amd64.exe) (portable) | 49,2 MB |
 
 Los binarios no van firmados: macOS pide «clic derecho → Abrir» la primera vez y
 Windows muestra el aviso de SmartScreen. También puedes compilarla desde el código
@@ -80,18 +80,18 @@ Arquitectura, reglas y agentes de desarrollo: [CLAUDE.md](CLAUDE.md).
 
 ## Distribución / Empaquetado macOS
 
-**v0.2.0** — [`ScadLab-v0.2.0.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0.dmg), 18,4 MB, SHA-256
-`5b943a17a7734716ff029cc5236610dcb7c13443d533c647188001a3a8f43655`. Solo Apple Silicon
+**v0.2.1** — [`ScadLab-v0.2.1.dmg`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1.dmg), 18,5 MB, SHA-256
+`a3f56de286c4be09d1bb83bd81be012b6cfab56fcc5468a6676b8839b409390a`. Solo Apple Silicon
 (arm64), macOS 11 o superior (el `Info.plist` que genera Wails declara 10.13, pero el
 binario es arm64 y exige 11+). Sin firma ni notarización: clic derecho → Abrir.
 Detalle en [releases/macos](releases/macos/README.md).
 
 ## Distribución / Empaquetado Windows
 
-**v0.2.0** — [`ScadLab-v0.2.0-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.0/ScadLab-v0.2.0-windows-amd64.exe), 49,1 MB,
-SHA-256 `10ae9563a01e79237258604c187986fb66f8dd935a485198975edd7b4fea320b`. Portable (x86-64),
+**v0.2.1** — [`ScadLab-v0.2.1-windows-amd64.exe`](https://github.com/rafael180496/scad-lab/releases/download/v0.2.1/ScadLab-v0.2.1-windows-amd64.exe), 49,2 MB,
+SHA-256 `9470b8a4d76c2e5d3421266cde53c87b4f3b0777b5113ff85810456a24206a73`. Portable (x86-64),
 sin instalador ni firma Authenticode (SmartScreen avisa). Verificado por el usuario en
-Windows 10 y Windows 11. Detalle en [releases/windows](releases/windows/README.md).
+Windows 10 y 11 en la v0.2.0; la 0.2.1 no se probó todavía en Windows. Detalle en [releases/windows](releases/windows/README.md).
 
 ## Apoya el proyecto
 

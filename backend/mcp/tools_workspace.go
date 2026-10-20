@@ -36,7 +36,7 @@ func (e *env) workspaceTools() []Tool {
 		},
 		{
 			Name: "rename_checkpoint",
-			Description: "Change the display name (label) the checkpoint tree shows for a checkpoint, e.g. «Lid with hinge». Checkpoint files are immutable and their children reference them by file name, so the file name and the description written in its header never change: the label is stored by the app (scadlab.db) next to the checkpoint and shown in its place. " +
+			Description: "Change the display name (label) the checkpoint tree shows for a checkpoint, e.g. «Lid with hinge». The file is NOT renamed (its children reference it by file name) and the description in its header is not touched: the label is stored by the app (scadlab.db) next to the checkpoint and shown in its place. " +
 				"An empty label removes it. Only works for a workspace registered in the ScadLab app.",
 			InputSchema: obj(map[string]any{
 				"file":  strProp("Checkpoint to rename (e.g. 003-base-box.scad)."),
@@ -186,8 +186,8 @@ func (e *env) renameCheckpoint(_ context.Context, args map[string]any) (*toolRes
 		return nil, err
 	}
 	return jsonResult(map[string]any{"file": name, "label": label, "note": msgf(i18n.Msg{
-		ES: "El archivo y la descripción de su cabecera no cambian (el checkpoint es inmutable): el árbol muestra este nombre en su lugar.",
-		EN: "The file and the description in its header do not change (the checkpoint is immutable): the tree shows this name instead.",
+		ES: "El archivo no cambia de nombre ni la descripción de su cabecera (sus hijos lo referencian por el nombre del archivo): el árbol muestra este nombre en su lugar.",
+		EN: "The file keeps its name and the description in its header is unchanged (its children reference it by file name): the tree shows this name instead.",
 	})})
 }
 

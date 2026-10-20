@@ -15,9 +15,10 @@ const (
 	// EffectNone: no cambia el proyecto (las de lectura; render, measure,
 	// preview, estimate_print y suggest_orientation solo escriben caché).
 	EffectNone Effect = iota
-	// EffectCheckpoint: deja un `.scad` NUEVO en el workspace y su resultado trae
-	// `file` con su nombre. Con eso el chat enlaza y selecciona el checkpoint, y la
-	// red de seguridad sabe que el modelo ya entregó algo.
+	// EffectCheckpoint: deja un `.scad` en el workspace —NUEVO, o reescrito en el
+	// lugar si es update_checkpoint (ver UpdatesInPlace)— y su resultado trae `file`
+	// con su nombre. Con eso el chat enlaza y selecciona el checkpoint, y la red de
+	// seguridad sabe que el modelo ya entregó algo.
 	EffectCheckpoint
 	// EffectTree: cambia el árbol SIN un `.scad` nuevo (padre activo, rótulo,
 	// papelera, restaurar). La app no se entera sola: tiene que reescanear y avisar.
@@ -40,6 +41,10 @@ var effects = map[string]Effect{
 	"set_parameters":       EffectCheckpoint,
 	"create_from_template": EffectCheckpoint,
 	"edit_mesh":            EffectCheckpoint,
+	// Reescribe en el lugar un checkpoint que ya existía (S16), con respaldo en el
+	// historial: no hay archivo nuevo, pero el resultado trae `file` y la tarjeta
+	// del chat enlaza el archivo editado.
+	"update_checkpoint": EffectCheckpoint,
 
 	"set_active_parent":  EffectTree,
 	"rename_checkpoint":  EffectTree,
@@ -63,6 +68,13 @@ func EffectOf(tool string) Effect { return effects[tool] }
 // CreatesCheckpoint dice si la herramienta, al terminar bien, deja un checkpoint
 // nuevo (su resultado trae `file`).
 func CreatesCheckpoint(tool string) bool { return effects[tool] == EffectCheckpoint }
+
+// UpdatesInPlace dice si la herramienta reescribe un `.scad` que ya existía (hoy
+// solo update_checkpoint) en vez de crear uno nuevo. Sigue siendo EffectCheckpoint
+// —su resultado trae `file`—, pero la interfaz no debe contarlo como un
+// checkpoint nuevo: refresca el archivo y su indicador «editado por la IA» en vez
+// de seleccionar un nodo recién aparecido.
+func UpdatesInPlace(tool string) bool { return tool == "update_checkpoint" }
 
 // ChangesTree dice si la herramienta cambia el árbol sin crear un `.scad`: tras
 // un paso bueno hay que reescanear el workspace y avisar a la interfaz.

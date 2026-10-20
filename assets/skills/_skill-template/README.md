@@ -36,13 +36,14 @@ diseñes seguido, reglas de tu impresora o tu filamento).
 Las skills se copian a cada workspace y el agente las combina; ninguna puede
 contradecir el contrato de la app definido en `openscad-core`:
 
-- Cada versión del modelo es un `.scad` nuevo `NNN-slug.scad`; nunca se
-  sobrescribe ni se borra uno existente.
+- Los cambios a un archivo que el usuario nombra se hacen con `update_checkpoint`
+  (guarda antes la versión anterior); un `.scad` nuevo `NNN-slug.scad` solo para
+  algo nuevo, una variante u «otra versión». Nunca se borra ni se renombra uno.
 - Línea 1 de cada checkpoint:
   `// @checkpoint parent=<padre.scad> desc="<qué cambia>"`.
 - Toda pieza de primer nivel dentro de `color()`.
 - Parámetros arriba con comentarios de Customizer; unidades en milímetros.
-- Validar el render y corregir errores en un checkpoint nuevo.
+- Validar el render y corregir errores con `update_checkpoint` sobre el mismo archivo.
 - Respetar `printer.json` si existe.
 
 Toda plantilla `.scad` en `templates/` debe empezar con

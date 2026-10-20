@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Pruebas de los permisos de las herramientas de ScadLab en el settings.json de
@@ -135,6 +137,44 @@ func TestAgyRulesAreTheExplicitCatalogAndNothingElse(t *testing.T) {
 	// De lectura Y de escritura: «Solo consulta» lo hace cumplir el servidor.
 	if !seen["mcp(scadlab/list_checkpoints)"] || !seen["mcp(scadlab/create_checkpoint)"] || !seen["mcp(scadlab/export)"] {
 		t.Errorf("faltan herramientas del catálogo: %v", rules)
+	}
+}
+
+// update_checkpoint (S16) entra en la lista de reglas, y un settings.json que ya
+// tenía las reglas de antes (sin ella) recibe SOLO esa regla al sincronizar.
+func TestSyncAddsOnlyUpdateCheckpointToOldRules(t *testing.T) {
+	rules := AgyRules()
+	var old []string
+	for _, rule := range rules {
+		if rule != "mcp(scadlab/update_checkpoint)" {
+			old = append(old, rule)
+		}
+	}
+	if len(old) != len(rules)-1 {
+		t.Fatalf("AgyRules debe incluir mcp(scadlab/update_checkpoint): %v", rules)
+	}
+	r := newPermRig(t)
+	body, err := json.Marshal(map[string]any{
+		"theme":       "dark",
+		"permissions": map[string]any{"allow": append([]string{"command(git status)"}, old...), "deny": []string{"command(rm)"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.write(string(body))
+	rep := r.sync()
+	if !rep.Changed || !reflect.DeepEqual(rep.Added, []string{"mcp(scadlab/update_checkpoint)"}) || len(rep.Removed) != 0 {
+		t.Fatalf("informe: %+v", rep)
+	}
+	allow := allowOf(t, r.read())
+	if !slices.Contains(allow, "mcp(scadlab/update_checkpoint)") || !slices.Contains(allow, "command(git status)") || len(allow) != len(rules)+1 {
+		t.Errorf("allow: %v", allow)
+	}
+	if got := parsed(t, r.read()); got["theme"] != `"dark"` {
+		t.Errorf("lo ajeno cambió: %v", got)
+	}
+	if again := r.sync(); again.Changed {
+		t.Errorf("segunda vez: %+v", again)
 	}
 }
 
@@ -497,9 +537,13 @@ func TestBackupsKeepOnlyTheLastOnes(t *testing.T) {
 	r := newPermRig(t)
 	r.write(`{"a": 1}`)
 	for i := 0; i < agyBackupsKept+5; i++ {
-		// Cada vuelta: quitar y volver a poner hace dos cambios, dos copias.
+		// Cada vuelta: quitar y volver a poner hace dos cambios, dos copias. El nombre
+		// de la copia lleva milisegundos: en una máquina rápida dos copias seguidas
+		// caían en el mismo y se pisaban.
 		r.sync()
+		time.Sleep(2 * time.Millisecond)
 		r.remove()
+		time.Sleep(2 * time.Millisecond)
 	}
 	if n := len(r.backupFiles()); n != agyBackupsKept {
 		t.Errorf("copias: %d, quería %d", n, agyBackupsKept)

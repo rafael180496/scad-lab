@@ -16,7 +16,7 @@ import (
 )
 
 // trashDirName es la papelera, dentro de .scadlab/. Los checkpoints son
-// inmutables y nunca se borran (regla 3 de technical.md): «borrar» es mover
+// protegidos y nunca se borran (regla 3 de technical.md): «borrar» es mover
 // aquí, con la fecha delante para que dos borrados del mismo nombre convivan y
 // para saber cuándo pasó.
 const trashDirName = "trash"
@@ -267,7 +267,7 @@ func trashFiles(wsDir, file string, branch bool) ([]string, []string, error) {
 
 	t := now()
 	moved := map[string]string{} // original → nombre en la papelera
-	var firstErr error
+	var firstErr, histErr error
 	for i := len(order) - 1; i >= 0; i-- { // la más profunda primero, file al final
 		name, err := trashOne(wsDir, dir, order[i], t)
 		if err != nil {
@@ -275,6 +275,11 @@ func trashFiles(wsDir, file string, branch bool) ([]string, []string, error) {
 			break
 		}
 		moved[order[i]] = name
+		// El historial viaja con el archivo (mismo sello). Si no se puede mover no
+		// se deshace el borrado: se informa al final, junto con lo que sí se hizo.
+		if herr := trashHistory(wsDir, dir, order[i], name); herr != nil && histErr == nil {
+			histErr = herr
+		}
 	}
 
 	// El activo se mueve solo si de verdad se llevó la papelera su archivo. Si
@@ -293,6 +298,10 @@ func trashFiles(wsDir, file string, branch bool) ([]string, []string, error) {
 	var relinked []string
 	if !branch && firstErr == nil {
 		relinked, firstErr = relinkChildren(wsDir, dir, file, moved[file], parents)
+	}
+
+	if firstErr == nil {
+		firstErr = histErr
 	}
 
 	out := make([]string, 0, len(moved))
@@ -386,6 +395,11 @@ func RestoreRelinked(wsDir, trashedName string) (string, []string, error) {
 		return "", nil, err
 	}
 	relinked, rerr := relinkOnRestore(wsDir, trashedName, name)
+	// El historial vuelve con el nombre con que volvió el archivo. Un fallo aquí
+	// tampoco deshace la restauración.
+	if herr := restoreHistory(wsDir, trashedName, name); herr != nil && rerr == nil {
+		rerr = herr
+	}
 	return name, relinked, rerr
 }
 

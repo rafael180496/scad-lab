@@ -52,6 +52,11 @@ type Settings struct {
 	// RenderTimeoutSec es el tope de un render, en segundos (10–3600). Un
 	// modelo con minkowski() o muchas esferas puede tardar minutos con CGAL.
 	RenderTimeoutSec int `json:"renderTimeoutSec"`
+	// HistoryMaxVersions es cuántas versiones anteriores de un checkpoint se
+	// conservan en su historial (S16): cada edición de la IA o «Restaurar versión»
+	// guarda antes lo que había, y al pasar el tope se borran los respaldos más
+	// viejos de ese archivo (nunca un checkpoint). 1–200; 0 o ausente = 20.
+	HistoryMaxVersions int `json:"historyMaxVersions"`
 	// AutoIterate avisa al agente de la terminal cuando falla el render del
 	// checkpoint más nuevo del workspace (S5): corrige solo, sin que el
 	// usuario copie el error. Se enciende y apaga desde la barra de la
@@ -286,7 +291,25 @@ func (s *Settings) normalizeEditor() {
 	s.UIScale, s.EditorFontSize, s.TerminalFontSize, s.ChatFontSize = a.UIScale, a.EditorFontSize, a.TerminalFontSize, a.ChatFontSize
 	s.Layout = s.Layout.Normalize()
 	s.normalizePrint()
+	s.normalizeHistory()
 	s.normalizeSlicerPaths()
+}
+
+// Límites del historial de versiones de un checkpoint.
+const (
+	MinHistoryVersions, MaxHistoryVersions = 1, 200
+	DefaultHistoryVersions                 = 20
+)
+
+// normalizeHistory acota el tope del historial: 0 (campo que nunca se guardó) o
+// un valor negativo toma el de fábrica; uno pasado de rango se recorta al máximo.
+func (s *Settings) normalizeHistory() {
+	switch {
+	case s.HistoryMaxVersions < MinHistoryVersions:
+		s.HistoryMaxVersions = DefaultHistoryVersions
+	case s.HistoryMaxVersions > MaxHistoryVersions:
+		s.HistoryMaxVersions = MaxHistoryVersions
+	}
 }
 
 // normalizeSlicerPaths deja el mapa listo para usar: nunca nil (el frontend
@@ -389,6 +412,7 @@ func DefaultSettings() Settings {
 		SlicerPaths:        map[string]string{},
 		AutoRender:         true,
 		RenderTimeoutSec:   300,
+		HistoryMaxVersions: DefaultHistoryVersions,
 		AutoIterate:        true,
 		MCPEnabled:         true,
 		Swatches:           DefaultSwatches(),

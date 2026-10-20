@@ -9,7 +9,7 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
   `inspect_reference` ya no son solo de la app; `ToolboxOptions.InApp` quedó sin efecto).
 - **Lectura / Escritura** = qué modo la habilita. **L** («Solo consulta» y «Agente») no toca el diseño: lee, o escribe solo
   caché (`render`, `measure`, `preview`, `estimate_print` y `suggest_orientation` escriben mallas en `<datos>/cache` y
-  `RENDER_ERRORS.md`). **E** (solo «Agente») crea un checkpoint, cambia el árbol, escribe en `exports/` o `lib/` o deja una
+  `RENDER_ERRORS.md`). **E** (solo «Agente») crea un checkpoint, **edita uno en el lugar con respaldo**, cambia el árbol, escribe en `exports/` o `lib/` o deja una
   malla congelada, un SVG o un mapa de alturas en `refs/`. Las listas viven en `backend/clichat/modes.go` (`readTools`/`writeTools`: de ahí salen
   `--allowedTools` de Claude, `enabled_tools` de Codex y los permisos de OpenCode); `TestEveryToolIsClassifiedForTheModes`
   (en `backend/mcp`) exige que cubran el catálogo entero, sin solaparse, y la de la app (`TestModeToolListsMatchTheMCPCatalog`) lo repite.
@@ -20,8 +20,9 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 | Herramienta | Qué hace | Modo | Hermes | `--mcp` |
 |---|---|---|---|---|
 | `list_checkpoints` | árbol: archivo, padre, descripción, **rótulo** del usuario, hijos, fecha y estado de render; `tree` lo dibuja como texto; `activeParent` | L | sí | sí |
-| `read_checkpoint` | el código (`file`, def. el más nuevo) | L | sí | sí |
+| `read_checkpoint` | el código (`file`, def. el más nuevo). **Así se lee un `.scad`**: por nombre de archivo, nunca por ruta ni con las herramientas de archivo del CLI | L | sí | sí |
 | `create_checkpoint` | `label`, `source`, `parent` (def. padre activo o el más nuevo), `description`; `root=true` abre una raíz nueva aunque ya haya otras. Nunca pisa | E | sí | sí |
+| `update_checkpoint` | `file`, `source` (archivo completo, ≤ 2 MB), `note?`: **edita en el lugar** el archivo que el usuario nombró o tiene abierto; guarda antes la versión anterior en `.scadlab/history/` ([15](15-checkpoints.md#historial-y-edición-en-el-lugar-s16)) y devuelve `{file, updated, unchanged, version, parent, description, lint, render}`. Idéntico → no escribe. No toca el padre activo | E | sí | sí |
 | `set_active_parent` | el «Ramificar desde aquí» (`file`) o `clear=true`; avanza solo con cada hijo | E | sí | sí |
 | `rename_checkpoint` | `file` + `label` (≤ 80): el rótulo del árbol, en `scadlab.db`. Ver decisiones | E | sí | sí |
 | `trash_checkpoint` | `file` (+ `branch=true` con sus descendientes) a `.scadlab/trash/`. **Nunca borra**; sin `branch`, los hijos directos pasan a colgar del padre (`relinked` en la respuesta, ver [15](15-checkpoints.md)) | E | sí | sí |
@@ -40,7 +41,7 @@ el usuario hace con la UI**, con cualquier proveedor. El servidor y su seguridad
 | `preview` | **PNG**: 8 vistas con nombre o ángulo libre (`rotate:[rx,ry,rz]`, `ortho`), `size` 256–1024 | L | sí | sí |
 | `measure` | malla, ¿cabe en la placa?, partes por color y estimación con la configuración de la app | L | sí | sí |
 | `get_parameters` | parámetros del Customizer: tipo, valor, grupo, descripción, rango `[min:paso:max]`, opciones | L | sí | sí |
-| `set_parameters` | `values` {nombre→valor} en un checkpoint **hijo** (`file`, `label`, `description`); el resto del archivo, byte a byte. Avisa de fuera de rango/opciones | E | sí | sí |
+| `set_parameters` | `values` {nombre→valor} en un checkpoint **hijo** (una variante; para cambiarlo en el archivo, `update_checkpoint`) (`file`, `label`, `description`); el resto del archivo, byte a byte. Avisa de fuera de rango/opciones | E | sí | sí |
 | `list_templates` / `get_template` | las plantillas de `openscad-templates` / su código | L | sí | sí |
 | `create_from_template` | `name` + `parameters`: checkpoint con los valores puestos y `PLATE` = placa de la impresora; raíz si el workspace está vacío, si no hijo del padre por defecto (`parent`, `root`) | E | sí | sí |
 | `list_libraries` | BOSL2, MCAD, NopSCADlib: versión, licencia, ¿instalada?, línea `include` exacta; más lo otro que haya en `lib/` | L | sí | sí |
@@ -81,7 +82,7 @@ Modelar a partir de una foto, un logo o un boceto. Procesa `backend/imagetools` 
 
 ## Decisiones
 
-- **Rótulo, no descripción.** El archivo es inmutable y sus hijos lo nombran en `parent=`, y la descripción vive en su cabecera
+- **Rótulo, no descripción.** El archivo no cambia de nombre (sus hijos lo nombran en `parent=`), y la descripción vive en su cabecera
   (el escaneo la relee y pisaría cualquier cambio). Lo que se renombra es el **rótulo** (`checkpoints.label`), el mismo que
   cambia `RenameCheckpoint` en la UI. Como vive en la base de la app, solo funciona en un workspace **registrado**; si no, la
   herramienta lo dice. `file` es obligatorio en `rename`, `trash` y `set_active_parent` (en las demás un `file` vacío es «el
@@ -91,7 +92,7 @@ Modelar a partir de una foto, un logo o un boceto. Procesa `backend/imagetools` 
   **commit** (no una rama) de `codeload.github.com`, **SHA-256** comprobado antes de extraer (BOSL2 v2.0.774, MCAD
   openscad-2019.05, NopSCADlib v21.43.1; tres descargas dieron los mismos bytes), todo o nada (se extrae a `lib/.install-*` y se
   renombra), sin `..`/rutas absolutas/enlaces, tope de archivos y de tamaño, y **nunca reemplaza** una librería instalada
-  (los checkpoints son inmutables). Anota en `lib/LIBRARIES.txt`. Subir una versión = cambiar commit, URL, SHA y tamaño juntos.
+  (los checkpoints existentes la incluyen sin versión y no deben cambiar de resultado). Anota en `lib/LIBRARIES.txt`. Subir una versión = cambiar commit, URL, SHA y tamaño juntos.
   Un SHA que GitHub cambie al regenerar archivos falla **cerrado** («no coincide: no se instaló»). Prueba con red real:
   `SCADLAB_REAL_DOWNLOAD=1 go test ./backend/mcp -run TestRealInstallCatalog` (las tres bajan y renderizan).
 - **Imágenes (S15).** Límites duros de `imagetools`, comprobados **antes** de gastar memoria: archivo ≤ 20 MB, ≤ 40 MP leídos con
@@ -142,14 +143,14 @@ Modelar a partir de una foto, un logo o un boceto. Procesa `backend/imagetools` 
 
 | Efecto | Herramientas | Quién lo usa |
 |---|---|---|
-| `EffectCheckpoint` (deja un `.scad` nuevo; el resultado trae `file`) | `create_checkpoint`, `import_mesh`, `set_parameters`, `create_from_template`, `edit_mesh` | `mcp.CreatesCheckpoint`: la red de seguridad de Hermes (`runner.createdCheckpoint`) y de los CLIs (`cliSafetyNet`); espejo `CREATING_TOOLS` (`lib/chatSteps.ts`): enlace de la tarjeta y selección automática del checkpoint |
+| `EffectCheckpoint` (deja un `.scad`: nuevo, o reescrito en el lugar si es `update_checkpoint`, que `mcp.UpdatesInPlace` distingue; el resultado trae `file`) | `create_checkpoint`, `update_checkpoint`, `import_mesh`, `set_parameters`, `create_from_template`, `edit_mesh` | `mcp.CreatesCheckpoint`: la red de seguridad de Hermes (`runner.createdCheckpoint`) y de los CLIs (`cliSafetyNet`); espejo `CREATING_TOOLS` (`lib/chatSteps.ts`): enlace de la tarjeta y selección automática del checkpoint |
 | `EffectTree` (cambia el árbol sin `.scad` nuevo) | `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `restore_checkpoint` | `mcp.ChangesTree`: `refreshTreeAfterStep` (`app_chat_tree.go`) |
 | `EffectFiles` (escribe fuera del árbol) | `export`, `install_library`, `trace_image_outline`, `image_to_heightmap` | nada que refrescar |
 | `EffectConfig` (cambia la impresora, los colores o las skills del workspace) | `set_workspace_printer` | `mcp.ChangesConfig`: evento `workspace:config` (S14) |
 
 `TestEffectsCoverTheWriteTools` exige que toda herramienta de `clichat.WriteTools()` tenga su entrada y que ninguna de
 lectura la tenga: una herramienta nueva que cambie el proyecto **no compila a verde** sin declarar su efecto.
-`TestDeclaredEffectsMatchWhatTheToolsDo` comprueba que las `EffectCheckpoint` devuelven de verdad un `.scad` nuevo en `file`, y
+`TestDeclaredEffectsMatchWhatTheToolsDo` comprueba que las `EffectCheckpoint` devuelven de verdad un `.scad` en `file` (nuevo; `update_checkpoint`, el mismo archivo y ninguno nuevo), y
 `chat-ux.test.mjs` lee `effects.go` y exige que `CREATING_TOOLS` diga lo mismo (más `autosave`).
 
 **Refresco del árbol.** `set_active_parent`, `rename_checkpoint`, `trash_checkpoint` y `restore_checkpoint` no crean un

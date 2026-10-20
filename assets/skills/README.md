@@ -21,7 +21,7 @@ Creality, Elegoo, Anycubic, Snapmaker o UltiMaker.
 | [`openscad-3mf-multicolor`](openscad-3mf-multicolor/SKILL.md) | Modelos multicolor para cualquier sistema (AMS, MMU3, CFS, ACE, toolchanger, IDEX, doble extrusión): una pieza por `color()`, qué formato exportar según el slicer y el formato interno de los 3MF. |
 | [`openscad-templates`](openscad-templates/SKILL.md) | Biblioteca de plantillas paramétricas listas para arrancar un proyecto (cajas, gabinetes, engranajes, Gridfinity…). |
 | [`openscad-libraries`](openscad-libraries/SKILL.md) | Cuándo y cómo usar BOSL2, MCAD y NopSCADlib desde la carpeta `lib/` del workspace. |
-| [`openscad-stl-editing`](openscad-stl-editing/SKILL.md) | Modificar un STL (o 3MF/OBJ) existente sin tocarlo: `import()` en un checkpoint nuevo y recetas de agujeros, avellanados, cortes con un plano, refuerzos, texto, escala, partir para la placa y espejar; límites de las mallas. |
+| [`openscad-stl-editing`](openscad-stl-editing/SKILL.md) | Modificar un STL (o 3MF/OBJ) existente sin tocarlo: `import()` en un checkpoint y recetas de agujeros, avellanados, cortes con un plano, refuerzos, texto, escala, partir para la placa y espejar; límites de las mallas. |
 | [`openscad-from-image`](openscad-from-image/SKILL.md) | Modelar a partir de una imagen que el usuario adjunta (`refs/images/`): foto de una pieza, logo o placa plana, relieve o litofanía, boceto acotado o varias vistas. Escala (una medida o un objeto conocido, con la fuente de cada cifra en `references/standard-sizes.md`), flujo crear → render → `compare_with_image` → corregir y los límites de lo que una foto permite. Herramientas: `image_info`, `compare_with_image`, `trace_image_outline`, `image_to_heightmap`. |
 | [`_skill-template`](_skill-template/README.md) | Plantilla para que el usuario cree skills nuevas. No es una skill operativa. |
 
@@ -29,14 +29,18 @@ Creality, Elegoo, Anycubic, Snapmaker o UltiMaker.
 
 Todas las skills respetan estas reglas; el detalle está en `openscad-core`:
 
-1. **Checkpoints inmutables**: cada versión es un `.scad` nuevo `NNN-slug.scad`;
-   nunca se sobrescribe ni borra uno existente.
+1. **Editar el archivo que el usuario nombra**: si nombra un archivo existente o se
+   refiere al abierto/seleccionado y pide cambios, se edita con `update_checkpoint`
+   (guarda antes la versión anterior en el historial). Un `.scad` nuevo
+   `NNN-slug.scad` solo si pide algo nuevo, una variante u «otra versión». Los `.scad`
+   se leen con `read_checkpoint` y nunca se escriben con las herramientas de
+   archivo/shell del CLI; no se renombran ni se borran.
 2. **Primera línea** de cada checkpoint:
    `// @checkpoint parent=<archivo-padre.scad> desc="<qué cambia>"`.
 3. **Color obligatorio**: toda pieza de primer nivel dentro de `color(...)`.
 4. **Parámetros arriba**, con comentarios de Customizer.
 5. **Validar** cada checkpoint (herramientas MCP `render`/`preview` del servidor `scadlab`, o `openscad -o` si no está) y
-   corregir lo que reporte `RENDER_ERRORS.md` en un checkpoint **nuevo**.
+   corregir lo que reporte `RENDER_ERRORS.md` con `update_checkpoint` sobre el mismo archivo.
 6. **Milímetros** siempre. Respetar `printer.json` si existe: su `colors` es el máximo de
    colores del workspace.
 

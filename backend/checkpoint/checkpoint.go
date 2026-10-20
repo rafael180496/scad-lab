@@ -1,8 +1,9 @@
 // Package checkpoint crea y nombra checkpoints: la lógica que comparten el
 // binding SaveAsCheckpoint (editor) y la herramienta create_checkpoint del
 // servidor MCP (S6). Vive en un paquete aparte para que las dos puntas escriban
-// exactamente el mismo formato y respeten la misma regla: un checkpoint nunca se
-// sobrescribe.
+// exactamente el mismo formato y respeten la misma regla: crear nunca sobrescribe,
+// y reescribir un checkpoint (Update, RestoreVersion; history.go) guarda antes la
+// versión anterior.
 package checkpoint
 
 import (
@@ -55,8 +56,8 @@ func Latest(dir string) string {
 	return watch.Newest(names)
 }
 
-// Create guarda source como un checkpoint NUEVO hijo de parentFile (los
-// checkpoints son inmutables: nunca sobrescribe). Escribe el encabezado
+// Create guarda source como un checkpoint NUEVO hijo de parentFile (nunca
+// sobrescribe un archivo: para cambiar uno que existe está Update). Escribe el encabezado
 // `// @checkpoint parent=… desc="…"` —reemplaza la primera línea si el código ya
 // trae uno— y devuelve el nombre creado.
 func Create(dir, parentFile, label, description, source string) (string, error) {

@@ -56,9 +56,11 @@ git clone --depth 1 https://github.com/openscad/MCAD.git lib/MCAD
 - Si no hay red o `git`, avisa al usuario en vez de inventar el código de la
   librería.
 - Anota en `lib/LIBRARIES.txt` el nombre, URL y commit de cada librería.
-- **Inmutabilidad**: los checkpoints son inmutables, así que una librería ya
-  usada por un checkpoint **no se actualiza en el lugar**. Para una versión nueva,
-  clónala en otra carpeta (`lib/BOSL2-2026-10`) y úsala desde checkpoints nuevos.
+- **Sin actualizar en el lugar**: los checkpoints existentes hacen `include` de la
+  librería sin versión, así que una librería ya usada **no se actualiza en el
+  lugar**: cambiaría el resultado de modelos que ya estaban bien. Para una versión
+  nueva, clónala en otra carpeta (`lib/BOSL2-2026-10`) y úsala desde los
+  checkpoints que la necesiten (`install_library` nunca reemplaza una instalada).
 - No borres `.git` dentro de `lib/` salvo que el usuario lo pida.
 
 ## 3. `include` vs `use`

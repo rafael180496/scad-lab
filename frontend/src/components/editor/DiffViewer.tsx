@@ -16,7 +16,7 @@ export type DiffViewerProps = {
 }
 
 // DiffViewer es el DiffEditor de Monaco con OpenSCAD, siempre en solo lectura:
-// un checkpoint es inmutable y el padre también. Comparte tema, tipografía y
+// el diff no escribe nada: ni el checkpoint ni su padre (ni una versión del historial). Comparte tema, tipografía y
 // textos con el editor de código. Entra con React.lazy, en el mismo chunk.
 export default function DiffViewer(props: DiffViewerProps) {
     const t = useT()

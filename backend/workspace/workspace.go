@@ -2,7 +2,7 @@
 //
 // Un workspace es una carpeta normal del usuario con:
 //
-//	NNN-slug.scad    checkpoints inmutables (la fuente de verdad del modelo)
+//	NNN-slug.scad    checkpoints (la fuente de verdad del modelo; se reescriben solo con respaldo en .scadlab/history)
 //	CLAUDE.md        reglas para Claude Code
 //	AGENTS.md        las mismas reglas para opencode, Codex y Antigravity
 //	printer.json     impresora destino y su volumen de impresión

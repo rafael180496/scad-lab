@@ -225,7 +225,7 @@ func (a *App) watchWorkspace(w store.Workspace) {
 		return
 	}
 	id := w.ID
-	wt, err := watch.Start(w.Path, func(added []string) { a.onWorkspaceChanged(id, added) })
+	wt, err := watch.StartChanges(w.Path, func(c watch.Change) { a.onWorkspaceChange(id, c.Added, c.Updated) })
 	if err != nil {
 		log.Printf("scadlab: vigilar %s: %v", w.Path, err)
 		return
@@ -272,7 +272,16 @@ func (a *App) stopWatcher() {
 // apareció un checkpoint nuevo, lo vincula con el agente abierto y —con el
 // auto-render activo— lo renderiza. Así el agente que creó el archivo desde la
 // terminal recibe RENDER_ERRORS.md sin que nadie toque nada.
-func (a *App) onWorkspaceChanged(id int64, added []string) {
+func (a *App) onWorkspaceChanged(id int64, added []string) { a.onWorkspaceChange(id, added, nil) }
+
+// onWorkspaceChange es onWorkspaceChanged con los .scad que ya existían y se
+// reescribieron (S16): un agente que edita un checkpoint con update_checkpoint
+// —desde el subproceso `--mcp` de un CLI, que la app no ve de otra manera— o
+// cualquier escritura externa. Por cada uno se emite checkpoint:updated para que
+// la interfaz relea el código y vuelva a renderizar; el render NO se lanza desde
+// acá (la interfaz solo renderiza el que está mirando y la caché es por
+// contenido), así que un archivo reescrito no se renderiza dos veces.
+func (a *App) onWorkspaceChange(id int64, added, updated []string) {
 	w, err := a.store.GetWorkspace(id)
 	if err != nil {
 		return
@@ -288,6 +297,9 @@ func (a *App) onWorkspaceChanged(id int64, added []string) {
 	svc.advance(w, v.Checkpoints, sortedCopy(added))
 	v.ActiveParent = checkpoint.ActiveParent(w.Path)
 	a.emit(evCheckpointsChanged, v)
+	for _, f := range updated {
+		a.emitCheckpointUpdated(id, f)
+	}
 	if len(added) == 0 {
 		return
 	}
@@ -338,6 +350,11 @@ func (a *App) rescan(w store.Workspace) (WorkspaceView, error) {
 		return v, err
 	}
 	v.Checkpoints, err = a.store.ListCheckpoints(w.ID)
+	// «Editado por la IA» sale del historial en disco, no de la base: se calcula en
+	// cada escaneo (una lectura de directorio por archivo, y casi todos no tienen).
+	for i := range v.Checkpoints {
+		v.Checkpoints[i].EditedByAI = checkpoint.EditedByAI(w.Path, v.Checkpoints[i].FileName)
+	}
 	v.ActiveParent = checkpoint.ActiveParent(w.Path)
 	return v, err
 }

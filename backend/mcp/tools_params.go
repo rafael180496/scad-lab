@@ -30,8 +30,8 @@ func (e *env) parameterTools() []Tool {
 		},
 		{
 			Name: "set_parameters",
-			Description: "Change Customizer parameter values in a NEW child checkpoint: reads the checkpoint, replaces only those literals and keeps everything else byte for byte (comments, ranges, order). The original is never modified. " +
-				"This is the right tool for «make it 10 mm wider», «use the slide lid», «turn off the logo». Values must match the parameter type (number, text, true/false, or a list of numbers of the same length); a value outside its range or options list is applied with a warning. Then call render.",
+			Description: "Change Customizer parameter values in a NEW child checkpoint: reads the checkpoint, replaces only those literals and keeps everything else byte for byte (comments, ranges, order). The original is never modified: this makes a VARIANT. If the user asked to change the file they named (or the open one), edit it with update_checkpoint instead (read_checkpoint first). " +
+				"Use it for «give me a version 10 mm wider», «another one with the slide lid», «a copy without the logo». Values must match the parameter type (number, text, true/false, or a list of numbers of the same length); a value outside its range or options list is applied with a warning. Then call render.",
 			InputSchema: obj(map[string]any{
 				"values": map[string]any{
 					"type":                 "object",
@@ -115,8 +115,8 @@ func (e *env) getParameters(_ context.Context, args map[string]any) (*toolResult
 	out := map[string]any{"file": name, "count": len(params), "parameters": params}
 	if len(params) == 0 {
 		out["note"] = msgf(i18n.Msg{
-			ES: "Este checkpoint no declara parámetros del Customizer (variables con un valor literal arriba del archivo, antes del primer module). Para cambiar una medida, crea un checkpoint nuevo con create_checkpoint.",
-			EN: "This checkpoint declares no Customizer parameters (variables with a literal value at the top of the file, before the first module). To change a measurement, create a new checkpoint with create_checkpoint.",
+			ES: "Este checkpoint no declara parámetros del Customizer (variables con un valor literal arriba del archivo, antes del primer module). Para cambiar una medida, edita el archivo con update_checkpoint.",
+			EN: "This checkpoint declares no Customizer parameters (variables with a literal value at the top of the file, before the first module). To change a measurement, edit the file with update_checkpoint.",
 		})
 	}
 	return jsonResult(out)

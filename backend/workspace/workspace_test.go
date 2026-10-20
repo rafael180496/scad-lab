@@ -185,8 +185,8 @@ func TestRulesMandateCheckpointFlow(t *testing.T) {
 	got := string(b)
 	for _, want := range []string{
 		"Flujo obligatorio", "`create_checkpoint`", "`render`", "`preview`", "`measure`",
-		"sin preguntar", "Nunca termines solo con código en el texto", "No uses la shell para escribir `.scad`",
-		"Nunca sobrescribir ni borrar", "No hacer commits",
+		"sin preguntar", "Nunca termines solo con código en el texto", "No leas ni escribas `.scad`", "Cuando el usuario nombra un archivo existente",
+		"`update_checkpoint`", "Ante la duda, edita el que nombró", "No hacer commits",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("falta %q en las reglas", want)

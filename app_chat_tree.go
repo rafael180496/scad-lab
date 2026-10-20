@@ -39,6 +39,10 @@ func (a *App) refreshTreeAfterStep(workspaceID int64, st hermes.Step) {
 		a.emitWorkspaceConfig(workspaceID)
 		return
 	}
+	if mcp.UpdatesInPlace(st.Tool) {
+		a.refreshAfterUpdate(workspaceID, st)
+		return
+	}
 	if !mcp.ChangesTree(st.Tool) {
 		return
 	}
@@ -59,4 +63,43 @@ func (a *App) refreshTreeAfterStep(workspaceID int64, st hermes.Step) {
 		}
 	}
 	a.emitView(w)
+}
+
+// refreshAfterUpdate es el refresco tras update_checkpoint (S16): el archivo ya
+// existía y cambió de contenido, así que no hay un .scad nuevo que el watcher
+// vea aparecer. Se reescanea el workspace (la descripción de la cabecera pudo
+// cambiar y «editado por la IA» se enciende) y se emite checkpoint:updated, para
+// que la interfaz relea el código y vuelva a renderizar. Con un CLI la escritura
+// la hizo el subproceso `--mcp`; el watcher la ve unos 300 ms después y avisa
+// otra vez (la interfaz lo tolera: releer es idempotente), pero este aviso sale
+// apenas termina el paso.
+func (a *App) refreshAfterUpdate(workspaceID int64, st hermes.Step) {
+	w, err := a.store.GetWorkspace(workspaceID)
+	if err != nil {
+		log.Printf("scadlab: refrescar el árbol tras %s: %v", st.Tool, err)
+		return
+	}
+	file := updatedFileOf(st)
+	a.emitView(w)
+	if file != "" {
+		a.emitCheckpointUpdated(workspaceID, file)
+	}
+}
+
+// updatedFileOf es el archivo que tocó un paso update_checkpoint: lo que el
+// modelo pidió (`file`) y, si falta, el `file` del resultado. Solo se devuelve un
+// nombre válido: es lo que la interfaz usa para releer el archivo.
+func updatedFileOf(st hermes.Step) string {
+	file, _ := st.Args["file"].(string)
+	if file == "" {
+		var res struct {
+			File string `json:"file"`
+		}
+		_ = json.Unmarshal([]byte(st.Text), &res)
+		file = res.File
+	}
+	if validCheckpointName(file) != nil {
+		return ""
+	}
+	return file
 }

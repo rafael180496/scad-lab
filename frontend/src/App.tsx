@@ -36,12 +36,15 @@ import {NewWorkspaceDialog, type NewWorkspaceShot} from './components/workspace/
 import {WorkspaceConfigDialog, type WorkspaceConfigShot} from './components/workspace/WorkspaceConfigDialog'
 import {SettingsDialog, type SettingsTab} from './components/settings/SettingsDialog'
 import {ConfirmHost, confirmDialog} from './components/ui/Dialog'
+import {HistoryHost} from './components/workspace/HistoryDialogs'
 import {VaultHost} from './components/vault/VaultHost'
 import {Toaster, toast} from './components/ui/Toast'
-import {fmt, normalizeLang, setLanguage, useT} from './i18n'
+import {fmt, normalizeLang, setLanguage, t as tNow, useT} from './i18n'
 import {errorText} from './lib/errors'
 import {applyTheme} from './lib/theme'
 import {onEvent} from './lib/events'
+import {planUpdate} from './lib/history'
+import {openDiff, openHistory} from './lib/historyUI'
 import {onChatCheckpoint} from './components/chat/chatStreams'
 import {useRenders} from './hooks/useRenders'
 import {openscadDownload, useOpenSCADDownloadSync} from './hooks/useOpenSCADDownload'
@@ -104,6 +107,8 @@ export type ShotOptions = {
     treeConfirm?: string
     /** Abre la comparación de este checkpoint con su padre. */
     compare?: string
+    /** Abre el historial de versiones (S16) de este archivo, o la comparación de su versión anterior con la actual. */
+    history?: {kind: 'history' | 'diff'; file: string}
     /** Entra al modo «Editar» del visor (S13) con unas operaciones ya hechas. */
     meshEdit?: MeshEditShot
     /** Abre el diálogo de importar un modelo 3D con este archivo (S13). */
@@ -667,10 +672,78 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
         [patchProject],
     )
 
+    // El contenido de un checkpoint que ya existía cambió en el disco (S16): la IA lo editó con update_checkpoint (el
+    // paso del chat o el watcher, que ve la escritura del subproceso --mcp de un CLI), se restauró una versión o algo
+    // externo lo reescribió. Si es el que se ve y el editor no tiene cambios sin guardar, se relee el código y se vuelve
+    // a renderizar (la caché es por contenido: si ya estaba renderizado sale al instante); con cambios sin guardar el
+    // borrador manda y solo hay un aviso. Si no es el que se ve, se olvida su render viejo.
+    const forgetRender = renders.forget
+    const renderFileRef = useRef(renders.render)
+    renderFileRef.current = renders.render
+    const renderRunningRef = useRef(renders.running)
+    renderRunningRef.current = renders.running
+    const autoTriedRef = useRef<Set<string> | null>(null)
+    useEffect(
+        () =>
+            onEvent('checkpoint:updated', (e) => {
+                const id = e.workspaceId
+                const p = projectsRef.current[id]
+                if (!p) return
+                const isActive = id === activeRef.current
+                const key = `${id}:${e.file}`
+                const stale = () => {
+                    forgetRender(id, e.file)
+                    autoTriedRef.current?.delete(key)
+                }
+                const reload = () =>
+                    ReadCheckpoint(id, e.file)
+                        .then((src) => {
+                            const cur = projectsRef.current[id]
+                            if (!cur || cur.selected !== e.file) return
+                            const changed = src !== cur.source
+                            patchProject(id, {source: src})
+                            // Mismo código que ya se veía: nada nuevo que dibujar (el aviso se repite: paso del chat y watcher).
+                            if (!changed) return
+                            if (isActive && id === activeRef.current) {
+                                if (!renderRunningRef.current[e.file]) void renderFileRef.current(e.file)
+                            } else stale()
+                        })
+                        .catch((err) => toast.error(errorText(err)))
+                const dirty = (isActive ? editorSession.get().dirty : !!p.editor?.dirty) || isSessionDirty(id)
+                switch (planUpdate({selected: p.selected, file: e.file, dirty})) {
+                    case 'invalidate':
+                        stale()
+                        break
+                    case 'warn':
+                        toast.withActions(
+                            fmt(tNow().history.changedOnDisk, {file: e.file}),
+                            [
+                                {
+                                    label: tNow().history.reload,
+                                    title: fmt(tNow().history.reloadHint, {file: e.file}),
+                                    run: () =>
+                                        void confirmLeave(tNow(), e.file).then((ok) => {
+                                            if (ok) void reload()
+                                        }),
+                                },
+                            ],
+                            tNow().history.close,
+                            `history-changed:${key}`,
+                            'error',
+                        )
+                        break
+                    default:
+                        reload()
+                }
+            }),
+        [patchProject, forgetRender],
+    )
+
     // Auto-render al elegir un checkpoint que todavía no tiene resultado. Se
     // intenta una sola vez por checkpoint: si el usuario lo cancela, no se
     // vuelve a lanzar solo.
     const autoTried = useRef(new Set<string>())
+    autoTriedRef.current = autoTried.current
     const {loaded: rendersLoaded, results: renderResults, running: renderRunning, render: renderFile} = renders
     useEffect(() => {
         if (!boot?.settings.autoRender || !view || !selected || !rendersLoaded) return
@@ -772,6 +845,16 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
             toast.error(errorText(e))
         }
     }
+
+    // Banco de capturas: abre el historial de versiones (S16) o su comparación cuando el workspace ya cargó.
+    const shotHistory = shot?.history
+    const shotHistoryDone = useRef(false)
+    useEffect(() => {
+        if (!shotHistory || !view || selected !== shot?.select || shotHistoryDone.current) return
+        shotHistoryDone.current = true
+        if (shotHistory.kind === 'diff') openDiff(view.workspace.id, shotHistory.file)
+        else openHistory(view.workspace.id, shotHistory.file)
+    }, [shotHistory, view, selected, shot?.select])
 
     // Banco de capturas: abre la comparación pedida cuando el workspace ya cargó.
     const shotCompare = shot?.compare
@@ -1082,6 +1165,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     onSaved={adoptNewCheckpoint}
                     onChatCheckpoint={adoptChatCheckpoint}
                     emptyWorkspace={!!view && !view.missing && view.checkpoints.length === 0}
+                    editedByAI={!!(selected && view?.checkpoints.find((c) => c.fileName === selected)?.editedByAI)}
                     onSwatchesSaved={(swatches) =>
                         // El diálogo de Configuración guarda la configuración
                         // entera: tiene que ver las muestras nuevas para no pisarlas.
@@ -1178,6 +1262,7 @@ export default function App({shot}: {shot?: ShotOptions} = {}) {
                     void reloadWsConfig()
                 }}
             />
+            <HistoryHost settings={liveSettings} />
             <ConfirmHost title="ScadLab" />
             <VaultHost />
             <Toaster />

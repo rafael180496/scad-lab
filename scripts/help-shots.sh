@@ -98,6 +98,9 @@ trash-empty-confirm trash-empty-confirm 1440 900
 tree-trash-confirm  tree-trash-confirm 1440 900
 problems-orphan     problems-orphan   1440  900
 diff-parent         diff-parent       1440  900
+history-menu        history-menu      1440  900
+history-dialog      history-dialog    1440  900
+history-diff        history-diff      1440  900
 projects-tabs       projects-tabs     1440  900
 projects-plus-menu  projects-plus-menu 1440 900
 projects-narrow     projects-narrow   1024  640

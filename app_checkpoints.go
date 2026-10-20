@@ -226,6 +226,23 @@ func (a *App) emitView(w store.Workspace) {
 	a.emit(evCheckpointsChanged, v)
 }
 
+// evCheckpointUpdated avisa de que el contenido de un checkpoint que ya existía
+// cambió en el disco (S16). Contrato con frontend/src/lib/events.ts.
+const evCheckpointUpdated = "checkpoint:updated"
+
+// CheckpointUpdatedEvent es el payload de checkpoint:updated.
+type CheckpointUpdatedEvent struct {
+	WorkspaceID int64  `json:"workspaceId"`
+	File        string `json:"file"`
+}
+
+// emitCheckpointUpdated avisa a la interfaz de que `file` cambió de contenido: si
+// es el que está abierto y no tiene cambios sin guardar, relee el código, lo
+// renderiza y refresca el visor y la etiqueta «editado por la IA».
+func (a *App) emitCheckpointUpdated(workspaceID int64, file string) {
+	a.emit(evCheckpointUpdated, CheckpointUpdatedEvent{WorkspaceID: workspaceID, File: file})
+}
+
 // checkpointWorkspace resuelve el workspace y valida el nombre del checkpoint:
 // la entrada de todos los bindings de este archivo.
 func (a *App) checkpointWorkspace(id int64, file string) (store.Workspace, error) {

@@ -56,11 +56,12 @@ var (
 		// Contexto
 		"list_skills", "read_skill",
 	}
-	// writeTools solo en «Agente»: crean un checkpoint, cambian el estado del
+	// writeTools solo en «Agente»: crean un checkpoint, reescriben uno en el lugar
+	// con respaldo (update_checkpoint), cambian el estado del
 	// árbol (padre activo, rótulo, papelera), escriben en exports/ o en lib/
 	// (install_library descarga de internet) o dejan una malla congelada en refs/.
 	writeTools = []string{
-		"create_checkpoint", "set_parameters", "create_from_template", "import_mesh", "edit_mesh",
+		"create_checkpoint", "update_checkpoint", "set_parameters", "create_from_template", "import_mesh", "edit_mesh",
 		"set_active_parent", "rename_checkpoint", "trash_checkpoint", "restore_checkpoint",
 		"install_library", "export",
 		// Escriben el SVG o el mapa de alturas en refs/ (S15).

@@ -39,3 +39,21 @@ sesión más reciente de ese agente para la carpeta (`agentsessions.List`, en ot
 vincula lo que creó la propia app (`SaveAsCheckpoint`, `SaveChatCheckpoint`) ni lo que acaba de volver
 de la papelera. La migración 3 de `scadlab.db` agrega `checkpoints.agent_id`, `checkpoints.chat_id` y la
 tabla `checkpoint_trash`; `SyncCheckpoints` no toca esas columnas.
+
+## Historial de versiones (S16) — `app_history.go`
+
+Una edición en el lugar (`update_checkpoint` de la IA, «Restaurar versión» y «Deshacer» del usuario) guarda antes la versión
+anterior en `<ws>/.scadlab/history/<archivo>/`. Detalle, interfaz y pendientes: [34-historial-checkpoints.md](34-historial-checkpoints.md);
+lógica de archivos: [15](15-checkpoints.md). Los tres bindings validan `checkpoint.ValidName` y `checkpoint.ValidVersionID` (nada con rutas).
+
+| Binding | Devuelve | Nota |
+|---|---|---|
+| `ListCheckpointHistory(workspaceID, file)` | `CheckpointHistory{file, versions[], editedByAI, max}` | `versions`: `checkpoint.Version{id, savedAt, reason (ai\|restore), tool, note, size}`, la más nueva primero, nunca `null`. `editedByAI` = la más nueva es `ai`; `max` = `Settings.historyMaxVersions` |
+| `ReadCheckpointVersion(workspaceID, file, versionID)` | `string` (el código) | error si la versión no existe |
+| `RestoreCheckpointVersion(workspaceID, file, versionID)` | `checkpoint.Version` (la que se guardó con lo que había, `reason: restore`) | conserva el `parent=` actual; emite `checkpoint:updated` y `checkpoints:changed` |
+
+`store.Checkpoint` ganó `editedByAI` (no está en la base: lo calcula el escaneo del workspace). `store.Settings` ganó
+`historyMaxVersions` (1–200, 0 = 20; Configuración → General). Evento nuevo **`checkpoint:updated`** `{workspaceId, file}`
+(ver [06](06-go-react-contract.md)): lo emiten el paso `update_checkpoint` del chat, el watcher al ver reescrito un `.scad` que ya
+existía (`watch.Change.Updated`) y `RestoreCheckpointVersion`. `TrashCheckpoint` / `RestoreCheckpoint` llevan y traen el historial
+del archivo.

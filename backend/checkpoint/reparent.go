@@ -25,8 +25,10 @@ var parentTokenRe = regexp.MustCompile(`\bparent=(\S*)`)
 // SetParent cambia el `parent=` de la cabecera `@checkpoint` de file. "" lo deja
 // como raíz.
 //
-// Es la ÚNICA excepción a la inmutabilidad de los checkpoints (regla 3 de
-// technical.md): el padre es metadato del árbol, no el modelo, y sin poder
+// Es una de las excepciones a «un checkpoint no se reescribe sin respaldo»
+// (regla 3 de technical.md; las otras reescrituras, update_checkpoint y
+// RestoreVersion, guardan antes la versión anterior en el historial): el padre
+// es metadato del árbol, no el modelo, y sin poder
 // moverlo borrar un checkpoint dejaría a sus hijos apuntando a un archivo que ya
 // no está. Por eso solo toca la primera línea:
 //

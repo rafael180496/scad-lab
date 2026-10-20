@@ -321,7 +321,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#14171e"/><path d="M16 5 26 10.8 16 16.6 6 10.8Z" fill="#ff7a1a"/><path d="M6 10.8 16 16.6V28L6 22.2Z" fill="#5e6677"/><path d="M26 10.8 16 16.6V28l10-5.8Z" fill="#aeb4c0"/><path d="M6 10.8 16 16.6 26 10.8" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width=".8" stroke-linejoin="round"/></svg>
     ScadLab
   </a>
-  <span class="ver" title="Esta ayuda describe la versión 0.2.0 de ScadLab. Todo lo que describe está implementado.">v0.2.0</span>
+  <span class="ver" title="Esta ayuda describe la versión 0.2.1 de ScadLab. Todo lo que describe está implementado.">v0.2.1</span>
   <div class="spacer"></div>
   <div class="search">
     <input id="q" type="search" placeholder="Buscar en la ayuda…" autocomplete="off" spellcheck="false" aria-label="Buscar en la ayuda">
@@ -353,6 +353,7 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
     <li><a href="#workspaces">Workspaces</a></li>
     <li><a href="#checkpoints">Checkpoints: el historial</a></li>
     <li><a href="#checkpoints-arbol">Árbol, ramas y menú</a></li>
+    <li><a href="#checkpoints-historial">Historial y deshacer a la IA</a></li>
   </ul>
 
   <button class="grp" aria-expanded="true"><span class="caret">▾</span>Visor 3D</button>
@@ -438,21 +439,21 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   escribirlo. ScadLab pone un agente de IA a escribir ese código por ti, y se encarga de lo que rodea a esa
   conversación:</p>
   <div class="grid">
-    <div class="card"><h3>Cada cambio es un checkpoint</h3><p>La IA nunca sobrescribe un archivo: cada versión es un <code>.scad</code> nuevo en un árbol con ramas. Volver atrás es hacer clic.</p></div>
+    <div class="card"><h3>Cada cambio deja huella</h3><p>Las ideas nuevas y las variantes son checkpoints nuevos en un árbol con ramas; cuando la IA edita un archivo que nombraste, guarda antes la versión anterior. Volver atrás es hacer clic.</p></div>
     <div class="card"><h3>Lo ves al instante</h3><p>Visor 3D con materiales realistas, medidas, peso y costo estimado de cada pieza.</p></div>
-    <div class="card"><h3>Los errores se corrigen solos</h3><p>Si OpenSCAD falla al renderizar, ScadLab le pasa el error al agente para que lo arregle en un checkpoint nuevo.</p></div>
+    <div class="card"><h3>Los errores se corrigen solos</h3><p>Si OpenSCAD falla al renderizar, ScadLab le pasa el error al agente para que lo arregle en el mismo archivo (la versión rota queda en su historial).</p></div>
     <div class="card"><h3>Para tu impresora, de la marca que sea</h3><p>Catálogo de siete marcas, impresora, colores y skills por workspace, aviso si no cabe en la placa y 3MF con color por pieza.</p></div>
     <div class="card"><h3>Tus agentes, no uno nuestro</h3><p>Usa el CLI que ya tengas instalado —Claude Code, opencode, Codex, Antigravity— o un modelo local con Ollama.</p></div>
     <div class="card"><h3>Local</h3><p>Tus proyectos son carpetas en tu disco y la configuración vive en una base SQLite local. Sin cuenta.</p></div>
   </div>
 
   <h2 id="introduccion--estado">Estado del proyecto</h2>
-  <p>Esta ayuda describe la versión <strong>0.2.0</strong> de ScadLab. Los binarios para macOS y Windows
-  están en <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0">Releases</a> (también puedes
+  <p>Esta ayuda describe la versión <strong>0.2.1</strong> de ScadLab. Los binarios para macOS y Windows
+  están en <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.1">Releases</a> (también puedes
   <a href="#instalacion--compilar">compilarla desde el código</a>). Todo lo que documenta esta página está
   implementado y verificado con OpenSCAD real; nada está «en desarrollo».</p>
   <div class="tablewrap"><table>
-    <tr><th>Área</th><th>Estado en v0.2.0</th></tr>
+    <tr><th>Área</th><th>Estado en v0.2.1</th></tr>
     <tr><td>Workspaces, configuración, idioma ES/EN</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Detección de OpenSCAD y de CLIs de agentes</td><td><span class="badge ok">Disponible</span></td></tr>
     <tr><td>Skills incluidas; skills propias: crear, editar, renombrar, eliminar y elegir su carpeta</td><td><span class="badge ok">Disponible</span></td></tr>
@@ -512,9 +513,9 @@ summary{cursor:pointer;padding:12px 0;font-weight:600}
   <p class="lead">Un ejecutable para macOS (Apple Silicon) y otro para Windows (x64). Los binarios no están
   firmados todavía, así que el sistema avisa la primera vez que los abres.</p>
 
-  <div class="note tip"><span class="lbl">Versión 0.2.0</span><p>Los archivos están en
-  <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0">Releases</a>:
-  <code>ScadLab-v0.2.0.dmg</code> para macOS y <code>ScadLab-v0.2.0-windows-amd64.exe</code> para Windows. También
+  <div class="note tip"><span class="lbl">Versión 0.2.1</span><p>Los archivos están en
+  <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.1">Releases</a>:
+  <code>ScadLab-v0.2.1.dmg</code> para macOS y <code>ScadLab-v0.2.1-windows-amd64.exe</code> para Windows. También
   puedes <a href="#instalacion--compilar">compilarla desde el código</a>.</p></div>
 
   <h2 id="instalacion--macos">macOS (Apple Silicon)</h2>
@@ -771,7 +772,7 @@ color("SteelBlue") difference() {
 
 <article class="topic" id="checkpoints" data-title="Checkpoints: el historial">
   <h1>Checkpoints: el historial <span class="badge ok">Disponible</span></h1>
-  <p class="lead">Cada versión del modelo es un archivo <code>.scad</code> inmutable. El historial no está en una
+  <p class="lead">Cada versión del modelo es un archivo <code>.scad</code>. El historial no está en una
   base de datos: se reconstruye leyendo los archivos.</p>
 
   <figure class="shot"><img src="../docs/screenshots/es/app-main.png" alt="Árbol de checkpoints con una rama desde 002-sliding-lid y el estado de render de cada uno" loading="lazy"><figcaption>Árbol de checkpoints: 005-snap-lid es una rama que sale de 002-sliding-lid. El punto de cada nodo es su estado de render.</figcaption></figure>
@@ -786,11 +787,13 @@ color("SteelBlue") difference() {
   <p>En el primer checkpoint <code>parent=</code> va vacío. <code>desc</code> dice qué cambia respecto al padre, en
   una frase y sin comillas dobles dentro.</p>
 
-  <h2 id="checkpoints--inmutables">Por qué son inmutables</h2>
-  <p>La IA <strong>nunca sobrescribe</strong> un checkpoint, ni siquiera uno con error: el arreglo va en uno
-  nuevo. Así cualquier versión que viste sigue existiendo exactamente igual, y comparar o volver atrás no
-  depende de que nadie haya guardado nada. Cada checkpoint es <strong>autocontenido</strong> (copia todo el
-  código del padre): no hace <code>include</code> de otro checkpoint.</p>
+  <h2 id="checkpoints--inmutables">Por qué nadie los sobrescribe sin respaldo</h2>
+  <p>Un checkpoint nunca se reescribe a tus espaldas. Una idea nueva, una variante u «otra versión» es <strong>un checkpoint nuevo</strong>:
+  cualquier versión que viste sigue existiendo exactamente igual, y comparar o volver atrás no depende de que nadie haya guardado nada.
+  Cuando le pides a la IA un cambio en <em>un archivo que nombraste</em> (o en el que tienes seleccionado), <strong>edita ese archivo</strong>, pero
+  <strong>antes guarda la versión anterior</strong> en su <a href="#checkpoints-historial">historial</a>: ves qué cambió y lo puedes
+  deshacer. Borrar no existe para la IA: solo manda a la <a href="#checkpoints-arbol--papelera">papelera</a>. Cada
+  checkpoint es <strong>autocontenido</strong> (copia todo el código del padre): no hace <code>include</code> de otro checkpoint.</p>
 
   <h2 id="checkpoints--cargar">Cargar un checkpoint</h2>
   <p>Un clic en el árbol lo selecciona y, si nunca se renderizó y el auto-render está activo, lo renderiza. Las
@@ -803,9 +806,9 @@ color("SteelBlue") difference() {
   chat»— y cuándo.</p>
 
   <h2 id="checkpoints--meta">Qué guarda ScadLab junto a los checkpoints</h2>
-  <p>La carpeta <code>.scadlab/</code> del workspace guarda dos cosas que no son modelos: la
-  <a href="#checkpoints-arbol--papelera">papelera</a> y el <a href="#checkpoints-arbol--activo">padre activo</a>
-  (<code>.scadlab/active-parent</code>, una línea con un nombre de archivo). Los rótulos, el plegado y el vínculo con
+  <p>La carpeta <code>.scadlab/</code> del workspace guarda tres cosas que no son modelos: la
+  <a href="#checkpoints-arbol--papelera">papelera</a>, el <a href="#checkpoints-arbol--activo">padre activo</a>
+  (<code>.scadlab/active-parent</code>, una línea con un nombre de archivo) y el <a href="#checkpoints-historial">historial</a> de los archivos que editó la IA (<code>.scadlab/history/</code>). Los rótulos, el plegado y el vínculo con
   la sesión del agente viven en la base local <code>scadlab.db</code>: si la pierdes, el árbol se reconstruye igual
   leyendo los archivos y solo se van esos detalles. Ninguna de las dos cosas toca tus <code>.scad</code>.</p>
 </article>
@@ -837,11 +840,14 @@ color("SteelBlue") difference() {
 └── 004-tall-version           <span class="c"># parent=001</span></code></pre></div>
 
   <h2 id="checkpoints-arbol--menu">Menú contextual</h2>
-  <figure class="shot"><img src="../docs/screenshots/es/tree-menu.png" alt="Menú contextual de 003-vent-slots con Ver código, Comparar con el padre, Ramificar desde aquí, Renombrar, Retomar en Claude Code, Plegar rama, Copiar nombre, Mostrar en el Finder, Mover a la papelera y Mover con su rama a la papelera" loading="lazy"><figcaption>El menú de un checkpoint creado por Claude Code: «Retomar en Claude Code» solo aparece con un vínculo.</figcaption></figure>
+  <figure class="shot"><img src="../docs/screenshots/es/tree-menu.png" alt="Menú contextual de 003-vent-slots con Ver código, Comparar con el padre, Historial, Ramificar desde aquí, Renombrar, Retomar en Claude Code, Plegar rama, Copiar nombre, Mostrar en el Finder, Mover a la papelera y Mover con su rama a la papelera" loading="lazy"><figcaption>El menú de un checkpoint creado por Claude Code: «Retomar en Claude Code» solo aparece con un vínculo.</figcaption></figure>
   <div class="tablewrap"><table>
     <tr><th>Acción</th><th>Qué hace</th></tr>
     <tr><td>Ver código</td><td>Elige el checkpoint y abre su código en el panel <a href="#editor">Código</a></td></tr>
     <tr><td>Comparar con el padre</td><td>Muestra en el panel Código <a href="#checkpoints-arbol--comparar">qué cambió</a> respecto del padre. Deshabilitada en una raíz</td></tr>
+    <tr><td>Deshacer cambio de la IA <span class="badge">solo si la IA lo editó</span></td><td>Vuelve a la versión que tenía antes del último cambio de la IA; <a href="#checkpoints-historial--deshacer">no se pierde nada</a></td></tr>
+    <tr><td>Ver diferencias <span class="badge">solo si la IA lo editó</span></td><td>Compara la versión anterior con la actual, <a href="#checkpoints-historial--diferencias">lado a lado</a></td></tr>
+    <tr><td>Historial</td><td>Las <a href="#checkpoints-historial--lista">versiones guardadas</a> del archivo, para compararlas o restaurar una</td></tr>
     <tr><td>Ramificar desde aquí</td><td>Lo marca como <a href="#checkpoints-arbol--activo">padre activo</a></td></tr>
     <tr><td>Renombrar <kbd>F2</kbd></td><td>Cambia el <a href="#checkpoints-arbol--renombrar">nombre que se muestra</a>, en la propia fila</td></tr>
     <tr><td>Retomar sesión</td><td>Reabre <a href="#checkpoints-arbol--sesion">la conversación</a> en la que se creó: «Retomar en Claude Code» (o el agente que fuera) o «Abrir el chat»</td></tr>
@@ -855,7 +861,7 @@ color("SteelBlue") difference() {
 
   <h2 id="checkpoints-arbol--renombrar">Renombrar</h2>
   <p>Renombrar cambia el <strong>rótulo</strong>: el nombre que se ve en el árbol, hasta 80 letras. El archivo <em>no</em>
-  cambia de nombre, porque sus hijos lo nombran en su <code>parent=</code> y un checkpoint es inmutable. Intro guarda, Esc
+  cambia de nombre, porque sus hijos lo nombran en su <code>parent=</code>. Intro guarda, Esc
   cancela, y dejarlo vacío vuelve a mostrar el nombre del archivo.</p>
 
   <h2 id="checkpoints-arbol--papelera">La papelera</h2>
@@ -917,6 +923,59 @@ color("SteelBlue") difference() {
   despliegan, <kbd>Intro</kbd> lo elige, <kbd>F2</kbd> lo renombra, <kbd>⌫</kbd> / <kbd>Supr</kbd> lo manda a la papelera
   (con confirmación) y la tecla de menú o <kbd>Shift+F10</kbd> abre el menú. Esas teclas son del árbol: con el foco en el
   editor o en la terminal no hacen nada. Ver <a href="#atajos">Atajos de teclado</a>.</p>
+</article>
+
+<article class="topic" id="checkpoints-historial" data-title="Historial y deshacer a la IA">
+  <h1>Historial y deshacer los cambios de la IA <span class="badge ok">Disponible</span></h1>
+  <p class="lead">Cuando le dices a la IA «cambia <em>este archivo</em>», edita ese mismo archivo en vez de apilar copias. Antes de
+  escribir, ScadLab guarda la versión que había: ves qué cambió, lo deshaces con un clic y no se pierde nada.</p>
+
+  <h2 id="checkpoints-historial--cual">Qué archivo cambia: el que nombras</h2>
+  <p>La regla es la misma para todos los proveedores —Claude Code, Codex, Antigravity, opencode y Hermes (Ollama o una API)—:</p>
+  <ul>
+    <li>Si <strong>nombras un archivo que existe</strong> (<em>«en el archivo 002-rpi5-snap-case.scad quería los cambios»</em>) o te refieres al que tienes
+      <strong>seleccionado</strong> (<em>«este», «el actual»</em>) y pides cambios, la IA <strong>edita ese archivo</strong> con la herramienta
+      <code>update_checkpoint</code>. Ante la duda, edita el que nombraste.</li>
+    <li>Crea un <strong>checkpoint nuevo</strong> solo si pides algo nuevo, una variante u «otra versión».</li>
+    <li>Corregir un render que falla en el archivo que acaba de crear también es una edición de ese archivo: el intento roto queda en el historial.</li>
+  </ul>
+  <p>Para que esto funcione con los agentes del <a href="#ia-hermes">chat</a>, cada turno les dice <strong>la ruta completa de la carpeta del proyecto</strong> y
+  <strong>qué checkpoint tienes seleccionado</strong>, y les recuerda que un <code>.scad</code> se lee con <code>read_checkpoint</code> (por nombre) y no con sus herramientas de archivo:
+  antes, un agente que necesitaba leer el archivo se inventaba una ruta, fallaba y terminaba creando una copia.</p>
+  <p>Solo en modo <strong>Agente</strong>: en <em>Solo consulta</em> la IA no puede escribir nada.</p>
+
+  <h2 id="checkpoints-historial--indicador">«Editado por la IA»</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/history-menu.png" alt="El árbol de checkpoints con un ícono de robot en 003-vent-slots y 006-two-color-logo, el menú de 006 con Deshacer cambio de la IA, Ver diferencias e Historial, y la pastilla Editado por la IA con Deshacer cambio de la IA en las cabeceras del visor y de Código" loading="lazy"><figcaption>El ícono del robot marca los archivos cuyo último cambio lo hizo la IA; el menú y las cabeceras del visor y del código ofrecen deshacerlo.</figcaption></figure>
+  <p>Un archivo cuyo <strong>último cambio fue de la IA</strong> lleva un ícono de robot en el árbol y una pastilla <strong>Editado por la IA</strong> en las cabeceras del
+  <a href="#visor-navegar">visor</a> y del <a href="#editor">código</a>, junto a <strong>Deshacer cambio de la IA</strong>, <strong>Ver diferencias</strong> e <strong>Historial</strong> (el menú del nodo
+  trae los mismos tres). Al restaurar una versión la marca se apaga sola.</p>
+
+  <h2 id="checkpoints-historial--deshacer">Deshacer el cambio de la IA</h2>
+  <p>Vuelve a la versión que tenía el archivo antes del último cambio de la IA. ScadLab pregunta antes, y lo que hay en ese momento se guarda como
+  una versión más («Restaurado»): <strong>deshacer se puede deshacer</strong> desde el historial. El visor y el código se recargan y el archivo se renderiza de nuevo.</p>
+
+  <h2 id="checkpoints-historial--diferencias">Ver diferencias</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/history-diff.png" alt="Diferencias en 006-two-color-logo: la versión anterior a la izquierda, con su fecha, el motivo IA y su nota, y la actual a la derecha; el ancho pasa de 88 a 92 y aparece el bloque del logo" loading="lazy"><figcaption>La versión anterior (con su fecha, por qué se guardó y la nota de la IA) junto a la actual. Desde aquí también se puede restaurar.</figcaption></figure>
+  <p>Una ventana con la versión anterior a la izquierda y la actual a la derecha, con lo agregado y lo quitado resaltado y lo que no cambió plegado.
+  Cada lado dice qué es: la fecha, el motivo (<em>IA</em> o <em>Restaurado</em>) y la nota que la IA dejó sobre el cambio.</p>
+
+  <h2 id="checkpoints-historial--lista">El Historial</h2>
+  <figure class="shot"><img src="../docs/screenshots/es/history-dialog.png" alt="Historial de 006-two-color-logo con tres versiones guardadas —hace 12 minutos por la IA con su nota, hace 2 horas restaurada y ayer por la IA—, cada una con los botones Ver diferencias y Restaurar esta versión" loading="lazy"><figcaption>Todas las versiones guardadas: cuándo, por qué y la nota, con <em>Ver diferencias</em> y <em>Restaurar esta versión</em>.</figcaption></figure>
+  <ul>
+    <li><strong>Dónde vive</strong>: <code>.scadlab/history/&lt;archivo&gt;/</code> del workspace, un par de archivos por versión. Son respaldos, no checkpoints: no aparecen en el árbol.</li>
+    <li><strong>Restaurar</strong> una versión guarda antes la actual, así que siempre se puede volver. El checkpoint conserva su <code>parent=</code>: solo cambia el modelo.</li>
+    <li><strong>Cuántas se conservan</strong>: <a href="#config-general">Configuración → General → Versiones guardadas por archivo</a> (de 1 a 200, 20 por defecto). Al pasar ese número se descartan las más viejas <em>de ese archivo</em>; un checkpoint nunca se borra.</li>
+    <li><strong>La papelera</strong>: si mandas el archivo a la <a href="#checkpoints-arbol--papelera">papelera</a>, su historial se va con él y vuelve cuando lo restauras.</li>
+  </ul>
+
+  <h2 id="checkpoints-historial--externo">Si el archivo cambia mientras lo miras</h2>
+  <p>Cuando la IA edita el archivo que tienes abierto, el código se recarga y se renderiza de nuevo solo (también si lo escribió el agente de la terminal). Si
+  tienes <strong>cambios sin guardar</strong> en el editor, ScadLab no los toca: muestra un aviso con un botón <strong>Recargar</strong> que pregunta antes de descartarlos.
+  El editor sigue en solo lectura hasta que pulses <em>Editar</em>; guardar desde él sigue creando un checkpoint nuevo.</p>
+
+  <h2 id="checkpoints-historial--limites">Lo que no cubre</h2>
+  <p>El historial cubre las ediciones que pasan por ScadLab (<code>update_checkpoint</code> y «Restaurar»). Si un agente <strong>escribe un <code>.scad</code> con sus propias herramientas de archivo o con la shell</strong>
+  (<code>Edit</code>, <code>Write</code>, <code>apply_patch</code>, <code>echo &gt;</code>…) no se guarda ningún respaldo: las <a href="#ia-reglas">reglas del workspace</a> lo prohíben, pero ScadLab no puede impedir que el CLI lo haga.</p>
 </article>
 
 <!-- ============================================================ VISOR 3D -->
@@ -1223,7 +1282,7 @@ color("SteelBlue") difference() {
   <figure class="shot"><img src="../docs/screenshots/es/editor.png" alt="Panel de código a la derecha con 006-two-color-logo.scad en solo lectura: resaltado de OpenSCAD, el encabezado @checkpoint y las anotaciones del Customizer destacadas, una advertencia subrayada en la línea del for y una sugerencia en la línea de lip" loading="lazy"><figcaption>Código en solo lectura. El linter subraya en ámbar la pieza sin <code>color()</code> (línea 23) y en azul el parámetro sin rango (línea 7); la barra de estado cuenta los problemas.</figcaption></figure>
 
   <h2 id="editor--lectura">Solo lectura y modo edición</h2>
-  <p>Un checkpoint es inmutable, así que el código se abre <strong>en solo lectura</strong> (el candado de la
+  <p>El código se abre <strong>en solo lectura</strong> (una versión solo cambia cuando la IA la edita con <a href="#checkpoints-historial">respaldo</a> o cuando guardas una nueva; el candado de la
   cabecera del panel y de la barra de estado lo dice). Pulsa <strong>Editar</strong> o haz <strong>doble clic</strong>
   en el código para pasar a edición. Mientras editas, el árbol no cambia: el checkpoint sigue siendo el que era hasta
   que guardes. <strong>Descartar</strong> (la flecha curva) vuelve al código guardado; si cambias de checkpoint o de
@@ -1563,7 +1622,7 @@ color("SteelBlue") difference() {
 
   <h2 id="ia-reglas--obligatorias">Las reglas obligatorias</h2>
   <ol>
-    <li><strong>Nunca sobrescribir</strong> ni borrar un <code>.scad</code>: cada cambio es un checkpoint nuevo.</li>
+    <li><strong>Nunca borrar un <code>.scad</code> ni escribirlo con las herramientas propias del CLI</strong>: un cambio a un archivo que existe pasa por <code>update_checkpoint</code>, que guarda antes la <a href="#checkpoints-historial">versión anterior</a>, y algo nuevo es un checkpoint nuevo.</li>
     <li><strong>Usar colores</strong>: toda pieza de primer nivel dentro de <code>color(...)</code>.</li>
     <li><strong>Validar</strong> cada checkpoint con las herramientas del <a href="#ia-mcp">servidor MCP de ScadLab</a> (o con OpenSCAD por línea de comandos si no están) antes de darlo por terminado.</li>
     <li>Parámetros arriba, con comentarios de Customizer; todo en milímetros.</li>
@@ -1609,8 +1668,9 @@ color("SteelBlue") difference() {
   <div class="tablewrap"><table>
     <tr><th>Herramienta</th><th>Qué hace</th><th>Modo</th></tr>
     <tr><td><code>list_checkpoints</code></td><td>El árbol del workspace: archivo, padre, descripción, tu rótulo, hijos y último estado de render conocido; también el padre activo.</td><td>Consulta</td></tr>
-    <tr><td><code>read_checkpoint</code></td><td>Devuelve el código de un checkpoint.</td><td>Consulta</td></tr>
+    <tr><td><code>read_checkpoint</code></td><td>Devuelve el código de un checkpoint, por el nombre de su archivo (así lee un agente un <code>.scad</code>: nunca una ruta).</td><td>Consulta</td></tr>
     <tr><td><code>create_checkpoint</code></td><td>Crea un checkpoint nuevo (<code>NNN-slug.scad</code>, con su encabezado) a partir de un padre. <strong>Nunca sobrescribe</strong> uno existente.</td><td>Agente</td></tr>
+    <tr><td><code>update_checkpoint</code></td><td>Edita en el lugar un checkpoint <strong>que ya existe</strong> con el código nuevo completo: conserva la cabecera, guarda la versión anterior en su <a href="#checkpoints-historial">historial</a> antes de escribir y devuelve el lint y el render del resultado. Es lo que usa la IA cuando nombras un archivo o tienes uno seleccionado.</td><td>Agente</td></tr>
     <tr><td><code>set_active_parent</code></td><td>Elige desde qué checkpoint ramifica el siguiente (tu «Ramificar desde aquí») o lo borra.</td><td>Agente</td></tr>
     <tr><td><code>rename_checkpoint</code></td><td>Cambia el rótulo que el árbol muestra para un checkpoint. El archivo y su encabezado no cambian.</td><td>Agente</td></tr>
     <tr><td><code>trash_checkpoint</code></td><td>Manda un checkpoint (o toda su rama) a la papelera; si es suelto, sus hijos pasan a colgar de su padre. <strong>Nunca borra nada</strong>: eliminar para siempre o vaciar la papelera solo lo puedes hacer tú, desde la interfaz.</td><td>Agente</td></tr>
@@ -1819,16 +1879,16 @@ color("SteelBlue") difference() {
     <li>El agente crea <code>004-add-hinge.scad</code> y ScadLab lo renderiza.</li>
     <li>OpenSCAD falla. ScadLab escribe <code>RENDER_ERRORS.md</code> en el workspace con el archivo, la línea y el mensaje.</li>
     <li>ScadLab escribe en la terminal del agente un aviso de una línea que pide leer <code>RENDER_ERRORS.md</code> y corregir.</li>
-    <li>El agente crea <code>005-fix-hinge.scad</code> con <code>parent=004-…</code>. El 004 queda como estaba.</li>
+    <li>El agente corrige <code>004-add-hinge.scad</code> con <code>update_checkpoint</code>: la versión rota queda en el <a href="#checkpoints-historial">historial</a> de ese archivo.</li>
   </ol>
   <div class="codewrap"><pre><code># RENDER_ERRORS.md
 Archivo: 004-add-hinge.scad
 ERROR: Parser error in file 004-add-hinge.scad, line 31: syntax error
-Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></pre></div>
+Corrige 004-add-hinge.scad en el lugar con la herramienta update_checkpoint.</code></pre></div>
   <p>El aviso que ve el agente empieza siempre por «ScadLab:», para que ningún CLI lo tome por un comando:</p>
-  <div class="codewrap"><pre><code>ScadLab: el render de "004-add-hinge.scad" falló con 1 error. Lee RENDER_ERRORS.md y corrígelo en un checkpoint NUEVO con parent=004-add-hinge.scad; no edites el archivo que falló.</code></pre></div>
-  <div class="note"><span class="lbl">Por qué un checkpoint nuevo</span><p>Corregir en el lugar rompería la regla de
-  inmutabilidad y perderías la pista de qué intentó la IA. Así el árbol muestra también los tropiezos.</p></div>
+  <div class="codewrap"><pre><code>ScadLab: el render de "004-add-hinge.scad" falló con 1 error. Lee RENDER_ERRORS.md y corrígelo editando ese mismo archivo con update_checkpoint (file=004-add-hinge.scad); la versión rota queda en su historial.</code></pre></div>
+  <div class="note"><span class="lbl">Por qué editar y no crear otro</span><p>El arreglo va en el mismo archivo porque es el mismo modelo; el
+  intento roto no se pierde: queda en su <a href="#checkpoints-historial">historial</a>, con su fecha, y puedes compararlo con la corrección.</p></div>
 
   <h2 id="ia-autoiteracion--limites">Cuándo avisa y cuándo no</h2>
   <ul>
@@ -1954,15 +2014,14 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   (el aviso <em>Cambiar a Agente</em> también lo guarda en ella).</p>
   <div class="tablewrap"><table>
     <tr><th></th><th>Solo consulta</th><th>Agente</th></tr>
-    <tr><td><strong>Con un CLI</strong></td><td>El CLI lee tu proyecto y usa las herramientas de lectura (listar y leer checkpoints, revisar, renderizar, medir, mirar). No crea checkpoints ni exporta.</td><td>Además crea checkpoints nuevos y exporta, y los renderiza y mira por ti.</td></tr>
+    <tr><td><strong>Con un CLI</strong></td><td>El CLI lee tu proyecto y usa las herramientas de lectura (listar y leer checkpoints, revisar, renderizar, medir, mirar). No crea ni edita checkpoints ni exporta.</td><td>Además crea checkpoints nuevos, <a href="#checkpoints-historial">edita el archivo que nombras</a> y exporta, y los renderiza y mira por ti.</td></tr>
     <tr><td><strong>Con un servidor</strong></td><td>El modelo solo conversa y te propone código OpenSCAD: tú lo guardas como checkpoint.</td><td>El modelo usa las herramientas de ScadLab en un bucle hasta resolver el pedido (Hermes).</td></tr>
   </table></div>
   <p><strong>La terminal no tiene modo.</strong> Los CLIs que abres desde la terminal de ScadLab (Claude Code, Codex, Antigravity, OpenCode) no quedan restringidos por ScadLab: reciben el servidor de ScadLab, las carpetas de
   tus otros proyectos abiertos y la sesión que retomas, y nada que los ponga en modo plan o de solo lectura ni que se salte los permisos —ahí apruebas tú, en tu terminal—. Lo mismo vale para <code>ScadLab --mcp</code>: ofrece las
   herramientas de escritura por defecto.</p>
   <p><strong>En ningún modo del chat un CLI ejecuta comandos de shell</strong> ni se le da permiso para saltarse sus controles. En modo Agente, el modelo decide qué hacer: mira los checkpoints y la impresora, crea un checkpoint con el código
-  <strong>completo</strong>, lo renderiza, lo mira desde una vista, lo mide y, si algo falla, lo corrige en <em>otro</em> checkpoint (nunca edita uno
-  existente). También puede leer las skills del workspace e inspeccionar las <a href="#ia-hermes--adjuntos">referencias</a> que adjuntes. Los checkpoints
+  <strong>completo</strong>, lo renderiza, lo mira desde una vista, lo mide y, si algo falla, lo corrige en el mismo archivo con <code>update_checkpoint</code> si lo nombraste o lo tienes seleccionado (se <a href="#checkpoints-historial">guarda la versión anterior</a>; nunca borra nada). También puede leer las skills del workspace e inspeccionar las <a href="#ia-hermes--adjuntos">referencias</a> que adjuntes. Los checkpoints
   que crea aparecen en el árbol como cualquier otro.</p>
   <ul>
     <li><strong>Cada paso es una tarjeta</strong> con la herramienta y su estado. Sin abrirla ves el <strong>checkpoint</strong> al que se refiere —un enlace que lo selecciona en el árbol y lo abre en el editor y el visor—,
@@ -1979,7 +2038,7 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
   <h3 id="ia-hermes--termina">Siempre termina en una pieza</h3>
   <figure class="shot"><img src="../docs/screenshots/es/chat-agent-creates.png" alt="Un workspace que solo tiene el checkpoint 001-caja-rpi5: arriba el visor con la caja y su tapa, a la derecha su código, y abajo el chat con Claude Code en modo Agente: el pedido «Una caja con tapa a presión para un Raspberry Pi 5» y tres tarjetas —crear checkpoint, renderizar con 89 × 60 × 24 mm, 4176 triángulos, cerrada y «cabe en la placa», y mirar el modelo con su imagen—, cada una con el enlace al checkpoint" loading="lazy"><figcaption>Un workspace sin checkpoints, un pedido en una frase: el agente crea el primero, lo renderiza y lo mira, y la pieza ya está en el visor.</figcaption></figure>
   <p>En modo Agente el pedido de alguien que no sabe OpenSCAD tiene un solo final posible: <strong>un <code>.scad</code> creado, renderizado y visible</strong>. El proveedor sigue el flujo
-  <em>crear checkpoint → renderizar → mirar → corregir en uno nuevo</em>, y en un workspace sin ningún checkpoint <strong>crea el primero sin preguntar</strong> (queda como la raíz del árbol, sin padre).
+  <em>crear o editar el checkpoint → renderizar → mirar → corregir</em>, y en un workspace sin ningún checkpoint <strong>crea el primero sin preguntar</strong> (queda como la raíz del árbol, sin padre).
   Cada checkpoint que nace en el chat —por una herramienta, por el guardado automático o por un botón— <strong>se selecciona solo en el árbol, en Código y en el visor, y se renderiza</strong>, aunque tengas apagado el
   auto-render. Si estás en medio de un cambio sin guardar en el editor, ScadLab no te cambia de archivo: el checkpoint aparece en el árbol y en la tarjeta del paso.</p>
 
@@ -2094,7 +2153,7 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
     <li>la <strong>proporción ancho/alto</strong> del modelo y la del objeto de la foto: si se parecen, las proporciones coinciden;</li>
     <li>el <strong>IoU</strong>: cuánto se superponen las dos siluetas, con 100 % = idénticas. Verde desde 85 %, ámbar por debajo de 60 %.</li>
   </ul>
-  <p>Con eso corrige lo que difiere en un checkpoint <em>nuevo</em> (los checkpoints nunca se editan) y vuelve a comparar.</p>
+  <p>Con eso corrige lo que difiere editando el checkpoint (su versión anterior queda en el <a href="#checkpoints-historial">historial</a>) y vuelve a comparar.</p>
 
   <h2 id="ia-imagen--contorno">Contornos planos, logos y relieves</h2>
   <figure class="shot"><img src="../docs/screenshots/es/chat-trace.png" alt="Chat en modo Agente: el paso Trazar el contorno muestra la silueta trazada del logo de un club —un anillo con una estrella calada— sobre una retícula en milímetros, las pastillas 80 × 80 mm, 2315,6 mm² y 3 contornos y el archivo refs/logo-club.svg; debajo, el checkpoint creado a partir de él y su render" loading="lazy"><figcaption>El paso <strong>Trazar el contorno</strong>: la silueta, sus medidas en milímetros y el SVG que quedó en <code>refs/</code>.</figcaption></figure>
@@ -2166,7 +2225,7 @@ Corrige el error en un checkpoint NUEVO con parent=004-add-hinge.scad.</code></p
 
   <h2 id="ia-skills--lista">Las skills incluidas</h2>
   <div class="grid">
-    <div class="card"><h3>openscad-core</h3><p>La base: checkpoints inmutables, color obligatorio, parámetros de Customizer, CSG limpio, rendimiento y cómo leer errores. Si otra skill la contradice, gana esta.</p></div>
+    <div class="card"><h3>openscad-core</h3><p>La base: checkpoints con historial, color obligatorio, parámetros de Customizer, CSG limpio, rendimiento y cómo leer errores. Si otra skill la contradice, gana esta.</p></div>
     <div class="card"><h3>Una skill por marca</h3><p><code>bambu-lab-printers</code>, <code>prusa-printers</code>, <code>creality-printers</code>, <code>elegoo-printers</code>, <code>anycubic-printers</code>, <code>snapmaker-printers</code> y <code>ultimaker-printers</code>: los perfiles de la marca (volumen, boquilla, multicolor) y las reglas FDM. Un workspace instala la de la marca de su impresora.</p></div>
     <div class="card"><h3>openscad-3mf-multicolor</h3><p>Modelos multicolor: una pieza por <code>color()</code>, cómo exportar a 3MF y cómo lo interpreta cada slicer.</p></div>
     <div class="card"><h3>openscad-templates</h3><p>Plantillas paramétricas para arrancar un proyecto sin partir de cero.</p></div>
@@ -2602,6 +2661,11 @@ color("Black") label();                                    // texto que llena el
   (300 por defecto). Un render que lo supera se corta y se marca como error: con CGAL, un modelo con
   <code>minkowski()</code> o muchas esferas puede tardar minutos.</p>
 
+  <h2 id="config-general--historial">Versiones guardadas por archivo</h2>
+  <p>En la pestaña General, <strong>Historial de cambios → Versiones guardadas por archivo</strong>: cuántas versiones anteriores de cada checkpoint conserva ScadLab
+  (<a href="#checkpoints-historial">Historial y deshacer los cambios de la IA</a>), de 1 a 200 (20 por defecto). Al pasar ese número se descartan las más viejas de ese archivo;
+  ningún checkpoint se borra nunca.</p>
+
   <h2 id="config-general--clis">CLIs de agentes detectados</h2>
   <p>Lista Claude Code, opencode, Codex y Antigravity con su estado (encontrado / no encontrado) y la ruta. Si
   instalas uno con la app abierta, pulsa <strong>Volver a detectar</strong>. Solo los agentes <strong>habilitados</strong>
@@ -2832,9 +2896,9 @@ color("Black") label();                                    // texto que llena el
   <details><summary>¿Necesito una suscripción de IA?</summary><p>Para los agentes de terminal, la que pida cada CLI
   (Claude Code, Codex…); para el chat, la de su proveedor. Si no quieres pagar, usa el
   <a href="#ia-hermes">chat con Ollama</a> en local, con menos precisión.</p></details>
-  <details><summary>¿Por qué la IA no puede editar un checkpoint?</summary><p>Porque el historial se reconstruye de los
-  archivos: si uno cambiara, el árbol dejaría de decir la verdad. Ver <a href="#checkpoints--inmutables">por qué son
-  inmutables</a>.</p></details>
+  <details><summary>¿La IA puede editar un checkpoint?</summary><p>Sí, si nombras el archivo o lo tienes seleccionado: edita ese archivo, pero antes guarda
+  la versión anterior en su historial para que veas las diferencias y lo deshagas. Una idea nueva o una variante es un checkpoint nuevo. Ver
+  <a href="#checkpoints-historial">Historial y deshacer los cambios de la IA</a> y <a href="#checkpoints--inmutables">por qué nadie los sobrescribe sin respaldo</a>.</p></details>
   <details><summary>¿Con qué impresoras funciona?</summary><p>El catálogo trae siete marcas (Bambu Lab, Prusa, Creality, Elegoo, Anycubic,
   Snapmaker y UltiMaker) con su ficha, su skill y su slicer; ver <a href="#imprimir-impresoras">Impresoras y configuración del workspace</a>.
   Si la tuya no está, elige la más parecida: el STL sirve para cualquier slicer y las reglas FDM son las mismas.</p></details>
@@ -2847,8 +2911,8 @@ color("Black") label();                                    // texto que llena el
   Puedes intentar <a href="#instalacion--compilar">compilar desde el código</a>, sin soporte.</p></details>
   <details><summary>¿Dónde están mis modelos si desinstalo la app?</summary><p>En las carpetas de tus workspaces, intactos.
   Solo se pierde la configuración de <code>scadlab.db</code>; ver <a href="#config-datos">Dónde se guardan tus datos</a>.</p></details>
-  <details><summary>¿Ya puedo descargarlo?</summary><p>Sí: la última versión (0.2.0) está en
-  <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.0">Releases</a>; ver <a href="#instalacion">Instalación</a>.
+  <details><summary>¿Ya puedo descargarlo?</summary><p>Sí: la última versión (0.2.1) está en
+  <a href="https://github.com/rafael180496/scad-lab/releases/tag/v0.2.1">Releases</a>; ver <a href="#instalacion">Instalación</a>.
   También puedes <a href="#instalacion--compilar">compilarla desde el código</a>.</p></details>
 
   <h2 id="faq--licencia">Licencia</h2>
@@ -2868,7 +2932,7 @@ color("Black") label();                                    // texto que llena el
 <div id="foot">
   <div class="pagenav" id="pagenav"></div>
   <p class="pagefoot"><strong>ScadLab</strong> — Go + Wails&nbsp;v2 + React. Documentación de la
-  <span class="ver">v0.2.0</span>; esta página no hace ninguna petición externa.
+  <span class="ver">v0.2.1</span>; esta página no hace ninguna petición externa.
   <a href="https://github.com/rafael180496/scad-lab">Código</a> ·
   <a href="https://github.com/rafael180496/scad-lab/releases">Descargas</a></p>
 </div>

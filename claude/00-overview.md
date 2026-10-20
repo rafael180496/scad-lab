@@ -25,8 +25,10 @@ Consecuencias que rigen cualquier fase:
    código cuando puede crearlo: el usuario no sabe modelar.
 3. **Escritura por defecto**: el modo «Agente» es el predeterminado en todos
    lados; «Solo consulta» se elige a mano y vale solo para esa conversación.
-4. **Nada es destructivo**: todo cambio es un checkpoint nuevo; borrar es mover a
-   la papelera; un STL importado queda intacto en `refs/`.
+4. **Nada es destructivo**: borrar es mover a la papelera; un STL importado queda
+   intacto en `refs/`; y un checkpoint solo se reescribe (la IA con
+   `update_checkpoint`, el usuario con «Restaurar versión») guardando antes la
+   versión anterior en su historial ([claude/15](15-checkpoints.md)).
 5. Un pedido en lenguaje natural en un workspace vacío termina en un modelo
    renderizado, medido y exportable sin que el usuario toque código.
 

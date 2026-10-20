@@ -148,6 +148,8 @@ export function ListChatProviders():Promise<Array<main.ChatProvider>>;
 
 export function ListChats(arg1:number):Promise<Array<store.Chat>>;
 
+export function ListCheckpointHistory(arg1:number,arg2:string):Promise<main.CheckpointHistory>;
+
 export function ListDetectedCLIs():Promise<Array<main.DetectedCLI>>;
 
 export function ListMaterials():Promise<Array<store.Material>>;
@@ -204,6 +206,8 @@ export function ReadCheckpoint(arg1:number,arg2:string):Promise<string>;
 
 export function ReadCheckpointPair(arg1:number,arg2:string):Promise<main.CheckpointPair>;
 
+export function ReadCheckpointVersion(arg1:number,arg2:string,arg3:string):Promise<string>;
+
 export function ReadSkillFile(arg1:string,arg2:string):Promise<string>;
 
 export function ReadTerminalBuffer(arg1:string):Promise<main.TerminalSnapshot>;
@@ -241,6 +245,8 @@ export function ResetVault():Promise<number>;
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function RestoreCheckpoint(arg1:number,arg2:string):Promise<string>;
+
+export function RestoreCheckpointVersion(arg1:number,arg2:string,arg3:string):Promise<checkpoint.Version>;
 
 export function ResumeCheckpointSession(arg1:number,arg2:string):Promise<main.CheckpointResume>;
 

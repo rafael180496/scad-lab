@@ -18,8 +18,9 @@ Mismo catálogo que mini-tools.
   nombra `apiKeyEnv`. Nunca viajan al frontend ni se escriben en un log o error. Ver
   [19-hermes.md](19-hermes.md) y [33-contrato-servidores-chat.md](33-contrato-servidores-chat.md#servidores-de-modelos--app_serversgo-s12-121).
 - Cada workspace lleva `CLAUDE.md` y `AGENTS.md` con las mismas reglas
-  (generadas de `assets/workspace/RULES.md.tmpl`), entre ellas: nunca
-  sobrescribir checkpoints, color obligatorio, validar, respetar la placa y
+  (generadas de `assets/workspace/RULES.md.tmpl`), entre ellas: editar
+  con `update_checkpoint` el archivo que el usuario nombra (con respaldo) y no
+  escribir `.scad` con las herramientas de archivo del CLI, color obligatorio, validar, respetar la placa y
   **no hacer commits**.
 ## En la app (S5)
 

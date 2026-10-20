@@ -81,12 +81,14 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, opts Options) error
 // serverInstructions las muestran algunos clientes (Claude Code) junto al
 // servidor: el flujo recomendado en pocas líneas.
 const serverInstructions = "ScadLab OpenSCAD tools for the current workspace. " +
-	"Mandatory flow for any design request: printer_info / list_checkpoints -> create_checkpoint (new immutable NNN-slug.scad; never edit an existing one; " +
-	"never write .scad files through the shell) -> render (errors with line numbers) -> if it fails, read the line and fix it in a NEW checkpoint with parent=<previous> " +
+	"Mandatory flow for any design request: printer_info / list_checkpoints -> create_checkpoint (a NEW NNN-slug.scad) or update_checkpoint (edit an existing file in place) -> render (errors with line numbers) -> if it fails, read the line and fix it with update_checkpoint on that same file " +
 	"-> preview (look at the part) -> measure (size, volume, weight, fits the plate?) -> short summary naming the file. " +
+	"When the user names an existing file, or refers to the open/selected one (\"this\", \"the current one\"), and asks for changes, edit it with update_checkpoint (the previous version is saved in its history first, so nothing is lost and the user can undo). " +
+	"Create a new checkpoint only if they ask for something new, a variant or \"another version\". When in doubt, edit the one they named. " +
+	"To read a .scad use read_checkpoint with the file name; never the CLI's own file tools or paths; never write .scad files with the CLI's file or shell tools (they leave no backup). " +
 	"If the workspace has no checkpoints, create the first one right away without asking. A design turn never ends without a checkpoint that renders, and never with only code in the text. " +
 	"When unsure, pick reasonable dimensions and say so. Omit parent to continue from the active parent shown by list_checkpoints. Every top-level part needs color(). Use lint/format while writing code. " +
-	"Shortcuts: a request that resembles a template -> create_from_template; changing a measurement -> get_parameters + set_parameters (new child, not a rewrite); " +
+	"Shortcuts: a request that resembles a template -> create_from_template; changing a measurement -> get_parameters + set_parameters (a new child, a variant) or update_checkpoint when the user wants it in their file; " +
 	"a model in refs/ (STL/3MF/OBJ) -> inspect_reference, import_mesh, then edit_mesh (move, rotate, scale, cut, holes, recolor); too big for the plate -> suggest_orientation; " +
 	"an image in refs/images/ (a photo, logo or sketch to model from) -> read_skill openscad-from-image, image_info, build it with primitives, then compare_with_image from the same view and fix; a flat logo/plaque -> trace_image_outline; a relief or lithophane -> image_to_heightmap; " +
 	"threads or rounded edges -> list_libraries / install_library; export stl/3mf/png only when asked. Discarding = trash_checkpoint (restorable); you cannot open Bambu Studio."

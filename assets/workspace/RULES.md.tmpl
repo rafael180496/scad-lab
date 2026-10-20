@@ -24,13 +24,15 @@ Quien te escribe casi nunca sabe OpenSCAD: espera ver la pieza en el visor de
 ScadLab, no código en el texto. Por eso, ante cualquier pedido de una pieza o de
 un cambio:
 
-1. **Crea el checkpoint tú, sin pedir permiso.** Si el workspace no tiene
-   ningún checkpoint, crea el primero (`001-<slug>.scad`, `parent=` vacío) de
-   inmediato, sin preguntar antes. Si una herramienta te lo deniega, dilo en
+1. **Crea o edita el checkpoint tú, sin pedir permiso.** Si el workspace no
+   tiene ningún checkpoint, crea el primero (`001-<slug>.scad`, `parent=` vacío)
+   de inmediato, sin preguntar antes. Si una herramienta te lo deniega, dilo en
    una frase en vez de limitarte a pegar el código.
 2. **Orden de preferencia de las herramientas:**
-   1. la herramienta MCP `create_checkpoint` del servidor `scadlab` (escribe
-      la cabecera `@checkpoint`, numera y nunca pisa un archivo);
+   1. las herramientas MCP del servidor `scadlab`: `create_checkpoint` para un
+      archivo nuevo (escribe la cabecera `@checkpoint`, numera y nunca pisa un
+      archivo) y `update_checkpoint` para editar uno que ya existe (conserva la
+      cabecera y guarda antes la versión anterior en su historial);
    2. después, con las mismas herramientas MCP, `render` → `preview` →
       `measure`;
    3. solo si el servidor `scadlab` no está conectado: escribir el archivo
@@ -39,20 +41,33 @@ un cambio:
 3. **Nunca termines solo con código en el texto.** Un turno de diseño acaba con
    un checkpoint que renderiza. Nombra el archivo en tu respuesta y no pegues
    su código completo: ya está en el checkpoint.
-4. **No uses la shell para escribir `.scad`** (`echo >`, `cat <<EOF`, `tee`,
-   `sed -i`…): se salta la cabecera, la numeración y la regla de no sobrescribir.
-5. **Si el render falla**, lee el error con su línea y crea un checkpoint NUEVO
-   con `parent=<el roto>`; repite hasta que renderice.
+4. **No leas ni escribas `.scad` con la shell ni con las herramientas de
+   archivo de tu CLI** (`echo >`, `cat <<EOF`, `tee`, `sed -i`, `Edit`, `Write`,
+   `view_file`…): se salta la cabecera, la numeración y el respaldo. Para leer un
+   `.scad` usa `read_checkpoint` con el nombre del archivo (nunca una ruta); para
+   cambiarlo, `update_checkpoint`.
+5. **Si el render falla**, lee el error con su línea y corrígelo con
+   `update_checkpoint` sobre ese mismo archivo (la versión rota queda en su
+   historial); repite hasta que renderice.
 6. **Ante la duda, no preguntes:** elige medidas razonables como parámetros del
    Customizer y di en el resumen qué supusiste. Pregunta solo si el pedido es
    imposible de interpretar.
 
 ## Reglas obligatorias
 
-1. **Nunca sobrescribir ni borrar un `.scad` existente.** Cada versión del
-   modelo es un *checkpoint* inmutable. Para cambiar algo, crear un archivo
-   NUEVO con el siguiente número: `NNN-slug.scad` (tres dígitos, creciente,
-   slug en kebab-case que diga qué cambió — p. ej. `004-add-hinge.scad`).
+1. **Cambiar un `.scad` existente = `update_checkpoint`; nunca borrarlo.**
+   Cuando el usuario nombra un archivo existente o se refiere al
+   abierto/seleccionado (“este”, “el actual”) y pide cambios, edítalo con
+   `update_checkpoint`. Crea un checkpoint nuevo solo si pide algo nuevo, una
+   variante u “otra versión”. Ante la duda, edita el que nombró. Antes de
+   escribir, `update_checkpoint` guarda la versión anterior en el historial del
+   archivo (`.scadlab/history/`, lo gestiona la app) y el usuario puede ver las
+   diferencias y deshacer. Para leer un `.scad` usa `read_checkpoint` con el
+   nombre del archivo; nunca las herramientas de archivo del CLI ni rutas; nunca
+   escribas `.scad` con las herramientas de archivo/shell del CLI (no dejan
+   respaldo). Un checkpoint nuevo lleva el siguiente número: `NNN-slug.scad`
+   (tres dígitos, creciente, slug en kebab-case que diga qué es — p. ej.
+   `004-add-hinge.scad`).
    «Borrar» un checkpoint no existe para ti: si el usuario pide descartar uno,
    usa `trash_checkpoint` (lo manda a `.scadlab/trash/`; `restore_checkpoint` lo
    trae de vuelta; los hijos del descartado pasan a colgar de su padre, y
@@ -68,6 +83,7 @@ un cambio:
    `parent` es el checkpoint del que parte (vacío en el primero: `parent=`).
    Ramificar = crear un archivo nuevo cuyo `parent` es un checkpoint anterior
    distinto del último. ScadLab arma el árbol con estas líneas.
+   `update_checkpoint` la conserva: tú solo mandas el código.
 
    **Padre activo.** Si el usuario eligió «Ramificar desde aquí», ScadLab guarda
    el checkpoint elegido en `.scadlab/active-parent` (una línea con el nombre
@@ -88,8 +104,8 @@ un cambio:
    Solo si el servidor MCP `scadlab` no está disponible, renderizar con
    `openscad -o exports/check.stl <archivo>.scad`.
 6. **Si existe `RENDER_ERRORS.md`**, ScadLab lo escribió porque el último
-   render falló: leerlo y corregir en un checkpoint NUEVO, nunca editando el
-   que falló. (`render` también devuelve esos mismos errores, con la línea.)
+   render falló: leerlo y corregir ese mismo archivo con `update_checkpoint`.
+   (`render` también devuelve esos mismos errores, con la línea.)
 7. **Debe caber en la placa**: el modelo completo dentro de
    {{.BuildX}} × {{.BuildY}} × {{.BuildZ}} mm. Si no cabe, partirlo en piezas y decirlo.
    `measure` lo comprueba (`fitsBuildVolume`).
@@ -122,9 +138,10 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 | `list_printers` | el catálogo de impresoras (id, marca, modelo, volumen, colores máximos, sistema, slicer); filtra por `brand` o `query` |
 | `set_workspace_printer` | cambia la impresora (y los colores) de ESTE workspace: reescribe estas reglas y `printer.json`, y cambia la skill de marca. Solo cuando el usuario lo pida |
 | `list_checkpoints` | árbol de checkpoints (también dibujado como texto: padre, descripción, rótulo, hijos), el último estado de render conocido y el padre activo (`activeParent`) |
-| `read_checkpoint` | código de un checkpoint |
+| `read_checkpoint` | código de un checkpoint, por el **nombre del archivo** (así se lee un `.scad`; nunca una ruta ni las herramientas de archivo del CLI) |
 | `create_checkpoint` | crea un checkpoint **nuevo** `NNN-slug.scad` con el encabezado correcto; nunca pisa uno existente. `parent` por defecto: el padre activo si hay, y si no el más nuevo; `root=true` abre un diseño nuevo sin padre |
-| `get_parameters` / `set_parameters` | leen los parámetros del Customizer de un checkpoint y crean un checkpoint **hijo** con otros valores (el resto del archivo no cambia): para «hazla 10 mm más ancha» |
+| `update_checkpoint` | **edita en el lugar** un checkpoint existente (`file`, `source` completo, `note` opcional): conserva la cabecera, guarda antes la versión anterior en su historial (el usuario puede deshacer) y devuelve el lint y el render del resultado. Es lo que usas cuando el usuario nombra un archivo o se refiere al abierto y pide cambios, y para corregir un render roto |
+| `get_parameters` / `set_parameters` | leen los parámetros del Customizer de un checkpoint y crean un checkpoint **hijo** con otros valores (el resto del archivo no cambia): para «hazme una versión 10 mm más ancha». Si el usuario quiere el cambio en su archivo, `update_checkpoint` |
 | `list_templates` / `get_template` / `create_from_template` | plantillas paramétricas listas (misma colección que la skill `openscad-templates`); `create_from_template` crea el checkpoint ya con los parámetros y la placa de esta impresora |
 | `render` | renderiza con OpenSCAD: estado, errores con línea, tamaño, volumen, triángulos, si cabe en la placa; mantiene `RENDER_ERRORS.md` |
 | `lint` / `format` | revisa (OpenSCAD + reglas SL001–SL009) y formatea código sin guardarlo |
@@ -139,7 +156,7 @@ misma caché que la app, y funciona aunque la app esté cerrada.
 | `edit_mesh` | edita el modelo 3D como un checkpoint **hijo**, con el mismo motor que el editor 3D de la app: `move`, `rotate`, `scale`, `resize`, `mirror`, `orient`, `center`, `to_bed`, `color`, `add`/`hole` (cubo, cilindro, esfera, texto) y `cut` con un plano. Sobre un checkpoint que no es un import congela su malla (una pieza de un solo color). El STL no se toca |
 | `export` | `stl`, `3mf` (multicolor: Bambu Studio, Orca, Creality Print, Anycubic, Elegoo, Snapmaker Orca), `3mf-prusa` (PrusaSlicer), `stl-per-color` (Cura y cualquiera) o `png` (la imagen del preview) en `exports/` |
 | `set_active_parent` | desde qué checkpoint ramifica el próximo (el «Ramificar desde aquí» del usuario) |
-| `rename_checkpoint` | cambia el nombre que muestra el árbol (el archivo y su cabecera son inmutables) |
+| `rename_checkpoint` | cambia el nombre que muestra el árbol (el archivo no cambia de nombre ni su cabecera) |
 | `trash_checkpoint` / `list_trash` / `restore_checkpoint` | descartar = mover a la papelera (nunca se borra), listarla y traerlo de vuelta |
 | `list_libraries` / `install_library` | librerías de `lib/` (BOSL2, MCAD, NopSCADlib): `install_library` las **descarga** (necesita internet) con SHA-256 comprobado y nunca reemplaza una instalada |
 | `list_skills` / `read_skill` | las skills del workspace (`.claude/skills/`) |
@@ -148,17 +165,20 @@ Flujo (obligatorio, ver arriba):
 
 1. `printer_info` (volumen, colores del workspace y slicer) y `list_checkpoints`. Si no
    hay checkpoints, el paso 2 es inmediato y sin preguntar.
-2. `create_checkpoint` con el código nuevo (empezando, si encaja, por
-   `create_from_template`). Para cambiar una medida de un checkpoint existente,
+2. Un diseño nuevo: `create_checkpoint` con el código (empezando, si encaja, por
+   `create_from_template`). Cambios a un archivo que el usuario nombró o tiene
+   abierto: `read_checkpoint` + `update_checkpoint`. Una variante de una medida:
    `get_parameters` + `set_parameters`; para un STL/3MF/OBJ de `refs/`,
    `import_mesh` + `edit_mesh`.
-3. `render`. Si falla, leer la línea del error y corregir en un checkpoint NUEVO
-   con `parent=<el roto>`.
+3. `render` (`update_checkpoint` ya devuelve el render del resultado). Si falla,
+   leer la línea del error y corregir con `update_checkpoint` sobre ese mismo
+   archivo.
 4. `preview` para mirar la pieza: un modelo puede renderizar sin errores y
    estar mal (voladizos, piezas flotando, un agujero del lado equivocado).
 5. `measure` para confirmar que cabe en la placa y ver el peso (si no cabe,
    `suggest_orientation`).
-6. Si algo no convence, un checkpoint nuevo y vuelta al paso 3. `export` solo
+6. Si algo no convence, otra vuelta con `update_checkpoint` (o un checkpoint nuevo
+   si es una variante) y vuelta al paso 3. `export` solo
    cuando el usuario lo pida o el modelo esté terminado, con el formato que lee
    su slicer. Abrir el archivo en el slicer
    {{- if .Slicer}} ({{.Slicer}}){{end}} lo hace el usuario, no tú.
@@ -170,7 +190,7 @@ Si el usuario adjunta una foto, un logo o un boceto, queda en `refs/images/`
 `openscad-from-image`** (`read_skill`): trae el método, las medidas estándar de
 monedas y tornillería y plantillas. El flujo es el mismo de arriba con un paso
 más: `image_info` → `create_checkpoint` con primitivas y parámetros → `render` →
-`compare_with_image` desde la misma vista → corregir en un checkpoint **nuevo**.
+`compare_with_image` desde la misma vista → corregir con `update_checkpoint`.
 Un logo o una placa plana: `trace_image_outline`; un relieve o una litofanía:
 `image_to_heightmap`. Una foto **no trae medidas**: usa la que dé el usuario o un
 objeto conocido de la foto como escala; sin ninguna, di que el tamaño es un
@@ -178,8 +198,9 @@ supuesto. Si tu modelo no ve imágenes, no juzgues la forma a ojo: apóyate en
 `image_info`, en `trace_image_outline` y en el IoU de `compare_with_image`. Las
 imágenes se leen solo de `refs/` y `refs/images/`, hasta 20 MB y 40 MP.
 
-Sin el MCP (último recurso): escribe el `NNN-slug.scad` nuevo con la cabecera
-correcta, `openscad -o exports/check.stl <archivo>.scad` para validar y
+Sin el MCP (último recurso; no hay `update_checkpoint`): si el usuario pidió
+cambios a un archivo, haz una copia con el siguiente número y edítala, así
+queda el original; escribe el `NNN-slug.scad` con la cabecera correcta, `openscad -o exports/check.stl <archivo>.scad` para validar y
 `openscad -o exports/preview.png --render --colorscheme=Tomorrow --imgsize=800,800 --viewall --autocenter <archivo>.scad`
 para obtener una imagen.
 

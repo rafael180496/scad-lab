@@ -198,8 +198,8 @@ func TestNudgeIsASafeSingleLine(t *testing.T) {
 				if !strings.HasPrefix(got, "ScadLab: ") || got != strings.TrimRight(got, " ") {
 					t.Errorf("forma inesperada: %q", got)
 				}
-				if !strings.Contains(got, "RENDER_ERRORS.md") || !strings.Contains(got, "parent=") {
-					t.Errorf("falta RENDER_ERRORS.md o parent=: %q", got)
+				if !strings.Contains(got, "RENDER_ERRORS.md") || !strings.Contains(got, "file=") {
+					t.Errorf("falta RENDER_ERRORS.md o file=: %q", got)
 				}
 				if len(got) > 400 {
 					t.Errorf("demasiado largo (%d)", len(got))
@@ -215,11 +215,11 @@ func TestNudgeContent(t *testing.T) {
 		count      int
 		want       []string
 	}{
-		{"003-add-hinge.scad", "es", 2, []string{`"003-add-hinge.scad"`, "con 2 errores", "NUEVO", "parent=003-add-hinge.scad"}},
+		{"003-add-hinge.scad", "es", 2, []string{`"003-add-hinge.scad"`, "con 2 errores", "update_checkpoint", "file=003-add-hinge.scad"}},
 		{"003-add-hinge.scad", "es", 1, []string{"con 1 error."}},
-		{"003-add-hinge.scad", "en", 3, []string{`"003-add-hinge.scad"`, "with 3 errors", "NEW checkpoint", "parent=003-add-hinge.scad"}},
+		{"003-add-hinge.scad", "en", 3, []string{`"003-add-hinge.scad"`, "with 3 errors", "update_checkpoint", "file=003-add-hinge.scad"}},
 		{"003-add-hinge.scad", "en", 0, []string{"failed. Read"}},
-		{"a\nb.scad", "en", 1, []string{`"a_b.scad"`, "parent=a_b.scad"}},
+		{"a\nb.scad", "en", 1, []string{`"a_b.scad"`, "file=a_b.scad"}},
 	}
 	for _, c := range cases {
 		got := Nudge(c.name, c.count, c.lang)

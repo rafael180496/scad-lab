@@ -368,10 +368,13 @@ func (a *App) sendCLIMessage(c store.Chat, text, currentFile string, attachmentI
 // empieza con texto propio (nunca con un guion), así que no se lee como bandera.
 func (a *App) cliPrompt(j chatJob, withHistory bool) string {
 	var b strings.Builder
+	// La ruta ABSOLUTA del proyecto va en el prompt a propósito: las herramientas de
+	// archivo de un CLI (view_file de Antigravity pide AbsolutePath) necesitan una
+	// ruta completa, y sin ella el modelo la inventa y falla con «no existe».
 	b.WriteString(i18n.T(i18n.Msg{
-		ES: "[ScadLab] Diseñas un modelo 3D en OpenSCAD en el proyecto «%s» (esta carpeta). Las reglas del proyecto están en CLAUDE.md y AGENTS.md. Usa las herramientas del servidor «scadlab» (render, preview, measure, lint…) para comprobar tu trabajo.",
-		EN: "[ScadLab] You are designing a 3D model in OpenSCAD in the project “%s” (this folder). The project rules are in CLAUDE.md and AGENTS.md. Use the tools of the “scadlab” server (render, preview, measure, lint…) to check your work.",
-	}, j.workspace.Name))
+		ES: "[ScadLab] Diseñas un modelo 3D en OpenSCAD en el proyecto «%s». El proyecto está en %s: es tu directorio actual. Las reglas del proyecto están en CLAUDE.md y AGENTS.md. Usa las herramientas del servidor «scadlab» (render, preview, measure, lint…) para comprobar tu trabajo.",
+		EN: "[ScadLab] You are designing a 3D model in OpenSCAD in the project “%s”. The project is at %s: it is your current directory. The project rules are in CLAUDE.md and AGENTS.md. Use the tools of the “scadlab” server (render, preview, measure, lint…) to check your work.",
+	}, j.workspace.Name, absDir(j.workspace.Path)))
 	pctx := chatPromptContext(j.workspace, j.currentFile, j.imageRefs...)
 	switch j.cli.mode {
 	case clichat.ModeAsk:
@@ -379,6 +382,8 @@ func (a *App) cliPrompt(j chatJob, withHistory bool) string {
 		b.WriteString(" " + i18n.T(msgCLIPromptAsk))
 		if j.cli.mcpNote != "" {
 			b.WriteString(" " + i18n.T(msgCLIPromptNoMCPAsk))
+		} else {
+			b.WriteString(" " + i18n.T(msgCLIPromptRead))
 		}
 	default:
 		// Agente: el diseño lo crea el agente, de punta a punta.
@@ -388,10 +393,12 @@ func (a *App) cliPrompt(j chatJob, withHistory bool) string {
 		}
 		if j.cli.mcpNote != "" {
 			b.WriteString(" " + i18n.T(msgCLIPromptNoMCP))
+		} else {
+			b.WriteString(" " + i18n.T(msgCLIPromptEdit))
 		}
 	}
 	if pctx.CurrentFile != "" {
-		b.WriteString("\n\n" + i18n.T(i18n.Msg{ES: "Checkpoint abierto en el editor: %s", EN: "Checkpoint open in the editor: %s"}, pctx.CurrentFile))
+		b.WriteString("\n\n" + i18n.T(msgCLIPromptSelected, pctx.CurrentFile))
 		src := pctx.CurrentSource
 		cut := false
 		if len(src) > cliSourceBytes {
@@ -439,8 +446,25 @@ var (
 		EN: "This turn is in “Query only” mode: you can read, reason and check (render, preview, measure, lint), but do not create checkpoints or export. If something has to be designed or changed, propose ONE ```openscad block with the COMPLETE code and the header `// @checkpoint parent=… desc=\"…\"`, ready to save: ScadLab offers the user to save and render it with one click.",
 	}
 	msgCLIPromptAgent = i18n.Msg{
-		ES: "El modo de este turno es «Agente»: el diseño lo creas TÚ, no el usuario, y el turno no termina hasta que exista un checkpoint que renderice. Flujo obligatorio con las herramientas del servidor «scadlab»: 1) `create_checkpoint` con el código completo; 2) `render` para validarlo; 3) `preview` para mirarlo; 4) si falla o no se ve bien, corrige en un checkpoint NUEVO (`create_checkpoint` con `parent` = el que falló; nunca edites uno existente) y vuelve al paso 2. No pegues el código en la respuesta en lugar de crear el checkpoint, no pidas permiso para crearlo y no uses la shell.",
-		EN: "This turn is in “Agent” mode: YOU create the design, not the user, and the turn does not end until a checkpoint that renders exists. Mandatory flow with the tools of the “scadlab” server: 1) `create_checkpoint` with the complete code; 2) `render` to validate it; 3) `preview` to look at it; 4) if it fails or does not look right, fix it in a NEW checkpoint (`create_checkpoint` with `parent` = the one that failed; never edit an existing one) and go back to step 2. Do not paste the code in the answer instead of creating the checkpoint, do not ask permission to create it, and do not use the shell.",
+		ES: "El modo de este turno es «Agente»: el diseño lo creas TÚ, no el usuario, y el turno no termina hasta que exista un checkpoint que renderice. Flujo obligatorio con las herramientas del servidor «scadlab»: 1) `create_checkpoint` con el código completo si es un diseño nuevo, una variante u «otra versión», o `update_checkpoint` si el usuario nombra un archivo existente o se refiere al seleccionado y pide cambios; 2) `render` para validarlo; 3) `preview` para mirarlo; 4) si falla o no se ve bien, corrígelo con `update_checkpoint` sobre ese mismo archivo (el intento roto queda en el historial) y vuelve al paso 2. No pegues el código en la respuesta en lugar de guardarlo, no pidas permiso para crear o editar el checkpoint y no uses la shell.",
+		EN: "This turn is in “Agent” mode: YOU create the design, not the user, and the turn does not end until a checkpoint that renders exists. Mandatory flow with the tools of the “scadlab” server: 1) `create_checkpoint` with the complete code if it is a new design, a variant or “another version”, or `update_checkpoint` if the user names an existing file or refers to the selected one and asks for changes; 2) `render` to validate it; 3) `preview` to look at it; 4) if it fails or does not look right, fix it with `update_checkpoint` on that same file (the broken attempt stays in the history) and go back to step 2. Do not paste the code in the answer instead of saving it, do not ask permission to create or edit the checkpoint, and do not use the shell.",
+	}
+	// La regla de editar el archivo que el usuario nombra (S16) y por qué se lee con
+	// read_checkpoint: las herramientas de archivo del CLI no dejan respaldo y piden
+	// rutas absolutas que el modelo no tiene por qué saber.
+	msgCLIPromptEdit = i18n.Msg{
+		ES: "Para leer un .scad usa `read_checkpoint` con su nombre; si el usuario nombra un archivo o se refiere al seleccionado y pide cambios, edítalo con `update_checkpoint`; crea uno nuevo solo si pide algo nuevo o una variante. Nunca escribas .scad con tus herramientas de archivo ni la shell.",
+		EN: "To read a .scad use `read_checkpoint` with its name; if the user names a file or refers to the selected one and asks for changes, edit it with `update_checkpoint`; create a new one only if they ask for something new or a variant. Never write .scad files with your file tools or the shell.",
+	}
+	// En «Solo consulta» también se lee con read_checkpoint: la ruta que el modelo inventaría para las
+	// herramientas de archivo del CLI es el mismo fallo, aunque no escriba.
+	msgCLIPromptRead = i18n.Msg{
+		ES: "Para leer un .scad usa `read_checkpoint` con su nombre, no las herramientas de archivo del CLI.",
+		EN: "To read a .scad use `read_checkpoint` with its name, not the CLI's file tools.",
+	}
+	msgCLIPromptSelected = i18n.Msg{
+		ES: "Checkpoint seleccionado en la app (es «este archivo» / «el actual»): %s",
+		EN: "Checkpoint selected in the app (it is “this file” / “the current one”): %s",
 	}
 	msgCLIPromptEmpty = i18n.Msg{
 		ES: "El proyecto todavía no tiene checkpoints: crea el primero ya, sin preguntar nada (sin `parent`).",

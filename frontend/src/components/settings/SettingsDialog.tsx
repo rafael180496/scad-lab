@@ -287,6 +287,22 @@ export function SettingsDialog({
                                 </div>
                             </div>
 
+                            <div className="mt-2 flex flex-col gap-4 border-t border-line pt-4">
+                                <span className="font-mono text-ui-10-5 tracking-[0.12em] text-faint uppercase">{t.settings.historyTitle}</span>
+                                <Field label={t.settings.historyMax} hint={t.settings.historyMaxHint}>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={200}
+                                        step={1}
+                                        className="w-32"
+                                        title={t.settings.historyMax}
+                                        value={s.historyMaxVersions || 20}
+                                        onChange={(e) => set('historyMaxVersions', Number(e.target.value))}
+                                    />
+                                </Field>
+                            </div>
+
                             <AppearanceSettings
                                 appearance={appearance}
                                 onChange={onAppearance}

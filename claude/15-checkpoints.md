@@ -1,6 +1,6 @@
-# Checkpoints: papelera, restaurar y padre activo
+# Checkpoints: papelera, restaurar, historial y padre activo
 
-Operaciones sobre los checkpoints del workspace (S3). Código en
+Operaciones sobre los checkpoints del workspace (S3; historial y edición en el lugar, S16). Código en
 `backend/checkpoint` (la misma lógica la usan los bindings de la app y el
 servidor MCP). Spec: [.claude/specs/s3-checkpoints-avanzados.md](../.claude/specs/s3-checkpoints-avanzados.md).
 Formato del archivo y creación: [claude/10-editor.md](10-editor.md).
@@ -8,7 +8,8 @@ Formato del archivo y creación: [claude/10-editor.md](10-editor.md).
 ## Nunca se borra
 
 Regla 3 de [technical.md](../.claude/rules/technical.md): ningún código de
-ScadLab borra un `.scad` por su cuenta. «Borrar» = **mover** a
+ScadLab borra un `.scad` por su cuenta (y solo lo reescribe con respaldo: ver
+«Historial y edición en el lugar»). «Borrar» = **mover** a
 `<ws>/.scadlab/trash/<AAAAMMDD-HHMMSS>-<archivo>` (hora local). Eliminar de verdad
 existe, pero **solo como acción explícita del usuario** en la papelera de la app (ver
 «Eliminación permanente»); ningún agente puede.
@@ -34,7 +35,7 @@ re-cuelgan del nombre nuevo.
 y el usuario no ve el ⚠ ni el SL002 por algo que hizo a propósito. Los nietos no se tocan. Con `TrashBranch` se va todo el
 subárbol y no hay nada que re-colgar.
 
-- **`SetParent(ws, file, parent)` es la única excepción a la inmutabilidad** (regla 3): es metadato del árbol, no el
+- **`SetParent(ws, file, parent)` reescribe sin respaldo** (excepción (a) de la regla 3): es metadato del árbol, no el
   modelo. Cambia **solo los bytes del valor de `parent=`** en la primera línea (misma regex que `workspace.Scan`, así lo
   escrito y lo leído coinciden): descripción, espacios, BOM, `\r\n` y el resto del archivo quedan byte a byte. Escritura
   atómica (temporal en la carpeta + rename) **conservando permisos y fecha de modificación** —cambiar de rama no es
@@ -63,7 +64,7 @@ herramienta o un parámetro que sugiera borrar. Mismo criterio que «Abrir en Ba
 
 - `PurgeTrashed`: valida el nombre (`ValidName` + formato de papelera), solo toca un archivo suelto **dentro de**
   `.scadlab/trash`; un enlace se quita a él, no a su destino; una carpeta no se elimina por esta vía. Borra también su
-  registro `.relink.json` y, desde la app, lo guardado en `checkpoint_trash` (`Store.ForgetCheckpointMeta`).
+  registro `.relink.json`, su carpeta de historial `<elemento>.history` (sin seguir enlaces) y, desde la app, lo guardado en `checkpoint_trash` (`Store.ForgetCheckpointMeta`).
 - `EmptyTrash`: vacía **todo** lo que haya en `.scadlab/trash` (checkpoints, registros y cualquier otra cosa: la confirmación
   lo dice) sin seguir enlaces; la carpeta queda. Devuelve cuántos checkpoints eran. `metaDir` rechaza una papelera que sea un
   enlace: nada fuera del workspace se toca. El botón está deshabilitado con la lista vacía.
@@ -83,6 +84,37 @@ nunca reemplaza) y quita el nombre de origen —el contenido sigue vivo bajo el
 nuevo—; donde no hay enlaces duros, o si el origen es un enlace simbólico, cae a
 comprobar y renombrar. Dos borrados del mismo nombre en el mismo segundo no se
 pisan: la marca de fecha corre de a un segundo (hasta 100).
+
+## Historial y edición en el lugar (S16)
+
+La IA edita **el archivo que el usuario nombra** (decisión del usuario: «editar el archivo con respaldo»); un checkpoint
+nuevo es solo para algo nuevo, una variante u «otra versión». Código en `backend/checkpoint/history.go`; la herramienta
+es `update_checkpoint` ([claude/13](13-mcp.md)). Segmento de la interfaz y del indicador «editado por la IA»:
+[claude/34](34-historial-checkpoints.md).
+
+| Función | Qué hace |
+|---|---|
+| `Update(ws, file, source, note, max)` | reescribe `file`: conserva la cabecera (`source` con la suya se descarta; `note` reemplaza `desc`); **idéntico byte a byte → `Unchanged`**, sin escribir ni respaldar. Si no: respaldo (`ReasonAI`, tool `update_checkpoint`) → escritura atómica (temporal + rename, conserva permisos, la fecha sí cambia) → poda |
+| `History` / `ReadVersion` | versiones de un archivo, la más nueva primero / su código |
+| `RestoreVersion(ws, file, id, max)` | guarda la actual (`ReasonRestore`) y escribe el cuerpo y `desc` de la versión conservando el `parent=` **actual**; restaurar se puede deshacer |
+| `EditedByAI` | la versión más nueva tiene `reason == "ai"`; lee un solo `.json` |
+
+- **Dónde**: `<ws>/.scadlab/history/<archivo.scad>/<id>.scad` + `<id>.json` (`savedAt`, `reason`, `tool`, `note`,
+  `size`). `id` = `AAAAMMDD-HHMMSS` hora local; si choca —o el reloj retrocede— toma el siguiente `-2`, `-3`… de la última
+  marca, así el id más grande es siempre el más reciente. El id se reserva con `O_EXCL` sobre el `.json` y el `.scad` se
+  escribe de forma atómica antes de completarlo: solo cuentan las versiones completas. `ValidVersionID` es la única puerta
+  de un id de fuera.
+- **Tope**: `Settings.HistoryMaxVersions` (1–200, 20 de fábrica; `max <= 0` = 20). Al pasarlo se borran las más viejas
+  de **ese** archivo: son respaldos, no checkpoints.
+- **Seguridad**: `.scadlab`, `history` y la carpeta del archivo no se siguen si son enlaces (`metaDir`); un archivo que es
+  un enlace no se reescribe; solo nombres de `ValidName`. Si el archivo solo está en la papelera, el error lo dice y
+  sugiere `restore_checkpoint`.
+- **Papelera**: el historial viaja con el archivo a `.scadlab/trash/<sello>-<archivo>.history/` y vuelve, con el nombre
+  con que volvió, a `.scadlab/history/`; si ya hay carpeta, se fusiona versión por versión sin pisar (un id ocupado toma el
+  siguiente). Un fallo al mover el historial no revierte el borrado ni la restauración: se devuelve el error junto con lo
+  hecho. `workspace.Scan` solo mira la raíz, así que el historial no aparece en el árbol.
+- Las escrituras directas con las herramientas de archivo de un CLI **no** dejan respaldo: las reglas se lo prohíben a la IA
+  para `.scad` y lo pendiente es denegarlas por patrón o respaldar desde el watcher.
 
 ## Padre activo
 
@@ -124,7 +156,8 @@ nuevo.
 
 [claude/13-mcp.md](13-mcp.md): `create_checkpoint` sin `parent` usa
 `ActiveParent` y, si no hay, el más nuevo; devuelve `activeParent` tras crear.
-`list_checkpoints` informa `activeParent` (`""` si no hay). Desde S12.c (T11) el MCP
+`list_checkpoints` informa `activeParent` (`""` si no hay); `update_checkpoint` edita un archivo que ya existe y no toca el
+activo. Desde S12.c (T11) el MCP
 **sí** expone el árbol completo en «Agente»: `set_active_parent`, `rename_checkpoint` (el rótulo, no el archivo),
 `trash_checkpoint` (`branch=true` con su rama), `list_trash` y `restore_checkpoint`, con la misma lógica de
 `backend/checkpoint` que los bindings. «Borrar» sigue siendo mandar a `.scadlab/trash/`: ninguna herramienta borra. Como
@@ -135,7 +168,7 @@ restaurado (`markRestored`) para que el watcher no lo trate como trabajo nuevo. 
 
 ## Pruebas
 
-`backend/checkpoint/{active,trash}_test.go` (tabla con `t.TempDir()`: nombre libre
+`backend/checkpoint/{active,trash,history}_test.go` (tabla con `t.TempDir()`: nombre libre
 y ocupado, ramas con nietos, activo que avanza / se mueve / queda colgado, nombres
 hostiles, enlaces simbólicos) y `TestActiveParentInMCP`. La hora del borrado se
 fija con la variable `now` del paquete.

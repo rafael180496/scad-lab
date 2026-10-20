@@ -45,7 +45,7 @@ main.go: os.Args[1] == "--mcp"  →  runMCP (main_mcp.go)  →  mcp.Serve(ctx, s
 
 El catálogo completo —cada herramienta, qué hace, si es de lectura o de escritura y en qué superficie está— vive en
 [25-herramientas-ia.md](25-herramientas-ia.md). Resumen: workspace y árbol (`list_checkpoints`, `read_checkpoint`,
-`create_checkpoint`, `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `list_trash`, `restore_checkpoint`,
+`create_checkpoint`, `update_checkpoint`, `set_active_parent`, `rename_checkpoint`, `trash_checkpoint`, `list_trash`, `restore_checkpoint`,
 `list_refs`), imágenes (`image_info`, `compare_with_image`, `trace_image_outline`, `image_to_heightmap`; S15), modelado (`render`, `lint`, `format`, `preview`, `measure`, `get_parameters`, `set_parameters`,
 `list_templates`, `get_template`, `create_from_template`, `list_libraries`, `install_library`, `list_skills`, `read_skill`),
 STL/3MF/OBJ (`inspect_reference`, `import_mesh`, `edit_mesh`) e impresión (`printer_info`, `list_printers`,
@@ -55,6 +55,19 @@ catálogo**.
 
 Detalles que no son obvios:
 
+- **`update_checkpoint(file, source, note?)`** (S16) edita **en el lugar** el archivo que el usuario nombró o tiene abierto
+  (`source` = el archivo completo, ≤ 2 MB); crear uno nuevo (`create_checkpoint`) es solo para algo nuevo, una variante u «otra
+  versión». Es de **escritura** y solo está en «Agente» (`EffectCheckpoint`: su resultado trae `file`, y
+  `mcp.UpdatesInPlace` la distingue porque no deja un `.scad` nuevo). Llama `checkpoint.Update` con
+  `Settings.HistoryMaxVersions` ([claude/15](15-checkpoints.md#historial-y-edición-en-el-lugar-s16)): valida el nombre, conserva la
+  cabecera, **guarda la versión anterior en el historial antes de escribir** y no escribe si el código es idéntico. Después corre
+  **lint + render** sobre lo que quedó en disco y devuelve `{file, updated, unchanged, version, parent, description, lint, render:
+  {ok, …}}`. Un render roto **no** es `isError`: el archivo sí cambió, así que `render.ok=false` trae los diagnósticos con
+  línea (el formato de `failedRender`) y el consejo de volver a llamar a `update_checkpoint` sobre el mismo archivo (el intento
+  roto queda en el historial). No toca el padre activo. Un archivo que solo está en la papelera da un error que sugiere
+  `restore_checkpoint`. «Solo consulta» la rechaza el `turnguard` ([26](26-antigravity-permisos.md)).
+  **Leer un `.scad` es con `read_checkpoint` y el nombre del archivo**, nunca con las herramientas de archivo del CLI (piden
+  rutas absolutas que el modelo no conoce: el origen del bug de S16) ni con la shell.
 - **Herramientas de imagen** (S15). `image_info` y `compare_with_image` son de **lectura**; `trace_image_outline` e
   `image_to_heightmap` son de **escritura** (efecto `EffectFiles`: dejan un `.svg` o un `.dat` en `refs/`, nunca pisan). La
   imagen se resuelve con `refmodel.ResolveImage` (solo `refs/` y `refs/images/`, mismo confinamiento que `ResolveRef`) y se
@@ -125,9 +138,9 @@ Detalles que no son obvios:
   `file` de **todas** las herramientas pasan por ahí; un test los prueba con
   `../`, rutas absolutas, subcarpetas, NUL y un enlace a un archivo externo.
 - `exports/` se comprueba igual: si es un enlace hacia afuera, no se escribe.
-- Los checkpoints son inmutables: `create_checkpoint` usa `O_EXCL` y avanza el
-  número si el nombre se ocupó entre medio; ninguna herramienta edita o borra un
-  `.scad` (`trash_checkpoint` lo **mueve** a `.scadlab/trash/` y `restore_checkpoint` lo trae de vuelta, sin pisar).
+- `create_checkpoint` usa `O_EXCL` y avanza el número si el nombre se ocupó entre medio. La única herramienta que reescribe
+  un `.scad` es `update_checkpoint`, y siempre con respaldo previo en `.scadlab/history/`; **ninguna borra** (`trash_checkpoint`
+  lo **mueve** a `.scadlab/trash/` y `restore_checkpoint` lo trae de vuelta, sin pisar).
   `rename_checkpoint`, `trash_checkpoint` y `set_active_parent` exigen `file` (vacío no es «el más nuevo»).
 - `refs/` y `lib/` se comprueban como `exports/` (una carpeta que sale del workspace no se usa); `install_library` solo baja
   lo del catálogo fijo, con SHA-256 y sin `..` ni enlaces ([25](25-herramientas-ia.md)).
@@ -154,7 +167,7 @@ con código 1 y el error en stderr.
 - `backend/mcp` — end-to-end por `io.Pipe` con OpenSCAD real (`t.Skip` si no
   está) y `SCADLAB_DATA_DIR` temporal: `initialize` (versiones), `tools/list`
   (todas con schema), cada `tools/call` (render OK y con error con línea,
-  `create_checkpoint` nunca pisa, `preview` devuelve PNG válido, `export` escribe
+  `create_checkpoint` nunca pisa, `update_checkpoint` edita en el lugar con respaldo (`tools_update_test.go`), `preview` devuelve PNG válido, `export` escribe
   en `exports/`, rutas fuera del workspace → `isError`), cancelación y stdout
   limpio.
 - `mcp_engine_test.go` — el servidor **sin OpenSCAD** (`SCADLAB_NO_SYSTEM_OPENSCAD=1`):

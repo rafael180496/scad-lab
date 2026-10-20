@@ -50,3 +50,28 @@ func TestClaudeAndCodexRules(t *testing.T) {
 		t.Errorf("%q", got)
 	}
 }
+
+// update_checkpoint (S16) es de escritura: solo «Agente» la permite en los CLIs que
+// aprueban por lista (Claude `--allowedTools`, Codex `enabled_tools`).
+func TestUpdateCheckpointIsAnAgentOnlyTool(t *testing.T) {
+	if !slices.Contains(WriteTools(), "update_checkpoint") || slices.Contains(ReadTools(), "update_checkpoint") {
+		t.Fatal("update_checkpoint va en writeTools y no en readTools")
+	}
+	if got := claudeAllowed(ModeEdit); !strings.Contains(","+got+",", ",mcp__scadlab__update_checkpoint,") {
+		t.Errorf("Claude en «Agente»: %q", got)
+	}
+	if got := claudeAllowed(ModeAsk); strings.Contains(got, "update_checkpoint") {
+		t.Errorf("Claude en «Solo consulta»: %q", got)
+	}
+	if got := codexEnabledTools(ModeEdit); !strings.Contains(got, `"update_checkpoint"`) {
+		t.Errorf("Codex en «Agente»: %q", got)
+	}
+	if got := codexEnabledTools(ModeAsk); strings.Contains(got, "update_checkpoint") {
+		t.Errorf("Codex en «Solo consulta»: %q", got)
+	}
+	// Y no puede reemplazar a la shell: la edición de archivos del CLI sigue
+	// denegada en «Solo consulta» y la shell en los dos modos.
+	if got := claudeDenied(ModeAsk); !strings.Contains(got, "Edit") || !strings.Contains(got, "Bash") {
+		t.Errorf("denegadas en consulta: %q", got)
+	}
+}

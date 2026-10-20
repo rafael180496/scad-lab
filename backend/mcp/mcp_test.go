@@ -20,7 +20,7 @@ import (
 )
 
 var wantTools = []string{
-	"list_checkpoints", "read_checkpoint", "create_checkpoint", "import_mesh", "render", "lint", "format",
+	"list_checkpoints", "read_checkpoint", "create_checkpoint", "update_checkpoint", "import_mesh", "render", "lint", "format",
 	"measure", "preview", "printer_info", "export", "list_templates", "get_template",
 	"set_active_parent", "rename_checkpoint", "trash_checkpoint", "list_trash", "restore_checkpoint", "list_refs",
 	"get_parameters", "set_parameters", "create_from_template",
@@ -630,7 +630,7 @@ func TestRenderErrorHasLineAndRenderErrorsMd(t *testing.T) {
 	if !found {
 		t.Fatalf("sin error con línea: %v", diags)
 	}
-	if msg, _ := out["message"].(string); !strings.Contains(msg, "NEW checkpoint") || !strings.Contains(msg, bad) {
+	if msg, _ := out["message"].(string); !strings.Contains(msg, "update_checkpoint") || !strings.Contains(msg, bad) {
 		t.Errorf("mensaje de corrección: %q", msg)
 	}
 	md := c.readWs("RENDER_ERRORS.md")
@@ -903,13 +903,13 @@ func TestCancelledNotificationStopsRender(t *testing.T) {
 
 // S12.c: las instrucciones del servidor dicen el flujo obligatorio.
 func TestServerInstructionsMandateFlow(t *testing.T) {
-	for _, want := range []string{"create_checkpoint", "render", "preview", "measure", "without asking", "never write .scad files through the shell", "color()",
+	for _, want := range []string{"create_checkpoint", "render", "preview", "measure", "without asking", "update_checkpoint", "read_checkpoint", "never write .scad files with the CLI", "no backup", "When in doubt, edit the one they named", "color()",
 		"create_from_template", "set_parameters", "edit_mesh", "suggest_orientation", "install_library", "trash_checkpoint"} {
 		if !strings.Contains(serverInstructions, want) {
 			t.Errorf("serverInstructions sin %q", want)
 		}
 	}
-	if len(serverInstructions) > 2200 {
+	if len(serverInstructions) > 2800 {
 		t.Errorf("serverInstructions demasiado larga (%d): deben ser pocas líneas", len(serverInstructions))
 	}
 }

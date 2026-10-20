@@ -501,7 +501,7 @@ export default function ChatPanel({workspaceId, onCheckpointCreated, currentFile
         }
     }
     // «Abrir en el editor»: ScadLab no tiene un borrador sin archivo (el editor
-    // muestra siempre un checkpoint, y los checkpoints son inmutables), así que abrir
+    // muestra siempre un checkpoint, y el editor manual no reescribe: guardar crea uno hijo), así que abrir
     // el código ES guardarlo como checkpoint nuevo —sin diálogo, con el nombre sacado
     // de su encabezado— y abrirlo: se selecciona en el árbol, el editor y el visor lo
     // siguen, y el panel Código se muestra si estaba oculto.

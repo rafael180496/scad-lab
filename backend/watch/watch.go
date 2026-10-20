@@ -25,12 +25,32 @@ import (
 // renderizaría— un archivo a medio escribir.
 const Debounce = 300 * time.Millisecond
 
+// Change es lo que cambió entre dos escaneos de la raíz, ya pasado el debounce.
+type Change struct {
+	// Added son los .scad que no estaban en el escaneo anterior (ordenados por
+	// nombre, puede ir vacío).
+	Added []string
+	// Updated son los .scad que ya existían y cuyo contenido se reescribió: lo hace
+	// un agente que edita un checkpoint en el lugar (update_checkpoint desde el
+	// subproceso --mcp de un CLI), «Restaurar versión» o cualquier editor externo.
+	// Se detecta por el tamaño y la fecha de modificación, no por el tipo de evento:
+	// una escritura atómica (temporal + rename) llega como Write, Create o Rename
+	// según el sistema y la API de fsnotify, y los tres son «el archivo cambió».
+	Updated []string
+}
+
+// sig identifica una versión del contenido de un archivo sin leerlo.
+type sig struct {
+	size  int64
+	mtime int64
+}
+
 // Watcher vigila un directorio (no recursivo). Close lo detiene.
 type Watcher struct {
 	fsw      *fsnotify.Watcher
 	dir      string
-	onChange func(added []string)
-	known    map[string]bool
+	onChange func(Change)
+	known    map[string]sig
 	done     chan struct{}
 	wg       sync.WaitGroup
 	once     sync.Once
@@ -43,6 +63,13 @@ type Watcher struct {
 // si va a hacer algo largo (un render) tiene que lanzarlo aparte, o Close
 // esperaría a que termine.
 func Start(dir string, onChange func(added []string)) (*Watcher, error) {
+	return StartChanges(dir, func(c Change) { onChange(c.Added) })
+}
+
+// StartChanges es Start para quien además quiere saber qué .scad existentes se
+// reescribieron (Change.Updated). Mismas garantías: debounce, llamadas
+// secuenciales desde una sola goroutine.
+func StartChanges(dir string, onChange func(Change)) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -53,13 +80,11 @@ func Start(dir string, onChange func(added []string)) (*Watcher, error) {
 		_ = fsw.Close()
 		return nil, err
 	}
-	w := &Watcher{fsw: fsw, dir: dir, onChange: onChange, known: map[string]bool{}, done: make(chan struct{})}
+	w := &Watcher{fsw: fsw, dir: dir, onChange: onChange, known: map[string]sig{}, done: make(chan struct{})}
 	// El scan inicial fija la línea de base: lo que ya estaba al abrir el
 	// workspace no cuenta como «nuevo» (si no, abrir un proyecto con 40
-	// checkpoints los renderizaría todos).
-	for _, f := range scadFiles(dir) {
-		w.known[f] = true
-	}
+	// checkpoints los renderizaría todos) ni como «reescrito».
+	w.known = scadSigs(dir)
 	w.wg.Add(1)
 	go w.loop()
 	return w, nil
@@ -115,24 +140,32 @@ func (w *Watcher) loop() {
 	}
 }
 
-// flush reescanea la raíz, calcula qué .scad son nuevos y avisa.
+// flush reescanea la raíz, calcula qué .scad son nuevos y cuáles se reescribieron,
+// y avisa.
 func (w *Watcher) flush() {
-	now := scadFiles(w.dir)
-	added := []string{}
-	next := make(map[string]bool, len(now))
-	for _, f := range now {
-		next[f] = true
-		if !w.known[f] {
-			added = append(added, f)
+	now := scadSigs(w.dir)
+	var c Change
+	for f, sg := range now {
+		prev, was := w.known[f]
+		switch {
+		case !was:
+			c.Added = append(c.Added, f)
+		case prev != sg:
+			c.Updated = append(c.Updated, f)
 		}
 	}
-	w.known = next
+	sort.Strings(c.Added)
+	sort.Strings(c.Updated)
+	if c.Added == nil {
+		c.Added = []string{}
+	}
+	w.known = now
 	select {
 	case <-w.done:
 		return
 	default:
 	}
-	w.onChange(added)
+	w.onChange(c)
 }
 
 // isScad dice si un evento es de un .scad. RENDER_ERRORS.md, printer.json y
@@ -141,18 +174,25 @@ func isScad(path string) bool {
 	return strings.EqualFold(filepath.Ext(path), ".scad")
 }
 
-func scadFiles(dir string) []string {
+// scadSigs lista los .scad de la raíz con su tamaño y fecha de modificación.
+func scadSigs(dir string) map[string]sig {
 	ents, err := os.ReadDir(dir)
+	out := map[string]sig{}
 	if err != nil {
-		return nil
+		return out
 	}
-	out := []string{}
 	for _, e := range ents {
-		if !e.IsDir() && isScad(e.Name()) {
-			out = append(out, e.Name())
+		if e.IsDir() || !isScad(e.Name()) {
+			continue
 		}
+		// Un enlace simbólico se sigue a propósito (Stat y no Lstat): lo que cuenta
+		// es si cambió el contenido que se ve, igual que workspace.Scan.
+		fi, err := os.Stat(filepath.Join(dir, e.Name()))
+		if err != nil || fi.IsDir() {
+			continue
+		}
+		out[e.Name()] = sig{size: fi.Size(), mtime: fi.ModTime().UnixNano()}
 	}
-	sort.Strings(out)
 	return out
 }
 

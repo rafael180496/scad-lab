@@ -1,4 +1,4 @@
-import {Code2, Copy, FolderSearch, GitBranch, GitCompare, History, ListCollapse, ListTree, Network, Pencil, Trash2, WandSparkles} from 'lucide-react'
+import {Code2, Copy, FileClock, FileDiff, FolderSearch, GitBranch, GitCompare, History, ListCollapse, ListTree, Network, Pencil, Trash2, Undo2, WandSparkles} from 'lucide-react'
 import type {store} from '../../../wailsjs/go/models'
 import {MakeCheckpointRoot, ResumeCheckpointSession, RevealCheckpoint, SetActiveParent, TrashCheckpoint} from '../../../wailsjs/go/main/App'
 import {agentName, resumeKind} from '../../lib/checkpointInfo'
@@ -8,10 +8,12 @@ import {modifyWithAI} from '../../lib/meshEditAI'
 import {errorText} from '../../lib/errors'
 import {isMac, keys} from '../../lib/platform'
 import {openChat, terminalOpened} from '../../lib/sessionBridge'
+import {openDiff, openHistory} from '../../lib/historyUI'
 import {fmt, getLanguage, useT} from '../../i18n'
 import {confirmDialog} from '../ui/Dialog'
 import type {MenuEntry} from '../ui/Menu'
 import {toast} from '../ui/Toast'
+import {undoAIChange} from './historyActions'
 
 // Nombre del checkpoint tal como lo ve quien mira el árbol: su rótulo, o el
 // archivo sin extensión.
@@ -100,6 +102,7 @@ export function useCheckpointActions(workspaceId: number) {
         const file = cp.fileName
         const kids = countDescendants(node)
         const m = c.menu
+        const h = t.history
         const canCompare = !!cp.parentFile && !node.orphan
         const kind = resumeKind(cp)
         const del = isMac() ? '⌫' : getLanguage() === 'es' ? 'Supr' : 'Del'
@@ -128,6 +131,26 @@ export function useCheckpointActions(workspaceId: number) {
                 icon: <WandSparkles className="icon-ui-14" />,
                 onSelect: () => void modifyWithAI(workspaceId, file, t),
             },
+            // Historial de versiones (S16). «Deshacer» y «Ver diferencias» solo si el último cambio del archivo lo hizo la IA.
+            ...(cp.editedByAI
+                ? [
+                      {
+                          id: 'undo-ai',
+                          label: h.undo,
+                          title: fmt(h.undoHint, {file}),
+                          icon: <Undo2 className="icon-ui-14" />,
+                          onSelect: () => void undoAIChange(workspaceId, file, t),
+                      } satisfies MenuEntry,
+                      {
+                          id: 'history-diff',
+                          label: h.diff,
+                          title: fmt(h.diffHint, {file}),
+                          icon: <FileDiff className="icon-ui-14" />,
+                          onSelect: () => openDiff(workspaceId, file),
+                      } satisfies MenuEntry,
+                  ]
+                : []),
+            {id: 'history', label: h.open, title: fmt(h.openHint, {file}), icon: <FileClock className="icon-ui-14" />, onSelect: () => openHistory(workspaceId, file)},
             {kind: 'separator'},
             {
                 id: 'branch',

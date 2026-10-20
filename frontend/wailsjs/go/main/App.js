@@ -262,6 +262,10 @@ export function ListChats(arg1) {
   return window['go']['main']['App']['ListChats'](arg1);
 }
 
+export function ListCheckpointHistory(arg1, arg2) {
+  return window['go']['main']['App']['ListCheckpointHistory'](arg1, arg2);
+}
+
 export function ListDetectedCLIs() {
   return window['go']['main']['App']['ListDetectedCLIs']();
 }
@@ -374,6 +378,10 @@ export function ReadCheckpointPair(arg1, arg2) {
   return window['go']['main']['App']['ReadCheckpointPair'](arg1, arg2);
 }
 
+export function ReadCheckpointVersion(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ReadCheckpointVersion'](arg1, arg2, arg3);
+}
+
 export function ReadSkillFile(arg1, arg2) {
   return window['go']['main']['App']['ReadSkillFile'](arg1, arg2);
 }
@@ -448,6 +456,10 @@ export function ResizeTerminal(arg1, arg2, arg3) {
 
 export function RestoreCheckpoint(arg1, arg2) {
   return window['go']['main']['App']['RestoreCheckpoint'](arg1, arg2);
+}
+
+export function RestoreCheckpointVersion(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RestoreCheckpointVersion'](arg1, arg2, arg3);
 }
 
 export function ResumeCheckpointSession(arg1, arg2) {

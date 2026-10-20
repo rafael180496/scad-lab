@@ -2,8 +2,12 @@ package prompts
 
 import (
 	"fmt"
+	"io/fs"
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"scadlab/assets"
 )
 
 func agentContext(lang string) AgentContext {
@@ -41,15 +45,15 @@ func TestAgentPromptRendersCleanInBothLanguages(t *testing.T) {
 }
 
 // El bucle completo está en el prompt: las seis etapas, las herramientas que las
-// hacen y la regla de corregir en un checkpoint NUEVO.
+// hacen y la regla de editar con update_checkpoint.
 func TestAgentPromptDescribesTheLoop(t *testing.T) {
 	tools := []string{
 		"printer_info", "list_checkpoints", "create_checkpoint", "render", "preview", "measure",
 		"list_skills", "read_skill", "inspect_reference", "list_templates", "lint",
 	}
 	for lang, wants := range map[string][]string{
-		"es": {"Hermes", "Responde siempre en español", "checkpoint **nuevo**", "`parent=<el que falló>`", "`color()`", "Parar.", "**8 pasos**", "mírala de verdad"},
-		"en": {"Hermes", "Always answer in English", "**new** checkpoint", "`parent=<the one that failed>`", "`color()`", "Stop.", "**8 steps**", "really look at it"},
+		"es": {"Hermes", "Responde siempre en español", "`update_checkpoint`", "“este”, “el actual”", "`color()`", "Parar.", "**8 pasos**", "mírala de verdad"},
+		"en": {"Hermes", "Always answer in English", "`update_checkpoint`", "“this”, “the current one”", "`color()`", "Stop.", "**8 steps**", "really look at it"},
 	} {
 		got := AgentSystemPrompt(agentContext(lang))
 		for _, w := range append(append([]string{}, tools...), wants...) {
@@ -86,7 +90,7 @@ func TestAgentPromptUsesContext(t *testing.T) {
 	got := AgentSystemPrompt(c)
 	for _, want := range []string{
 		"256 × 256.5 × 250 mm", "**6 colores**", "Bambu Lab A1 mini", "Caja de sensores",
-		"cuelga de `002-lid.scad`", "003-hinge.scad", "Siguiente número: 004", "Checkpoint abierto: `002-lid.scad`",
+		"cuelga de `002-lid.scad`", "003-hinge.scad", "Siguiente número: 004", "“el actual”): `002-lid.scad`",
 		"color(\"red\") cube([10, 10, 2]);", "6)",
 	} {
 		if !strings.Contains(got, want) {
@@ -275,8 +279,8 @@ func TestAgentPromptNoVoseo(t *testing.T) {
 // workspace vacío, a crear el primero sin preguntar.
 func TestAgentPromptMandatesCheckpoint(t *testing.T) {
 	for lang, wants := range map[string][]string{
-		"es": {"nunca termina sin haber creado", "crea el primero de inmediato y no preguntes", "Créalo ya", "nómbralo por su archivo", "Pide aclaraciones solo si el pedido es imposible de interpretar"},
-		"en": {"never ends without having created", "create the first one right away and do not ask", "Create it now", "name it by its file", "Ask for clarification only if the request is impossible to interpret"},
+		"es": {"nunca termina sin dejar un checkpoint que renderice", "crea el primero de inmediato y no preguntes", "Créalo ya", "nómbralo por su archivo", "Pide aclaraciones solo si el pedido es imposible de interpretar"},
+		"en": {"never ends without leaving a checkpoint that renders", "create the first one right away and do not ask", "Create it now", "name it by its file", "Ask for clarification only if the request is impossible to interpret"},
 	} {
 		got := AgentSystemPrompt(AgentContext{Context: Context{Lang: lang}, Tools: true})
 		for _, w := range wants {
@@ -310,6 +314,63 @@ func TestAgentPromptNamesThePrinterAndTheSlicer(t *testing.T) {
 			if strings.Contains(got, bad) {
 				t.Errorf("%s: el prompt de una Prusa dice %q", lang, bad)
 			}
+		}
+	}
+}
+
+// S16: la regla es una sola en todas partes —el archivo que el usuario nombra o
+// tiene abierto se edita con update_checkpoint; uno nuevo solo para algo nuevo o
+// una variante— y el viejo «checkpoints inmutables / nunca edites» dirigido a la
+// IA no sobrevive en ningún texto embebido (prompts, reglas, starter, skills).
+func TestEditRuleIsUniformAndTheOldImmutableRuleIsGone(t *testing.T) {
+	for lang, wants := range map[string][]string{
+		"es": {"Cuando el usuario nombra un archivo existente o se refiere al abierto/seleccionado (“este”, “el actual”) y pide cambios, **edítalo con `update_checkpoint`**",
+			"solo si pide algo nuevo, una variante u “otra versión”", "Ante la duda, edita el que nombró", "Para leer un `.scad` usa `read_checkpoint` con el nombre del archivo"},
+		"en": {"When the user names an existing file, or refers to the open/selected one (“this”, “the current one”), and asks for changes, **edit it with `update_checkpoint`**",
+			"only if they ask for something new, a variant or “another version”", "When in doubt, edit the one they named", "To read a `.scad` use `read_checkpoint` with the file name"},
+	} {
+		got := AgentSystemPrompt(agentContext(lang))
+		for _, w := range wants {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: el prompt de agente no dice %q", lang, w)
+			}
+		}
+		for _, bad := range []string{"inmutable", "immutable", "Nunca editas", "You never edit"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("%s: el prompt de agente dice %q", lang, bad)
+			}
+		}
+		// «Solo consulta»: sin herramientas, entrega el archivo completo, sin «inmutable».
+		sys := SystemPrompt(Context{Lang: lang})
+		if strings.Contains(sys, "inmutable") || strings.Contains(sys, "immutable") || strings.Contains(sys, "update_checkpoint") {
+			t.Errorf("%s: el prompt de consulta: %q", lang, sys)
+		}
+		if !strings.Contains(sys, "**complete**") && !strings.Contains(sys, "**completo**") {
+			t.Errorf("%s: el prompt de consulta pide el archivo completo", lang)
+		}
+	}
+
+	banned := []string{"inmutable", "immutable", "Nunca sobrescribir ni borrar", "nunca editando", "never by editing", "checkpoint NUEVO con", "NEW checkpoint with parent"}
+	for _, root := range []string{"prompts", "workspace", "skills"} {
+		err := fs.WalkDir(assets.FS, root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			raw, err := fs.ReadFile(assets.FS, path)
+			if err != nil || !utf8.Valid(raw) {
+				return err
+			}
+			text := string(raw)
+			text = strings.ReplaceAll(text, "inmutables por ámbito", "") // OpenSCAD: variables
+			for _, bad := range banned {
+				if strings.Contains(text, bad) {
+					t.Errorf("%s dice %q", path, bad)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
 }

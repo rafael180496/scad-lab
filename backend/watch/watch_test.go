@@ -177,3 +177,90 @@ func TestAgentsFolderDoesNotTriggerARescan(t *testing.T) {
 		t.Fatalf("los archivos de .agents/ no son un .scad: no deben avisar (%v)", c)
 	}
 }
+
+// changeRecorder junta los avisos con Updated de StartChanges.
+type changeRecorder struct {
+	mu    sync.Mutex
+	calls []Change
+}
+
+func (r *changeRecorder) on(c Change) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, c)
+}
+
+func (r *changeRecorder) wait(t *testing.T, n int) []Change {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		c := append([]Change(nil), r.calls...)
+		r.mu.Unlock()
+		if len(c) >= n {
+			return c
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("se esperaban %d avisos", n)
+	return nil
+}
+
+func startChanges(t *testing.T, dir string, r *changeRecorder) {
+	t.Helper()
+	w, err := StartChanges(dir, r.on)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+}
+
+// Reescribir un .scad que ya existía (un agente que lo edita en el lugar) se
+// informa como Updated y no como nuevo.
+func TestRewriteOfAnExistingFileIsReportedAsUpdated(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "001-base.scad")
+	write(t, dir, "002-x.scad")
+	r := &changeRecorder{}
+	startChanges(t, dir, r)
+	if err := os.WriteFile(filepath.Join(dir, "002-x.scad"), []byte("cube([2,2,2]);\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := r.wait(t, 1)[0]
+	if !reflect.DeepEqual(got.Updated, []string{"002-x.scad"}) || len(got.Added) != 0 {
+		t.Fatalf("cambio = %+v, se esperaba 002-x.scad reescrito y nada nuevo", got)
+	}
+}
+
+// La escritura atómica (temporal + rename, la que usa update_checkpoint) llega con
+// otros tipos de evento, pero el resultado es el mismo.
+func TestAtomicReplaceIsReportedAsUpdated(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "002-x.scad")
+	r := &changeRecorder{}
+	startChanges(t, dir, r)
+	tmp := filepath.Join(dir, ".002-x.scad-1.tmp")
+	if err := os.WriteFile(tmp, []byte("sphere(3);\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, filepath.Join(dir, "002-x.scad")); err != nil {
+		t.Fatal(err)
+	}
+	got := r.wait(t, 1)[0]
+	if !reflect.DeepEqual(got.Updated, []string{"002-x.scad"}) || len(got.Added) != 0 {
+		t.Fatalf("cambio = %+v", got)
+	}
+}
+
+// Un archivo nuevo no es Updated, y el aviso de Start (solo nuevos) sigue igual.
+func TestNewFileIsAddedNotUpdated(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "001-base.scad")
+	r := &changeRecorder{}
+	startChanges(t, dir, r)
+	write(t, dir, "002-nuevo.scad")
+	got := r.wait(t, 1)[0]
+	if !reflect.DeepEqual(got.Added, []string{"002-nuevo.scad"}) || len(got.Updated) != 0 {
+		t.Fatalf("cambio = %+v", got)
+	}
+}

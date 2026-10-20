@@ -87,6 +87,7 @@ el clic derecho, el «…» y el teclado (F2, Supr/⌫, Shift+F10); los atajos d
 montado). «Comparar con el padre» es `components/editor/DiffViewer.tsx`
 (`DiffEditor` de Monaco, local), dentro del panel Código. Detalle de la lógica:
 [claude/15-checkpoints.md](15-checkpoints.md).
+Historial de versiones (S16): `components/workspace/HistoryDialogs.tsx` + `HistoryControls.tsx` (estado en `lib/historyUI.ts`, lógica pura probada en `lib/history.ts`), el indicador «Editado por la IA» del nodo y el evento `checkpoint:updated` que relee y vuelve a renderizar el archivo elegido: [34-historial-checkpoints.md](34-historial-checkpoints.md).
 
 ## Editor y ventana (S4)
 

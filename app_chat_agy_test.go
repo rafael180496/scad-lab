@@ -55,15 +55,20 @@ NOTIF='{"jsonrpc":"2.0","method":"notifications/initialized"}'
 n=0
 while read -r tool; do
   n=$((n+1))
-  emit "{\"event\":\"step_update\",\"step_update\":{\"step_index\":$n,\"state\":\"ACTIVE\",\"step_type\":\"call_mcp_tool\",\"tool_name\":\"call_mcp_tool\",\"tool_input\":{\"ServerName\":\"scadlab\",\"ToolName\":\"$tool\",\"Arguments\":{}}}}"
+  # Los argumentos y el resultado de la herramienta: por defecto vacíos; una prueba puede
+  # dejar args.<herramienta> (JSON) y out.<herramienta> (el JSON del resultado, ya con \" escapadas).
+  args='{}'
+  if [ -f "$d/args.$tool" ]; then args=$(cat "$d/args.$tool");
+  elif [ "$tool" = "create_checkpoint" ]; then args='{"label":"caja","source":"color(\"red\") cube(10);"}'; fi
+  out='{\"ok\":true}'
+  [ -f "$d/out.$tool" ] && out=$(cat "$d/out.$tool")
+  emit "{\"event\":\"step_update\",\"step_update\":{\"step_index\":$n,\"state\":\"ACTIVE\",\"step_type\":\"call_mcp_tool\",\"tool_name\":\"call_mcp_tool\",\"tool_input\":{\"ServerName\":\"scadlab\",\"ToolName\":\"$tool\",\"Arguments\":$args}}}"
   # La regla de permiso: sin ella, el rechazo de verdad y el turno termina.
   if ! { [ -f "$settings" ] && grep -F "\"mcp(scadlab/$tool)\"" "$settings" >/dev/null 2>&1; }; then
     emit "{\"event\":\"step_update\",\"step_update\":{\"step_index\":$n,\"state\":\"ERROR\",\"step_type\":\"call_mcp_tool\",\"tool_name\":\"call_mcp_tool\",\"tool_info\":\"permission check failed for mcp \\\"scadlab/$tool\\\": user denied permission for mcp(scadlab/$tool)\\nDo not attempt to circumvent this denial.\"}}"
     emit '{"event":"result","result":{"conversation_id":"aaaaaaaa-0000-4000-8000-000000000001","status":"SUCCESS","response":"","usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}'
     exit 0
   fi
-  args='{}'
-  if [ "$tool" = "create_checkpoint" ]; then args='{"label":"caja","source":"color(\"red\") cube(10);"}'; fi
   CALL="{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool\",\"arguments\":$args}}"
   resp=$(printf '%s\n%s\n%s\n' "$INIT" "$NOTIF" "$CALL" | "$bin" --mcp 2>"$d/mcp.stderr")
   printf '%s\n' "$resp" > "$d/resp.$n.$tool"
@@ -72,7 +77,7 @@ while read -r tool; do
       emit "{\"event\":\"step_update\",\"step_update\":{\"step_index\":$n,\"state\":\"ERROR\",\"step_type\":\"call_mcp_tool\",\"tool_name\":\"call_mcp_tool\",\"tool_info\":\"el servidor de ScadLab rechazó la herramienta\"}}"
       ;;
     *)
-      emit "{\"event\":\"step_update\",\"step_update\":{\"step_index\":$n,\"state\":\"DONE\",\"step_type\":\"call_mcp_tool\",\"tool_name\":\"call_mcp_tool\",\"output\":\"{\\\"ok\\\":true}\"}}"
+      emit "{\"event\":\"step_update\",\"step_update\":{\"step_index\":$n,\"state\":\"DONE\",\"step_type\":\"call_mcp_tool\",\"tool_name\":\"call_mcp_tool\",\"output\":\"$out\"}}"
       ;;
   esac
 done < "$d/calls.agy"

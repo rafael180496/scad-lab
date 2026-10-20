@@ -34,9 +34,9 @@ import (
 //   - el zip se verifica ANTES de extraerse; un SHA distinto no instala nada;
 //   - todo o nada: se extrae a una carpeta temporal dentro de lib/ y se renombra
 //     de una vez, así que una descarga cortada no deja media librería;
-//   - nunca se actualiza en el lugar: los checkpoints son inmutables y uno que ya
-//     usa BOSL2 no debe cambiar porque la librería cambió. Si ya está instalada,
-//     no se toca.
+//   - nunca se actualiza en el lugar: un checkpoint que ya usa BOSL2 no debe
+//     cambiar de resultado porque la librería cambió (el include no lleva versión
+//     y el render se guarda por contenido). Si ya está instalada, no se toca.
 //
 // Las librerías las baja el usuario (la herramienta corre en su máquina, a su
 // pedido); ScadLab no las redistribuye. Cada licencia va en el catálogo.
@@ -135,7 +135,7 @@ func (e *env) libraryTools() []Tool {
 		{
 			Name: "install_library",
 			Description: "Install one library from the fixed catalog (see list_libraries) into <workspace>/lib/<name>. It DOWNLOADS the library from GitHub (needs internet): a pinned commit whose SHA-256 is checked before anything is extracted, all-or-nothing. " +
-				"Never replaces or updates an installed library (checkpoints are immutable and may depend on it): if it is already there it does nothing and says so. Records the install in lib/LIBRARIES.txt. Install only when the design needs it.",
+				"Never replaces or updates an installed library (existing checkpoints include it and must not change their result because the library changed): if it is already there it does nothing and says so. Records the install in lib/LIBRARIES.txt. Install only when the design needs it.",
 			InputSchema: obj(map[string]any{"name": enumProp("Library name from list_libraries.", libNamesList()...)}, "name"),
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true},
 			handler:     e.installLibrary,

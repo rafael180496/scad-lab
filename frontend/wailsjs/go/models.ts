@@ -41,6 +41,47 @@ export namespace checkpoint {
 	        this.trashedAt = source["trashedAt"];
 	    }
 	}
+	export class Version {
+	    id: string;
+	    // Go type: time
+	    savedAt: any;
+	    reason: string;
+	    tool: string;
+	    note: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Version(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.savedAt = this.convertValues(source["savedAt"], null);
+	        this.reason = source["reason"];
+	        this.tool = source["tool"];
+	        this.note = source["note"];
+	        this.size = source["size"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 
@@ -522,6 +563,42 @@ export namespace main {
 	        this.partialSeq = source["partialSeq"];
 	        this.steps = this.convertValues(source["steps"], hermes.Step);
 	        this.usage = this.convertValues(source["usage"], hermes.Usage);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CheckpointHistory {
+	    file: string;
+	    versions: checkpoint.Version[];
+	    editedByAI: boolean;
+	    max: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CheckpointHistory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file = source["file"];
+	        this.versions = this.convertValues(source["versions"], checkpoint.Version);
+	        this.editedByAI = source["editedByAI"];
+	        this.max = source["max"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2342,6 +2419,7 @@ export namespace store {
 	    collapsed: boolean;
 	    fileMtime: number;
 	    createdAt: number;
+	    editedByAI: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Checkpoint(source);
@@ -2361,6 +2439,7 @@ export namespace store {
 	        this.collapsed = source["collapsed"];
 	        this.fileMtime = source["fileMtime"];
 	        this.createdAt = source["createdAt"];
+	        this.editedByAI = source["editedByAI"];
 	    }
 	}
 	export class DockLayoutEntry {
@@ -2494,6 +2573,7 @@ export namespace store {
 	    slicerPaths: Record<string, string>;
 	    autoRender: boolean;
 	    renderTimeoutSec: number;
+	    historyMaxVersions: number;
 	    autoIterate: boolean;
 	    mcpEnabled: boolean;
 	    swatches: string[];
@@ -2535,6 +2615,7 @@ export namespace store {
 	        this.slicerPaths = source["slicerPaths"];
 	        this.autoRender = source["autoRender"];
 	        this.renderTimeoutSec = source["renderTimeoutSec"];
+	        this.historyMaxVersions = source["historyMaxVersions"];
 	        this.autoIterate = source["autoIterate"];
 	        this.mcpEnabled = source["mcpEnabled"];
 	        this.swatches = source["swatches"];

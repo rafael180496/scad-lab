@@ -14,9 +14,10 @@ import (
 )
 
 // La caché guarda <clave>.stl + <clave>.json (el Result) en cacheDir. La clave
-// depende del CONTENIDO, no de la ruta ni de la fecha: un checkpoint es
-// inmutable, pero sus include/use no (lib/ se edita), y una malla vieja servida
-// porque el .scad no cambió sería justo el error que nadie sabe explicar.
+// depende del CONTENIDO, no de la ruta ni de la fecha: un checkpoint se
+// puede reescribir en el lugar (update_checkpoint) y sus include/use cambian sin
+// tocar el .scad (lib/ se edita), y una malla vieja servida porque el nombre no
+// cambió sería justo el error que nadie sabe explicar.
 
 // defaultMaxCacheBytes es el tope de la caché: 1 GB. Un STL de una pieza
 // detallada pesa decenas de MB y los checkpoints se acumulan; sin tope la

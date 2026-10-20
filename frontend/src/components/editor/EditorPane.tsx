@@ -18,6 +18,7 @@ import {isMod, withKeys} from '../../lib/platform'
 import {fmt, useT, type Dict} from '../../i18n'
 import {cn} from '../../lib/cn'
 import {StarterAction} from '../workspace/StarterAction'
+import {HistoryControls} from '../workspace/HistoryControls'
 
 // EditorShot: estado inicial para el banco de capturas (src/uishot.tsx).
 export type EditorShot = {mode: 'edit' | 'search' | 'save'; label?: string; description?: string}
@@ -47,8 +48,9 @@ export async function confirmLeave(t: Dict, file: string | null) {
 }
 
 // EditorPane es el panel de código: cabecera con el modo y las acciones, y
-// Monaco debajo (que entra con lazy). Los checkpoints son inmutables: el
-// código se abre en solo lectura y «Guardar» crea un checkpoint hijo.
+// Monaco debajo (que entra con lazy). El editor no reescribe archivos: el
+// código se abre en solo lectura y «Guardar» crea un checkpoint hijo (la IA sí edita
+// en el lugar, con respaldo: ver claude/34-historial-checkpoints.md).
 // Ancho del panel de código (a interfaz 100 %) por debajo del cual la barra pasa a solo ícono.
 const EDITOR_COMPACT_W = 400
 // Ancho del panel (a interfaz 100 %) desde el que la comparación con el padre se
@@ -63,6 +65,7 @@ export function EditorPane({
     settings,
     onSaved,
     emptyWorkspace = false,
+    editedByAI = false,
     restore,
     onRestored,
     shot,
@@ -75,6 +78,8 @@ export function EditorPane({
     onSaved: (fileName: string) => void
     /** El proyecto no tiene ningún checkpoint: se ofrece «Crear un modelo de inicio». */
     emptyWorkspace?: boolean
+    /** La última versión del archivo la dejó la IA (S16): indicador, «Deshacer cambio de la IA» y «Ver diferencias». */
+    editedByAI?: boolean
     /** Estado que dejó este proyecto al irse a segundo plano (se aplica al volver y se consume). */
     restore?: EditorSnap | null
     onRestored?: () => void
@@ -282,6 +287,7 @@ export function EditorPane({
     ) : null
     const actions = file ? (
         <>
+            {workspaceId != null ? <HistoryControls workspaceId={workspaceId} file={file} editedByAI={editedByAI} compact={compact} /> : null}
             <span
                 className={cn(
                     'mr-1 flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-ui-11',

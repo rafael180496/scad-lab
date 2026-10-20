@@ -243,3 +243,14 @@ Plan: [.claude/specs/s15-modelo-desde-imagen.md](../.claude/specs/s15-modelo-des
 | 15.2 | Fotos del chat a `refs/images/` (deduplicadas), rutas en el turno de Hermes y de los CLIs, «Crear desde una imagen», tarjetas de comparación y trazado, aviso sin visión con «Cambiar a un modelo con visión» / «Usar trazado de contorno»; capturas, ayuda, CHANGELOG | FS | ✅ |
 | 15.3 | Integración: una foto grande se reduce al adjuntar (≤ 2048 px y ≤ 5 MB al modelo; el original a `refs/images/`; entrada hasta 20 MB), verificación completa y humo con servidor simulado (foto sintética de 3000 px → checkpoint renderizado → `compare_with_image` en vista frontal, IoU 1) | architect | ✅ |
 | 15.4 | Probar con un modelo real con visión, fotos reales de una pieza y un logo, y con un CLI (Claude Code / Codex) leyendo `refs/images/` | usuario | ⬜ |
+
+## S16 — La IA edita el archivo que nombras, con historial y deshacer ✅ (falta 16.4, prueba del usuario con el `agy` real)
+
+Plan: [.claude/specs/s16-ia-edita-con-historial.md](../.claude/specs/s16-ia-edita-con-historial.md). Detalle: [34-historial-checkpoints.md](34-historial-checkpoints.md).
+
+| # | Tarea | Dueño | Estado |
+|---|---|---|---|
+| 16.1 | Historial por archivo en `backend/checkpoint` (respaldo antes de escribir, tope, restaurar, papelera y purga se lo llevan), herramienta `update_checkpoint` (MCP y Hermes, solo «Agente», lint + render), clasificación en `effects.go`/`modes.go`, regla nueva en servidor MCP, `RULES.md.tmpl`, prompts, skills, `RENDER_ERRORS.md`; regla 3 de `technical.md` | OS | ✅ |
+| 16.2 | Bindings de historial, evento `checkpoint:updated` (chat y watcher), prompt CLI con ruta absoluta y archivo seleccionado, indicador «Editado por la IA», «Deshacer cambio de la IA», «Ver diferencias», historial, tope en Configuración; pruebas por proveedor con CLIs falsos y Hermes simulado; capturas, ayuda, CHANGELOG, `claude/34` | FS | ✅ |
+| 16.3 | Integración y verificación completa | architect | ✅ |
+| 16.4 | Probar con el `agy` real (y los demás CLIs) el pedido «modifica 002-….scad» y «hazme una variante» | usuario | ⬜ |

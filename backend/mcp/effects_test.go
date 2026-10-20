@@ -39,7 +39,7 @@ func TestEffectsCoverTheWriteTools(t *testing.T) {
 	}
 	// Los grupos que usa el resto del código, fijos a propósito: cambiarlos es una
 	// decisión (hermes, el autosave, el árbol y CREATING_TOOLS del frontend).
-	wantCreate := []string{"create_checkpoint", "create_from_template", "edit_mesh", "import_mesh", "set_parameters"}
+	wantCreate := []string{"create_checkpoint", "create_from_template", "edit_mesh", "import_mesh", "set_parameters", "update_checkpoint"}
 	if got := ToolsWithEffect(EffectCheckpoint); !slices.Equal(got, wantCreate) {
 		t.Errorf("crean checkpoint: %v, esperaba %v", got, wantCreate)
 	}
@@ -56,6 +56,15 @@ func TestEffectsCoverTheWriteTools(t *testing.T) {
 		if CreatesCheckpoint(n) || ChangesTree(n) || ChangesConfig(n) {
 			t.Errorf("%s solo escribe archivos: no crea checkpoints ni cambia el árbol ni la configuración", n)
 		}
+	}
+	// update_checkpoint es la única que reescribe en el lugar (no crea un .scad nuevo).
+	for _, n := range wantCreate {
+		if UpdatesInPlace(n) != (n == "update_checkpoint") {
+			t.Errorf("UpdatesInPlace(%s) = %v", n, UpdatesInPlace(n))
+		}
+	}
+	if UpdatesInPlace("render") || UpdatesInPlace("no_existe") || UpdatesInPlace("") {
+		t.Error("UpdatesInPlace solo es cierto para update_checkpoint")
 	}
 	for _, n := range wantCreate {
 		if !CreatesCheckpoint(n) || ChangesTree(n) {
@@ -96,12 +105,13 @@ func TestDeclaredEffectsMatchWhatTheToolsDo(t *testing.T) {
 		"set_parameters":       {"file": base, "values": map[string]any{"width": 35}},
 		"create_from_template": {"name": "knob"},
 		"edit_mesh":            {"file": base, "operations": []any{map[string]any{"op": "center"}}},
+		"update_checkpoint":    {"file": base, "source": srcCube},
 	}
 	// edit_mesh congela la malla del checkpoint: necesita un motor (el instalado o el integrado).
 	if tool := tb.e.openscad(context.Background(), ""); !tool.Found && !tb.e.wasm.Available() {
 		delete(calls, "edit_mesh")
 	}
-	if len(calls) < 4 {
+	if len(calls) < 5 {
 		t.Fatalf("faltan herramientas por probar: %v", calls)
 	}
 	for _, name := range ToolsWithEffect(EffectCheckpoint) {
@@ -114,6 +124,13 @@ func TestDeclaredEffectsMatchWhatTheToolsDo(t *testing.T) {
 		}
 		before := scads()
 		file, _ := tb.mustJSON(t, name, args)["file"].(string)
+		if UpdatesInPlace(name) {
+			// Reescribe un .scad que ya existía: devuelve su nombre y no aparece ninguno nuevo.
+			if file != base || !slices.Equal(scads(), before) {
+				t.Errorf("%s: `file` = %q, esperaba %q y ningún .scad nuevo (%v -> %v)", name, file, base, before, scads())
+			}
+			continue
+		}
 		if !strings.HasSuffix(file, ".scad") || slices.Contains(before, file) {
 			t.Errorf("%s: `file` = %q, esperaba un .scad nuevo", name, file)
 			continue

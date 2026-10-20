@@ -5,7 +5,7 @@ description: Modelar en OpenSCAD a partir de una imagen que el usuario adjunta (
 
 # Modelar a partir de una imagen
 
-Requisito previo: `openscad-core` (checkpoints inmutables, `color()` obligatorio,
+Requisito previo: `openscad-core` (cuándo editar un checkpoint y cuándo crear uno, `color()` obligatorio,
 parámetros arriba). Si lo que el usuario adjuntó es un **STL, 3MF u OBJ**, no es
 esta skill: usa `inspect_reference` y `openscad-stl-editing`.
 

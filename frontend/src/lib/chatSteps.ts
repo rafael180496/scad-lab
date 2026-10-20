@@ -12,6 +12,7 @@ import type {ChatStep} from './chatTypes'
  */
 export const CREATING_TOOLS: ReadonlySet<string> = new Set([
     'create_checkpoint',
+    'update_checkpoint',
     'import_mesh',
     'set_parameters',
     'create_from_template',

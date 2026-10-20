@@ -56,6 +56,8 @@ export type PanelHostProps = {
     onChatCheckpoint: (fileName: string) => void
     /** El proyecto no tiene ningún checkpoint: el visor y Código ofrecen «Crear un modelo de inicio». */
     emptyWorkspace: boolean
+    /** La última versión del checkpoint elegido la dejó la IA (S16). */
+    editedByAI: boolean
     /** Por qué no se puede exportar ('' = se puede) y cómo abrir el diálogo de 3MF. */
     exportWhy: string
     onExport3mf: () => void
@@ -165,6 +167,7 @@ export function PanelHost(p: PanelHostProps) {
                         editShot={p.meshEditShot}
                         onEditApplied={p.onSaved}
                         emptyWorkspace={p.emptyWorkspace}
+                        editedByAI={p.editedByAI}
                         onStarter={p.onSaved}
                     />
                 )
@@ -178,6 +181,7 @@ export function PanelHost(p: PanelHostProps) {
                         settings={p.settings}
                         onSaved={p.onSaved}
                         emptyWorkspace={p.emptyWorkspace}
+                        editedByAI={p.editedByAI}
                         restore={p.editorRestore}
                         onRestored={p.onEditorRestored}
                         shot={p.editorShot}

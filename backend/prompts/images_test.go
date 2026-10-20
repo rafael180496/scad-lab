@@ -12,10 +12,10 @@ func TestAgentPromptWithImages(t *testing.T) {
 	for lang, wants := range map[string][]string{
 		"es": {"**Imágenes adjuntas**", "- `refs/images/foto-1a2b3c4d.jpg`", "- `refs/images/logo-ffeedd00.png`",
 			"read_skill openscad-from-image", "`image_info`", "`compare_with_image`", "`trace_image_outline`", "`image_to_heightmap`",
-			"corregir en checkpoints nuevos", "Una foto no trae medidas", "supuesto"},
+			"corregir con `update_checkpoint` sobre ese archivo", "Una foto no trae medidas", "supuesto"},
 		"en": {"**Attached images**", "- `refs/images/foto-1a2b3c4d.jpg`", "- `refs/images/logo-ffeedd00.png`",
 			"read_skill openscad-from-image", "`image_info`", "`compare_with_image`", "`trace_image_outline`", "`image_to_heightmap`",
-			"fix in new checkpoints", "A photo carries no measurements", "assumption"},
+			"fix with `update_checkpoint` on that file", "A photo carries no measurements", "assumption"},
 	} {
 		c := agentContext(lang)
 		c.Images = []string{"refs/images/foto-1a2b3c4d.jpg", "refs/images/logo-ffeedd00.png"}

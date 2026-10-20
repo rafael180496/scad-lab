@@ -20,6 +20,7 @@ import {toast} from '../ui/Toast'
 import {DownloadControls} from './DownloadControls'
 import {WasmNotice} from './WasmNotice'
 import {StarterAction} from '../workspace/StarterAction'
+import {HistoryControls} from '../workspace/HistoryControls'
 import {useNarrow} from '../../hooks/useNarrow'
 import {fmt, useT} from '../../i18n'
 import {cn} from '../../lib/cn'
@@ -171,6 +172,7 @@ export function RenderPanel({
     editShot,
     onEditApplied,
     emptyWorkspace = false,
+    editedByAI = false,
     onStarter = () => {},
 }: {
     workspaceId: number | null
@@ -195,6 +197,8 @@ export function RenderPanel({
     onEditApplied: (file: string) => void
     /** El proyecto no tiene ningún checkpoint: se ofrece «Crear un modelo de inicio». */
     emptyWorkspace?: boolean
+    /** La última versión del checkpoint la dejó la IA (S16): indicador, «Deshacer cambio de la IA» y «Ver diferencias». */
+    editedByAI?: boolean
     onStarter?: (file: string) => void
 }) {
     const t = useT()
@@ -291,7 +295,12 @@ export function RenderPanel({
                         ) : null}
                     </div>
                 ) : null}
-                <div className="ml-auto shrink-0">
+                {editedByAI && workspaceId != null ? (
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
+                        <HistoryControls workspaceId={workspaceId} file={file} editedByAI compact={narrow} />
+                    </div>
+                ) : null}
+                <div className={cn('shrink-0', editedByAI ? '' : 'ml-auto')}>
                     {running ? (
                         <Button variant="outline" title={t.render.cancelHint} onClick={onCancel}>
                             <Square className="icon-ui-12" />

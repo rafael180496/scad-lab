@@ -11,6 +11,7 @@ import {cn} from '../../lib/cn'
 import {Menu} from '../ui/Menu'
 import {toast} from '../ui/Toast'
 import {useCheckpointActions} from './checkpointActions'
+import {EditedByAIBadge} from './HistoryControls'
 
 const dotColor: Partial<Record<RenderTone, string>> = {
     ok: 'bg-ok',
@@ -298,6 +299,7 @@ export function CheckpointTree({
                             <TriangleAlert className="icon-ui-12 text-warn" aria-label={fmt(t.checkpoints.orphan, {parent: cp.parentFile})} />
                         </span>
                     ) : null}
+                    {cp.editedByAI ? <EditedByAIBadge file={cp.fileName} className="p-0.5" /> : null}
                     {isActive ? (
                         <span
                             className="flex shrink-0 items-center rounded bg-accent-soft p-0.5 text-accent"

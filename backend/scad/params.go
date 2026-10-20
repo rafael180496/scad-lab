@@ -429,8 +429,8 @@ func setParameters(src string, values map[string]any, allowHidden bool) (string,
 			}, name, strings.Join(visible, ", "))
 		case p.Hidden && !allowHidden:
 			return "", nil, nil, i18n.Errorf(i18n.Msg{
-				ES: "%q está en la sección Hidden: no es un parámetro editable (cámbialo con un checkpoint nuevo escrito a mano)",
-				EN: "%q is in the Hidden section: it is not an editable parameter (change it with a hand-written new checkpoint)",
+				ES: "%q está en la sección Hidden: no es un parámetro editable (cámbialo editando el código con update_checkpoint)",
+				EN: "%q is in the Hidden section: it is not an editable parameter (change it by editing the code with update_checkpoint)",
 			}, name)
 		}
 		lit, warn, err := formatParam(p, values[name])

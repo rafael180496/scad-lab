@@ -10,10 +10,15 @@ export type RenderFinishedEvent = {workspaceId: number; result: render.Result}
 export type OpenSCADDownloadPhase = 'download' | 'verify' | 'extract' | 'done' | 'error' | 'cancelled'
 export type OpenSCADDownloadEvent = {phase: OpenSCADDownloadPhase; received: number; total: number; message: string}
 
+export type CheckpointUpdatedEvent = {workspaceId: number; file: string}
+
 type EventMap = {
     'render:started': RenderStartedEvent
     'render:finished': RenderFinishedEvent
     'checkpoints:changed': main.WorkspaceView
+    // El contenido de un checkpoint que ya existía cambió en el disco (S16): la IA lo editó con update_checkpoint,
+    // el usuario restauró una versión o algo externo lo reescribió. Si es el elegido, se relee y se vuelve a renderizar.
+    'checkpoint:updated': CheckpointUpdatedEvent
     'openscad:download': OpenSCADDownloadEvent
     'mcp:changed': {enabled: boolean}
     // ScadLab se registró (o falló al registrarse) en la configuración global de Antigravity (S12.c) y/o agregó sus

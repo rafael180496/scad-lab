@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"scadlab/backend/checkpoint"
+	"scadlab/backend/detect"
 	"scadlab/backend/estimate"
 	"scadlab/backend/exporter"
 	"scadlab/backend/i18n"
@@ -48,7 +49,7 @@ func (e *env) tools() []Tool {
 	tools := []Tool{
 		{
 			Name: "list_checkpoints",
-			Description: "List the workspace's checkpoints (immutable NNN-slug.scad files) as a tree: parent, description, the display name (`label`) if the user gave one, children, modification time and the last known render status; `tree` draws it as text. " +
+			Description: "List the workspace's checkpoints (NNN-slug.scad files) as a tree: parent, description, the display name (`label`) if the user gave one, children, modification time and the last known render status; `tree` draws it as text. " +
 				"Also reports `activeParent`: the checkpoint the user chose to branch from (empty if none), which create_checkpoint uses as the default parent. Start here to see where the design stands.",
 			InputSchema: obj(map[string]any{}),
 			Annotations: annotations(annReadOnly),
@@ -56,14 +57,14 @@ func (e *env) tools() []Tool {
 		},
 		{
 			Name:        "read_checkpoint",
-			Description: "Return the OpenSCAD source of a checkpoint.",
+			Description: "Return the OpenSCAD source of a checkpoint, by its file name (e.g. 003-add-hinge.scad; no paths). This is the way to read a .scad: never use the CLI's own file tools or a path for it. Read the file before changing it with update_checkpoint.",
 			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
 			Annotations: annotations(annReadOnly),
 			handler:     e.readCheckpoint,
 		},
 		{
 			Name: "create_checkpoint",
-			Description: "Create a NEW checkpoint file NNN-slug.scad from the given source. Never overwrites or edits an existing checkpoint: to change anything, create a new one. " +
+			Description: "Create a NEW checkpoint file NNN-slug.scad from the given source. It never overwrites an existing file. Use it for something new, a variant or «another version»; when the user names an existing file (or the open/selected one) and asks for changes, edit that file with update_checkpoint instead. " +
 				"The @checkpoint header line is written for you (an existing first-line header in source is replaced). " +
 				"Every top-level part must use color(). Then call render to validate it. Use root=true to start a new, unrelated design as a root checkpoint in a workspace that already has others.",
 			InputSchema: obj(map[string]any{
@@ -75,6 +76,7 @@ func (e *env) tools() []Tool {
 			Annotations: annotations(annWrite),
 			handler:     e.createCheckpoint,
 		},
+		e.updateCheckpointTool(),
 		{
 			Name: "import_mesh",
 			Description: "Make a 3D model the user put in refs/ (STL, 3MF or OBJ) EDITABLE: creates a NEW root checkpoint NNN-slug.scad that does import(\"refs/x.stl\") inside color(). " +
@@ -93,7 +95,7 @@ func (e *env) tools() []Tool {
 			Name: "render",
 			Description: "Render a checkpoint with OpenSCAD (same engine and cache as the ScadLab app; if no OpenSCAD is installed it uses the built-in WebAssembly engine, reported in `engine`). Returns the status, diagnostics with line numbers (and the offending code line), duration, " +
 				"mesh size/volume/triangle count/watertightness and whether it fits the printer plate. Updates RENDER_ERRORS.md like the app does (newest checkpoint only). " +
-				"On errors, fix the model in a NEW checkpoint (create_checkpoint with parent=<this file>), never by editing this one.",
+				"On errors, fix the model with update_checkpoint on this same file (the previous version stays in its history).",
 			InputSchema: obj(map[string]any{"file": strProp(fileHelp)}),
 			Annotations: annotations(annWrite),
 			handler:     e.renderTool,
@@ -570,9 +572,9 @@ func tailLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// failedRender arma el resultado de un render que no produjo malla: mismo JSON
-// que uno bueno, con isError para que el agente lo trate como algo a corregir.
-func (e *env) failedRender(name string, res render.Result) (*toolResult, error) {
+// renderFailure arma el contenido de un render que no produjo malla: estado,
+// diagnósticos con su línea de código y el consejo de qué hacer.
+func (e *env) renderFailure(name string, res render.Result) map[string]any {
 	out := map[string]any{
 		"file":        name,
 		"status":      res.Status,
@@ -601,11 +603,17 @@ func (e *env) failedRender(name string, res render.Result) (*toolResult, error) 
 			out["logTail"] = tailLines(res.Log, 15)
 		}
 		out["message"] = msgf(i18n.Msg{
-			ES: "El modelo no renderiza. Corrígelo en un checkpoint NUEVO (create_checkpoint con parent=%s), nunca editando este.",
-			EN: "The model does not render. Fix it in a NEW checkpoint (create_checkpoint with parent=%s), never by editing this one.",
+			ES: "El modelo no renderiza. Corrígelo con update_checkpoint sobre este archivo (%s): la versión rota queda en su historial.",
+			EN: "The model does not render. Fix it with update_checkpoint on this file (%s): the broken version stays in its history.",
 		}, name)
 	}
-	r, err := jsonResult(out)
+	return out
+}
+
+// failedRender arma el resultado de un render que no produjo malla: mismo JSON
+// que uno bueno, con isError para que el agente lo trate como algo a corregir.
+func (e *env) failedRender(name string, res render.Result) (*toolResult, error) {
+	r, err := jsonResult(e.renderFailure(name, res))
 	if err != nil {
 		return nil, err
 	}
@@ -625,6 +633,16 @@ func (e *env) renderTool(ctx context.Context, args map[string]any) (*toolResult,
 	if res.Status != render.StatusOK {
 		return e.failedRender(name, res)
 	}
+	out, err := e.renderSummary(name, res, s)
+	if err != nil {
+		return nil, err
+	}
+	return jsonResult(out)
+}
+
+// renderSummary es el resultado de un render que salió bien: malla, medidas,
+// si cabe en la placa y los avisos de forma.
+func (e *env) renderSummary(name string, res render.Result, s store.Settings) (map[string]any, error) {
 	info, err := mesh.InfoFromFile(res.MeshPath)
 	if err != nil {
 		return nil, i18n.Errorf(i18n.Msg{ES: "no se pudo leer la malla renderizada: %w", EN: "could not read the rendered mesh: %w"}, err)
@@ -653,7 +671,7 @@ func (e *env) renderTool(ctx context.Context, args map[string]any) (*toolResult,
 	if warns := meshWarnings(info); len(warns) > 0 {
 		out["warnings"] = warns
 	}
-	return jsonResult(out)
+	return out, nil
 }
 
 // meshWarnings son los avisos de forma que el agente querrá saber.
@@ -697,24 +715,9 @@ func (e *env) lintTool(ctx context.Context, args map[string]any) (*toolResult, e
 		}
 		fileName = file
 	}
-	files, err := workspace.Scan(e.ws)
+	ds, tool, err := e.lintSource(ctx, s, source, fileName)
 	if err != nil {
 		return nil, err
-	}
-	names := make([]string, len(files))
-	for i, f := range files {
-		names[i] = f.FileName
-	}
-	tool := e.openscad(ctx, s.OpenSCADPath)
-	ds := scad.Lint(ctx, source, scad.LintOptions{
-		WorkspaceDir:  e.ws,
-		FileName:      fileName,
-		OpenSCADPath:  tool.Path,
-		WASM:          e.wasm,
-		ExistingFiles: names,
-	})
-	if ds == nil {
-		ds = []scad.Diagnostic{}
 	}
 	counts := map[string]int{scad.SeverityError: 0, scad.SeverityWarning: 0, scad.SeverityInfo: 0}
 	for _, d := range ds {
@@ -737,6 +740,31 @@ func (e *env) lintTool(ctx context.Context, args map[string]any) (*toolResult, e
 		})
 	}
 	return jsonResult(out)
+}
+
+// lintSource corre el linter sobre source (con las reglas de cabecera de
+// fileName) y devuelve los diagnósticos —nunca nil— y el OpenSCAD usado.
+func (e *env) lintSource(ctx context.Context, s store.Settings, source, fileName string) ([]scad.Diagnostic, detect.Tool, error) {
+	files, err := workspace.Scan(e.ws)
+	if err != nil {
+		return nil, detect.Tool{}, err
+	}
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = f.FileName
+	}
+	tool := e.openscad(ctx, s.OpenSCADPath)
+	ds := scad.Lint(ctx, source, scad.LintOptions{
+		WorkspaceDir:  e.ws,
+		FileName:      fileName,
+		OpenSCADPath:  tool.Path,
+		WASM:          e.wasm,
+		ExistingFiles: names,
+	})
+	if ds == nil {
+		ds = []scad.Diagnostic{}
+	}
+	return ds, tool, nil
 }
 
 func (e *env) formatTool(_ context.Context, args map[string]any) (*toolResult, error) {

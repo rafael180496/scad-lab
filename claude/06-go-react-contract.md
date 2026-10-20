@@ -41,6 +41,7 @@ Suscripción con `onEvent()` de `frontend/src/lib/events.ts`.
 | `render:finished` | `{workspaceId, result}` | `RenderCheckpoint`, siempre, aunque falle el motor (un cancelado llega con `status: cancelled`) |
 | `openscad:download` | `{phase, received, total, message}` | `DownloadOpenSCAD`: `phase` = `download` \| `verify` \| `extract` \| `done` \| `error` \| `cancelled`; el progreso va acotado a ~10 por segundo; `message` solo con `error`; en `extract` de un dmg `total` es 0 (no hay avance) |
 | `checkpoints:changed` | `WorkspaceView` | watcher: algún `.scad` de la raíz cambió (debounce 300 ms); también al cambiar el padre activo, la papelera, un rótulo o un vínculo con la sesión |
+| `checkpoint:updated` | `{workspaceId, file}` | el contenido de un checkpoint que ya existía cambió (S16): un paso `update_checkpoint` del chat, el watcher al ver reescrito un `.scad` conocido (el subproceso `--mcp` de un CLI, un editor externo) o `RestoreCheckpointVersion`. La interfaz relee y vuelve a renderizar si es el elegido; ver [34](34-historial-checkpoints.md) |
 | `terminal:data` | `{id, data (base64), seq}` | PTY de una terminal de agente (S5) |
 | `terminal:exit` | `{id, code}` | el proceso de la terminal terminó |
 | `chat:delta` | `{chatId, text, seq}` | turno de chat en curso (deltas agrupados cada 40 ms) |

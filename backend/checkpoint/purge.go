@@ -77,6 +77,10 @@ func PurgeTrashed(wsDir, trashedName string) error {
 		return err
 	}
 	removeRelink(dir, trashedName)
+	// Su historial se va con él (sin seguir enlaces).
+	if err := removeTree(filepath.Join(dir, trashedName+historySuffix)); err != nil {
+		return err
+	}
 	if TrashEmpty(wsDir) {
 		markStarterDeclined(wsDir)
 	}

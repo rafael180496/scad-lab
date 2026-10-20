@@ -19,6 +19,9 @@ type Checkpoint struct {
 	Collapsed   bool   `json:"collapsed"`
 	FileMtime   int64  `json:"fileMtime"`
 	CreatedAt   int64  `json:"createdAt"`
+	// EditedByAI no está en la base: lo calcula el escaneo del workspace (S16) a partir
+	// del historial del archivo —su versión guardada más nueva la dejó la IA—.
+	EditedByAI bool `json:"editedByAI"`
 }
 
 const checkpointCols = `id, workspace_id, file_name, parent_file, label, description, session_id, agent_id, chat_id, collapsed, file_mtime, created_at`

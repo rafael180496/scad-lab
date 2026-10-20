@@ -50,8 +50,8 @@ Contrato en `backend/render/types.go` (fijo) y
   checkpoint, relativo al workspace si es un include. Un formato nuevo de
   OpenSCAD se agrega como caso en `parse_test.go`.
 - **`RENDER_ERRORS.md`**: errores con línea y ±3 líneas de código, warnings,
-  final del log si ningún error trae ubicación, y la instrucción de corregir en
-  un checkpoint NUEVO con `parent=<archivo>`. Textos en el idioma activo;
+  final del log si ningún error trae ubicación, y la instrucción de corregir
+  ese mismo archivo con `update_checkpoint` (guarda antes la versión rota en su historial). Textos en el idioma activo;
   escritura atómica. Lo escribe/borra `app_render.go` según el estado.
 - **Tests**: openscad falso (script sh en `t.TempDir()`), se saltean en
   Windows. Validado sin OpenSCAD real instalado.

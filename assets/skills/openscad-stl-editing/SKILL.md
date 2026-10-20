@@ -5,7 +5,7 @@ description: Modificar un STL (o 3MF/OBJ) que el usuario ya tiene sin tocarlo, i
 
 # Editar un STL existente
 
-Requisito previo: `openscad-core` (checkpoints inmutables, `color()` obligatorio,
+Requisito previo: `openscad-core` (cuándo editar un checkpoint y cuándo crear uno, `color()` obligatorio,
 `eps` en los cortes). Si el usuario solo quiere **copiar la forma** de una
 referencia, ese es otro caso: reconstrúyela con primitivas a partir de
 `inspect_reference`. Aquí se **modifica la pieza real**.
@@ -13,12 +13,15 @@ referencia, ese es otro caso: reconstrúyela con primitivas a partir de
 ## 1. Principio: nada es destructivo
 
 - El STL vive **intacto** en `refs/`. Nunca lo escribas, lo renombres ni lo
-  borres, y tampoco sobrescribas un `.scad`.
-- Editar = un **checkpoint nuevo** (hijo del anterior) que hace
-  `import("refs/pieza.stl")` y le aplica las operaciones con CSG. Deshacer es
-  volver al checkpoint padre.
-- Un cambio por checkpoint cuando se pueda (un agujero, un corte): si algo sale
-  mal se ve cuál fue.
+  borres. Un `.scad` se cambia solo con `update_checkpoint` (guarda antes la
+  versión anterior), nunca con las herramientas de archivo del CLI.
+- Editar = un **checkpoint** que hace `import("refs/pieza.stl")` y le aplica las
+  operaciones con CSG: un hijo nuevo del anterior (`import_mesh`/`edit_mesh`
+  crean ese hijo), o, si el usuario pidió cambiar el archivo que nombró,
+  `update_checkpoint` sobre él. Deshacer es volver al checkpoint padre o a la
+  versión anterior del historial.
+- Un cambio por vez cuando se pueda (un agujero, un corte): si algo sale mal se
+  ve cuál fue.
 
 ## 2. Flujo
 

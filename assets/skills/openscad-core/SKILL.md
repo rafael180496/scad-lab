@@ -1,6 +1,6 @@
 ---
 name: openscad-core
-description: Reglas base para escribir o modificar cualquier archivo .scad en un workspace de ScadLab (convención de checkpoints inmutables, color obligatorio, parámetros de Customizer, CSG limpio, rendimiento y validación). Úsala SIEMPRE antes de crear un checkpoint nuevo o de diagnosticar un error o warning de OpenSCAD.
+description: Reglas base para escribir o modificar cualquier archivo .scad en un workspace de ScadLab (convención de checkpoints y de cuándo editar o crear uno, color obligatorio, parámetros de Customizer, CSG limpio, rendimiento y validación). Úsala SIEMPRE antes de crear un checkpoint nuevo o de diagnosticar un error o warning de OpenSCAD.
 ---
 
 # OpenSCAD — reglas de modelado en ScadLab
@@ -8,14 +8,28 @@ description: Reglas base para escribir o modificar cualquier archivo .scad en un
 Esta skill es la base de todas las demás. Si una regla de otra skill parece
 contradecir esta, gana esta (es el contrato con la app).
 
-## 1. Checkpoints inmutables (LO MÁS IMPORTANTE)
+## 1. Checkpoints: editar el que nombra el usuario (LO MÁS IMPORTANTE)
 
-ScadLab reconstruye el historial y las ramas del modelo leyendo los archivos
-`.scad` del workspace. Por eso:
+ScadLab reconstruye el árbol y las ramas del modelo leyendo los archivos `.scad`
+del workspace. Por eso:
 
-- **Cada versión del modelo es un archivo `.scad` NUEVO.** Nunca sobrescribas,
-  edites en el lugar, renombres ni borres un `.scad` existente — aunque tenga un
-  error. El error se corrige en un checkpoint nuevo.
+- **Cuando el usuario nombra un archivo existente o se refiere al
+  abierto/seleccionado (“este”, “el actual”) y pide cambios, edítalo con
+  `update_checkpoint`. Crea un checkpoint nuevo solo si pide algo nuevo, una
+  variante u “otra versión”. Ante la duda, edita el que nombró.**
+  `update_checkpoint(file, source, note?)` recibe el archivo **completo**, conserva
+  la cabecera `// @checkpoint`, guarda antes la versión anterior en el historial
+  del archivo (`.scadlab/history/`, así el usuario ve las diferencias y deshace) y
+  devuelve el lint y el render del resultado. Un render roto del archivo que
+  acabas de crear o de editar se corrige igual: `update_checkpoint` sobre el mismo
+  archivo.
+- **Leer y escribir**: un `.scad` se lee con `read_checkpoint` y el nombre del
+  archivo (nunca una ruta ni las herramientas de archivo del CLI) y se cambia con
+  `update_checkpoint`. Nunca escribas `.scad` con las herramientas de
+  archivo/shell del CLI: no dejan respaldo. Nunca renombres ni borres un `.scad`
+  (descartar = `trash_checkpoint`).
+- **Un checkpoint nuevo** (algo nuevo, una variante, otra versión) es un archivo
+  `.scad` con el siguiente número, que parte del código del padre.
 - **Nombre**: `NNN-slug.scad`. `NNN` = número de 3 dígitos, **siguiente al mayor
   que exista en el workspace** (aunque ramifiques desde uno viejo). `slug` en
   kebab-case ASCII, corto y en inglés: `001-base-box.scad`,
@@ -37,7 +51,7 @@ ScadLab reconstruye el historial y las ramas del modelo leyendo los archivos
   partir de `003` → crea `006-alt-snap-lid.scad` con `parent=003-….scad`.
 - **Cada checkpoint es autocontenido**: copia el código completo del padre y
   modifícalo. No hagas `include`/`use` de otro checkpoint (la app renderiza cada
-  archivo por separado y un cambio de dependencia rompería la inmutabilidad).
+  archivo por separado y un cambio en otro checkpoint cambiaría este sin aviso).
   Las librerías externas van en `lib/` (ver skill `openscad-libraries`).
 - `desc` describe **qué cambia respecto del padre**, en español, en una frase.
   No uses comillas dobles dentro de `desc`.
@@ -181,8 +195,8 @@ Referencia rápida de sintaxis, primitivas y patrones:
    `--enable=manifold` — **verificar** con `openscad --help`.)
 3. Revisa **todo** `WARNING:` y `ERROR:`. Un render sin errores pero con
    warnings no está terminado.
-4. Si la app dejó `RENDER_ERRORS.md` en el workspace, léelo y corrige en un
-   **checkpoint nuevo** (parent = el que falló).
+4. Si la app dejó `RENDER_ERRORS.md` en el workspace, léelo y corrige ese mismo
+   archivo con `update_checkpoint` (la versión rota queda en su historial).
 5. Para probar variantes de parámetros sin crear archivos:
    `openscad -D 'width=80' -o /tmp/out.stl archivo.scad`.
 

@@ -3,14 +3,23 @@
 1. **Sin CGO.** Todo Go puro; Windows se cross-compila desde macOS.
 2. **macOS (Apple Silicon) y Windows (x64)** son plataformas de primera. Nada
    que funcione solo en una (rutas, procesos, atajos Cmd/Ctrl, PATH).
-3. **Checkpoints inmutables.** Ningún código de ScadLab sobrescribe ni borra un
-   `.scad` de un workspace. «Borrar» mueve a `.scadlab/trash/`. Dos excepciones,
-   ambas acotadas y probadas: (a) `checkpoint.SetParent` reescribe **solo el valor de
-   `parent=`** de la línea de cabecera (metadato del árbol, no el modelo; atómico,
-   conserva el resto byte a byte, permisos y fecha); (b) la **eliminación permanente
-   de la papelera** (`DeleteTrashed` / `EmptyTrash`) la dispara únicamente el usuario
-   desde la interfaz, con confirmación, y **nunca está expuesta a un agente** (ni MCP
-   ni Hermes). Ver `claude/15-checkpoints.md`.
+3. **Checkpoints protegidos: se reescriben solo con respaldo, y ninguna herramienta
+   borra.** Ningún código de ScadLab sobrescribe un `.scad` de un workspace sin guardar
+   antes lo que había, ni lo borra: «borrar» mueve a `.scadlab/trash/`. Las excepciones
+   son cuatro, acotadas y probadas: (a) `checkpoint.SetParent` reescribe **solo el valor
+   de `parent=`** de la línea de cabecera (metadato del árbol, no el modelo; atómico,
+   conserva el resto byte a byte, permisos y fecha); (b) la **eliminación permanente de
+   la papelera** (`DeleteTrashed` / `EmptyTrash`) la dispara únicamente el usuario desde
+   la interfaz, con confirmación, y **nunca está expuesta a un agente** (ni MCP ni
+   Hermes); (c) la **reescritura en el lugar con respaldo previo** en
+   `.scadlab/history/<archivo>/`: `update_checkpoint` (la IA, **solo en «Agente»**;
+   `checkpoint.Update`) y «Restaurar versión» / «Deshacer cambio de la IA» (el usuario;
+   `checkpoint.RestoreVersion`, que guarda primero la versión actual). El orden es
+   siempre respaldo → escritura atómica: si el respaldo falla no se escribe; (d) la
+   **poda del historial** por el tope (`Settings.HistoryMaxVersions`, 20 de fábrica),
+   que borra **respaldos** —copias de seguridad—, nunca un checkpoint. Las escrituras
+   directas con las herramientas de archivo de un CLI no dejan respaldo y las reglas se
+   lo prohíben a la IA para `.scad`. Ver `claude/15-checkpoints.md`.
 4. **Migraciones aditivas** de `scadlab.db` (ver `claude/07-database.md`).
 5. **Sin secretos en texto plano**: las claves de API se cifran con AES-256-GCM con
    una llave derivada (argon2id) de la contraseña maestra; la llave solo se recuerda

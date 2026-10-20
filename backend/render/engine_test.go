@@ -374,7 +374,7 @@ func TestWriteAndClearRenderErrors(t *testing.T) {
 		"  1 | // @checkpoint", // contexto -3
 		"  7 | x();",           // contexto +3
 		"Ignoring unknown module 'x'",
-		"checkpoint NUEVO cuyo parent sea `002-b.scad`",
+		"`update_checkpoint` (file=`002-b.scad`",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("falta %q en:\n%s", want, md)

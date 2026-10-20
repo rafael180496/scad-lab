@@ -101,6 +101,19 @@ export function useRenders(openIds: number[], activeId: number | null) {
         [activeId],
     )
 
+    // Olvida el resultado de un checkpoint cuyo contenido cambió en el disco (S16): el que había es de
+    // la versión anterior y mostrarlo —punto verde, malla vieja— sería mentir. Al elegirlo se vuelve a
+    // renderizar (o queda «sin render» si el auto-render está apagado).
+    const forget = useCallback((id: number, file: string) => {
+        setByWs((prev) => {
+            const cur = prev[id]
+            if (!cur || !(file in cur.results)) return prev
+            const results = {...cur.results}
+            delete results[file]
+            return {...prev, [id]: {...cur, results}}
+        })
+    }, [])
+
     const cancel = useCallback(() => {
         if (activeId != null) CancelRender(activeId).catch((e) => toast.error(errorText(e)))
     }, [activeId])
@@ -111,6 +124,7 @@ export function useRenders(openIds: number[], activeId: number | null) {
         running: cur?.running ?? EMPTY_RUNNING,
         loaded: !!cur?.loaded,
         render: renderFile,
+        forget,
         cancel,
         byWs,
     }

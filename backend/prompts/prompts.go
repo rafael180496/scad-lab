@@ -309,7 +309,7 @@ func oneLine(s string, maxRunes int) string {
 // render del checkpoint más nuevo (auto-iteración): una sola línea, en el
 // idioma pedido, sin saltos de línea ni caracteres de control, que no termina
 // en salto (la terminal decide si manda Enter). Pide leer RENDER_ERRORS.md y
-// corregir en un checkpoint NUEVO con parent=fileName.
+// corregirlo editando ese mismo archivo con update_checkpoint (file=fileName).
 //
 // fileName se sanea con SafeFileName: un nombre con caracteres raros nunca
 // rompe la línea ni inyecta nada. Empieza por "ScadLab:" a propósito: un
@@ -349,9 +349,9 @@ func Nudge(fileName string, errorCount int, lang string) string {
 		}
 	}
 	if es {
-		fmt.Fprintf(&b, ". Lee RENDER_ERRORS.md y corrígelo en un checkpoint NUEVO con parent=%s; no edites el archivo que falló.", parent)
+		fmt.Fprintf(&b, ". Lee RENDER_ERRORS.md y corrígelo editando ese mismo archivo con update_checkpoint (file=%s); la versión rota queda en su historial.", parent)
 	} else {
-		fmt.Fprintf(&b, ". Read RENDER_ERRORS.md and fix it in a NEW checkpoint with parent=%s; do not edit the file that failed.", parent)
+		fmt.Fprintf(&b, ". Read RENDER_ERRORS.md and fix it by editing that same file with update_checkpoint (file=%s); the broken version stays in its history.", parent)
 	}
 	return b.String()
 }

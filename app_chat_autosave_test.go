@@ -327,7 +327,7 @@ func TestCLIPromptPerMode(t *testing.T) {
 	ev.wait(t)
 	calls := f.calls("claude")
 	agent, ask := calls[0][1], calls[1][1]
-	for _, want := range []string{"“Agent” mode", "create_checkpoint", "render", "preview", "NEW checkpoint", "right away, without asking anything"} {
+	for _, want := range []string{"“Agent” mode", "create_checkpoint", "render", "preview", "update_checkpoint", "right away, without asking anything"} {
 		if !strings.Contains(agent, want) {
 			t.Errorf("Agente no dice %q:\n%s", want, agent)
 		}

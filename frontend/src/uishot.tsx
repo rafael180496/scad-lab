@@ -30,7 +30,7 @@ import './index.css'
 import App, {type ShotOptions} from './App'
 import type {SettingsTab} from './components/settings/SettingsDialog'
 import {loadMesh, loadParts, loadRawMesh} from './lib/mesh'
-import {loadCodeEditor, loadSkillCodeEditor} from './components/editor/lazy'
+import {loadCodeEditor, loadDiffViewer, loadSkillCodeEditor} from './components/editor/lazy'
 import {fmt, setLanguage, t as dict} from './i18n'
 import {ConfirmHost} from './components/ui/Dialog'
 import {Toaster, toast} from './components/ui/Toast'
@@ -234,6 +234,12 @@ const VIEWS: Record<string, {scenario: Scenario; shot?: ShotOptions}> = {
     // Un hijo cuyo padre está en la papelera: el ⚠ del árbol y, en Problemas, el aviso con «Hacer principal».
     'problems-orphan': {scenario: 'ok', shot: {select: '007-snap-case-v2.scad', panel: 'problems'}},
     'diff-parent': {scenario: 'ok', shot: {select: '006-two-color-logo.scad', compare: '006-two-color-logo.scad', panel: 'source', dock: 'diff'}},
+    // Historial de versiones (S16): la IA editó 003 y 006 en el lugar. `history-menu`: el árbol con el indicador «Editado por la
+    // IA», el menú del nodo con «Deshacer cambio de la IA», «Ver diferencias» e «Historial», y los chips de las cabeceras.
+    // `history-dialog`: la lista de versiones. `history-diff`: la versión anterior frente a la actual.
+    'history-menu': {scenario: 'ok', shot: {select: '006-two-color-logo.scad', treeMenu: '006-two-color-logo.scad'}},
+    'history-dialog': {scenario: 'ok', shot: {select: '006-two-color-logo.scad', history: {kind: 'history', file: '006-two-color-logo.scad'}}},
+    'history-diff': {scenario: 'ok', shot: {select: '006-two-color-logo.scad', history: {kind: 'diff', file: '006-two-color-logo.scad'}}},
     // Pestañas de proyecto (S8): tres proyectos abiertos (uno con un render en curso y
     // cambios sin guardar, otro con un agente vivo y su último render fallido), el menú «+»
     // y la barra con poco ancho (se captura a 1024 px).
@@ -431,9 +437,12 @@ const treeExtra: Record<string, {label?: string; agentId?: string; sessionId?: s
 // Padre activo explícito: en el árbol de la rama activa, el 003 (se quiere probar
 // otra variante desde ahí); en el resto, ninguno (rige el más nuevo).
 const activeParent = view === 'tree-active-branch' || view === 'trash' || view === 'trash-empty-confirm' ? '003-vent-slots.scad' : ''
+// S16: en las vistas del historial, la IA editó 003 y 006 en el lugar (su versión anterior está en el historial).
+const historyShot = view.startsWith('history-')
 const cp = (n: number, file: string, parent: string, desc: string) => ({
     id: n, workspaceId: 1, fileName: file, parentFile: parent, label: '', description: desc,
     sessionId: '', agentId: '', chatId: 0, collapsed: false, fileMtime: treeShot ? 1792080000 + n * 5400 : 0, createdAt: 0,
+    editedByAI: historyShot && (file === '003-vent-slots.scad' || file === '006-two-color-logo.scad'),
     ...treeExtra[file],
 })
 // sidebar-long: una cadena de diez checkpoints con nombres de 60 caracteres, como los que deja
@@ -521,7 +530,7 @@ module rounded_box(size, r) {
 // El modelo de inicio (assets/workspace/starter.scad.*.tmpl, recortado) y el primer checkpoint que crea el chat.
 const starterSource = `// @checkpoint parent= desc="${es ? 'Mi primer proyecto' : 'My first project'}"
 // ${es ? 'Punto de partida de ScadLab: una base con chaflán y un pomo encima.' : "ScadLab's starting point: a chamfered base with a knob on top."}
-// ${es ? 'Cambia las medidas en el Customizer (panel de parámetros) o escribe tu propio\n// modelo: cada versión que guardes será un checkpoint nuevo, este no se edita.' : 'Change the sizes in the Customizer (parameters panel) or write your own\n// model: every version you save becomes a new checkpoint, this one is not edited.'}
+// ${es ? 'Cambia las medidas en el Customizer (panel de parámetros) o escribe tu propio\n// modelo: si le pides cambios a la IA sobre este archivo, los edita aquí mismo\n// y guarda antes la versión anterior en su historial (se puede deshacer).' : 'Change the sizes in the Customizer (parameters panel) or write your own\n// model: if you ask the AI to change this file, it edits it right here and first saves\n// the previous version in its history (you can undo).'}
 
 /* [Base] */
 base_width = 50;    // [20:1:150]
@@ -1555,6 +1564,20 @@ const parentSource = () =>
         .replace('width  = 92;', 'width  = 88;')
         .replace(/color\("#ff7a1a"\)\n[^\n]*\n[^\n]*\n\n/, '')
 
+// Una versión guardada del mismo archivo: el cuerpo anterior, pero con el mismo
+// `parent=` (update_checkpoint y restaurar conservan el padre de la cabecera).
+const versionSource = () => parentSource().replace('parent=002-sliding-lid.scad', 'parent=005-snap-lid.scad')
+
+// Versiones guardadas inventadas de la vista `history-*` (hace 12 minutos, 2 horas y ayer), la más nueva primero.
+const historyVersions = () => {
+    const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
+    return [
+        {id: '20261019-221500', savedAt: ago(12), reason: 'ai', tool: 'update_checkpoint', note: es ? 'Logo bicolor para el AMS y caja más ancha' : 'Two-color logo for the AMS and a wider box', size: 1190},
+        {id: '20261019-201000', savedAt: ago(130), reason: 'restore', tool: '', note: '', size: 1004},
+        {id: '20261018-190500', savedAt: ago(26 * 60), reason: 'ai', tool: 'update_checkpoint', note: es ? 'Tornillos de la tapa a M2.5' : 'Lid screws to M2.5', size: 1042},
+    ]
+}
+
 const agyPerms = {state: 'ok', path: '/Users/maker/.gemini/antigravity-cli/settings.json', approved: 37, total: 37, stale: 0, managed: true, detail: ''}
 const agyStatus = {state: 'missing', agyPath: '/Users/maker/.local/bin/agy', command: `${scadlabBin} --mcp`, current: '', detail: ''}
 
@@ -1777,6 +1800,15 @@ const App_ = {
     RevealCheckpoint: () => P(undefined),
     ResumeCheckpointSession: () => P({kind: 'terminal', terminalId: 'term-1', agentId: 'claude', chatId: 0}),
     ReadCheckpointPair: (_id: number, file: string) => P({file, parent: '005-snap-lid.scad', parentSource: parentSource(), source}),
+    // Historial de versiones (S16): en las vistas `history-*`, el archivo que editó la IA tiene tres versiones guardadas
+    // (la más nueva la dejó la IA justo antes de su último cambio); en las demás vistas, ninguna.
+    ListCheckpointHistory: (_id: number, file: string) => {
+        const versions = historyShot ? historyVersions() : []
+        return P({file, versions, editedByAI: versions[0]?.reason === 'ai', max: 20})
+    },
+    ReadCheckpointVersion: (_id: number, _file: string, versionId: string) =>
+        P(versionId === historyVersions()[0].id ? versionSource() : versionSource().replace('width  = 88;', 'width  = 84;')),
+    RestoreCheckpointVersion: () => P(historyVersions()[0]),
     ...chatMocks,
     ...serverMocks,
     GetScadCatalog: () => P(catalog),
@@ -1951,7 +1983,7 @@ if (chatHarness || meshHarness) {
 }
 
 setLanguage(lang)
-Promise.all([import('./components/viewer/Viewer'), import('./components/meshedit/MeshEditor'), loadRawMesh(`${meshDir}${fakeKey('mesh-edit')}.stl`),  import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadSkillCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
+Promise.all([import('./components/viewer/Viewer'), import('./components/meshedit/MeshEditor'), loadRawMesh(`${meshDir}${fakeKey('mesh-edit')}.stl`),  import('./components/terminal/TerminalView'), import('./components/dock/DockWorkbench'), loadCodeEditor(), loadDiffViewer(), loadSkillCodeEditor(), loadMesh(okResult(selectedFile, 0, false).meshPath), loadParts(fakeKey(selectedFile), shotModel.parts.map((_, i) => `/parts/${fakeKey(selectedFile)}/${String(i).padStart(2, '0')}.stl`))])
     .catch(() => {})
     .then(() => (meshHarness ? prepareSession(1, selectedFile) : null))
     .then(() =>

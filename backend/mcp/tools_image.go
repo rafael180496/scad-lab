@@ -54,7 +54,7 @@ func (e *env) imageTools() []Tool {
 		{
 			Name: "compare_with_image",
 			Description: "Render a checkpoint and put it NEXT TO the user's image (or the model's silhouette over it with mode=overlay) so you can compare shape and proportions. Returns one PNG, the `view` used, the width/height proportions of the model in that view and of the photo's foreground, and `silhouetteIoU` (0 to 1: how much the two silhouettes overlap once both are scaled to the same box; above 0.9 is a very close shape). " +
-				"With view=auto (default) it picks, among the 8 views, the one whose silhouette matches the photo best, and lists the ranking. Look at it after render/preview and correct the model in a NEW checkpoint until proportions and details agree.",
+				"With view=auto (default) it picks, among the 8 views, the one whose silhouette matches the photo best, and lists the ranking. Look at it after render/preview and correct the model with update_checkpoint on the same file until proportions and details agree.",
 			InputSchema: obj(map[string]any{
 				"image":  strProp(imageHelp),
 				"file":   strProp(fileHelp),
@@ -485,7 +485,7 @@ func compareAdvice(iou *float64, diff *float64) string {
 	case *iou >= 0.9:
 		parts = append(parts, msgf(i18n.Msg{ES: "La silueta coincide casi por completo: revisa ahora los detalles (agujeros, redondeos, relieves).", EN: "The silhouette matches almost entirely: check the details now (holes, fillets, reliefs)."}))
 	case *iou >= 0.75:
-		parts = append(parts, msgf(i18n.Msg{ES: "La silueta se parece pero no coincide: busca qué parte sobra o falta y corrige en un checkpoint nuevo.", EN: "The silhouette is similar but not equal: find which part is extra or missing and fix it in a new checkpoint."}))
+		parts = append(parts, msgf(i18n.Msg{ES: "La silueta se parece pero no coincide: busca qué parte sobra o falta y corrige con update_checkpoint.", EN: "The silhouette is similar but not equal: find which part is extra or missing and fix it with update_checkpoint."}))
 	default:
 		parts = append(parts, msgf(i18n.Msg{ES: "La silueta es distinta: revisa la forma base y las proporciones antes de afinar detalles.", EN: "The silhouette is different: review the base shape and the proportions before refining details."}))
 	}
