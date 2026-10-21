@@ -7,6 +7,17 @@ empaquetarla (ver `.claude/specs/releases.md`).
 
 ## [Unreleased]
 
+### Corregido
+
+- **Las herramientas de la IA fallaban por el nombre de un argumento.** Los modelos
+  adivinan cómo se llama cada parámetro: Antigravity (Gemini) mandaba `file` al mirar
+  una foto adjunta, `pattern` al buscar en un `.scad` y `skill` al leer una skill, y
+  ScadLab respondía «falta `image`», «falta `query`» o «falta `name`», perdiendo una
+  vuelta por cada tropiezo. Ahora cada herramienta entiende los sinónimos habituales
+  (y la capitalización o los guiones distintos) antes de ejecutarse, con cualquier
+  proveedor: Claude Code, Codex, OpenCode, Antigravity y el agente propio con Ollama o
+  una API.
+
 ## [0.2.2] - 2026-10-20
 
 ### Agregado

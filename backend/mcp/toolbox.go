@@ -233,7 +233,7 @@ func (t *Toolbox) run(ctx context.Context, tool *Tool, args map[string]any) (res
 			res, err = nil, i18n.Errorf(i18n.Msg{ES: "error interno en la herramienta %s", EN: "internal error in tool %s"}, tool.Name)
 		}
 	}()
-	return tool.handler(ctx, args)
+	return tool.handler(ctx, normalizeArgs(tool, args))
 }
 
 // toOutput convierte el resultado en formato MCP (contenido con texto e
